@@ -1,4 +1,4 @@
-![Logo](https://media.forgecdn.net/avatars/thumbnails/1461/177/64/64/638948383876436269.png "Logo")
+![Logo](https://github.com/IAmChills/HardcoreAchievements/blob/main/Logo.png)
 # Ultra Hardcore Live Leaderboard
 
 **Hardcore Achievements**
