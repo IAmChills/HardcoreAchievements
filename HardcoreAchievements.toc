@@ -1,0 +1,11 @@
+## Interface: 11507
+## Title: HardcoreAchievements
+## Author: Chills
+## Version: 0.0.1
+## Notes: Achievement System for Harcore!
+## SavedVariables: HardcoreAchievementsDB
+## IconTexture: Interface\AddOns\UltraHardcoreLeaderboard\Images\UltraHardcoreLeaderbaordIcon
+
+Achievements\FourCandleTracker.lua
+
+HardcoreAchievements.lua
