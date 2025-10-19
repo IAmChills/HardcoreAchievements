@@ -1,7 +1,7 @@
 ## Interface: 11507
 ## Title: HardcoreAchievements
 ## Author: Chills
-## Version: 0.0.1
+## Version: 1.0.0
 ## Notes: Achievement System for Harcore!
 ## SavedVariables: HardcoreAchievementsDB
 ## IconTexture: Interface\AddOns\UltraHardcoreLeaderboard\Images\UltraHardcoreLeaderbaordIcon
@@ -36,4 +36,5 @@ Achievements\HighChiefWinterfall.lua
 Achievements\Deathclasp.lua
 
 HardcoreAchievements.lua
+
 Achievements_Catalog.lua
