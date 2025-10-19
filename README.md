@@ -1,4 +1,4 @@
-![Logo]
+![Logo](https://github.com/IAmChills/HardcoreAchievements/blob/main/Images/LogoButton.png?raw=true)
 
 # Ultra Hardcore Live Leaderboard
 
