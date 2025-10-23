@@ -3,11 +3,8 @@
 ## Author: Chills
 ## Version: 1.0.0
 ## Notes: Hardcore achievements system for UltraHardcore players
-## Dependencies: UltraHardcore
 ## SavedVariables: HardcoreAchievementsDB
-## IconTexture: Interface\AddOns\HardcoreAchievements\Images\HardcoreAchievementsIcon
-
-embeds.xml
+## IconTexture: Interface\AddOns\HardcoreAchievements\Images\Logo
 
 HardcoreAchievements.lua
 Achievements\Common.lua

@@ -438,11 +438,6 @@ local function ApplySelfFoundBonus()
             updatedCount = updatedCount + 1
         end
     end
-
-    if updatedCount > 0 then
-        print("|cff00ff00[HardcoreAchievements]|r Added +" .. SELF_FOUND_BONUS ..
-              " to " .. updatedCount .. " completed achievements (Self-Found bonus).")
-    end
 end
 
 -- =========================================================

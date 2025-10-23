@@ -1,6 +1,6 @@
 local Achievements = {
 
---{ achId="Test",  title="Wolfslayer Test",  level=8, desc="Kill |cff0091e6a wolf", icon=134400, points=10, requiredQuestId=nil, targetNpcId=299, faction="Alliance" },
+{ achId="Test",  title="Wolfslayer Test",  level=8, desc="Kill |cff0091e6a wolf", icon=134400, points=10, requiredQuestId=nil, targetNpcId=299, faction="Alliance" },
 --{ achId="Test2", title="Easy Quest Test", level=8, desc="Human starter quest", icon=134400, points=10, requiredQuestId=783, targetNpcId=nil, faction="Alliance" },
 
 -- Alliance
