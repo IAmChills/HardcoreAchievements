@@ -1,40 +1,16 @@
-## Interface: 11507
+## Interface: 11508
 ## Title: HardcoreAchievements
 ## Author: Chills
 ## Version: 1.0.0
-## Notes: Achievement System for Harcore!
+## Notes: Hardcore achievements system for UltraHardcore players
+## Dependencies: UltraHardcore
 ## SavedVariables: HardcoreAchievementsDB
-## IconTexture: Interface\AddOns\UltraHardcoreLeaderboard\Images\UltraHardcoreLeaderbaordIcon
+## IconTexture: Interface\AddOns\HardcoreAchievements\Images\HardcoreAchievementsIcon
 
-Achievements\Rageclaw.lua
-Achievements\Vagash.lua
-Achievements\Hogger.lua
-Achievements\Grawmug.lua
-Achievements\AbsentMindedProspector.lua
-Achievements\FourCandles.lua
-Achievements\Fangore.lua
-Achievements\Foulborne.lua
-Achievements\Nekrosh.lua
-Achievements\MorLadim.lua
-Achievements\ForsakenCourier.lua
-Achievements\Thogrun.lua
-Achievements\LordShalzaru.lua
-Achievements\DragonkinMenace.lua
-Achievements\StinkysEscape.lua
-Achievements\GalensEscape.lua
-Achievements\KingBangalash.lua
-Achievements\GetMeOutOfHere.lua
-Achievements\CuergosGold.lua
-Achievements\KimJaelIndeed.lua
-Achievements\StonesThatBindUs.lua
-Achievements\ShadowLordFeldan.lua
-Achievements\SummoningThePrincess.lua
-Achievements\GorishiHiveQueen.lua
-Achievements\OverseerMaltorius.lua
-Achievements\MercutioFilthgorger.lua
-Achievements\HighChiefWinterfall.lua
-Achievements\Deathclasp.lua
+embeds.xml
 
 HardcoreAchievements.lua
-
-Achievements_Catalog.lua
+Achievements\Common.lua
+Achievements\Catalog.lua
+Achievements\FourCandles.lua
+Utils\Embed_UltraHardcore.lua

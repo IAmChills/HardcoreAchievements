@@ -27,7 +27,6 @@ local REQUIRED = {
 local state = {
   counts = {},           -- npcId => kills this combat
   completed = false,     -- set true once achievement conditions met in this combat
-  inCombat = false,
 }
 
 -- Helpers
@@ -41,11 +40,6 @@ end
 local function IsOnRequiredMap()
   local mapId = select(8, GetInstanceInfo())
   return mapId == REQUIRED_MAP_ID
-end
-
-local function ResetState()
-  state.counts = {}
-  state.completed = false
 end
 
 local function CountsSatisfied()
@@ -79,49 +73,8 @@ local function IsGroupEligible()
   return true
 end
 
-local function IsFeigningDeath()
-  for i = 1, 40 do
-    local name, _, _, _, _, _, _, _, _, spellId = UnitBuff("player", i)
-    if not name then break end
-    if spellId == 5384 or name == "Feign Death" then
-      return true
-    end
-  end
-  return false
-end
-
-local function IsStealthing()
-  for i = 1, 40 do
-    local name, _, _, _, _, _, _, _, _, spellId = UnitBuff("player", i)
-    if not name then break end
-    if spellId == 1784 or spellId == 1785 or spellId == 1786 or spellId == 1787 or name == "Stealth" then
-      return true
-    end
-  end
-  return false
-end
-
-local function IsPartyInCombat()
-  local members = GetNumGroupMembers()
-  if members == 0 then return UnitAffectingCombat("player") end
-  for i = 1, 4 do
-    local u = "party"..i
-    if UnitExists(u) and UnitAffectingCombat(u) then
-      return true
-    end
-  end
-  return false
-end
-
 function FourCandle(destGUID)
   if not IsOnRequiredMap() then return false end
-
-  -- Allow counting if player is feigning/Stealthing or party is in combat
-  if not UnitAffectingCombat("player") and not IsFeigningDeath() and not IsStealthing() and not IsPartyInCombat() then
-    return false
-  end
-
-  state.inCombat = true
 
   if state.completed then return false end
 
@@ -138,23 +91,6 @@ function FourCandle(destGUID)
   return false
 end
 
-local f = CreateFrame("Frame")
-f:RegisterEvent("PLAYER_REGEN_DISABLED")
-f:RegisterEvent("PLAYER_REGEN_ENABLED")
-f:SetScript("OnEvent", function(_, event)
-  if event == "PLAYER_REGEN_DISABLED" then
-    ResetState()
-    state.inCombat = true
-  elseif event == "PLAYER_REGEN_ENABLED" then
-    -- Only reset if neither player nor party is in combat, and not feigning/Stealthing
-    if not IsFeigningDeath() and not IsStealthing() and not IsPartyInCombat() then
-      ResetState()
-      state.inCombat = false
-    end
-  end
-end)
-
--- Four Candles self-registration (kept minimal)
 _G.FourCandle_IsCompleted = function() return false end
 
 local function HCA_RegisterFourCandles()
