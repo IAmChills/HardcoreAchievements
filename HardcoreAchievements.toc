@@ -7,7 +7,7 @@
 ## IconTexture: Interface\AddOns\HardcoreAchievements\Images\Logo
 ## X-Category: Achievements
 
-# Required Libraries for Admin Panel
+# Required Libraries for CommandHandler
 Libs\LibStub\LibStub.lua
 Libs\CallbackHandler-1.0\CallbackHandler-1.0.lua
 Libs\AceComm-3.0\AceComm-3.0.xml
