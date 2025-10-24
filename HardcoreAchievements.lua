@@ -75,65 +75,6 @@ local function GetCharDB()
     return db, db.chars[playerGUID]
 end
 
-function GetPresetMultiplier(preset)
-    local POINT_MULTIPLIER = {
-      lite            = 1.20,
-      liteplus        = 1.30,
-      recommended     = 1.50,
-      recommendedplus = 1.60,
-      ultra           = 1.70,
-      ultraplus       = 1.80,
-      experimental    = 2.00,
-      custom          = 1.00,
-    }
-    
-    if not preset or preset == "Custom" then
-      return 1.00
-    end
-    
-    local normalizedPreset = tostring(preset or ""):lower()
-    normalizedPreset = normalizedPreset:gsub("%+","plus")
-         :gsub("%s+","")
-         :gsub("[^%w]","")
-    
-    return POINT_MULTIPLIER[normalizedPreset] or 1.00
-  end
-
-local presetDelayedCheck = false
-
-function HCA_GetPlayerPreset()
-  -- Try to get preset from UltraHardcoreLeaderboard addon first
-  if type(GetPresetAndTooltip) == "function" then
-    local preset, tooltiptext = GetPresetAndTooltip(UnitName("player"))
-    return preset, tooltiptext, GetPresetMultiplier(preset)
-  end
-  
-  -- If function not available yet, schedule a delayed check
-  if not presetDelayedCheck then
-    presetDelayedCheck = true
-    C_Timer.After(2, function()
-      if type(GetPresetAndTooltip) == "function" then
-        local preset, tooltiptext = GetPresetAndTooltip(UnitName("player"))
-        if preset and preset ~= "Custom" then
-          -- Update any UI elements that might be showing preset info
-          if AchievementPanel and AchievementPanel.PresetLabel then
-            local isSelfFound = IsSelfFound()
-            local labelText = "Point Multiplier (" .. preset
-            if isSelfFound then
-              labelText = labelText .. ", Self Found"
-            end
-            labelText = labelText .. ")"
-            AchievementPanel.PresetLabel:SetText(labelText)
-          end
-          
-        end
-      end
-    end)
-  end
-  
-  return "Custom", nil, 1.00
-end
-
 local function ClearProgress(achId)
     local _, cdb = GetCharDB()
     if cdb and cdb.progress then cdb.progress[achId] = nil end
@@ -179,16 +120,14 @@ local function SortAchievementRows()
     local prev = nil
     local totalHeight = 0
     for _, row in ipairs(AchievementPanel.achievements) do
-        if not row._isHidden then
-            row:ClearAllPoints()
-            if prev and prev ~= row then
-                row:SetPoint("TOPLEFT", prev, "BOTTOMLEFT", 0, -2)
-            else
-                row:SetPoint("TOPLEFT", AchievementPanel.Content, "TOPLEFT", 0, 0)
-            end
-            prev = row
-            totalHeight = totalHeight + (row:GetHeight() + 2)
+        row:ClearAllPoints()
+        if prev and prev ~= row then
+            row:SetPoint("TOPLEFT", prev, "BOTTOMLEFT", 0, -2)
+        else
+            row:SetPoint("TOPLEFT", AchievementPanel.Content, "TOPLEFT", 0, 0)
         end
+        prev = row
+        totalHeight = totalHeight + (row:GetHeight() + 2)
     end
 
     AchievementPanel.Content:SetHeight(math.max(totalHeight + 16, AchievementPanel.Scroll:GetHeight() or 0))
@@ -199,11 +138,6 @@ end
 local function MarkRowCompleted(row)
     if row.completed then return end
 
-    if row._isHidden then
-        row._isHidden = false
-        row:Show()
-        SortAchievementRows()
-    end
 
     row.completed = true
 
@@ -260,8 +194,6 @@ local function RestoreCompletionsFromDB()
             if row.Points then row.Points:SetTextColor(0.6, 0.9, 0.6) end
             if row.Title and row.Title.SetTextColor then row.Title:SetTextColor(0.6, 0.9, 0.6) end
             if row.Icon and row.Icon.SetDesaturated then row.Icon:SetDesaturated(false) end
-            if row._isHidden then row._isHidden = false end
-            if row._isHidden then row:show() end
 
             if rec.points then
                 row.points = rec.points
@@ -617,30 +549,21 @@ AchievementPanel.TotalPoints:SetText("0pts")
 AchievementPanel.TotalPoints:SetTextColor(0.6, 0.9, 0.6)
 
 -- Preset multiplier label, e.g. "Point Multiplier (Lite +)"
-AchievementPanel.PresetLabel = AchievementPanel:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-AchievementPanel.PresetLabel:SetPoint("TOP", 5, -60)
+AchievementPanel.MultiplierText = AchievementPanel:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+AchievementPanel.MultiplierText:SetPoint("TOP", 5, -60)
 
 -- Build the label text based on available information
 local function BuildPresetLabelText()
-    local preset, tooltiptext, multiplier = HCA_GetPlayerPreset()
-    local isSelfFound = IsSelfFound()
-    
+    local selfFound = IsSelfFound()
     local labelText = ""
-    if preset or isSelfFound then
-        labelText = "Point Multiplier ("
-        if preset then
-            labelText = labelText .. preset .. ", "
-        end
-        if isSelfFound then
-            labelText = labelText .. "Self Found"
-        end
-        labelText = labelText .. ")"
+    if selfFound then
+        labelText = "Point Multiplier (Self Found)"
     end
     return labelText
 end
 
-AchievementPanel.PresetLabel:SetText(BuildPresetLabelText())
-AchievementPanel.PresetLabel:SetTextColor(0.8, 0.8, 0.8)
+AchievementPanel.MultiplierText:SetText(BuildPresetLabelText())
+AchievementPanel.MultiplierText:SetTextColor(0.8, 0.8, 0.8)
 
 -- Scrollable container inside the AchievementPanel
 AchievementPanel.Scroll = CreateFrame("ScrollFrame", "$parentScroll", AchievementPanel, "UIPanelScrollFrameTemplate")
@@ -723,11 +646,9 @@ BR:SetPoint("BOTTOMRIGHT", AchievementPanel, "BOTTOMRIGHT", 2, -1)
 
 AchievementPanel.achievements = AchievementPanel.achievements or {}
 
-function CreateAchievementRow(parent, achId, title, desc, tooltip, icon, level, points, killTracker, questTracker, hidden)
+function CreateAchievementRow(parent, achId, title, desc, tooltip, icon, level, points, killTracker, questTracker, staticPoints)
     local rowParent = AchievementPanel and AchievementPanel.Content or parent or AchievementPanel
     AchievementPanel.achievements = AchievementPanel.achievements or {}
-
-    local initiallyHidden = not not hidden
 
     local index = (#AchievementPanel.achievements) + 1
     local row = CreateFrame("Frame", nil, rowParent)
@@ -793,11 +714,9 @@ function CreateAchievementRow(parent, achId, title, desc, tooltip, icon, level, 
         GameTooltip:Hide()
     end)
 
-    row._isHidden = initiallyHidden
-    if initiallyHidden then
-        row:Hide()
-    end
 
+    row.originalPoints = points or 0  -- Store original points before any multipliers
+    row.staticPoints = staticPoints or false  -- Store static points flag
     row.points = ((points or 0) + (IsSelfFound() and SELF_FOUND_BONUS or 0))
     row.completed = false
     row.maxLevel = tonumber(level) or 0

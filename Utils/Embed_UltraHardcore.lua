@@ -244,7 +244,7 @@ local function BuildEmbedIfNeeded()
   hideExistingTextObjects()
   
   -- Hide custom achievement tab when embedded UI loads
-  --HideCustomAchievementTab()
+  HideCustomAchievementTab()
 
   DEST.Scroll = CreateFrame("ScrollFrame", nil, DEST, "UIPanelScrollFrameTemplate")
   DEST.Scroll:SetPoint("TOPLEFT", DEST, "TOPLEFT", 4, -40)
@@ -271,7 +271,7 @@ local function BuildEmbedIfNeeded()
   local function UpdateMultiplierText()
     if not DEST.MultiplierText then return end
     
-    local preset, tooltiptext, multiplier = HCA_GetPlayerPreset()
+    local preset = GetPlayerPresetFromSettings()
     local isSelfFound = IsSelfFound()
     
     local labelText = ""

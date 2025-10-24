@@ -6,8 +6,12 @@
 ## SavedVariables: HardcoreAchievementsDB
 ## IconTexture: Interface\AddOns\HardcoreAchievements\Images\Logo
 
+Functions\GetUHCPreset.lua
+
 HardcoreAchievements.lua
+
 Achievements\Common.lua
 Achievements\Catalog.lua
 Achievements\FourCandles.lua
+
 Utils\Embed_UltraHardcore.lua

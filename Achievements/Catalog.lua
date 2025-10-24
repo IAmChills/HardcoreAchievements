@@ -510,20 +510,6 @@ local Achievements = {
 }
 }
 
-local function HCA_NormalizePreset(p)
-  p = tostring(p or ""):lower()
-  p = p:gsub("%+","plus")      -- keep plus as text
-       :gsub("%s+","")         -- remove spaces
-       :gsub("[^%w]","")       -- drop any remaining punctuation
-  return p
-end
-
-function HCA_AdjustPoints(basePoints)
-  local preset, tooltip, multiplier = HCA_GetPlayerPreset()
-  -- round to nearest integer so totals are clean
-  return math.floor((basePoints or 0) * multiplier + 0.5)
-end
-
 local function IsEligible(def)
   -- Faction: "Alliance" / "Horde"
   if def.faction and UnitFactionGroup("player") ~= def.faction then
@@ -570,27 +556,23 @@ for _, def in ipairs(Achievements) do
   end
 end
 
--- Wait for preset to be available before creating achievements
-C_Timer.After(1, function()
-  for _, def in ipairs(Achievements) do
-    if IsEligible(def) then
-      local killFn  = def.customKill or (def.targetNpcId and _G[def.achId .. "_Kill"]) or nil
-      local questFn = (def.requiredQuestId and _G[def.achId .. "_Quest"]) or nil
+for _, def in ipairs(Achievements) do
+  if IsEligible(def) then
+    local killFn  = def.customKill or (def.targetNpcId and _G[def.achId .. "_Kill"]) or nil
+    local questFn = (def.requiredQuestId and _G[def.achId .. "_Quest"]) or nil
 
-      local effectivePoints = def.staticPoints and (def.points or 0) or HCA_AdjustPoints(def.points or 0)
-
-      CreateAchievementRow(
-        AchievementPanel,
-        def.achId,
-        def.title,
-        ("Level %d"):format(def.level),
-        def.desc,
-        def.icon,
-        def.level,
-        effectivePoints,
-        killFn,
-        questFn
-      )
-    end
+    CreateAchievementRow(
+      AchievementPanel,
+      def.achId,
+      def.title,
+      ("Level %d"):format(def.level),
+      def.desc,
+      def.icon,
+      def.level,
+      def.points or 0,
+      killFn,
+      questFn,
+      def.staticPoints
+    )
   end
-end)
+end
