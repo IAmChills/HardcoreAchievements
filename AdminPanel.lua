@@ -79,7 +79,7 @@ local function CreateAdminPanel()
     
     -- Create title manually since BasicFrameTemplateWithInset doesn't have SetTitle
     local titleText = adminFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-    titleText:SetPoint("TOP", adminFrame, "TOP", 0, -2)
+    titleText:SetPoint("TOP", adminFrame, "TOP", 0, -5)
     titleText:SetText("HardcoreAchievements Admin Panel")
     
     -- Make it draggable
@@ -91,12 +91,12 @@ local function CreateAdminPanel()
     
     -- Achievement dropdown
     local achievementLabel = adminFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    achievementLabel:SetPoint("TOPLEFT", 200, -32)
+    achievementLabel:SetPoint("TOPLEFT", 20, -40)
     achievementLabel:SetText("Achievement:")
     
     local achievementDropdown = CreateFrame("Frame", nil, adminFrame, "UIDropDownMenuTemplate")
-    achievementDropdown:SetPoint("TOPLEFT", achievementLabel, "BOTTOMLEFT", -20, -10)
-    achievementDropdown:SetSize(320, 32)
+    achievementDropdown:SetPoint("TOPLEFT", achievementLabel, "BOTTOMLEFT", -20, -5)
+    achievementDropdown:SetSize(520, 32)
     
     -- Character name input
     local characterLabel = adminFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
