@@ -75,8 +75,12 @@ local function CreateAdminPanel()
     adminFrame = CreateFrame("Frame", "HardcoreAchievementsAdminPanel", UIParent, "BasicFrameTemplateWithInset")
     adminFrame:SetSize(400, 300)
     adminFrame:SetPoint("CENTER")
-    adminFrame:SetTitle("HardcoreAchievements Admin Panel")
     adminFrame:Hide()
+    
+    -- Create title manually since BasicFrameTemplateWithInset doesn't have SetTitle
+    local titleText = adminFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    titleText:SetPoint("TOP", adminFrame, "TOP", 0, -15)
+    titleText:SetText("HardcoreAchievements Admin Panel")
     
     -- Make it draggable
     adminFrame:SetMovable(true)
