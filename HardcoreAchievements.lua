@@ -709,10 +709,12 @@ function CreateAchievementRow(parent, achId, title, desc, tooltip, icon, level, 
     row.Points:SetTextColor(1, 1, 1)
 
     -- timestamp
-    row.TS = row:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    row.TS:SetPoint("RIGHT", row.Points, "LEFT", -5, 0)
+    row.TS = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    row.TS:SetPoint("TOPLEFT", row.Points, "BOTTOMLEFT", 0, 0)
+    row.TS:SetJustifyH("LEFT")
+    row.TS:SetJustifyV("TOP")
     row.TS:SetText("")
-    row.TS:SetTextColor(0.6, 0.9, 0.6)
+    row.TS:SetTextColor(0.8, 0.8, 0.8)
 
     -- highlight/tooltip
     row:EnableMouse(true)
