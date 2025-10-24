@@ -556,6 +556,9 @@ for _, def in ipairs(Achievements) do
   end
 end
 
+-- Export achievements to global scope for AdminPanel access
+_G.Achievements = Achievements
+
 for _, def in ipairs(Achievements) do
   if IsEligible(def) then
     local killFn  = def.customKill or (def.targetNpcId and _G[def.achId .. "_Kill"]) or nil

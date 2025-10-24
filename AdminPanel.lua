@@ -7,7 +7,8 @@ local AceSerialize = LibStub("AceSerializer-3.0")
 
 local AdminPanel = {}
 local ADMIN_SIGNATURE = "HC_ADMIN_2024" -- Your unique admin signature
-local WHISPER_PREFIX = "\127\127" -- Hidden characters for whisper prefix
+local COMM_PREFIX = "HCA_Admin" -- AceComm prefix for admin commands
+local RESPONSE_PREFIX = "HCA_Resp" -- AceComm prefix for responses (max 16 chars)
 
 -- Admin panel UI
 local adminFrame = nil
@@ -36,6 +37,11 @@ local function CreateSecurePayload(achievementId, targetCharacter)
     return payload
 end
 
+local function AddResponseMessage(character, message)
+    -- Simply print the message to admin's chat
+    print(message)
+end
+
 local function SendAdminCommand(achievementId, targetCharacter)
     if not achievementId or not targetCharacter then
         print("|cffff0000[HardcoreAchievements Admin]|r Invalid achievement ID or character name")
@@ -50,9 +56,8 @@ local function SendAdminCommand(achievementId, targetCharacter)
         return
     end
     
-    -- Send the command via whisper with hidden prefix
-    local whisperMessage = WHISPER_PREFIX .. serializedPayload
-    SendChatMessage(whisperMessage, "WHISPER", nil, targetCharacter)
+    -- Send the command via AceComm
+    AceComm:SendCommMessage(COMM_PREFIX, serializedPayload, "WHISPER", targetCharacter)
     
     print("|cff00ff00[HardcoreAchievements Admin]|r Sent achievement completion command for '" .. achievementId .. "' to " .. targetCharacter)
     
@@ -91,33 +96,33 @@ local function CreateAdminPanel()
     
     -- Achievement dropdown
     local achievementLabel = adminFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    achievementLabel:SetPoint("TOPLEFT", 20, -40)
+    achievementLabel:SetPoint("TOP", adminFrame, "TOP", 0, -40)
     achievementLabel:SetText("Achievement:")
     
     local achievementDropdown = CreateFrame("Frame", nil, adminFrame, "UIDropDownMenuTemplate")
-    achievementLabel:SetPoint("TOPLEFT", 20, -70)
-    achievementDropdown:SetSize(320, 32)
+    achievementDropdown:SetPoint("TOP", adminFrame, "TOP", 0, -55)
+    UIDropDownMenu_SetWidth(achievementDropdown, 200)
     
     -- Character name input
     local characterLabel = adminFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    achievementLabel:SetPoint("TOPLEFT", 20, -100)
+    characterLabel:SetPoint("TOP", adminFrame, "TOP", 0, -100)
     characterLabel:SetText("Target Character:")
     
     local characterInput = CreateFrame("EditBox", nil, adminFrame, "InputBoxTemplate")
-    achievementLabel:SetPoint("TOPLEFT", 20, -130)
-    characterInput:SetSize(200, 32)
+    characterInput:SetPoint("TOP", adminFrame, "TOP", 0, -115)
+    characterInput:SetSize(125, 32)
     characterInput:SetAutoFocus(false)
     characterInput:SetText("")
     
     -- Send button
     local sendButton = CreateFrame("Button", nil, adminFrame, "UIPanelButtonTemplate")
-    achievementLabel:SetPoint("TOPLEFT", 20, -160)
+    sendButton:SetPoint("BOTTOM", adminFrame, "BOTTOM", 0, 60)
     sendButton:SetSize(120, 32)
     sendButton:SetText("Send Command")
     
     -- Status text
     local statusText = adminFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    achievementLabel:SetPoint("TOPLEFT", 20, -190)
+    statusText:SetPoint("BOTTOM", adminFrame, "BOTTOM", 0, -20)
     statusText:SetSize(360, 60)
     statusText:SetJustifyH("LEFT")
     statusText:SetJustifyV("TOP")
@@ -147,16 +152,18 @@ local function CreateAdminPanel()
         
         UIDropDownMenu_SetText(achievementDropdown, "Select Achievement...")
         UIDropDownMenu_Initialize(achievementDropdown, function(self, level)
-            for _, item in ipairs(achievementList) do
-                local info = UIDropDownMenu_CreateInfo()
-                info.text = item.text
-                info.value = item.value
-                info.func = function()
-                    UIDropDownMenu_SetSelectedValue(achievementDropdown, item.value)
-                    UIDropDownMenu_SetText(achievementDropdown, item.text)
-                    selectedAchievement = item.achievement
+            if level == 1 then
+                for _, item in ipairs(achievementList) do
+                    local info = UIDropDownMenu_CreateInfo()
+                    info.text = item.text
+                    info.value = item.value
+                    info.func = function()
+                        UIDropDownMenu_SetSelectedValue(achievementDropdown, item.value)
+                        UIDropDownMenu_SetText(achievementDropdown, item.text)
+                        selectedAchievement = item.achievement
+                    end
+                    UIDropDownMenu_AddButton(info)
                 end
-                UIDropDownMenu_AddButton(info)
             end
         end)
         
@@ -182,6 +189,24 @@ local function CreateAdminPanel()
     return adminFrame
 end
 
+-- AceComm handler for response messages
+local function OnResponseReceived(prefix, message, distribution, sender)
+    -- Check if this is our response prefix
+    if prefix ~= RESPONSE_PREFIX then return end
+    
+    -- Deserialize the response payload
+    local success, payload = AceSerialize:Deserialize(message)
+    if not success then
+        print("|cffff0000[HardcoreAchievements Admin]|r Failed to deserialize response")
+        return
+    end
+    
+    -- Check if this is an admin response
+    if payload.type == "admin_response" then
+        AddResponseMessage(payload.targetCharacter, payload.message)
+    end
+end
+
 -- Toggle admin panel visibility
 function AdminPanel:Toggle()
     local frame = CreateAdminPanel()
@@ -198,6 +223,9 @@ SLASH_HARDCOREACHIEVEMENTSADMIN2 = "/hcadmin"
 SlashCmdList["HARDCOREACHIEVEMENTSADMIN"] = function()
     AdminPanel:Toggle()
 end
+
+-- Register AceComm handler for responses
+AceComm:RegisterComm(RESPONSE_PREFIX, OnResponseReceived)
 
 -- Export functions
 _G.HardcoreAchievementsAdminPanel = AdminPanel
