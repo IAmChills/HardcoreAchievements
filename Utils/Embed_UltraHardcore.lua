@@ -4,7 +4,7 @@
 
 local ADDON_NAME = ...
 local EMBED = {}
-local DEST      -- tabContents[3]
+local DEST -- tabContents[3]
 local ICON_SIZE = 60
 local ICON_PADDING = 12
 local GRID_COLS = 7  -- Number of columns in the grid
@@ -32,12 +32,15 @@ local function ReadRowData(src)
   -- Get the tooltip from the row object (now stored in CreateAchievementRow)
   local tooltip = src.tooltip or title
   
+  -- Get calculated points (now stored directly in row.points)
+  local calculatedPoints = tonumber(src.points) or 0
+  
   return {
     id        = src.id or title,
     title     = title,
     iconTex   = iconTex,
     tooltip   = tooltip,
-    points    = tonumber(src.points) or 0,
+    points    = calculatedPoints,
     maxLevel  = tonumber(src.maxLevel) or nil,
     completed = not not src.completed,
   }
@@ -229,11 +232,10 @@ local function BuildEmbedIfNeeded()
   
   -- Hide any existing text objects in the frame that aren't ours
   local function hideExistingTextObjects()
-    for i = 1, DEST:GetNumChildren() do
-      local child = select(i, DEST:GetChildren())
-      if child and child.GetText and type(child.GetText) == "function" then
-        -- Hide any text object that exists (assuming they're all from UltraHardcore)
-        child:Hide()
+    -- Look for FontString regions (like the "Achievements Coming In Phase 3!" text)
+    for _, region in ipairs({ DEST:GetRegions() }) do
+      if region.GetText then
+        region:Hide()
       end
     end
   end
@@ -257,8 +259,36 @@ local function BuildEmbedIfNeeded()
   DEST.Content:SetSize(1, 1)
   DEST.Scroll:SetScrollChild(DEST.Content)
 
+  -- Add multiplier text (like in standalone mode)
+  DEST.MultiplierText = DEST:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+  DEST.MultiplierText:SetPoint("TOP", DEST, "TOP", 0, -35)
+  DEST.MultiplierText:SetText("") -- Will be set by UpdateMultiplierText
+
   EMBED.Content = DEST.Content
   SyncContentWidth()
+
+  -- Function to update multiplier text
+  local function UpdateMultiplierText()
+    if not DEST.MultiplierText then return end
+    
+    local preset, tooltiptext, multiplier = HCA_GetPlayerPreset()
+    local isSelfFound = IsSelfFound()
+    
+    local labelText = ""
+    if preset or isSelfFound then
+        labelText = "Point Multiplier ("
+        if preset then
+            labelText = labelText .. preset .. ", "
+        end
+        if isSelfFound then
+            labelText = labelText .. "Self Found"
+        end
+        labelText = labelText .. ")"
+    end
+    
+    DEST.MultiplierText:SetText(labelText)
+    DEST.MultiplierText:SetTextColor(0.8, 0.8, 0.8)
+  end
 
   DEST:HookScript("OnShow", function()
     if not EMBED.Content or EMBED.Content ~= DEST.Content then
@@ -266,6 +296,8 @@ local function BuildEmbedIfNeeded()
     end
     SyncContentWidth()
     EMBED:Rebuild()
+    
+    UpdateMultiplierText()
   end)
 
   DEST.Scroll:SetScript("OnSizeChanged", function(self)
@@ -295,21 +327,28 @@ end
 local f = CreateFrame("Frame")
 f:RegisterEvent("PLAYER_LOGIN")
 f:RegisterEvent("ADDON_LOADED")
-f:SetScript("OnEvent", function(self, event)
-  if BuildEmbedIfNeeded() then
-    HookSourceSignals()
-    C_Timer.After(0, function() EMBED:Rebuild() end)
-  else
-    C_Timer.After(0.25, function()
+f:SetScript("OnEvent", function(self, event, addonName)
+  -- Wait for UltraHardcore addon to be loaded
+  if event == "ADDON_LOADED" and addonName == "UltraHardcore" then
+    C_Timer.After(0.5, function()
       if BuildEmbedIfNeeded() then
         HookSourceSignals()
         C_Timer.After(0, function() EMBED:Rebuild() end)
-      else
-        -- UltraHardcore not available - achievements will use standalone mode
-        print("|cff00ff00[HardcoreAchievements]|r UltraHardcore addon not detected - achievements available in standalone mode")
+        --print("|cff00ff00[HardcoreAchievements]|r Successfully integrated with UltraHardcore")
       end
     end)
   end
+  
+  -- Fallback method - try after 2 seconds regardless
+  C_Timer.After(2.0, function()
+    if not DEST and tabContents and tabContents[3] then
+      if BuildEmbedIfNeeded() then
+        HookSourceSignals()
+        C_Timer.After(0, function() EMBED:Rebuild() end)
+        --print("|cff00ff00[HardcoreAchievements]|r Successfully integrated with UltraHardcore (fallback)")
+      end
+    end
+  end)
 
   if not GetSourceRows() then
     C_Timer.After(1.0, function()

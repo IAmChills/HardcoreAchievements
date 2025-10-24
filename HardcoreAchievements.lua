@@ -2,16 +2,6 @@ local ADDON_NAME = ...
 local playerGUID
 local SELF_FOUND_BONUS = 5
 
--- Check if UltraHardcoreLeaderboard addon is available for preset detection
-local function IsLeaderboardAddonAvailable()
-    return type(GetPresetAndTooltip) == "function"
-end
-
--- Check if UltraHardcore addon is available for integration
-local function IsUltraHardcoreAddonAvailable()
-    return UltraHardcoreDB ~= nil
-end
-
 local function EnsureDB()
     HardcoreAchievementsDB = HardcoreAchievementsDB or {}
     HardcoreAchievementsDB.chars = HardcoreAchievementsDB.chars or {}
@@ -85,15 +75,63 @@ local function GetCharDB()
     return db, db.chars[playerGUID]
 end
 
+function GetPresetMultiplier(preset)
+    local POINT_MULTIPLIER = {
+      lite            = 1.20,
+      liteplus        = 1.30,
+      recommended     = 1.50,
+      recommendedplus = 1.60,
+      ultra           = 1.70,
+      ultraplus       = 1.80,
+      experimental    = 2.00,
+      custom          = 1.00,
+    }
+    
+    if not preset or preset == "Custom" then
+      return 1.00
+    end
+    
+    local normalizedPreset = tostring(preset or ""):lower()
+    normalizedPreset = normalizedPreset:gsub("%+","plus")
+         :gsub("%s+","")
+         :gsub("[^%w]","")
+    
+    return POINT_MULTIPLIER[normalizedPreset] or 1.00
+  end
+
+local presetDelayedCheck = false
+
 function HCA_GetPlayerPreset()
   -- Try to get preset from UltraHardcoreLeaderboard addon first
-  if IsLeaderboardAddonAvailable() then
-    local preset = GetPresetAndTooltip(UnitName("player"))
-    if type(preset) == "string" and preset ~= "" then
-      return preset
-    end
+  if type(GetPresetAndTooltip) == "function" then
+    local preset, tooltiptext = GetPresetAndTooltip(UnitName("player"))
+    return preset, tooltiptext, GetPresetMultiplier(preset)
   end
-  return "Custom"
+  
+  -- If function not available yet, schedule a delayed check
+  if not presetDelayedCheck then
+    presetDelayedCheck = true
+    C_Timer.After(2, function()
+      if type(GetPresetAndTooltip) == "function" then
+        local preset, tooltiptext = GetPresetAndTooltip(UnitName("player"))
+        if preset and preset ~= "Custom" then
+          -- Update any UI elements that might be showing preset info
+          if AchievementPanel and AchievementPanel.PresetLabel then
+            local isSelfFound = IsSelfFound()
+            local labelText = "Point Multiplier (" .. preset
+            if isSelfFound then
+              labelText = labelText .. ", Self Found"
+            end
+            labelText = labelText .. ")"
+            AchievementPanel.PresetLabel:SetText(labelText)
+          end
+          
+        end
+      end
+    end)
+  end
+  
+  return "Custom", nil, 1.00
 end
 
 local function ClearProgress(achId)
@@ -410,7 +448,7 @@ end
 -- Self Found
 -- =========================================================
 
-local function IsSelfFound()
+function IsSelfFound()
     -- Check for UltraHardcore Self-Found buff
     for i = 1, 40 do
         local name, _, _, _, _, _, _, _, _, spellId = UnitBuff("player", i)
@@ -584,18 +622,17 @@ AchievementPanel.PresetLabel:SetPoint("TOP", 5, -60)
 
 -- Build the label text based on available information
 local function BuildPresetLabelText()
-    local preset = HCA_GetPlayerPreset()
+    local preset, tooltiptext, multiplier = HCA_GetPlayerPreset()
     local isSelfFound = IsSelfFound()
     
+    local labelText = ""
     if preset or isSelfFound then
-        local labelText = "Point Multiplier ("
-        if preset ~= "Custom" then
-            labelText = labelText .. preset
-        else
-            labelText = labelText .. "Standard"
+        labelText = "Point Multiplier ("
+        if preset then
+            labelText = labelText .. preset .. ", "
         end
         if isSelfFound then
-            labelText = labelText .. ", Self Found"
+            labelText = labelText .. "Self Found"
         end
         labelText = labelText .. ")"
     end
@@ -761,7 +798,7 @@ function CreateAchievementRow(parent, achId, title, desc, tooltip, icon, level, 
         row:Hide()
     end
 
-    row.points = tonumber(points) or 0
+    row.points = ((points or 0) + (IsSelfFound() and SELF_FOUND_BONUS or 0))
     row.completed = false
     row.maxLevel = tonumber(level) or 0
     row.tooltip = tooltip  -- Store the tooltip for later access

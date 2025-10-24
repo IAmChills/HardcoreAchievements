@@ -1,6 +1,6 @@
 local Achievements = {
 
-{ achId="Test",  title="Wolfslayer Test",  level=8, desc="Kill |cff0091e6a wolf", icon=134400, points=10, requiredQuestId=nil, targetNpcId=299, faction="Alliance" },
+--{ achId="Test",  title="Wolfslayer Test",  level=8, desc="Kill |cff0091e6a wolf", icon=134400, points=10, requiredQuestId=nil, targetNpcId=299, faction="Alliance" },
 --{ achId="Test2", title="Easy Quest Test", level=8, desc="Human starter quest", icon=134400, points=10, requiredQuestId=783, targetNpcId=nil, faction="Alliance" },
 
 -- Alliance
@@ -518,23 +518,10 @@ local function HCA_NormalizePreset(p)
   return p
 end
 
-local POINT_MULTIPLIER = {
-  lite            = 1.20,  -- 10 -> 12
-  liteplus        = 1.30,  -- 10 -> 13
-  recommended     = 1.50,  -- 10 -> 15
-  recommendedplus = 1.60,  -- 10 -> 16
-  ultra           = 1.70,  -- 10 -> 17
-  ultraplus       = 1.80,  -- 10 -> 18
-  experimental    = 2.00,  -- 10 -> 20
-  custom          = 1.00,  -- unchanged
-}
-
-local PLAYER_PRESET = HCA_GetPlayerPreset()
-
-local function HCA_AdjustPoints(basePoints, PLAYER_PRESET)
-  local mult = POINT_MULTIPLIER[HCA_NormalizePreset(PLAYER_PRESET)] or 1.00
+function HCA_AdjustPoints(basePoints)
+  local preset, tooltip, multiplier = HCA_GetPlayerPreset()
   -- round to nearest integer so totals are clean
-  return math.floor((basePoints or 0) * mult + 0.5)
+  return math.floor((basePoints or 0) * multiplier + 0.5)
 end
 
 local function IsEligible(def)
@@ -583,24 +570,27 @@ for _, def in ipairs(Achievements) do
   end
 end
 
-for _, def in ipairs(Achievements) do
-  if IsEligible(def) then
-    local killFn  = def.customKill or (def.targetNpcId and _G[def.achId .. "_Kill"]) or nil
-    local questFn = (def.requiredQuestId and _G[def.achId .. "_Quest"]) or nil
+-- Wait for preset to be available before creating achievements
+C_Timer.After(1, function()
+  for _, def in ipairs(Achievements) do
+    if IsEligible(def) then
+      local killFn  = def.customKill or (def.targetNpcId and _G[def.achId .. "_Kill"]) or nil
+      local questFn = (def.requiredQuestId and _G[def.achId .. "_Quest"]) or nil
 
-    local effectivePoints = def.staticPoints and (def.points or 0) or HCA_AdjustPoints(def.points or 0, PLAYER_PRESET)
+      local effectivePoints = def.staticPoints and (def.points or 0) or HCA_AdjustPoints(def.points or 0)
 
-    CreateAchievementRow(
-      AchievementPanel,
-      def.achId,
-      def.title,
-      ("Level %d"):format(def.level),
-      def.desc,
-      def.icon,
-      def.level,
-      effectivePoints,
-      killFn,
-      questFn
-    )
+      CreateAchievementRow(
+        AchievementPanel,
+        def.achId,
+        def.title,
+        ("Level %d"):format(def.level),
+        def.desc,
+        def.icon,
+        def.level,
+        effectivePoints,
+        killFn,
+        questFn
+      )
+    end
   end
-end
+end)
