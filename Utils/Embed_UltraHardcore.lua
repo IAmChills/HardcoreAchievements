@@ -386,28 +386,6 @@ local function HookSourceSignals()
       C_Timer.After(0, function() EMBED:Rebuild() end)
     end)
   end
-  
-  -- Hook into the new TabManager system
-  if _G.TabManager and _G.TabManager.switchToTab then
-    local originalSwitchToTab = _G.TabManager.switchToTab
-    _G.TabManager.switchToTab = function(index)
-      originalSwitchToTab(index)
-      -- If switching to achievements tab (index 3), rebuild our embed
-      if index == 3 then
-        C_Timer.After(0.1, function()
-          if UHCA and UHCA:IsShown() then
-            -- Clear any content that UltraHardcore might have added
-            local regions = {UHCA:GetRegions()}
-            for i = #regions, 1, -1 do
-              regions[i]:Hide()
-            end
-            EMBED:Rebuild()
-          end
-        end)
-      end
-    end
-  end
-  
   EMBED._hooked = true
 end
 
