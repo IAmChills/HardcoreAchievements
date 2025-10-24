@@ -95,29 +95,29 @@ local function CreateAdminPanel()
     achievementLabel:SetText("Achievement:")
     
     local achievementDropdown = CreateFrame("Frame", nil, adminFrame, "UIDropDownMenuTemplate")
-    achievementDropdown:SetPoint("TOPLEFT", achievementLabel, "BOTTOMLEFT", -20, -5)
+    achievementLabel:SetPoint("TOPLEFT", 20, -70)
     achievementDropdown:SetSize(320, 32)
     
     -- Character name input
     local characterLabel = adminFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    characterLabel:SetPoint("TOPLEFT", achievementLabel, "BOTTOMLEFT", 0, -70)
+    achievementLabel:SetPoint("TOPLEFT", 20, -100)
     characterLabel:SetText("Target Character:")
     
     local characterInput = CreateFrame("EditBox", nil, adminFrame, "InputBoxTemplate")
-    characterInput:SetPoint("TOPLEFT", characterLabel, "BOTTOMLEFT", 10, -10)
+    achievementLabel:SetPoint("TOPLEFT", 20, -130)
     characterInput:SetSize(200, 32)
     characterInput:SetAutoFocus(false)
     characterInput:SetText("")
     
     -- Send button
     local sendButton = CreateFrame("Button", nil, adminFrame, "UIPanelButtonTemplate")
-    sendButton:SetPoint("TOPLEFT", characterInput, "BOTTOMLEFT", 0, -20)
+    achievementLabel:SetPoint("TOPLEFT", 20, -160)
     sendButton:SetSize(120, 32)
     sendButton:SetText("Send Command")
     
     -- Status text
     local statusText = adminFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    statusText:SetPoint("TOPLEFT", sendButton, "BOTTOMLEFT", 0, -20)
+    achievementLabel:SetPoint("TOPLEFT", 20, -190)
     statusText:SetSize(360, 60)
     statusText:SetJustifyH("LEFT")
     statusText:SetJustifyV("TOP")
