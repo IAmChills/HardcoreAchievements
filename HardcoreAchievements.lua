@@ -690,6 +690,14 @@ function CreateAchievementRow(parent, achId, title, desc, tooltip, icon, level, 
     row.Points:SetText(((points or 0) + (IsSelfFound() and SELF_FOUND_BONUS or 0)) .. " pts")
     row.Points:SetTextColor(1, 1, 1)
 
+    -- timestamp
+    row.TS = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    row.TS:SetPoint("RIGHT", row.Points, "RIGHT", 0, -15)
+    row.TS:SetJustifyH("RIGHT")
+    row.TS:SetJustifyV("TOP")
+    row.TS:SetText("")
+    row.TS:SetTextColor(0.6, 0.6, 0.6, 0.5)
+
     -- highlight/tooltip
     row:EnableMouse(true)
     row.highlight = row:CreateTexture(nil, "BACKGROUND")
