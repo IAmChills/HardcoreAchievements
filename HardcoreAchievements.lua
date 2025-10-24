@@ -710,7 +710,7 @@ function CreateAchievementRow(parent, achId, title, desc, tooltip, icon, level, 
 
     -- timestamp
     row.TS = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    row.TS:SetPoint("RIGHT", row.Points, "RIGHT", -15, 0)
+    row.TS:SetPoint("RIGHT", row.Points, "RIGHT", 0, -15)
     row.TS:SetJustifyH("RIGHT")
     row.TS:SetJustifyV("TOP")
     row.TS:SetText("")
