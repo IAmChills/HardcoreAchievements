@@ -1,10 +1,6 @@
--- Embed_UltraHardcore.lua
--- Embeds HardcoreAchievements as circular icons in a grid layout into the UltraHardcore Settings "Achievements" tab (tabContents[3])
--- Grid UI: circular icons with tooltips showing title, level requirement, and points.
-
 local ADDON_NAME = ...
 local EMBED = {}
-local DEST -- tabContents[3]
+local UHCA -- tabContents[3]
 local ICON_SIZE = 60
 local ICON_PADDING = 12
 local GRID_COLS = 7  -- Number of columns in the grid
@@ -126,15 +122,15 @@ end
 
 -- Keep content width synced to the scroll frame so text aligns and doesn't bunch up
 local function SyncContentWidth()
-  if not DEST or not DEST.Scroll or not DEST.Content then return end
-  local w = math.max(DEST.Scroll:GetWidth(), 1)
-  DEST.Content:SetWidth(w)
+  if not UHCA or not UHCA.Scroll or not UHCA.Content then return end
+  local w = math.max(UHCA.Scroll:GetWidth(), 1)
+  UHCA.Content:SetWidth(w)
 end
 
 -- ---------- Rebuild ----------
 function EMBED:Rebuild()
-  if not DEST or not DEST.Content then return end
-  if not self.Content then self.Content = DEST.Content end
+  if not UHCA or not UHCA.Content then return end
+  if not self.Content then self.Content = UHCA.Content end
 
   SyncContentWidth()
 
@@ -225,15 +221,21 @@ end
 
 -- ---------- Build / Hooks ----------
 local function BuildEmbedIfNeeded()
-  if DEST and DEST.Scroll and DEST.Content and EMBED.Content then return true end
+  if UHCA and UHCA.Scroll and UHCA.Content and EMBED.Content then return true end
   if not tabContents or not tabContents[3] then return false end
 
-  DEST = tabContents[3]
+  UHCA = tabContents[3]
+  
+  -- Clear any existing content that UltraHardcore might have added
+  local regions = {UHCA:GetRegions()}
+  for i = #regions, 1, -1 do
+    regions[i]:Hide()
+  end
   
   -- Hide any existing text objects in the frame that aren't ours
   local function hideExistingTextObjects()
     -- Look for FontString regions (like the "Achievements Coming In Phase 3!" text)
-    for _, region in ipairs({ DEST:GetRegions() }) do
+    for _, region in ipairs({ UHCA:GetRegions() }) do
       if region.GetText then
         region:Hide()
       end
@@ -246,38 +248,38 @@ local function BuildEmbedIfNeeded()
   -- Hide custom achievement tab when embedded UI loads
   HideCustomAchievementTab()
 
-  DEST.Scroll = CreateFrame("ScrollFrame", nil, DEST, "UIPanelScrollFrameTemplate")
-  DEST.Scroll:SetPoint("TOPLEFT", DEST, "TOPLEFT", 4, -40)
-  DEST.Scroll:SetPoint("BOTTOMRIGHT", DEST, "BOTTOMRIGHT", -8, -20)
+  UHCA.Scroll = CreateFrame("ScrollFrame", nil, UHCA, "UIPanelScrollFrameTemplate")
+  UHCA.Scroll:SetPoint("TOPLEFT", UHCA, "TOPLEFT", 4, -40)
+  UHCA.Scroll:SetPoint("BOTTOMRIGHT", UHCA, "BOTTOMRIGHT", -8, -20)
   
   -- Hide the scroll bar but keep it functional
-  if DEST.Scroll.ScrollBar then
-    DEST.Scroll.ScrollBar:Hide()
+  if UHCA.Scroll.ScrollBar then
+    UHCA.Scroll.ScrollBar:Hide()
   end
 
-  DEST.Content = CreateFrame("Frame", nil, DEST.Scroll)
-  DEST.Content:SetSize(1, 1)
-  DEST.Scroll:SetScrollChild(DEST.Content)
+  UHCA.Content = CreateFrame("Frame", nil, UHCA.Scroll)
+  UHCA.Content:SetSize(1, 1)
+  UHCA.Scroll:SetScrollChild(UHCA.Content)
 
   -- Add multiplier text (like in standalone mode)
-  DEST.MultiplierText = DEST:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-  DEST.MultiplierText:SetPoint("TOP", DEST, "TOP", 0, -35)
-  DEST.MultiplierText:SetText("") -- Will be set by UpdateMultiplierText
+  UHCA.MultiplierText = UHCA:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+  UHCA.MultiplierText:SetPoint("TOP", UHCA, "TOP", 0, -35)
+  UHCA.MultiplierText:SetText("") -- Will be set by UpdateMultiplierText
 
   -- Add checkbox to control custom tab visibility
-  DEST.HideCustomTabCheckbox = CreateFrame("CheckButton", nil, DEST, "UICheckButtonTemplate")
-  DEST.HideCustomTabCheckbox:SetPoint("BOTTOMRIGHT", DEST, "BOTTOMRIGHT", 0, -30)
-  DEST.HideCustomTabCheckbox:SetSize(20, 20)
-  DEST.HideCustomTabCheckbox:SetChecked(HardcoreAchievementsDB and HardcoreAchievementsDB.showCustomTab == true) -- Default to not showing custom tab, but respect saved state
+  UHCA.HideCustomTabCheckbox = CreateFrame("CheckButton", nil, UHCA, "UICheckButtonTemplate")
+  UHCA.HideCustomTabCheckbox:SetPoint("BOTTOMRIGHT", UHCA, "BOTTOMRIGHT", 0, -30)
+  UHCA.HideCustomTabCheckbox:SetSize(20, 20)
+  UHCA.HideCustomTabCheckbox:SetChecked(HardcoreAchievementsDB and HardcoreAchievementsDB.showCustomTab == true) -- Default to not showing custom tab, but respect saved state
   
   -- Add label for the checkbox
-  DEST.HideCustomTabLabel = DEST:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-  DEST.HideCustomTabLabel:SetPoint("RIGHT", DEST.HideCustomTabCheckbox, "LEFT", -5, 0)
-  DEST.HideCustomTabLabel:SetText("Show Achievement on CharacterFrame")
-  DEST.HideCustomTabLabel:SetTextColor(0.8, 0.8, 0.8)
+  UHCA.HideCustomTabLabel = UHCA:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+  UHCA.HideCustomTabLabel:SetPoint("RIGHT", UHCA.HideCustomTabCheckbox, "LEFT", -5, 0)
+  UHCA.HideCustomTabLabel:SetText("Show Achievement on CharacterFrame")
+  UHCA.HideCustomTabLabel:SetTextColor(0.8, 0.8, 0.8)
   
   -- Handle checkbox changes
-  DEST.HideCustomTabCheckbox:SetScript("OnClick", function(self)
+  UHCA.HideCustomTabCheckbox:SetScript("OnClick", function(self)
     local isChecked = self:GetChecked()
     local tab = _G["CharacterFrameTab" .. (CharacterFrame.numTabs + 1)]
     
@@ -305,7 +307,7 @@ local function BuildEmbedIfNeeded()
     end
   end)
 
-  EMBED.Content = DEST.Content
+  EMBED.Content = UHCA.Content
   SyncContentWidth()
   
   -- Apply saved state on initialization
@@ -332,7 +334,7 @@ local function BuildEmbedIfNeeded()
 
   -- Function to update multiplier text
   local function UpdateMultiplierText()
-    if not DEST.MultiplierText then return end
+    if not UHCA.MultiplierText then return end
     
     local preset = GetPlayerPresetFromSettings()
     local isSelfFound = IsSelfFound()
@@ -349,13 +351,13 @@ local function BuildEmbedIfNeeded()
         labelText = labelText .. ")"
     end
     
-    DEST.MultiplierText:SetText(labelText)
-    DEST.MultiplierText:SetTextColor(0.8, 0.8, 0.8)
+    UHCA.MultiplierText:SetText(labelText)
+    UHCA.MultiplierText:SetTextColor(0.8, 0.8, 0.8)
   end
 
-  DEST:HookScript("OnShow", function()
-    if not EMBED.Content or EMBED.Content ~= DEST.Content then
-      EMBED.Content = DEST.Content
+  UHCA:HookScript("OnShow", function()
+    if not EMBED.Content or EMBED.Content ~= UHCA.Content then
+      EMBED.Content = UHCA.Content
     end
     SyncContentWidth()
     EMBED:Rebuild()
@@ -363,7 +365,7 @@ local function BuildEmbedIfNeeded()
     UpdateMultiplierText()
   end)
 
-  DEST.Scroll:SetScript("OnSizeChanged", function(self)
+  UHCA.Scroll:SetScript("OnSizeChanged", function(self)
     self:UpdateScrollChildRect()
     SyncContentWidth()
     EMBED:Rebuild()
@@ -384,6 +386,28 @@ local function HookSourceSignals()
       C_Timer.After(0, function() EMBED:Rebuild() end)
     end)
   end
+  
+  -- Hook into the new TabManager system
+  if _G.TabManager and _G.TabManager.switchToTab then
+    local originalSwitchToTab = _G.TabManager.switchToTab
+    _G.TabManager.switchToTab = function(index)
+      originalSwitchToTab(index)
+      -- If switching to achievements tab (index 3), rebuild our embed
+      if index == 3 then
+        C_Timer.After(0.1, function()
+          if UHCA and UHCA:IsShown() then
+            -- Clear any content that UltraHardcore might have added
+            local regions = {UHCA:GetRegions()}
+            for i = #regions, 1, -1 do
+              regions[i]:Hide()
+            end
+            EMBED:Rebuild()
+          end
+        end)
+      end
+    end
+  end
+  
   EMBED._hooked = true
 end
 
@@ -404,7 +428,7 @@ f:SetScript("OnEvent", function(self, event, addonName)
   
   -- Fallback method - try after 2 seconds regardless
   C_Timer.After(2.0, function()
-    if not DEST and tabContents and tabContents[3] then
+    if not UHCA and tabContents and tabContents[3] then
       if BuildEmbedIfNeeded() then
         HookSourceSignals()
         C_Timer.After(0, function() EMBED:Rebuild() end)
@@ -416,7 +440,7 @@ f:SetScript("OnEvent", function(self, event, addonName)
   if not GetSourceRows() then
     C_Timer.After(1.0, function()
       HookSourceSignals()
-      if DEST and DEST:IsShown() then 
+      if UHCA and UHCA:IsShown() then 
         EMBED:Rebuild()
         -- If rebuild still fails to get data, show custom tab as fallback
         if not GetSourceRows() then
