@@ -264,8 +264,71 @@ local function BuildEmbedIfNeeded()
   DEST.MultiplierText:SetPoint("TOP", DEST, "TOP", 0, -35)
   DEST.MultiplierText:SetText("") -- Will be set by UpdateMultiplierText
 
+  -- Add checkbox to control custom tab visibility
+  DEST.HideCustomTabCheckbox = CreateFrame("CheckButton", nil, DEST, "UICheckButtonTemplate")
+  DEST.HideCustomTabCheckbox:SetPoint("BOTTOMRIGHT", DEST, "BOTTOMRIGHT", 0, -30)
+  DEST.HideCustomTabCheckbox:SetSize(20, 20)
+  DEST.HideCustomTabCheckbox:SetChecked(HardcoreAchievementsDB and HardcoreAchievementsDB.showCustomTab == true) -- Default to not showing custom tab, but respect saved state
+  
+  -- Add label for the checkbox
+  DEST.HideCustomTabLabel = DEST:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+  DEST.HideCustomTabLabel:SetPoint("RIGHT", DEST.HideCustomTabCheckbox, "LEFT", -5, 0)
+  DEST.HideCustomTabLabel:SetText("Show Achievement on CharacterFrame")
+  DEST.HideCustomTabLabel:SetTextColor(0.8, 0.8, 0.8)
+  
+  -- Handle checkbox changes
+  DEST.HideCustomTabCheckbox:SetScript("OnClick", function(self)
+    local isChecked = self:GetChecked()
+    local tab = _G["CharacterFrameTab" .. (CharacterFrame.numTabs + 1)]
+    
+    -- Save the state to the database
+    if not HardcoreAchievementsDB then
+      HardcoreAchievementsDB = {}
+    end
+    HardcoreAchievementsDB.showCustomTab = isChecked
+    
+    if tab and tab:GetText() and tab:GetText():find("Achievements") then
+      if isChecked then
+        -- Show custom tab
+        tab:Show()
+        tab:SetScript("OnClick", function(self)
+          -- Use the same logic as the main achievement tab
+          if HCA_ShowAchievementTab then
+            HCA_ShowAchievementTab()
+          end
+        end)
+      else
+        -- Hide custom tab
+        tab:Hide()
+        tab:SetScript("OnClick", function() end) -- Disable click functionality
+      end
+    end
+  end)
+
   EMBED.Content = DEST.Content
   SyncContentWidth()
+  
+  -- Apply saved state on initialization
+  local savedState = HardcoreAchievementsDB and HardcoreAchievementsDB.showCustomTab
+  if savedState ~= nil then
+    local tab = _G["CharacterFrameTab" .. (CharacterFrame.numTabs + 1)]
+    if tab and tab:GetText() and tab:GetText():find("Achievements") then
+      if savedState then
+        -- Show custom tab
+        tab:Show()
+        tab:SetScript("OnClick", function(self)
+          -- Use the same logic as the main achievement tab
+          if HCA_ShowAchievementTab then
+            HCA_ShowAchievementTab()
+          end
+        end)
+      else
+        -- Hide custom tab
+        tab:Hide()
+        tab:SetScript("OnClick", function() end) -- Disable click functionality
+      end
+    end
+  end
 
   -- Function to update multiplier text
   local function UpdateMultiplierText()
@@ -353,7 +416,23 @@ f:SetScript("OnEvent", function(self, event, addonName)
   if not GetSourceRows() then
     C_Timer.After(1.0, function()
       HookSourceSignals()
-      if DEST and DEST:IsShown() then EMBED:Rebuild() end
+      if DEST and DEST:IsShown() then 
+        EMBED:Rebuild()
+        -- If rebuild still fails to get data, show custom tab as fallback
+        if not GetSourceRows() then
+          -- Show custom achievement tab as fallback
+          local tab = _G["CharacterFrameTab" .. (CharacterFrame.numTabs + 1)]
+          if tab and tab:GetText() and tab:GetText():find("Achievements") then
+            tab:Show()
+            tab:SetScript("OnClick", function(self)
+              -- Use the same logic as the main achievement tab
+              if HCA_ShowAchievementTab then
+                HCA_ShowAchievementTab()
+              end
+            end)
+          end
+        end
+      end
     end)
   end
 end)

@@ -779,7 +779,8 @@ end
 -- Handle only OUR tabs click (dont toggle the whole frame)
 -- =========================================================
  
-Tab:SetScript("OnClick", function(self)
+-- Reusable function for achievement tab click logic
+function HCA_ShowAchievementTab()
     -- tab sfx (Classic-compatible)
     if SOUNDKIT and SOUNDKIT.IG_CHARACTER_INFO_TAB then
         PlaySound(SOUNDKIT.IG_CHARACTER_INFO_TAB)
@@ -808,7 +809,9 @@ Tab:SetScript("OnClick", function(self)
     AchievementPanel:Show()
 
     -- AchievementPanel.PortraitCover:Show()
-end)
+end
+
+Tab:SetScript("OnClick", HCA_ShowAchievementTab)
 
 hooksecurefunc("CharacterFrame_ShowSubFrame", function(frameName)
     if AchievementPanel and AchievementPanel:IsShown() and frameName ~= "Achievements" then
