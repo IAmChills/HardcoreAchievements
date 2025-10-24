@@ -80,6 +80,22 @@ local function ClearProgress(achId)
     if cdb and cdb.progress then cdb.progress[achId] = nil end
 end
 
+-- Format timestamp into readable date/time string
+local function FormatTimestamp(timestamp)
+    if not timestamp then return "" end
+    
+    local dateInfo = date("*t", timestamp)
+    local monthNames = {"Jan", "Feb", "Mar", "Apr", "May", "Jun", 
+                       "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"}
+    
+    return string.format("%s %d, %d %02d:%02d", 
+        monthNames[dateInfo.month], 
+        dateInfo.day, 
+        dateInfo.year, 
+        dateInfo.hour, 
+        dateInfo.min)
+end
+
 function UpdateTotalPoints()
     local total = 0
     if AchievementPanel and AchievementPanel.achievements then
@@ -138,12 +154,12 @@ end
 function HCA_MarkRowCompleted(row)
     if row.completed then return end
 
-
     row.completed = true
 
+    if row.Title and row.Title.SetTextColor then row.Title:SetTextColor(0.6, 0.9, 0.6) end
     if row.Sub then row.Sub:SetText("Completed!") end
     if row.Points then row.Points:SetTextColor(0.6, 0.9, 0.6) end
-    if row.Title and row.Title.SetTextColor then row.Title:SetTextColor(0.6, 0.9, 0.6) end
+    if row.TS then row.TS:SetText(FormatTimestamp(time())) end
     if row.Icon and row.Icon.SetDesaturated then row.Icon:SetDesaturated(false) end
 
     local _, cdb = GetCharDB()
@@ -190,9 +206,11 @@ local function RestoreCompletionsFromDB()
         local rec = id and cdb.achievements and cdb.achievements[id]
         if rec and rec.completed then
             row.completed = true
-            if row.Sub then row.Sub:SetText("Completed!") end
-            if row.Points then row.Points:SetTextColor(0.6, 0.9, 0.6) end
             if row.Title and row.Title.SetTextColor then row.Title:SetTextColor(0.6, 0.9, 0.6) end
+            if row.Sub then row.Sub:SetText("Completed!") end
+            if row.TS then row.TS:SetText(FormatTimestamp(rec.completedAt)) end
+            if row.Points then row.Points:SetTextColor(0.6, 0.9, 0.6) end
+            
             if row.Icon and row.Icon.SetDesaturated then row.Icon:SetDesaturated(false) end
 
             if rec.points then
