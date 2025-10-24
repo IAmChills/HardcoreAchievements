@@ -219,12 +219,25 @@ local function HideCustomAchievementTab()
     end
 end
 
+-- helper: get the Achievements tab frame in both old and new UHC builds
+local function GetAchievementsContainer()
+  if TabManager and TabManager.getTabContent then
+    local f = TabManager.getTabContent(3)
+    if f then return f end
+  end
+  if _G.tabContents and _G.tabContents[3] then
+    return _G.tabContents[3]
+  end
+end
+
 -- ---------- Build / Hooks ----------
 local function BuildEmbedIfNeeded()
   if UHCA and UHCA.Scroll and UHCA.Content and EMBED.Content then return true end
-  if not tabContents or not tabContents[3] then return false end
+  
+  local container = GetAchievementsContainer()
+  if not container then return false end
 
-  UHCA = tabContents[3]
+  UHCA = container
   
   -- Clear any existing content that UltraHardcore might have added
   local regions = {UHCA:GetRegions()}
@@ -389,50 +402,45 @@ local function HookSourceSignals()
   EMBED._hooked = true
 end
 
+local function HookTabManager()
+  if EMBED._tmHooked or not TabManager or not TabManager.switchToTab then return end
+  local orig = TabManager.switchToTab
+  TabManager.switchToTab = function(index)
+    orig(index)
+    if index == 3 then
+      C_Timer.After(0, function()
+        if BuildEmbedIfNeeded() then EMBED:Rebuild() end
+      end)
+    end
+  end
+  EMBED._tmHooked = true
+end
+
 local f = CreateFrame("Frame")
 f:RegisterEvent("PLAYER_LOGIN")
 f:RegisterEvent("ADDON_LOADED")
 f:SetScript("OnEvent", function(self, event, addonName)
   -- Wait for UltraHardcore addon to be loaded
   if event == "ADDON_LOADED" and addonName == "UltraHardcore" then
-    C_Timer.After(0.5, function()
-      if BuildEmbedIfNeeded() then
-        HookSourceSignals()
-        C_Timer.After(0, function() EMBED:Rebuild() end)
-        --print("|cff00ff00[HardcoreAchievements]|r Successfully integrated with UltraHardcore")
-      end
-    end)
+    HookTabManager()
+    HookSourceSignals()
+    --print("|cff00ff00[HardcoreAchievements]|r Successfully integrated with UltraHardcore")
   end
-  
-  -- Fallback method - try after 2 seconds regardless
-  C_Timer.After(2.0, function()
-    if not UHCA and tabContents and tabContents[3] then
-      if BuildEmbedIfNeeded() then
-        HookSourceSignals()
-        C_Timer.After(0, function() EMBED:Rebuild() end)
-        --print("|cff00ff00[HardcoreAchievements]|r Successfully integrated with UltraHardcore (fallback)")
-      end
-    end
-  end)
 
+  -- Show custom achievement tab as fallback if needed
   if not GetSourceRows() then
     C_Timer.After(1.0, function()
-      HookSourceSignals()
-      if UHCA and UHCA:IsShown() then 
-        EMBED:Rebuild()
-        -- If rebuild still fails to get data, show custom tab as fallback
-        if not GetSourceRows() then
-          -- Show custom achievement tab as fallback
-          local tab = _G["CharacterFrameTab" .. (CharacterFrame.numTabs + 1)]
-          if tab and tab:GetText() and tab:GetText():find("Achievements") then
-            tab:Show()
-            tab:SetScript("OnClick", function(self)
-              -- Use the same logic as the main achievement tab
-              if HCA_ShowAchievementTab then
-                HCA_ShowAchievementTab()
-              end
-            end)
-          end
+      if not GetSourceRows() then
+        -- Show custom achievement tab as fallback
+        local tab = _G["CharacterFrameTab" .. (CharacterFrame.numTabs + 1)]
+        if tab and tab:GetText() and tab:GetText():find("Achievements") then
+          tab:Show()
+          tab:SetScript("OnClick", function(self)
+            -- Use the same logic as the main achievement tab
+            if HCA_ShowAchievementTab then
+              HCA_ShowAchievementTab()
+            end
+          end)
         end
       end
     end)
