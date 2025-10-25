@@ -137,13 +137,16 @@ local function SortAchievementRows()
     local totalHeight = 0
     for _, row in ipairs(AchievementPanel.achievements) do
         row:ClearAllPoints()
-        if prev and prev ~= row then
-            row:SetPoint("TOPLEFT", prev, "BOTTOMLEFT", 0, -2)
-        else
-            row:SetPoint("TOPLEFT", AchievementPanel.Content, "TOPLEFT", 0, 0)
+        -- Only position visible rows
+        if row:IsShown() then
+            if prev and prev ~= row then
+                row:SetPoint("TOPLEFT", prev, "BOTTOMLEFT", 0, -2)
+            else
+                row:SetPoint("TOPLEFT", AchievementPanel.Content, "TOPLEFT", 0, 0)
+            end
+            prev = row
+            totalHeight = totalHeight + (row:GetHeight() + 2)
         end
-        prev = row
-        totalHeight = totalHeight + (row:GetHeight() + 2)
     end
 
     AchievementPanel.Content:SetHeight(math.max(totalHeight + 16, AchievementPanel.Scroll:GetHeight() or 0))
@@ -177,6 +180,11 @@ function HCA_MarkRowCompleted(row)
         end
         ClearProgress(id)
         UpdateTotalPoints()
+    end
+    
+    -- Re-apply filter after completion state changes
+    if ApplyFilter then
+        C_Timer.After(0, ApplyFilter)
     end
 end
 
@@ -556,19 +564,82 @@ AchievementPanel:Hide()
 AchievementPanel:EnableMouse(true)
 AchievementPanel:SetAllPoints(CharacterFrame)
 
-AchievementPanel.Text = AchievementPanel:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-AchievementPanel.Text:SetPoint("TOP", 5, -45)
-AchievementPanel.Text:SetText("Achievements")
+-- Filter dropdown
+local filterDropdown = CreateFrame("Frame", nil, AchievementPanel, "UIDropDownMenuTemplate")
+filterDropdown:SetPoint("TOP", AchievementPanel, "TOP", 5, -50)
+UIDropDownMenu_SetWidth(filterDropdown, 110)
+UIDropDownMenu_SetText(filterDropdown, "All")
+
+local currentFilter = "all"
+
+local function PopulateFilterDropdown()
+    local filterList = {
+        { text = "All", value = "all" },
+        { text = "Completed", value = "completed" },
+        { text = "Not Completed", value = "not_completed" },
+        { text = "Failed", value = "failed" },
+    }
+    return filterList
+end
+
+-- Function to apply the current filter to all achievement rows
+local function ApplyFilter()
+    if not AchievementPanel or not AchievementPanel.achievements then return end
+    
+    for _, row in ipairs(AchievementPanel.achievements) do
+        local shouldShow = false
+        
+        if currentFilter == "all" then
+            shouldShow = true
+        elseif currentFilter == "completed" then
+            shouldShow = row.completed == true
+        elseif currentFilter == "not_completed" then
+            shouldShow = row.completed ~= true and not IsRowOutleveled(row)
+        elseif currentFilter == "failed" then
+            shouldShow = IsRowOutleveled(row)
+        end
+        
+        if shouldShow then
+            row:Show()
+        else
+            row:Hide()
+        end
+    end
+    
+    -- Recalculate and update the row positioning after filtering
+    SortAchievementRows()
+end
+
+UIDropDownMenu_Initialize(filterDropdown, function(self, level)
+    if level == 1 then
+        for _, filter in ipairs(PopulateFilterDropdown()) do
+            local info = UIDropDownMenu_CreateInfo()
+            info.text = filter.text
+            info.value = filter.value
+            info.func = function()
+                UIDropDownMenu_SetSelectedValue(filterDropdown, filter.value)
+                UIDropDownMenu_SetText(filterDropdown, filter.text)
+                currentFilter = filter.value
+                ApplyFilter()
+            end
+            UIDropDownMenu_AddButton(info)
+        end
+    end
+end)
+
+--AchievementPanel.Text = AchievementPanel:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+--AchievementPanel.Text:SetPoint("TOP", 5, -45)
+--AchievementPanel.Text:SetText("Achievements")
 --AchievementPanel.Text:SetTextColor(1, 1, 0)
 
 AchievementPanel.TotalPoints = AchievementPanel:CreateFontString(nil, "OVERLAY", "GameFontHighlightLarge")
-AchievementPanel.TotalPoints:SetPoint("TOPRIGHT", AchievementPanel, "TOPRIGHT", -45, -43)
+AchievementPanel.TotalPoints:SetPoint("TOPRIGHT", AchievementPanel, "TOPRIGHT", -50, -55)
 AchievementPanel.TotalPoints:SetText("0pts")
 AchievementPanel.TotalPoints:SetTextColor(0.6, 0.9, 0.6)
 
 -- Preset multiplier label, e.g. "Point Multiplier (Lite +)"
 AchievementPanel.MultiplierText = AchievementPanel:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-AchievementPanel.MultiplierText:SetPoint("TOP", 5, -60)
+AchievementPanel.MultiplierText:SetPoint("TOP", 5, -40)
 
 -- Build the label text based on available information
 local function BuildPresetLabelText()
@@ -838,6 +909,11 @@ function HCA_ShowAchievementTab()
 
     -- Show our AchievementPanel directly (no CharacterFrame_ShowSubFrame)
     AchievementPanel:Show()
+    
+    -- Apply current filter when opening panel
+    if ApplyFilter then
+        ApplyFilter()
+    end
 
     -- AchievementPanel.PortraitCover:Show()
 end
