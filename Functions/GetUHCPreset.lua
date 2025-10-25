@@ -162,10 +162,10 @@ eventFrame:SetScript("OnEvent", function(self, event, addonName)
                 if preset or isSelfFound then
                     labelText = "Point Multiplier ("
                     if preset then
-                        labelText = labelText .. preset .. ", "
+                        labelText = labelText .. preset
                     end
                     if isSelfFound then
-                        labelText = labelText .. "Self Found"
+                        labelText = labelText .. ", Self Found"
                     end
                     labelText = labelText .. ")"
                 end
@@ -183,10 +183,10 @@ eventFrame:SetScript("OnEvent", function(self, event, addonName)
                 if preset or isSelfFound then
                     labelText = "Point Multiplier ("
                     if preset then
-                        labelText = labelText .. preset .. ", "
+                        labelText = labelText .. preset
                     end
                     if isSelfFound then
-                        labelText = labelText .. "Self Found"
+                        labelText = labelText .. ", Self Found"
                     end
                     labelText = labelText .. ")"
                 end
