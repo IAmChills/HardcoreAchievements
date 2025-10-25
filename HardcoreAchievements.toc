@@ -23,6 +23,3 @@ Achievements\FourCandles.lua
 
 Utils\Embed_UltraHardcore.lua
 Utils\CommandHandler.lua
-
-AdminPanel.lua
-AdminPanelTest.lua
