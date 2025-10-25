@@ -499,23 +499,30 @@ f:SetScript("OnEvent", function(self, event, addonName)
   if event == "ADDON_LOADED" and addonName == "UltraHardcore" then
     HookTabManager()
     HookSourceSignals()
+    
+    -- Hide custom achievement tab immediately when UltraHardcore loads
+    if not HardcoreAchievementsDB.showCustomTab then HideCustomAchievementTab() end
+    
     --print("|cff00ff00[HardcoreAchievements]|r Successfully integrated with UltraHardcore")
   end
 
-  -- Show custom achievement tab as fallback if needed
+  -- Show custom achievement tab as fallback if needed (only if UltraHardcore is not loaded)
   if not GetSourceRows() then
     C_Timer.After(1.0, function()
       if not GetSourceRows() then
-        -- Show custom achievement tab as fallback
-        local tab = _G["CharacterFrameTab" .. (CharacterFrame.numTabs + 1)]
-        if tab and tab:GetText() and tab:GetText():find("Achievements") then
-          tab:Show()
-          tab:SetScript("OnClick", function(self)
-            -- Use the same logic as the main achievement tab
-            if HCA_ShowAchievementTab then
-              HCA_ShowAchievementTab()
-            end
-          end)
+        -- Check if UltraHardcore is loaded before showing fallback tab
+        if not UltraHardcore then
+          -- Show custom achievement tab as fallback
+          local tab = _G["CharacterFrameTab" .. (CharacterFrame.numTabs + 1)]
+          if tab and tab:GetText() and tab:GetText():find("Achievements") then
+            tab:Show()
+            tab:SetScript("OnClick", function(self)
+              -- Use the same logic as the main achievement tab
+              if HCA_ShowAchievementTab then
+                HCA_ShowAchievementTab()
+              end
+            end)
+          end
         end
       end
     end)
