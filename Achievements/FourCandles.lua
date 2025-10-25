@@ -3,14 +3,14 @@
 -- Exposes: FourCandle_OnPartyKill(destGUID) -> boolean (true exactly once when all conditions are met)
 
 local REQUIRED_MAP_ID = 48 -- Blackfathom Deeps map id
-local MAX_LEVEL = 30 -- The maximum level any player in the group can be to count this achievement
+local MAX_LEVEL = 60 -- The maximum level any player in the group can be to count this achievement
 
 local achId = "FourCandle"
 local title = "Four Candles"
-local desc = ("Level %d"):format(30)
+local desc = ("Level %d"):format(MAX_LEVEL)
 local tooltip = "Light all four candles at once within Blackfathom Depths and survive before level 31 (including party members)"
 local icon = 133750
-local level = 30
+local level = MAX_LEVEL
 local points = 50
 local requiredQuestId = _G.FourCandle
 local targetNpcId = nil
@@ -64,7 +64,7 @@ local function IsGroupEligible()
 
   local function overLeveled(unit)
     local lvl = UnitLevel(unit)
-    return (lvl and lvl >= MAX_LEVEL)
+    return (lvl and lvl > MAX_LEVEL)
   end
 
   if overLeveled("player") then return false end
@@ -170,7 +170,7 @@ local function HCA_RegisterFourCandles()
     icon,
     level,
     points,
-    targetNpcId,
+    FourCandle,
     requiredQuestId
   )
 end
