@@ -785,7 +785,7 @@ function CreateAchievementRow(parent, achId, title, desc, tooltip, icon, level, 
     row.TS:SetJustifyH("RIGHT")
     row.TS:SetJustifyV("TOP")
     row.TS:SetText("")
-    row.TS:SetTextColor(0.6, 0.6, 0.6, 0.5)
+    row.TS:SetTextColor(0.8, 0.8, 0.8, 0.5)
 
     -- highlight/tooltip
     row:EnableMouse(true)
