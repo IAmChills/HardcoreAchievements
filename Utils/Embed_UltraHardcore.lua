@@ -127,6 +127,29 @@ local function SyncContentWidth()
   UHCA.Content:SetWidth(w)
 end
 
+  -- Function to update multiplier text
+  local function UpdateMultiplierText()
+    if not UHCA.MultiplierText then return end
+    
+    local preset = GetPlayerPresetFromSettings()
+    local isSelfFound = IsSelfFound()
+    
+    local labelText = ""
+    if preset or isSelfFound then
+        labelText = "Point Multiplier ("
+        if preset then
+            labelText = labelText .. preset
+        end
+        if isSelfFound then
+            labelText = labelText .. ", Self Found"
+        end
+        labelText = labelText .. ")"
+    end
+    
+    UHCA.MultiplierText:SetText(labelText)
+    UHCA.MultiplierText:SetTextColor(0.8, 0.8, 0.8)
+  end
+
 -- ---------- Rebuild ----------
 function EMBED:Rebuild()
   if not UHCA or not UHCA.Content then return end
@@ -207,6 +230,7 @@ function EMBED:Rebuild()
   end
 
   LayoutIcons(self.Content, self.icons)
+  UpdateMultiplierText()
 end
 
 -- Hide the custom Achievement tab when embedded UI loads
@@ -345,37 +369,12 @@ local function BuildEmbedIfNeeded()
     end
   end
 
-  -- Function to update multiplier text
-  local function UpdateMultiplierText()
-    if not UHCA.MultiplierText then return end
-    
-    local preset = GetPlayerPresetFromSettings()
-    local isSelfFound = IsSelfFound()
-    
-    local labelText = ""
-    if preset or isSelfFound then
-        labelText = "Point Multiplier ("
-        if preset then
-            labelText = labelText .. preset .. ", "
-        end
-        if isSelfFound then
-            labelText = labelText .. "Self Found"
-        end
-        labelText = labelText .. ")"
-    end
-    
-    UHCA.MultiplierText:SetText(labelText)
-    UHCA.MultiplierText:SetTextColor(0.8, 0.8, 0.8)
-  end
-
   UHCA:HookScript("OnShow", function()
     if not EMBED.Content or EMBED.Content ~= UHCA.Content then
       EMBED.Content = UHCA.Content
     end
     SyncContentWidth()
     EMBED:Rebuild()
-    
-    UpdateMultiplierText()
   end)
 
   UHCA.Scroll:SetScript("OnSizeChanged", function(self)

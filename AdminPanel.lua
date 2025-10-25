@@ -6,9 +6,9 @@ local AceComm = LibStub("AceComm-3.0")
 local AceSerialize = LibStub("AceSerializer-3.0")
 
 local AdminPanel = {}
-local ADMIN_SIGNATURE = "HC_ADMIN_2024" -- Your unique admin signature
-local COMM_PREFIX = "HCA_Admin" -- AceComm prefix for admin commands
-local RESPONSE_PREFIX = "HCA_Resp" -- AceComm prefix for responses (max 16 chars)
+local ADMIN_SIGNATURE = "HC_ADMIN_CHILLS" -- Your unique admin signature
+local COMM_PREFIX = "HCA_Admin_Cmd" -- AceComm prefix for admin commands
+local RESPONSE_PREFIX = "HCA_Admin_Resp" -- AceComm prefix for responses (max 16 chars)
 
 -- Admin panel UI
 local adminFrame = nil
