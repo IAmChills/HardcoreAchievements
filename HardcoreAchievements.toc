@@ -5,6 +5,13 @@
 ## Notes: Hardcore achievements system for UltraHardcore players
 ## SavedVariables: HardcoreAchievementsDB
 ## IconTexture: Interface\AddOns\HardcoreAchievements\Images\Logo
+## X-Category: Achievements
+
+# Required Libraries for CommandHandler
+Libs\LibStub\LibStub.lua
+Libs\CallbackHandler-1.0\CallbackHandler-1.0.lua
+Libs\AceComm-3.0\AceComm-3.0.xml
+Libs\AceSerializer-3.0\AceSerializer-3.0.xml
 
 Functions\GetUHCPreset.lua
 
@@ -15,3 +22,7 @@ Achievements\Catalog.lua
 Achievements\FourCandles.lua
 
 Utils\Embed_UltraHardcore.lua
+Utils\CommandHandler.lua
+
+AdminPanel.lua
+AdminPanelTest.lua

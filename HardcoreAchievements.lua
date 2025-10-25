@@ -151,7 +151,7 @@ local function SortAchievementRows()
 end
 
 -- Small utility: mark a UI row as completed visually + persist in DB
-local function MarkRowCompleted(row)
+function HCA_MarkRowCompleted(row)
     if row.completed then return end
 
     row.completed = true
@@ -190,7 +190,7 @@ function CheckPendingCompletions()
                 local id = row.id
                 local fn = _G[id .. "_IsCompleted"]
                 if type(fn) == "function" and fn() then
-                    MarkRowCompleted(row)
+                    HCA_MarkRowCompleted(row)
                 end
             end
         end
@@ -780,7 +780,7 @@ do
                 for _, row in ipairs(AchievementPanel.achievements) do
                     if not row.completed and type(row.killTracker) == "function" then
                         if row.killTracker(destGUID) then
-                            MarkRowCompleted(row)
+                            HCA_MarkRowCompleted(row)
                             UHC_AchToast_Show(row.Icon:GetTexture(), row.Title:GetText(), row.points)
                         end
                     end
@@ -791,7 +791,7 @@ do
                 for _, row in ipairs(AchievementPanel.achievements) do
                     if not row.completed and type(row.questTracker) == "function" then
                         if row.questTracker(questID) then
-                            MarkRowCompleted(row)
+                            HCA_MarkRowCompleted(row)
                             UHC_AchToast_Show(row.Icon:GetTexture(), row.Title:GetText(), row.points)
                         end
                     end
