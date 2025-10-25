@@ -97,7 +97,7 @@ local function CreateAdminPanel()
     -- Achievement dropdown
     local achievementLabel = adminFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     achievementLabel:SetPoint("TOP", adminFrame, "TOP", 0, -40)
-    achievementLabel:SetText("Achievement:")
+    achievementLabel:SetText("Achievement")
     
     local achievementDropdown = CreateFrame("Frame", nil, adminFrame, "UIDropDownMenuTemplate")
     achievementDropdown:SetPoint("TOP", adminFrame, "TOP", 0, -55)
@@ -106,7 +106,7 @@ local function CreateAdminPanel()
     -- Character name input
     local characterLabel = adminFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     characterLabel:SetPoint("TOP", adminFrame, "TOP", 0, -100)
-    characterLabel:SetText("Target Character:")
+    characterLabel:SetText("Target Character")
     
     local characterInput = CreateFrame("EditBox", nil, adminFrame, "InputBoxTemplate")
     characterInput:SetPoint("TOP", adminFrame, "TOP", 0, -115)
