@@ -1,19 +1,15 @@
--- FourCandleTracker.lua
--- Tracks "Four Candle" (all specified mobs slain in a single combat) in Blackfathom Deeps (mapId 48).
--- Exposes: FourCandle_OnPartyKill(destGUID) -> boolean (true exactly once when all conditions are met)
-
-local REQUIRED_MAP_ID = 48 -- Blackfathom Deeps map id
+local REQUIRED_MAP_ID = 48 -- The map ID where the achievement is valid
 local MAX_LEVEL = 30 -- The maximum level any player in the group can be to count this achievement
 
-local achId = "FourCandle"
-local title = "Four Candles"
-local desc = ("Level %d"):format(30)
-local tooltip = "Light all four candles at once within Blackfathom Depths and survive before level 31 (including party members)"
-local icon = 133750
-local level = 30
-local points = 50
-local requiredQuestId = _G.FourCandle
-local targetNpcId = nil
+local achId = "DungeonTemplate" -- Unique identifier for the achievement
+local title = "Dungeon Template" -- Display name of the achievement
+local desc = ("Level %d"):format(MAX_LEVEL) -- Description of the achievement
+local tooltip = "Template for dungeon achievements" -- Tooltip text
+local icon = 133750 -- Icon texture for the achievement
+local level = MAX_LEVEL -- Level requirement
+local points = 50 -- Points awarded for completing the achievement
+local requiredQuestId = nil -- Quest ID required for the achievement
+local targetNpcId = nil -- NPC ID required for the achievement
 
 -- Required kills (NPC ID => count)
 local REQUIRED = {
@@ -23,10 +19,10 @@ local REQUIRED = {
   [4977] = 10, -- Murkshallow Softshell x10
 }
 
--- State for the current combat session only
+-- State for the current achievement session only
 local state = {
-  counts = {},           -- npcId => kills this combat
-  completed = false,     -- set true once achievement conditions met in this combat
+  counts = {},           -- npcId => kills this achievement
+  completed = false,     -- set true once achievement conditions met in this achievement
 }
 
 -- Helpers
@@ -73,7 +69,7 @@ local function IsGroupEligible()
   return true
 end
 
-function FourCandle(destGUID)
+function DungeonTemplate(destGUID)
   if not IsOnRequiredMap() then return false end
 
   if state.completed then return false end
@@ -91,13 +87,13 @@ function FourCandle(destGUID)
   return false
 end
 
-_G.FourCandle_IsCompleted = function() return false end
+_G.DungeonTemplate_IsCompleted = function() return false end
 
-local function HCA_RegisterFourCandles()
+local function HCA_RegisterDungeonTemplate()
   if not _G.CreateAchievementRow or not _G.AchievementPanel then return end
-  if _G.FourCandle_Row then return end
+  if _G.DungeonTemplate_Row then return end
 
-  _G.FourCandle_Row = CreateAchievementRow(
+  _G.DungeonTemplate_Row = CreateAchievementRow(
     AchievementPanel,
     achId,
     title,
@@ -111,13 +107,13 @@ local function HCA_RegisterFourCandles()
   )
 end
 
-local fc_reg = CreateFrame("Frame")
-fc_reg:RegisterEvent("PLAYER_LOGIN")
-fc_reg:RegisterEvent("ADDON_LOADED")
-fc_reg:SetScript("OnEvent", function()
-  HCA_RegisterFourCandles()
+local dt_reg = CreateFrame("Frame")
+dt_reg:RegisterEvent("PLAYER_LOGIN")
+dt_reg:RegisterEvent("ADDON_LOADED")
+dt_reg:SetScript("OnEvent", function()
+  HCA_RegisterDungeonTemplate()
 end)
 
 if _G.CharacterFrame and _G.CharacterFrame.HookScript then
-  CharacterFrame:HookScript("OnShow", HCA_RegisterFourCandles)
+  CharacterFrame:HookScript("OnShow", HCA_RegisterDungeonTemplate)
 end
