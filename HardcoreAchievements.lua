@@ -173,7 +173,7 @@ function HCA_MarkRowCompleted(row)
         local fixedPoints = tonumber(row.points) or 0
         rec.points = fixedPoints
         if row.Points then
-            row.Points:SetText(tostring(fixedPoints) .. "pts")
+            row.Points:SetText(tostring(fixedPoints) .. " pts")
         end
         ClearProgress(id)
         UpdateTotalPoints()
@@ -216,7 +216,7 @@ local function RestoreCompletionsFromDB()
             if rec.points then
                 row.points = rec.points
                 if row.Points then
-                    row.Points:SetText(tostring(rec.points) .. "pts")
+                    row.Points:SetText(tostring(rec.points) .. " pts")
                 end
             end
         end
@@ -702,7 +702,7 @@ function CreateAchievementRow(parent, achId, title, desc, tooltip, icon, level, 
     -- points
     row.Points = row:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     row.Points:SetPoint("RIGHT", row, "RIGHT", -15, 10)
-    row.Points:SetWidth(40)
+    row.Points:SetWidth(100)
     row.Points:SetJustifyH("RIGHT")
     row.Points:SetJustifyV("TOP")
     row.Points:SetText(((points or 0) + (IsSelfFound() and SELF_FOUND_BONUS or 0)) .. " pts")
@@ -831,6 +831,11 @@ function HCA_ShowAchievementTab()
     if _G["ReputationFrame"]   then _G["ReputationFrame"]:Hide()   end
     if _G["TokenFrame"]        then _G["TokenFrame"]:Hide()        end
 
+    -- Hide CharacterStatsClassic panel
+    if type(_G.CSC_HideStatsPanel) == "function" then
+        _G.CSC_HideStatsPanel()
+    end
+
     -- Show our AchievementPanel directly (no CharacterFrame_ShowSubFrame)
     AchievementPanel:Show()
 
@@ -844,9 +849,24 @@ hooksecurefunc("CharacterFrame_ShowSubFrame", function(frameName)
         AchievementPanel:Hide()
         -- AchievementPanel.PortraitCover:Hide()
         PanelTemplates_DeselectTab(Tab)
+        
+        -- Show CharacterStatsClassic panel when leaving achievements tab
+        if type(_G.CSC_ShowStatsPanel) == "function" then
+            _G.CSC_ShowStatsPanel()
+        end
     end
 end)
 
 if AchievementPanel and AchievementPanel.HookScript then
     AchievementPanel:HookScript("OnShow", RestoreCompletionsFromDB)
 end
+
+-- Hook ToggleCharacter to handle CharacterStatsClassic visibility
+hooksecurefunc("ToggleCharacter", function(tab, onlyShow)
+    -- When switching to PaperDoll tab, show CharacterStatsClassic if not hidden
+    if tab == "PaperDollFrame" then
+        if type(_G.CSC_ShowStatsPanel) == "function" then
+            _G.CSC_ShowStatsPanel()
+        end
+    end
+end)
