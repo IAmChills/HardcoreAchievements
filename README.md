@@ -1,4 +1,4 @@
-![Logo](https://github.com/IAmChills/HardcoreAchievements/blob/AdminPanel/Images/HardcoreAchievementsCurse.png?raw=true)
+![Logo](https://github.com/IAmChills/HardcoreAchievements/blob/AdminPanel/Images/HardcoreAchievementsButton.png?raw=true)
 
 # Hardcore Achievements
 
