@@ -1,9 +1,5 @@
--- FourCandleTracker.lua
--- Tracks "Four Candle" (all specified mobs slain in a single combat) in Blackfathom Deeps (mapId 48).
--- Exposes: FourCandle_OnPartyKill(destGUID) -> boolean (true exactly once when all conditions are met)
-
 local REQUIRED_MAP_ID = 48 -- Blackfathom Deeps map id
-local MAX_LEVEL = 60 -- The maximum level any player in the group can be to count this achievement
+local MAX_LEVEL = 30 -- The maximum level any player in the group can be to count this achievement
 
 local achId = "FourCandle"
 local title = "Four Candles"
