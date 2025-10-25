@@ -170,8 +170,8 @@ local function HCA_RegisterFourCandles()
     icon,
     level,
     points,
-    requiredQuestId,
-    targetNpcId
+    targetNpcId,
+    requiredQuestId
   )
 end
 
