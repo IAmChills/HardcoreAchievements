@@ -13,10 +13,7 @@ local targetNpcId = nil -- NPC ID required for the achievement
 
 -- Required kills (NPC ID => count)
 local REQUIRED = {
-  [4978] = 2,  -- Aku'mai Servant x2
-  [4825] = 3,  -- Aku'mai Snapjaw x3
-  [4823] = 4,  -- Barbed Crustacean x4
-  [4977] = 10, -- Murkshallow Softshell x10
+  [123456] = 2,  -- NPC ID x2
 }
 
 -- State for the current achievement session only
@@ -54,7 +51,7 @@ local function IsGroupEligible()
 
   local function overLeveled(unit)
     local lvl = UnitLevel(unit)
-    return (lvl and lvl >= MAX_LEVEL)
+    return (lvl and lvl > MAX_LEVEL)
   end
 
   if overLeveled("player") then return false end
@@ -102,7 +99,7 @@ local function HCA_RegisterDungeonTemplate()
     icon,
     level,
     points,
-    targetNpcId,
+    DungeonTemplate,
     requiredQuestId
   )
 end
