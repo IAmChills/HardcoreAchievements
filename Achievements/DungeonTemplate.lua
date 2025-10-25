@@ -102,8 +102,8 @@ local function HCA_RegisterDungeonTemplate()
     icon,
     level,
     points,
-    requiredQuestId,
-    targetNpcId
+    targetNpcId,
+    requiredQuestId
   )
 end
 
