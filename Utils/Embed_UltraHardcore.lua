@@ -312,7 +312,7 @@ local function BuildEmbedIfNeeded()
   -- Add label for the checkbox
   UHCA.HideCustomTabLabel = UHCA:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
   UHCA.HideCustomTabLabel:SetPoint("RIGHT", UHCA.HideCustomTabCheckbox, "LEFT", -5, 0)
-  UHCA.HideCustomTabLabel:SetText("Show Achievement on CharacterFrame")
+  UHCA.HideCustomTabLabel:SetText("Show Achievements on the Character Info Panel")
   UHCA.HideCustomTabLabel:SetTextColor(0.8, 0.8, 0.8)
   
   -- Handle checkbox changes
