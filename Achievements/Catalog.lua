@@ -1,7 +1,8 @@
 local Achievements = {
 
---{ achId="Test",  title="Wolfslayer Test",  level=8, tooltip="Kill |cff0091e6a wolf", icon=134400, points=10, requiredQuestId=nil, targetNpcId=299, faction="Alliance" },
---{ achId="Test2", title="Easy Quest Test", level=8, tooltip="Human starter quest", icon=134400, points=10, requiredQuestId=783, targetNpcId=nil, faction="Alliance" },
+--{ achId="Test",  title="Boar Test",  level=8, tooltip="Kill |cff0091e6a boar", icon=134400, points=10, requiredQuestId=nil, targetNpcId=3098, faction="Horde", zone="Durotar" },
+--{ achId="Test2", title="Easy Quest Test", level=8, tooltip="Orc starter quest", icon=134400, points=10, requiredQuestId=4641, targetNpcId=nil, faction="Horde", zone="Durotar" },
+--{ achId="Test3", title="Kill + Quest", level=8, tooltip="Kill a boar and complete the orc starter quest", icon=134400, points=10, requiredQuestId=4641, targetNpcId=3098, faction="Horde", zone="Durotar" },
 
 -- Alliance
 {
@@ -12,7 +13,7 @@ local Achievements = {
     icon = 134297,
     points = 10,
     requiredQuestId = 2561,
-    targetNpcId = nil,
+    targetNpcId = 7318,
     faction = "Alliance",
     zone = "Teldrassil"
 }, {
@@ -23,7 +24,7 @@ local Achievements = {
     icon = 132189,
     points = 10,
     requiredQuestId = 314,
-    targetNpcId = nil,
+    targetNpcId = 1388,
     faction = "Alliance",
     zone = "Dun Morogh"
 }, {
@@ -34,7 +35,7 @@ local Achievements = {
     icon = 134163,
     points = 10,
     requiredQuestId = 176,
-    targetNpcId = nil,
+    targetNpcId = 448,
     faction = "Alliance",
     zone = "Elwynn Forest"
 }, {
@@ -45,7 +46,7 @@ local Achievements = {
     icon = 236421,
     points = 10,
     requiredQuestId = 217,
-    targetNpcId = nil,
+    targetNpcId = 1205,
     faction = "Alliance",
     zone = "Loch Modan"
 }, {
@@ -67,7 +68,7 @@ local Achievements = {
     icon = 134296,
     points = 10,
     requiredQuestId = 180,
-    targetNpcId = nil,
+    targetNpcId = 703,
     faction = "Alliance",
     zone = "Redridge Mountains"
 }, {
@@ -78,7 +79,7 @@ local Achievements = {
     icon = 134173,
     points = 10,
     requiredQuestId = 1017,
-    targetNpcId = nil,
+    targetNpcId = 3986,
     faction = "Alliance",
     zone = "Ashenvale"
 }, {
@@ -89,7 +90,7 @@ local Achievements = {
     icon = 134170,
     points = 10,
     requiredQuestId = 474,
-    targetNpcId = nil,
+    targetNpcId = 2091,
     faction = "Alliance",
     zone = "Wetlands"
 }, {
@@ -100,7 +101,7 @@ local Achievements = {
     icon = 133730,
     points = 10,
     requiredQuestId = 228,
-    targetNpcId = nil,
+    targetNpcId = 522,
     faction = "Alliance",
     zone = "Duskwood"
 }, {
@@ -111,7 +112,7 @@ local Achievements = {
     icon = 133470,
     points = 10,
     requiredQuestId = 658,
-    targetNpcId = nil,
+    targetNpcId = 2714,
     faction = "Alliance",
     zone = "Arathi Highlands"
 }, {
@@ -133,7 +134,7 @@ local Achievements = {
     icon = 254093,
     points = 10,
     requiredQuestId = 732,
-    targetNpcId = nil,
+    targetNpcId = 2944,
     faction = "Alliance",
     zone = "Badlands"
 }, {
@@ -144,7 +145,7 @@ local Achievements = {
     icon = 136098,
     points = 10,
     requiredQuestId = 2870,
-    targetNpcId = nil,
+    targetNpcId = 8136,
     faction = "Alliance",
     zone = "Feralas"
 }, {
@@ -155,7 +156,7 @@ local Achievements = {
     icon = 236734,
     points = 10,
     requiredQuestId = 4182,
-    targetNpcId = nil,
+    targetNpcId = 7044,
     faction = "Alliance",
     zone = "Burning Steppes"
 },
@@ -169,7 +170,7 @@ local Achievements = {
     icon = 236458,
     points = 10,
     requiredQuestId = 408,
-    targetNpcId = nil,
+    targetNpcId = 1658,
     faction = "Horde",
     zone = "Tirisfal Glades"
 }, {
@@ -180,7 +181,7 @@ local Achievements = {
     icon = 132243,
     points = 10,
     requiredQuestId = 776,
-    targetNpcId = nil,
+    targetNpcId = 3058,
     faction = "Horde",
     zone = "Thunder Bluff"
 }, {
@@ -191,18 +192,18 @@ local Achievements = {
     icon = 134085,
     points = 10,
     requiredQuestId = 832,
-    targetNpcId = nil,
+    targetNpcId = 3204,
     faction = "Horde",
     zone = "Orgrimmar"
 }, {
     achId = "Fizzle",
-    title = "For Rizzle Fizzle",
+    title = "For Rizzle my Fizzle!",
     level = 12,
     tooltip = "Complete |cff0091e6Dark Storms|r before level 13",
     icon = 236290,
     points = 10,
     requiredQuestId = 806,
-    targetNpcId = nil,
+    targetNpcId = 3203,
     faction = "Horde",
     zone = "Durotar"
 }, {
@@ -213,7 +214,7 @@ local Achievements = {
     icon = 236831,
     points = 10,
     requiredQuestId = 6481,
-    targetNpcId = nil,
+    targetNpcId = 11920,
     faction = "Horde",
     zone = "Stonetalon Mountains"
 }, {
@@ -235,18 +236,18 @@ local Achievements = {
     icon = 135144,
     points = 10,
     requiredQuestId = 480,
-    targetNpcId = nil,
+    targetNpcId = 2120,
     faction = "Horde",
     zone = "Silverpine Forest"
 }, {
     achId = "TheHunt",
     title = "The Great Hunt",
     level = 26,
-    tooltip = "Complete |cff0091e6The Hunt Completed|r by slaying |cff0091e6Shadumbra|r, |cff0091e6Sharptalon|r, and |cff0091e6Ursangous|r before level 27",
+    tooltip = "Complete |cff0091e6The Hunt Completed|r by slaying |cff0091e6Sharptalon|r, |cff0091e6Shadumbra|r, and |cff0091e6Ursangous|r before level 27",
     icon = 236713,
     points = 10,
     requiredQuestId = 247,
-    targetNpcId = nil,
+    targetNpcId = 12677, -- Shadumbra
     faction = "Horde",
     zone = "Ashenvale"
 }, {
@@ -257,7 +258,7 @@ local Achievements = {
     icon = 133236,
     points = 10,
     requiredQuestId = 5151,
-    targetNpcId = nil,
+    targetNpcId = 10992,
     faction = "Horde",
     zone = "Thousand Needles"
 }, {
@@ -268,7 +269,7 @@ local Achievements = {
     icon = 236848,
     points = 10,
     requiredQuestId = 1150,
-    targetNpcId = nil,
+    targetNpcId = 4490,
     faction = "Horde",
     zone = "Thousand Needles"
 }, {
@@ -279,7 +280,7 @@ local Achievements = {
     icon = 236779,
     points = 10,
     requiredQuestId = 541,
-    targetNpcId = nil,
+    targetNpcId = 2304,
     faction = "Horde",
     zone = "Hillsbrad Foothills"
 }, {
@@ -290,7 +291,7 @@ local Achievements = {
     icon = 254093,
     points = 10,
     requiredQuestId = 782,
-    targetNpcId = nil,
+    targetNpcId = 2944,
     faction = "Horde",
     zone = "Badlands"
 }, {
@@ -312,7 +313,7 @@ local Achievements = {
     icon = 132768,
     points = 10,
     requiredQuestId = 520,
-    targetNpcId = nil,
+    targetNpcId = 2257,
     faction = "Horde",
     zone = "Hillsbrad Foothills"
 }, {
@@ -323,7 +324,7 @@ local Achievements = {
     icon = 134131,
     points = 10,
     requiredQuestId = 3062,
-    targetNpcId = nil,
+    targetNpcId = 8075,
     faction = "Horde",
     zone = "Feralas"
 }, {
@@ -334,7 +335,7 @@ local Achievements = {
     icon = 236695,
     points = 10,
     requiredQuestId = 3822,
-    targetNpcId = nil,
+    targetNpcId = 8977,
     faction = "Horde",
     zone = "Burning Steppes"
 }, {
@@ -345,7 +346,7 @@ local Achievements = {
     icon = 236780,
     points = 10,
     requiredQuestId = 7846,
-    targetNpcId = nil,
+    targetNpcId = 10802,
     faction = "Horde",
     zone = "Hinterlands"
 },
@@ -423,7 +424,7 @@ local Achievements = {
     icon = 134176,
     points = 10,
     requiredQuestId = 208,
-    targetNpcId = nil,
+    targetNpcId = 731,
     zone = "Stranglethorn Vale"
 }, {
     achId = "GetMeOutOfHere",
@@ -456,6 +457,16 @@ local Achievements = {
     targetNpcId = nil,
     zone = "Tanaris"
 }, {
+    achId = "Mokk",
+    title = "This Isn't Worth It",
+    level = 47,
+    tooltip = "Complete |cff0091e6Stranglethorn Fever|r before level 48",
+    icon = 134338,
+    points = 10,
+    requiredQuestId = 348,
+    targetNpcId = 1514,
+    zone = "Stranglethorn Vale"
+}, {
     achId = "Mukla",
     title = "King of the Jungle",
     level = 48,
@@ -463,7 +474,7 @@ local Achievements = {
     icon = 132159,
     points = 10,
     requiredQuestId = 630,
-    targetNpcId = nil,
+    targetNpcId = 1559,
     zone = "Stranglethorn Vale"
 }, {
     achId = "MalletZF",
@@ -513,7 +524,7 @@ local Achievements = {
     icon = 236763,
     points = 10,
     requiredQuestId = 5242,
-    targetNpcId = nil,
+    targetNpcId = 9517,
     zone = "Felwood"
 }, {
     achId = "SummoningThePrincess",
@@ -523,7 +534,7 @@ local Achievements = {
     icon = 4571434,
     points = 10,
     requiredQuestId = 656,
-    targetNpcId = nil,
+    targetNpcId = 2755,
     zone = "Badlands"
 }, {
     achId = "GorishiHiveQueen",
@@ -533,7 +544,7 @@ local Achievements = {
     icon = 134340,
     points = 10,
     requiredQuestId = 4507,
-    targetNpcId = nil,
+    targetNpcId = 10041,
     zone = "Un'Goro Crater"
 }, {
     achId = "OverseerMaltorius",
@@ -543,7 +554,7 @@ local Achievements = {
     icon = 134159,
     points = 10,
     requiredQuestId = 7701,
-    targetNpcId = nil,
+    targetNpcId = 14621,
     zone = "Searing Gorge"
 }, {
     achId = "MercutioFilthgorger",
@@ -553,7 +564,7 @@ local Achievements = {
     icon = 133038,
     points = 10,
     requiredQuestId = 5781,
-    targetNpcId = nil,
+    targetNpcId = 11886,
     zone = "Eastern Plaguelands"
 }, {
     achId = "HighChiefWinterfall",
@@ -563,7 +574,7 @@ local Achievements = {
     icon = 236696,
     points = 10,
     requiredQuestId = 5121,
-    targetNpcId = nil,
+    targetNpcId = 10738,
     zone = "Winterspring"
 }, {
     achId = "Deathclasp",
@@ -573,8 +584,50 @@ local Achievements = {
     icon = 133708,
     points = 10,
     requiredQuestId = 8283,
-    targetNpcId = nil,
+    targetNpcId = 15196,
     zone = "Silithus"
+},
+
+-- Rogue
+{
+    achId = "Gallywix",
+    title = "Get Gallywix or Die Tryin |cffFFF46[Rogue]|r",
+    level = 23,
+    tooltip = "Complete |cff0091e6Mission: Possible But Not Probable|r before level 24",
+    icon = 236281,
+    points = 10,
+    requiredQuestId = 2478,
+    targetNpcId = 7288,
+    faction = "Horde",
+    class = "ROGUE",
+    zone = "Barrens"
+},
+
+-- Mage
+{
+    achId = "AlchemistShopH",
+    title = "Back to Brill! |cff3FC7EB[Mage]|r",
+    level = 18,
+    tooltip = "Complete |cff0091e6Investigate the Alchemist Shop|r before level 19",
+    icon = 135734,
+    points = 10,
+    requiredQuestId = 1960,
+    targetNpcId = nil,
+    faction = "Horde",
+    class = "MAGE",
+    zone = "Undercity"
+}, {
+    achId = "AlchemistShopA",
+    title = "Back to Elwynn! |cff3FC7EB[Mage]|r",
+    level = 18,
+    tooltip = "Complete |cff0091e6Investigate the Alchemist Shop|r before level 19",
+    icon = 135734,
+    points = 10,
+    requiredQuestId = 1920,
+    targetNpcId = nil,
+    faction = "Alliance",
+    class = "MAGE",
+    zone = "Stormwind City"
 }
 }
 
