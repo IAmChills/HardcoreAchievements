@@ -3,13 +3,14 @@ local MAX_LEVEL = 30
 
 local achId = "FourCandle"
 local title = "Four Candles"
-local desc = ("Level %d"):format(MAX_LEVEL)
-local tooltip = "Light all four candles at once within Blackfathom Depths and survive before level 31 (including party members)"
+local tooltip = "Light all four candles at once within |cff0091e6Blackfathom Deeps|r and survive before level 31 (including party members)"
 local icon = 133750
 local level = MAX_LEVEL
-local points = 50
-local requiredQuestId = _G.FourCandle
+local points = 25
 local targetNpcId = nil
+local requiredQuestId = _G.FourCandle
+local staticPoints = false
+local zone = "Blackfathom Deeps"
 
 -- Required kills (NPC ID => count)
 local REQUIRED = {
@@ -161,13 +162,14 @@ local function HCA_RegisterFourCandles()
     AchievementPanel,
     achId,
     title,
-    desc,
     tooltip,
     icon,
     level,
     points,
-    FourCandle,
-    requiredQuestId
+    FourCandle,  -- killTracker (custom completion function)
+    questTracker,
+    staticPoints,
+    zone
   )
 end
 

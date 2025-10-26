@@ -735,7 +735,7 @@ BR:SetPoint("BOTTOMRIGHT", AchievementPanel, "BOTTOMRIGHT", 2, -1)
 
 AchievementPanel.achievements = AchievementPanel.achievements or {}
 
-function CreateAchievementRow(parent, achId, title, desc, tooltip, icon, level, points, killTracker, questTracker, staticPoints)
+function CreateAchievementRow(parent, achId, title, tooltip, icon, level, points, killTracker, questTracker, staticPoints, zone)
     local rowParent = AchievementPanel and AchievementPanel.Content or parent or AchievementPanel
     AchievementPanel.achievements = AchievementPanel.achievements or {}
 
@@ -768,7 +768,7 @@ function CreateAchievementRow(parent, achId, title, desc, tooltip, icon, level, 
     row.Sub:SetJustifyH("LEFT")
     row.Sub:SetJustifyV("TOP")
     row.Sub:SetWordWrap(true)
-    row.Sub:SetText(desc or "—")
+    row.Sub:SetText(level and ("Level %d"):format(level) or "—")
 
     -- points
     row.Points = row:CreateFontString(nil, "OVERLAY", "GameFontNormal")
@@ -785,7 +785,7 @@ function CreateAchievementRow(parent, achId, title, desc, tooltip, icon, level, 
     row.TS:SetJustifyH("RIGHT")
     row.TS:SetJustifyV("TOP")
     row.TS:SetText("")
-    row.TS:SetTextColor(0.8, 0.8, 0.8, 0.5)
+    row.TS:SetTextColor(0.5, 0.5, 0.5)
 
     -- highlight/tooltip
     row:EnableMouse(true)
@@ -802,6 +802,9 @@ function CreateAchievementRow(parent, achId, title, desc, tooltip, icon, level, 
             GameTooltip:SetOwner(row, "ANCHOR_RIGHT")
             GameTooltip:SetText(title or "", 1, 1, 1)
             GameTooltip:AddLine(tooltip, nil, nil, nil, true)
+            if self.zone then
+                GameTooltip:AddLine(self.zone, 0.5, 0.5, 0.5) -- Gray text for zone
+            end
             GameTooltip:Show()
         end
     end)
@@ -818,6 +821,7 @@ function CreateAchievementRow(parent, achId, title, desc, tooltip, icon, level, 
     row.completed = false
     row.maxLevel = tonumber(level) or 0
     row.tooltip = tooltip  -- Store the tooltip for later access
+    row.zone = zone  -- Store the zone for later access
     ApplyOutleveledStyle(row)
     if row.Icon and IsRowOutleveled(row) and row.Icon.SetDesaturated then
         row.Icon:SetDesaturated(true)

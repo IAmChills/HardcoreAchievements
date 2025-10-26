@@ -62,9 +62,12 @@ function M.registerQuestAchievement(cfg)
 
     local function topUpFromServer()
         if REQUIRED_QUEST_ID and not state.quest and serverQuestDone() then
-            state.quest = true
-            setProg("quest", true)
-            return true
+            -- Only store quest completion if player is not over-leveled
+            if belowMax() then
+                state.quest = true
+                setProg("quest", true)
+                return true
+            end
         end
     end
 
