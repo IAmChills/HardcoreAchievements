@@ -18,7 +18,9 @@ Functions\GetUHCPreset.lua
 HardcoreAchievements.lua
 
 Achievements\Common.lua
+Achievements\DungeonCommon.lua
 Achievements\Catalog.lua
+Achievements\DungeonCatalog.lua
 Achievements\FourCandles.lua
 
 Utils\Embed_UltraHardcore.lua
