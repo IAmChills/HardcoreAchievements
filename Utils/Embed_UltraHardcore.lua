@@ -66,6 +66,7 @@ local function ReadRowData(src)
     maxLevel  = tonumber(src.maxLevel) or nil,
     completed = not not src.completed,
     outleveled = IsRowOutleveled(src),
+    requiredKills = src.requiredKills,  -- Store requiredKills for dungeon achievements
   }
 end
 
@@ -103,8 +104,39 @@ local function CreateEmbedIcon(parent)
       GameTooltip:AddLine(("Max Level: %d"):format(self.maxLevel), 0.7, 0.7, 0.7)
     end
 
-    if self.tooltip and self.tooltip ~= "" then
-      GameTooltip:AddLine(self.tooltip, 0.9, 0.9, 0.9, true)
+    -- Check if this is a dungeon achievement with requiredKills
+    local requiredKills = self.requiredKills or {}
+    local isDungeonAchievement = next(requiredKills) ~= nil
+    
+    if isDungeonAchievement then
+      -- Build dynamic tooltip with boss completion status
+      if self.tooltip and self.tooltip ~= "" then
+        GameTooltip:AddLine(self.tooltip, 0.9, 0.9, 0.9, true)
+      end
+      
+      GameTooltip:AddLine("\nRequired Bosses:", 0, 1, 0) -- Green header
+      
+      -- Get progress from database
+      local progress = _G.HardcoreAchievements_GetProgress and _G.HardcoreAchievements_GetProgress(self.achId)
+      local counts = progress and progress.counts or {}
+      
+      for npcId, need in pairs(requiredKills) do
+        local idNum = tonumber(npcId) or npcId
+        local current = (counts[idNum] or counts[tostring(idNum)] or 0)
+        local bossName = HCA_GetBossName(idNum)
+        local done = current >= (tonumber(need) or 1)
+        
+        if done then
+          GameTooltip:AddLine(bossName, 1, 1, 1) -- White for completed
+        else
+          GameTooltip:AddLine(bossName, 0.5, 0.5, 0.5) -- Gray for not completed
+        end
+      end
+    else
+      -- Standard tooltip
+      if self.tooltip and self.tooltip ~= "" then
+        GameTooltip:AddLine(self.tooltip, 0.9, 0.9, 0.9, true)
+      end
     end
     
     if type(self.points) == "number" and self.points > 0 then
@@ -230,11 +262,13 @@ function EMBED:Rebuild()
         end
 
         icon.id        = data.id
+        icon.achId     = data.id  -- Store achId for tooltip lookup
         icon.title     = data.title
         icon.tooltip   = data.tooltip
         icon.points    = data.points
         icon.maxLevel  = data.maxLevel
         icon.completed = data.completed
+        icon.requiredKills = data.requiredKills  -- Store requiredKills for dungeon achievements
 
         if data.iconTex then
           icon.Icon:SetTexture(data.iconTex)
