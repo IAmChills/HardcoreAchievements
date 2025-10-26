@@ -68,7 +68,7 @@ function DungeonCommon.registerDungeonAchievement(def)
   end
 
   -- Get boss names from NPC IDs (you can expand this with a lookup table)
-  local function GetBossName(npcId)
+  function HCA_GetBossName(npcId)
     -- This is a basic mapping - you can expand this with more boss names
     local bossNames = {
       [11520] = "Taragaman the Hungerer",
@@ -295,7 +295,7 @@ function DungeonCommon.registerDungeonAchievement(def)
             for npcId, need in pairs(requiredKills) do
               local idNum = tonumber(npcId) or npcId
               local current = (state.counts[idNum] or state.counts[tostring(idNum)] or 0)
-              local bossName = GetBossName(idNum)
+              local bossName = HCA_GetBossName(idNum)
               local done = current >= (tonumber(need) or 1)
               
               if done then
@@ -359,7 +359,7 @@ function DungeonCommon.registerDungeonAchievement(def)
         state.counts[npcId] = (state.counts[npcId] or 0) + 1
         SaveProgress() -- Save progress after each kill
         UpdateTooltip() -- Update tooltip to show progress
-        print("[HardcoreAchievements] " .. GetBossName(npcId) .. " killed as part of achievement: " .. title)
+        print("[HardcoreAchievements] " .. HCA_GetBossName(npcId) .. " killed as part of achievement: " .. title)
     end
 
     if CountsSatisfied() and IsGroupEligible() then
@@ -408,6 +408,11 @@ function DungeonCommon.registerDungeonAchievement(def)
       requiredQuestId,
       staticPoints
     )
+    
+    -- Store requiredKills on the row for the embed UI to access
+    if requiredKills and next(requiredKills) then
+      _G[rowVarName].requiredKills = requiredKills
+    end
     
     -- Update tooltip after creation to ensure it shows current progress
     C_Timer.After(0.1, UpdateTooltip)
