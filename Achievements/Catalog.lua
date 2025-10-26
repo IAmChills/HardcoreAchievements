@@ -195,6 +195,17 @@ local Achievements = {
     faction = "Horde",
     zone = "Orgrimmar"
 }, {
+    achId = "Fizzle",
+    title = "For Rizzle Fizzle",
+    level = 12,
+    tooltip = "Complete |cff0091e6Dark Storms|r before level 13",
+    icon = 236290,
+    points = 10,
+    requiredQuestId = 806,
+    targetNpcId = nil,
+    faction = "Horde",
+    zone = "Durotar"
+}, {
     achId = "Goggeroc",
     title = "Stone and Soil",
     level = 20,
@@ -238,6 +249,17 @@ local Achievements = {
     targetNpcId = nil,
     faction = "Horde",
     zone = "Ashenvale"
+}, {
+    achId = "Gizmo",
+    title = "Flux-Hypercapacitor",
+    level = 28,
+    tooltip = "Complete |cff0091e6Hypercapacitor Gizmo|r before level 29",
+    icon = 133236,
+    points = 10,
+    requiredQuestId = 5151,
+    targetNpcId = nil,
+    faction = "Horde",
+    zone = "Thousand Needles"
 }, {
     achId = "Grenka",
     title = "What's in the Box!?",
