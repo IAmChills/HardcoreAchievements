@@ -145,6 +145,41 @@ local function InitializeAdminCommandHandler()
     AceComm:RegisterComm(COMM_PREFIX, OnCommReceived)
 end
 
+-- Slash command handler
+local function HandleSlashCommand(msg)
+    local command = string.lower(string.trim(msg or ""))
+    
+    if command == "show" then
+        -- Set database flag to show custom tab
+        if not HardcoreAchievementsDB then
+            HardcoreAchievementsDB = {}
+        end
+        HardcoreAchievementsDB.showCustomTab = true
+        
+        -- Immediately show the custom tab
+        local tab = _G["CharacterFrameTab" .. (CharacterFrame.numTabs + 1)]
+        if tab and tab:GetText() and tab:GetText():find("Achievements") then
+            tab:Show()
+            tab:SetScript("OnClick", function(self)
+                if HCA_ShowAchievementTab then
+                    HCA_ShowAchievementTab()
+                end
+            end)
+            print("|cff00ff00[HardcoreAchievements]|r Custom achievement tab enabled and shown")
+        else
+            print("|cffff0000[HardcoreAchievements]|r Custom achievement tab not found")
+        end
+    else
+        print("|cff00ff00[HardcoreAchievements]|r Available commands:")
+        print("  |cffffff00/hca show|r - Enable and show the custom achievement tab")
+    end
+end
+
+-- Register slash command
+SLASH_HARDCOREAchievements1 = "/hca"
+SLASH_HARDCOREAchievements2 = "/hardcoreachievements"
+SlashCmdList["HARDCOREAchievements"] = HandleSlashCommand
+
 -- Initialize when addon loads
 local initFrame = CreateFrame("Frame")
 initFrame:RegisterEvent("PLAYER_LOGIN")

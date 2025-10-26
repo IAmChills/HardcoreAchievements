@@ -634,7 +634,7 @@ end)
 
 AchievementPanel.TotalPoints = AchievementPanel:CreateFontString(nil, "OVERLAY", "GameFontHighlightLarge")
 AchievementPanel.TotalPoints:SetPoint("TOPRIGHT", AchievementPanel, "TOPRIGHT", -50, -55)
-AchievementPanel.TotalPoints:SetText("0pts")
+AchievementPanel.TotalPoints:SetText("0 pts")
 AchievementPanel.TotalPoints:SetTextColor(0.6, 0.9, 0.6)
 
 -- Preset multiplier label, e.g. "Point Multiplier (Lite +)"

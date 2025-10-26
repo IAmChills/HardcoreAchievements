@@ -88,13 +88,32 @@ local function CreateEmbedIcon(parent)
   icon.Mask:SetTexture("Interface\\CharacterFrame\\TempPortraitAlphaMask", "CLAMPTOBLACKADDITIVE", "CLAMPTOBLACKADDITIVE")
   icon.Icon:AddMaskTexture(icon.Mask)
 
-  -- Create completion border
-  icon.CompletionBorder = icon:CreateTexture(nil, "OVERLAY")
-  icon.CompletionBorder:SetAllPoints(icon)
-  icon.CompletionBorder:SetTexture("Interface\\CharacterFrame\\UI-Character-InfoFrame-Character")
-  icon.CompletionBorder:SetTexCoord(0.5, 0.75, 0.5, 0.75)
-  icon.CompletionBorder:SetVertexColor(0, 1, 0, 1.0) -- Green border
-  icon.CompletionBorder:Hide()
+  -- Create completion border as a green circle behind the icon
+  icon.GreenBorder = icon:CreateTexture(nil, "BACKGROUND")
+  icon.GreenBorder:SetSize(ICON_SIZE + 2, ICON_SIZE + 2) -- Slightly larger than icon
+  icon.GreenBorder:SetPoint("CENTER", icon, "CENTER", 0, 0)
+  icon.GreenBorder:SetTexture("Interface\\CharacterFrame\\TempPortraitAlphaMask")
+  icon.GreenBorder:SetTexCoord(0, 1, 0, 1)
+  icon.GreenBorder:SetVertexColor(0.6, 0.9, 0.6, 0.8) -- Green circle
+  icon.GreenBorder:Hide()
+
+  -- Create failed border as a red circle behind the icon
+  icon.RedBorder = icon:CreateTexture(nil, "BACKGROUND")
+  icon.RedBorder:SetSize(ICON_SIZE + 2, ICON_SIZE + 2) -- Slightly larger than icon
+  icon.RedBorder:SetPoint("CENTER", icon, "CENTER", 0, 0)
+  icon.RedBorder:SetTexture("Interface\\CharacterFrame\\TempPortraitAlphaMask")
+  icon.RedBorder:SetTexCoord(0, 1, 0, 1)
+  icon.RedBorder:SetVertexColor(0.53, 0.02, 0.03, 0.8) -- Red circle
+  icon.RedBorder:Hide()
+
+      -- Create available border as a yellow circle behind the icon
+  icon.YellowBorder = icon:CreateTexture(nil, "BACKGROUND")
+  icon.YellowBorder:SetSize(ICON_SIZE + 2, ICON_SIZE + 2) -- Slightly larger than icon
+  icon.YellowBorder:SetPoint("CENTER", icon, "CENTER", 0, 0)
+  icon.YellowBorder:SetTexture("Interface\\CharacterFrame\\TempPortraitAlphaMask")
+  icon.YellowBorder:SetTexCoord(0, 1, 0, 1)
+  icon.YellowBorder:SetVertexColor(1, 0.82, 0, 0.8) -- Goldish yellow circle
+  icon.YellowBorder:Hide()
 
   icon:SetScript("OnEnter", function(self)
     GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
@@ -169,7 +188,7 @@ local function LayoutIcons(container, icons)
   local totalIcons = #visibleIcons
   local rows = math.ceil(totalIcons / GRID_COLS)
   local startX = ICON_PADDING
-  local startY = -ICON_PADDING
+  local startY = -2
   
   for i, icon in ipairs(visibleIcons) do
     local col = ((i - 1) % GRID_COLS)
@@ -214,6 +233,19 @@ end
     
     UHCA.MultiplierText:SetText(labelText)
     UHCA.MultiplierText:SetTextColor(0.8, 0.8, 0.8)
+  end
+
+  -- Function to update total points text
+  local function UpdateTotalPointsText()
+    if not UHCA.TotalPointsText then return end
+    
+    local totalPoints = 0
+    if _G.HardcoreAchievements_GetTotalPoints then
+      totalPoints = _G.HardcoreAchievements_GetTotalPoints()
+    end
+    
+    UHCA.TotalPointsText:SetText(totalPoints .. " pts")
+    UHCA.TotalPointsText:SetTextColor(0.6, 0.9, 0.6)
   end
 
 -- ---------- Rebuild ----------
@@ -288,7 +320,7 @@ function EMBED:Rebuild()
           if playerLevel > data.maxLevel then
             -- Out-leveled: Desaturated
             icon.Icon:SetDesaturated(true)
-            icon.Icon:SetAlpha(0.7)
+            icon.Icon:SetAlpha(1.0)
             icon.Icon:SetVertexColor(1.0, 1.0, 1.0) -- Reset to normal color
           else
             -- Available but has level requirement: Full color
@@ -305,9 +337,17 @@ function EMBED:Rebuild()
 
         -- Set completion border
         if data.completed then
-          icon.CompletionBorder:Show()
+          icon.GreenBorder:Show()
+          icon.YellowBorder:Hide()
+          icon.RedBorder:Hide()
+        elseif data.outleveled then
+          icon.RedBorder:Show()
+          icon.GreenBorder:Hide()
+          icon.YellowBorder:Hide()
         else
-          icon.CompletionBorder:Hide()
+          icon.YellowBorder:Show()
+          icon.GreenBorder:Hide()
+          icon.RedBorder:Hide()
         end
         
         -- Show the icon
@@ -317,6 +357,7 @@ function EMBED:Rebuild()
 
   LayoutIcons(self.Content, self.icons)
   UpdateMultiplierText()
+  UpdateTotalPointsText()
 end
 
 -- Hide the custom Achievement tab when embedded UI loads
@@ -372,8 +413,8 @@ local function BuildEmbedIfNeeded()
   HideCustomAchievementTab()
 
   UHCA.Scroll = CreateFrame("ScrollFrame", nil, UHCA, "UIPanelScrollFrameTemplate")
-  UHCA.Scroll:SetPoint("TOPLEFT", UHCA, "TOPLEFT", 4, -40)
-  UHCA.Scroll:SetPoint("BOTTOMRIGHT", UHCA, "BOTTOMRIGHT", -8, -20)
+  UHCA.Scroll:SetPoint("TOPLEFT", UHCA, "TOPLEFT", -4, -60)
+  UHCA.Scroll:SetPoint("BOTTOMRIGHT", UHCA, "BOTTOMRIGHT", -8, -15)
   
   -- Hide the scroll bar but keep it functional
   if UHCA.Scroll.ScrollBar then
@@ -389,6 +430,11 @@ local function BuildEmbedIfNeeded()
   UHCA.MultiplierText:SetPoint("TOP", UHCA, "TOP", 0, -35)
   UHCA.MultiplierText:SetText("") -- Will be set by UpdateMultiplierText
 
+  -- Add total points text in top left corner
+  UHCA.TotalPointsText = UHCA:CreateFontString(nil, "OVERLAY", "GameFontHighlightLarge")
+  UHCA.TotalPointsText:SetPoint("TOPLEFT", UHCA, "TOPLEFT", 5, -35)
+  UHCA.TotalPointsText:SetText("0 pts") -- Will be updated by UpdateTotalPointsText
+
   -- Add filter dropdown
   local filterDropdown = CreateFrame("Frame", nil, UHCA, "UIDropDownMenuTemplate")
   filterDropdown:SetPoint("TOPRIGHT", UHCA, "TOPRIGHT", 30, -25)
@@ -397,13 +443,13 @@ local function BuildEmbedIfNeeded()
 
   -- Add checkbox to control custom tab visibility
   UHCA.HideCustomTabCheckbox = CreateFrame("CheckButton", nil, UHCA, "UICheckButtonTemplate")
-  UHCA.HideCustomTabCheckbox:SetPoint("BOTTOMRIGHT", UHCA, "BOTTOMRIGHT", 0, -30)
+  UHCA.HideCustomTabCheckbox:SetPoint("BOTTOMRIGHT", UHCA, "BOTTOMRIGHT", 8, -40)
   UHCA.HideCustomTabCheckbox:SetSize(20, 20)
   UHCA.HideCustomTabCheckbox:SetChecked(HardcoreAchievementsDB and HardcoreAchievementsDB.showCustomTab == true) -- Default to not showing custom tab, but respect saved state
   
   -- Add label for the checkbox
   UHCA.HideCustomTabLabel = UHCA:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-  UHCA.HideCustomTabLabel:SetPoint("RIGHT", UHCA.HideCustomTabCheckbox, "LEFT", -5, 0)
+  UHCA.HideCustomTabLabel:SetPoint("RIGHT", UHCA.HideCustomTabCheckbox, "LEFT", -3, 0)
   UHCA.HideCustomTabLabel:SetText("Show Achievements on the Character Info Panel")
   UHCA.HideCustomTabLabel:SetTextColor(0.8, 0.8, 0.8)
   
@@ -500,12 +546,16 @@ local function HookSourceSignals()
   if EMBED._hooked then return end
   if type(CheckPendingCompletions) == "function" then
     hooksecurefunc("CheckPendingCompletions", function()
-      C_Timer.After(0, function() ApplyFilter() end)
+      C_Timer.After(0, function() 
+        if EMBED.Rebuild then EMBED:Rebuild() else ApplyFilter() end
+      end)
     end)
   end
   if type(UpdateTotalPoints) == "function" then
     hooksecurefunc("UpdateTotalPoints", function()
-      C_Timer.After(0, function() ApplyFilter() end)
+      C_Timer.After(0, function() 
+        if EMBED.Rebuild then EMBED:Rebuild() else ApplyFilter() end
+      end)
     end)
   end
   EMBED._hooked = true
@@ -537,26 +587,42 @@ f:SetScript("OnEvent", function(self, event, addonName)
     -- Hide custom achievement tab immediately when UltraHardcore loads
     if not HardcoreAchievementsDB.showCustomTab then HideCustomAchievementTab() end
     
-    --print("|cff00ff00[HardcoreAchievements]|r Successfully integrated with UltraHardcore")
+    -- Try modern integration approach first
+    C_Timer.After(0.5, function()
+      if BuildEmbedIfNeeded() then
+        C_Timer.After(0, function() 
+          if EMBED.Rebuild then EMBED:Rebuild() else ApplyFilter() end
+        end)
+        --print("|cff00ff00[HardcoreAchievements]|r Successfully integrated with UltraHardcore")
+      end
+    end)
+    
+    -- Fallback method for old versions - try after 2 seconds
+    C_Timer.After(2.0, function()
+      if not UHCA and tabContents and tabContents[3] then
+        if BuildEmbedIfNeeded() then
+          C_Timer.After(0, function() 
+            if EMBED.Rebuild then EMBED:Rebuild() else ApplyFilter() end
+          end)
+          --print("|cff00ff00[HardcoreAchievements]|r Successfully integrated with UltraHardcore (fallback)")
+        end
+      end
+    end)
   end
 
   -- Show custom achievement tab as fallback if needed (only if UltraHardcore is not loaded)
   if not GetSourceRows() then
     C_Timer.After(1.0, function()
       if not GetSourceRows() then
-        -- Check if UltraHardcore is loaded before showing fallback tab
-        if not UltraHardcore then
-          -- Show custom achievement tab as fallback
-          local tab = _G["CharacterFrameTab" .. (CharacterFrame.numTabs + 1)]
-          if tab and tab:GetText() and tab:GetText():find("Achievements") then
-            tab:Show()
-            tab:SetScript("OnClick", function(self)
-              -- Use the same logic as the main achievement tab
-              if HCA_ShowAchievementTab then
-                HCA_ShowAchievementTab()
-              end
-            end)
-          end
+        -- Show custom achievement tab as fallback
+        local tab = _G["CharacterFrameTab" .. (CharacterFrame.numTabs + 1)]
+        if tab and tab:GetText() and tab:GetText():find("Achievements") then
+          tab:Show()
+          tab:SetScript("OnClick", function(self)
+            if HCA_ShowAchievementTab then
+              HCA_ShowAchievementTab()
+            end
+          end)
         end
       end
     end)
