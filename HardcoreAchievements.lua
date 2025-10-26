@@ -156,7 +156,6 @@ end
 -- Small utility: mark a UI row as completed visually + persist in DB
 function HCA_MarkRowCompleted(row)
     if row.completed then return end
-
     row.completed = true
 
     if row.Title and row.Title.SetTextColor then row.Title:SetTextColor(0.6, 0.9, 0.6) end
@@ -173,11 +172,20 @@ function HCA_MarkRowCompleted(row)
         rec.completed   = true
         rec.completedAt = time()
         rec.level       = UnitLevel("player") or nil
-        local fixedPoints = tonumber(row.points) or 0
-        rec.points = fixedPoints
-        if row.Points then
-            row.Points:SetText(tostring(fixedPoints) .. " pts")
+        -- Check if we have pointsAtKill value in progress to use those points
+        local finalPoints = tonumber(row.points) or 0
+        local progress = cdb.progress[id]
+
+        if progress and progress.pointsAtKill then
+            -- Use the points that were stored at the time of kill
+            finalPoints = tonumber(progress.pointsAtKill) or 0
         end
+
+        rec.points = finalPoints
+        if row.Points then
+            row.Points:SetText(tostring(finalPoints) .. " pts")
+        end
+
         ClearProgress(id)
         UpdateTotalPoints()
     end
@@ -248,7 +256,7 @@ local function UHC_CreateAchToast()
 
     local f = CreateFrame("Frame", "UHC_AchToast", UIParent)
     f:SetSize(320, 92)
-    f:SetPoint("CENTER", 0, -400)
+    f:SetPoint("CENTER", 0, -280)
     f:Hide()
     f:SetFrameStrata("TOOLTIP")
 
@@ -822,6 +830,7 @@ function CreateAchievementRow(parent, achId, title, tooltip, icon, level, points
     row.maxLevel = tonumber(level) or 0
     row.tooltip = tooltip  -- Store the tooltip for later access
     row.zone = zone  -- Store the zone for later access
+    row.achId = achId
     ApplyOutleveledStyle(row)
     if row.Icon and IsRowOutleveled(row) and row.Icon.SetDesaturated then
         row.Icon:SetDesaturated(true)
@@ -855,8 +864,17 @@ do
                 for _, row in ipairs(AchievementPanel.achievements) do
                     if not row.completed and type(row.killTracker) == "function" then
                         if row.killTracker(destGUID) then
+                            -- Get pointsAtKill from progress if it exists, otherwise use row.points
+                            local toastPoints = row.points
+                            local _, cdb = GetCharDB()
+                            local achId = row.achId or row.id
+
+                            if cdb and cdb.progress and cdb.progress[achId] and cdb.progress[achId].pointsAtKill then
+                                toastPoints = tonumber(cdb.progress[achId].pointsAtKill) or row.points
+                            end
+                            
                             HCA_MarkRowCompleted(row)
-                            UHC_AchToast_Show(row.Icon:GetTexture(), row.Title:GetText(), row.points)
+                            UHC_AchToast_Show(row.Icon:GetTexture(), row.Title:GetText(), toastPoints)
                         end
                     end
                 end
@@ -866,8 +884,17 @@ do
                 for _, row in ipairs(AchievementPanel.achievements) do
                     if not row.completed and type(row.questTracker) == "function" then
                         if row.questTracker(questID) then
+                            -- Get pointsAtKill from progress if it exists, otherwise use row.points
+                            local toastPoints = row.points
+                            local _, cdb = GetCharDB()
+                            local achId = row.achId or row.id
+
+                            if cdb and cdb.progress and cdb.progress[achId] and cdb.progress[achId].pointsAtKill then
+                                toastPoints = tonumber(cdb.progress[achId].pointsAtKill) or row.points
+                            end
+
                             HCA_MarkRowCompleted(row)
-                            UHC_AchToast_Show(row.Icon:GetTexture(), row.Title:GetText(), row.points)
+                            UHC_AchToast_Show(row.Icon:GetTexture(), row.Title:GetText(), toastPoints)
                         end
                     end
                 end

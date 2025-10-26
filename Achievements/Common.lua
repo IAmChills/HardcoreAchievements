@@ -2,6 +2,9 @@
 -- Shared factory for standard (quest/kill under level cap) achievements.
 local M = {}
 
+-- Load GetPlayerPresetFromSettings function from GetUHCPreset
+local GetPlayerPresetFromSettings = _G.GetPlayerPresetFromSettings
+
 local function getNpcIdFromGUID(guid)
     if not guid then
         return nil
@@ -78,8 +81,15 @@ function M.registerQuestAchievement(cfg)
         if not gate() or not belowMax() then
             return false
         end
-        local killOk = (not TARGET_NPC_ID) or state.killed
-        local questOk = (not REQUIRED_QUEST_ID) or state.quest
+        
+        -- Check both state and progress table for kill/quest completion
+        local progressTable = HardcoreAchievements_GetProgress and HardcoreAchievements_GetProgress(ACH_ID)
+        local killFromProgress = progressTable and progressTable.killed
+        local questFromProgress = progressTable and progressTable.quest
+        
+        local killOk = (not TARGET_NPC_ID) or state.killed or killFromProgress
+        local questOk = (not REQUIRED_QUEST_ID) or state.quest or questFromProgress
+        
         if killOk and questOk then
             state.completed = true
             setProg("completed", true)
@@ -109,6 +119,16 @@ function M.registerQuestAchievement(cfg)
             end
             state.killed = true
             setProg("killed", true)
+            -- Save the current points at time of kill
+            -- Need to find the row and get its current points value
+            if AchievementPanel and AchievementPanel.achievements then
+                for _, row in ipairs(AchievementPanel.achievements) do
+                    if row.id == ACH_ID and row.points then
+                        setProg("pointsAtKill", row.points)
+                        break
+                    end
+                end
+            end
             return checkComplete()
         end
     end
