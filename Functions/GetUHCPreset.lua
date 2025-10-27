@@ -138,8 +138,8 @@ local function UpdateAllAchievementPoints()
     end
     
     -- Update total points
-    if UpdateTotalPoints then
-        UpdateTotalPoints()
+    if HCA_UpdateTotalPoints then
+        HCA_UpdateTotalPoints()
     end
 end
 

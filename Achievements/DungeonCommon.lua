@@ -264,8 +264,22 @@ function DungeonCommon.registerDungeonAchievement(def)
       local baseTooltip = tooltip or ""
       row.tooltip = baseTooltip
       
-      -- Override the OnEnter script to use proper GameTooltip API
+      -- Ensure mouse events are enabled and highlight texture exists
+      row:EnableMouse(true)
+      if not row.highlight then
+        row.highlight = row:CreateTexture(nil, "BACKGROUND")
+        row.highlight:SetAllPoints(row)
+        row.highlight:SetColorTexture(1, 1, 1, 0.10)
+        row.highlight:Hide()
+      end
+      
+      -- Override the OnEnter script to use proper GameTooltip API while preserving highlighting
       row:SetScript("OnEnter", function(self)
+        -- Show highlight
+        if self.highlight then
+          self.highlight:Show()
+        end
+        
         if self.Title and self.Title.GetText then
           -- Load fresh progress from database before showing tooltip
           LoadProgress()
@@ -294,6 +308,14 @@ function DungeonCommon.registerDungeonAchievement(def)
           
           GameTooltip:Show()
         end
+      end)
+      
+      -- Set up OnLeave script to hide highlight and tooltip
+      row:SetScript("OnLeave", function(self)
+        if self.highlight then
+          self.highlight:Hide()
+        end
+        GameTooltip:Hide()
       end)
     end
   end
