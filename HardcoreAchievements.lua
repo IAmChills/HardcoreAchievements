@@ -8,6 +8,81 @@ local function EnsureDB()
     return HardcoreAchievementsDB
 end
 
+-- =========================================================
+-- Minimap Button Implementation
+-- =========================================================
+
+-- Initialize minimap button libraries
+local LDB = LibStub("LibDataBroker-1.1")
+local LDBIcon = LibStub("LibDBIcon-1.0")
+
+-- Function to open achievements panel (detects UltraHardcore vs standalone)
+local function OpenAchievementsPanel()
+    -- Check if UltraHardcore is loaded and has TabManager
+    if TabManager and TabManager.switchToTab then
+        -- UltraHardcore is loaded - use TabManager to switch to tab 3 (Achievements)
+        TabManager.switchToTab(3)
+    else
+        -- UltraHardcore not loaded - use Character Frame method
+        if not CharacterFrame:IsShown() then
+            CharacterFrame:Show()
+        end
+        HCA_ShowAchievementTab()
+    end
+end
+
+-- Create the data object for the minimap button
+local minimapDataObject = LDB:NewDataObject("HardcoreAchievements", {
+    type = "data source",
+    text = "HardcoreAchievements",
+    icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\HardcoreAchievementsButton.tga",
+    OnClick = function(self, button)
+        if button == "LeftButton" then
+            OpenAchievementsPanel()
+        end
+    end,
+    OnTooltipShow = function(tooltip)
+        tooltip:AddLine("HardcoreAchievements", 1, 1, 1)
+        
+        -- Show different tooltip text based on whether UltraHardcore is loaded
+        if TabManager and TabManager.switchToTab then
+            tooltip:AddLine("Left-click to open UltraHardcore Achievements", 0.5, 0.5, 0.5)
+        else
+            tooltip:AddLine("Left-click to open Hardcore Achievements", 0.5, 0.5, 0.5)
+        end
+        
+        -- Show current achievement count
+        local _, cdb = GetCharDB()
+        if cdb and cdb.achievements then
+            local completedCount = 0
+            local totalCount = 0
+            for _, achievement in pairs(cdb.achievements) do
+                totalCount = totalCount + 1
+                if achievement.completed then
+                    completedCount = completedCount + 1
+                end
+            end
+            tooltip:AddLine(" ")
+            tooltip:AddLine(string.format("Completed: %d/%d", completedCount, totalCount), 0.6, 0.9, 0.6)
+        end
+    end,
+})
+
+-- Register the minimap icon
+local function InitializeMinimapButton()
+    local db = EnsureDB()
+    if not db.minimap then
+        db.minimap = { hide = false, position = 45 }
+    end
+    
+    LDBIcon:Register("HardcoreAchievements", minimapDataObject, db)
+    
+    -- Show the button by default
+    if not db.minimap.hide then
+        LDBIcon:Show("HardcoreAchievements")
+    end
+end
+
 -- Migration function to move achievement data from UltraHardcoreLeaderboard database
 local function MigrateFromLeaderboardDB()
     -- Check if we already have our own database
@@ -992,78 +1067,3 @@ hooksecurefunc("ToggleCharacter", function(tab, onlyShow)
         end
     end
 end)
-
--- =========================================================
--- Minimap Button Implementation
--- =========================================================
-
--- Initialize minimap button libraries
-local LDB = LibStub("LibDataBroker-1.1")
-local LDBIcon = LibStub("LibDBIcon-1.0")
-
--- Function to open achievements panel (detects UltraHardcore vs standalone)
-local function OpenAchievementsPanel()
-    -- Check if UltraHardcore is loaded and has TabManager
-    if TabManager and TabManager.switchToTab then
-        -- UltraHardcore is loaded - use TabManager to switch to tab 3 (Achievements)
-        TabManager.switchToTab(3)
-    else
-        -- UltraHardcore not loaded - use Character Frame method
-        if not CharacterFrame:IsShown() then
-            CharacterFrame:Show()
-        end
-        HCA_ShowAchievementTab()
-    end
-end
-
--- Create the data object for the minimap button
-local minimapDataObject = LDB:NewDataObject("HardcoreAchievements", {
-    type = "data source",
-    text = "HardcoreAchievements",
-    icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\HardcoreAchievementsButton.tga",
-    OnClick = function(self, button)
-        if button == "LeftButton" then
-            OpenAchievementsPanel()
-        end
-    end,
-    OnTooltipShow = function(tooltip)
-        tooltip:AddLine("HardcoreAchievements", 1, 1, 1)
-        
-        -- Show different tooltip text based on whether UltraHardcore is loaded
-        if TabManager and TabManager.switchToTab then
-            tooltip:AddLine("Left-click to open UltraHardcore Achievements", 0.5, 0.5, 0.5)
-        else
-            tooltip:AddLine("Left-click to open Hardcore Achievements", 0.5, 0.5, 0.5)
-        end
-        
-        -- Show current achievement count
-        local _, cdb = GetCharDB()
-        if cdb and cdb.achievements then
-            local completedCount = 0
-            local totalCount = 0
-            for _, achievement in pairs(cdb.achievements) do
-                totalCount = totalCount + 1
-                if achievement.completed then
-                    completedCount = completedCount + 1
-                end
-            end
-            tooltip:AddLine(" ")
-            tooltip:AddLine(string.format("Completed: %d/%d", completedCount, totalCount), 0.6, 0.9, 0.6)
-        end
-    end,
-})
-
--- Register the minimap icon
-local function InitializeMinimapButton()
-    local db = EnsureDB()
-    if not db.minimap then
-        db.minimap = { hide = false, position = 45 }
-    end
-    
-    LDBIcon:Register("HardcoreAchievements", minimapDataObject, db)
-    
-    -- Show the button by default
-    if not db.minimap.hide then
-        LDBIcon:Show("HardcoreAchievements")
-    end
-end
