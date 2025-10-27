@@ -666,6 +666,194 @@ local Tab = CreateFrame("Button" , "$parentTab"..TabID, CharacterFrame, "Charact
 Tab:SetPoint("RIGHT", _G["CharacterFrameTab"..Tabs], "RIGHT", 43, 0)
 Tab:SetText("Achievements")
 PanelTemplates_DeselectTab(Tab)
+
+-- Make tab draggable with snapping functionality
+Tab:SetMovable(true)
+Tab:EnableMouse(true)
+Tab:RegisterForDrag("LeftButton")
+
+-- Store initial position offset and mode
+local tabOffsetX = 43
+local isDragging = false
+local isVerticalMode = false
+local originalTabText = "Achievements"
+
+-- Function to switch to vertical mode
+local function SwitchToVerticalMode()
+    if isVerticalMode then return end
+    
+    isVerticalMode = true
+    Tab:SetText("HCA")
+    
+    -- Rotate the tab for vertical display
+    Tab:SetWidth(32)
+    Tab:SetHeight(120)
+    
+    -- Position on right edge
+    Tab:ClearAllPoints()
+    Tab:SetPoint("RIGHT", CharacterFrame, "RIGHT", 0, 0)
+end
+
+-- Function to switch to horizontal mode
+local function SwitchToHorizontalMode()
+    if not isVerticalMode then return end
+    
+    isVerticalMode = false
+    Tab:SetText(originalTabText)
+    
+    -- Restore normal tab dimensions
+    Tab:SetWidth(120)
+    Tab:SetHeight(32)
+    
+    -- Position on bottom edge
+    Tab:ClearAllPoints()
+    Tab:SetPoint("BOTTOM", CharacterFrame, "BOTTOM", 0, 0)
+end
+
+-- Function to constrain tab position within character frame bounds
+local function ConstrainTabPosition()
+    if not Tab or not CharacterFrame then return end
+    
+    if isVerticalMode then
+        -- Vertical mode constraints
+        local charFrameTop = CharacterFrame:GetTop()
+        local charFrameBottom = CharacterFrame:GetBottom()
+        local tabTop = Tab:GetTop()
+        local tabBottom = Tab:GetBottom()
+        
+        -- Constrain vertical movement (only top limit, no bottom limit)
+        if tabTop > charFrameTop then
+            -- Tab exceeds top edge
+            Tab:ClearAllPoints()
+            Tab:SetPoint("TOPRIGHT", CharacterFrame, "TOPRIGHT", 0, 0)
+        elseif tabBottom < charFrameBottom then
+            -- Tab exceeds bottom edge - snap back to horizontal mode
+            SwitchToHorizontalMode()
+            return
+        end
+    else
+        -- Horizontal mode constraints
+        local charFrameWidth = CharacterFrame:GetWidth()
+        local tabWidth = Tab:GetWidth()
+        local charFrameLeft = CharacterFrame:GetLeft()
+        local charFrameRight = charFrameLeft + charFrameWidth
+        
+        -- Get current tab position
+        local tabLeft = Tab:GetLeft()
+        local tabRight = tabLeft + tabWidth
+        
+        -- Check if tab should snap to vertical mode
+        if tabRight > charFrameRight then
+            SwitchToVerticalMode()
+            return
+        elseif tabLeft < charFrameLeft then
+            -- Tab exceeds left edge, move it right
+            Tab:ClearAllPoints()
+            Tab:SetPoint("LEFT", CharacterFrame, "LEFT", 0, 0)
+        end
+    end
+end
+
+-- Function to save tab position and mode
+local function SaveTabPosition()
+    local db = EnsureDB()
+    if not db.tabPosition then
+        db.tabPosition = {}
+    end
+    
+    db.tabPosition.isVertical = isVerticalMode
+    
+    if isVerticalMode then
+        -- Save vertical position (offset from top)
+        local charFrameTop = CharacterFrame:GetTop()
+        local tabTop = Tab:GetTop()
+        local offset = charFrameTop - tabTop
+        db.tabPosition.y = offset
+    else
+        -- Save horizontal position (offset from left)
+        local charFrameLeft = CharacterFrame:GetLeft()
+        local tabLeft = Tab:GetLeft()
+        local offset = tabLeft - charFrameLeft
+        db.tabPosition.x = offset
+    end
+end
+
+-- Function to restore tab position and mode
+local function RestoreTabPosition()
+    local db = EnsureDB()
+    if db.tabPosition then
+        if db.tabPosition.isVertical then
+            SwitchToVerticalMode()
+            if db.tabPosition.y then
+                Tab:ClearAllPoints()
+                Tab:SetPoint("TOPRIGHT", CharacterFrame, "TOPRIGHT", 0, -db.tabPosition.y)
+            end
+        else
+            SwitchToHorizontalMode()
+            if db.tabPosition.x then
+                Tab:ClearAllPoints()
+                Tab:SetPoint("LEFT", CharacterFrame, "LEFT", db.tabPosition.x, 0)
+            end
+        end
+        ConstrainTabPosition()
+    end
+end
+
+-- Visual feedback for dragging
+Tab:SetScript("OnEnter", function(self)
+    if not isDragging then
+        self:SetScript("OnUpdate", function()
+            -- Show resize cursor to indicate draggable
+            if self:IsMouseOver() then
+                SetCursor("Interface\\Cursors\\UI-Cursor-Move")
+            end
+        end)
+    end
+end)
+
+Tab:SetScript("OnLeave", function(self)
+    if not isDragging then
+        self:SetScript("OnUpdate", nil)
+        ResetCursor()
+    end
+end)
+
+-- Drag event handlers
+Tab:SetScript("OnDragStart", function(self)
+    isDragging = true
+    self:StartMoving()
+    self:SetScript("OnUpdate", function()
+        if isVerticalMode then
+            -- Vertical mode: constrain to Y-axis only, allow unlimited downward movement
+            local x, y = self:GetCenter()
+            local charFrameCenterX, charFrameCenterY = CharacterFrame:GetCenter()
+            self:ClearAllPoints()
+            self:SetPoint("CENTER", UIParent, "BOTTOMLEFT", charFrameCenterX, y)
+        else
+            -- Horizontal mode: constrain to X-axis only
+            local x, y = self:GetCenter()
+            local charFrameCenterX, charFrameCenterY = CharacterFrame:GetCenter()
+            self:ClearAllPoints()
+            self:SetPoint("CENTER", UIParent, "BOTTOMLEFT", x, charFrameCenterY)
+        end
+        ConstrainTabPosition()
+    end)
+end)
+
+Tab:SetScript("OnDragStop", function(self)
+    isDragging = false
+    self:StopMovingOrSizing()
+    self:SetScript("OnUpdate", nil)
+    ResetCursor()
+    ConstrainTabPosition()
+    SaveTabPosition()
+end)
+
+
+-- Restore position when character frame is shown
+CharacterFrame:HookScript("OnShow", function()
+    C_Timer.After(0.1, RestoreTabPosition)
+end)
  
 AchievementPanel = CreateFrame("Frame", "Achievements", CharacterFrame)
 AchievementPanel:Hide()
