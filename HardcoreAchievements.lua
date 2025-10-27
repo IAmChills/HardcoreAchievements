@@ -245,7 +245,7 @@ local function RestoreCompletionsFromDB()
     end
 
     if SortAchievementRows then SortAchievementRows() end
-    if UpdateTotalPoints then HCA_UpdateTotalPoints() end
+    if HCA_UpdateTotalPoints then HCA_UpdateTotalPoints() end
 end
 
 -- =========================================================
@@ -531,7 +531,15 @@ local LDBIcon = LibStub("LibDBIcon-1.0")
 
 -- Function to open achievements panel (detects UltraHardcore vs standalone)
 local function OpenAchievementsPanel()
-    if type(OpenSettingsToTab) == "function" then
+    -- Check if user prefers the custom Character Frame tab
+    local db = EnsureDB()
+    if db.showCustomTab then
+        -- User prefers Character Frame tab - use that instead
+        if not CharacterFrame:IsShown() then
+            CharacterFrame:Show()
+        end
+        HCA_ShowAchievementTab()
+    elseif type(OpenSettingsToTab) == "function" then
         -- UltraHardcore's public API: initializes the frame & tabs, then switches
         OpenSettingsToTab(3)  -- Achievements tab
     else
@@ -556,8 +564,11 @@ local minimapDataObject = LDB:NewDataObject("HardcoreAchievements", {
     OnTooltipShow = function(tooltip)
         tooltip:AddLine("HardcoreAchievements", 1, 1, 1)
         
-        -- Show different tooltip text based on whether UltraHardcore is loaded
-        if TabManager and TabManager.switchToTab then
+        -- Show different tooltip text based on user preference and UltraHardcore availability
+        local db = EnsureDB()
+        if db.showCustomTab then
+            tooltip:AddLine("Left-click to open Hardcore Achievements", 0.5, 0.5, 0.5)
+        elseif type(OpenSettingsToTab) == "function" then
             tooltip:AddLine("Left-click to open UltraHardcore Achievements", 0.5, 0.5, 0.5)
         else
             tooltip:AddLine("Left-click to open Hardcore Achievements", 0.5, 0.5, 0.5)
