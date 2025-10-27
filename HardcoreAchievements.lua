@@ -200,11 +200,6 @@ function HCA_MarkRowCompleted(row)
     if ApplyFilter then
         C_Timer.After(0, ApplyFilter)
     end
-    
-    -- Re-apply filter after completion state changes
-    if ApplyFilter then
-        C_Timer.After(0, ApplyFilter)
-    end
 end
 
 function CheckPendingCompletions()
