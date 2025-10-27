@@ -1,5 +1,5 @@
 local REQUIRED_MAP_ID = 48 -- Blackfathom Deeps map id
-local MAX_LEVEL = 30 -- The maximum level any player in the group can be to count this achievement
+local MAX_LEVEL = 30
 
 local achId = "FourCandle"
 local title = "Four Candles"
