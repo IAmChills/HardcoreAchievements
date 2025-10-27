@@ -531,10 +531,9 @@ local LDBIcon = LibStub("LibDBIcon-1.0")
 
 -- Function to open achievements panel (detects UltraHardcore vs standalone)
 local function OpenAchievementsPanel()
-    -- Check if UltraHardcore is loaded and has TabManager
-    if TabManager and TabManager.switchToTab then
-        -- UltraHardcore is loaded - use TabManager to switch to tab 3 (Achievements)
-        TabManager.switchToTab(3)
+    if type(OpenSettingsToTab) == "function" then
+        -- UltraHardcore's public API: initializes the frame & tabs, then switches
+        OpenSettingsToTab(3)  -- Achievements tab
     else
         -- UltraHardcore not loaded - use Character Frame method
         if not CharacterFrame:IsShown() then
