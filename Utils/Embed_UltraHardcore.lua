@@ -240,8 +240,8 @@ end
     if not UHCA.TotalPointsText then return end
     
     local totalPoints = 0
-    if _G.HardcoreAchievements_GetTotalPoints then
-      totalPoints = _G.HardcoreAchievements_GetTotalPoints()
+    if _G.HCA_GetTotalPoints then
+      totalPoints = _G.HCA_GetTotalPoints()
     end
     
     UHCA.TotalPointsText:SetText(totalPoints .. " pts")
@@ -551,8 +551,8 @@ local function HookSourceSignals()
       end)
     end)
   end
-  if type(UpdateTotalPoints) == "function" then
-    hooksecurefunc("UpdateTotalPoints", function()
+  if type(HCA_UpdateTotalPoints) == "function" then
+    hooksecurefunc("HCA_UpdateTotalPoints", function()
       C_Timer.After(0, function() 
         if EMBED.Rebuild then EMBED:Rebuild() else ApplyFilter() end
       end)

@@ -96,7 +96,8 @@ local function FormatTimestamp(timestamp)
         dateInfo.min)
 end
 
-function UpdateTotalPoints()
+-- Export function for embedded UI to get total points
+function HCA_GetTotalPoints()
     local total = 0
     if AchievementPanel and AchievementPanel.achievements then
         for _, row in ipairs(AchievementPanel.achievements) do
@@ -105,6 +106,11 @@ function UpdateTotalPoints()
             end
         end
     end
+    return total
+end
+
+function HCA_UpdateTotalPoints()
+    local total = HCA_GetTotalPoints()
     if AchievementPanel and AchievementPanel.TotalPoints then
         AchievementPanel.TotalPoints:SetText(tostring(total) .. " pts")
     end
@@ -187,7 +193,7 @@ function HCA_MarkRowCompleted(row)
         end
 
         ClearProgress(id)
-        UpdateTotalPoints()
+        HCA_UpdateTotalPoints()
     end
     
     -- Re-apply filter after completion state changes
@@ -239,22 +245,22 @@ local function RestoreCompletionsFromDB()
     end
 
     if SortAchievementRows then SortAchievementRows() end
-    if UpdateTotalPoints then UpdateTotalPoints() end
+    if UpdateTotalPoints then HCA_UpdateTotalPoints() end
 end
 
 -- =========================================================
 -- Simple Achievement Toast
 -- =========================================================
 -- Usage:
--- UHC_AchToast_Show(iconTextureIdOrPath, "Achievement Title", 10)
--- UHC_AchToast_Show(row.icon or 134400, row.title or "Achievement", row.points or 10)
+-- HCA_AchToast_Show(iconTextureIdOrPath, "Achievement Title", 10)
+-- HCA_AchToast_Show(row.icon or 134400, row.title or "Achievement", row.points or 10)
 
-local function UHC_CreateAchToast()
-    if UHC_AchToast and UHC_AchToast:IsObjectType("Frame") then
-        return UHC_AchToast
+local function HCA_CreateAchToast()
+    if HCA_AchToast and HCA_AchToast:IsObjectType("Frame") then
+        return HCA_AchToast
     end
 
-    local f = CreateFrame("Frame", "UHC_AchToast", UIParent)
+    local f = CreateFrame("Frame", "HCA_AchToast", UIParent)
     f:SetSize(320, 92)
     f:SetPoint("CENTER", 0, -280)
     f:Hide()
@@ -381,8 +387,8 @@ end
 -- Call Achievement Toast
 -- =========================================================
 
-function UHC_AchToast_Show(iconTex, title, pts)
-    local f = UHC_CreateAchToast()
+function HCA_AchToast_Show(iconTex, title, pts)
+    local f = HCA_CreateAchToast()
     f:Hide()
     f:SetAlpha(1)
 
@@ -522,6 +528,7 @@ end
 local initFrame = CreateFrame("Frame")
 initFrame:RegisterEvent("PLAYER_LOGIN")
 initFrame:RegisterEvent("PLAYER_LEVEL_UP")
+initFrame:RegisterEvent("ADDON_LOADED")
 initFrame:SetScript("OnEvent", function(self, event, ...)
     if event == "PLAYER_LOGIN" then
         playerGUID = UnitGUID("player")
@@ -546,10 +553,18 @@ initFrame:SetScript("OnEvent", function(self, event, ...)
         end
         SortAchievementRows()
         ApplySelfFoundBonus()
+        
+        -- Initialize minimap button
+        InitializeMinimapButton()
 
     elseif event == "PLAYER_LEVEL_UP" then
         RefreshOutleveledAll()
         CheckPendingCompletions()
+    elseif event == "ADDON_LOADED" then
+        local addonName = ...
+        if addonName == ADDON_NAME then
+            -- Addon loaded, but wait for PLAYER_LOGIN for minimap button
+        end
     end
 end)
 
@@ -843,7 +858,7 @@ function CreateAchievementRow(parent, achId, title, tooltip, icon, level, points
 
     AchievementPanel.achievements[index] = row
     SortAchievementRows()
-    UpdateTotalPoints()
+    HCA_UpdateTotalPoints()
 
     return row
 end
@@ -874,7 +889,7 @@ do
                             end
                             
                             HCA_MarkRowCompleted(row)
-                            UHC_AchToast_Show(row.Icon:GetTexture(), row.Title:GetText(), toastPoints)
+                            HCA_AchToast_Show(row.Icon:GetTexture(), row.Title:GetText(), toastPoints)
                         end
                     end
                 end
@@ -894,7 +909,7 @@ do
                             end
 
                             HCA_MarkRowCompleted(row)
-                            UHC_AchToast_Show(row.Icon:GetTexture(), row.Title:GetText(), toastPoints)
+                            HCA_AchToast_Show(row.Icon:GetTexture(), row.Title:GetText(), toastPoints)
                         end
                     end
                 end
@@ -977,3 +992,78 @@ hooksecurefunc("ToggleCharacter", function(tab, onlyShow)
         end
     end
 end)
+
+-- =========================================================
+-- Minimap Button Implementation
+-- =========================================================
+
+-- Initialize minimap button libraries
+local LDB = LibStub("LibDataBroker-1.1")
+local LDBIcon = LibStub("LibDBIcon-1.0")
+
+-- Function to open achievements panel (detects UltraHardcore vs standalone)
+local function OpenAchievementsPanel()
+    -- Check if UltraHardcore is loaded and has TabManager
+    if TabManager and TabManager.switchToTab then
+        -- UltraHardcore is loaded - use TabManager to switch to tab 3 (Achievements)
+        TabManager.switchToTab(3)
+    else
+        -- UltraHardcore not loaded - use Character Frame method
+        if not CharacterFrame:IsShown() then
+            CharacterFrame:Show()
+        end
+        HCA_ShowAchievementTab()
+    end
+end
+
+-- Create the data object for the minimap button
+local minimapDataObject = LDB:NewDataObject("HardcoreAchievements", {
+    type = "data source",
+    text = "HardcoreAchievements",
+    icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\HardcoreAchievementsButton.tga",
+    OnClick = function(self, button)
+        if button == "LeftButton" then
+            OpenAchievementsPanel()
+        end
+    end,
+    OnTooltipShow = function(tooltip)
+        tooltip:AddLine("HardcoreAchievements", 1, 1, 1)
+        
+        -- Show different tooltip text based on whether UltraHardcore is loaded
+        if TabManager and TabManager.switchToTab then
+            tooltip:AddLine("Left-click to open UltraHardcore Achievements", 0.5, 0.5, 0.5)
+        else
+            tooltip:AddLine("Left-click to open Hardcore Achievements", 0.5, 0.5, 0.5)
+        end
+        
+        -- Show current achievement count
+        local _, cdb = GetCharDB()
+        if cdb and cdb.achievements then
+            local completedCount = 0
+            local totalCount = 0
+            for _, achievement in pairs(cdb.achievements) do
+                totalCount = totalCount + 1
+                if achievement.completed then
+                    completedCount = completedCount + 1
+                end
+            end
+            tooltip:AddLine(" ")
+            tooltip:AddLine(string.format("Completed: %d/%d", completedCount, totalCount), 0.6, 0.9, 0.6)
+        end
+    end,
+})
+
+-- Register the minimap icon
+local function InitializeMinimapButton()
+    local db = EnsureDB()
+    if not db.minimap then
+        db.minimap = { hide = false, position = 45 }
+    end
+    
+    LDBIcon:Register("HardcoreAchievements", minimapDataObject, db)
+    
+    -- Show the button by default
+    if not db.minimap.hide then
+        LDBIcon:Show("HardcoreAchievements")
+    end
+end

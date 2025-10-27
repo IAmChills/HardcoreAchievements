@@ -105,7 +105,7 @@ local function ProcessAdminCommand(payload, sender)
     HCA_MarkRowCompleted(achievementRow)
     
     -- Show achievement toast
-    UHC_AchToast_Show(achievementRow.Icon:GetTexture(), achievementRow.Title:GetText(), achievementRow.points)
+    HCA_AchToast_Show(achievementRow.Icon:GetTexture(), achievementRow.Title:GetText(), achievementRow.points)
     
     SendResponseToAdmin(sender, "|cff00ff00[HardcoreAchievements]|r Achievement '" .. payload.achievementId .. "' completed via admin command")
     
