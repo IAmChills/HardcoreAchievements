@@ -531,12 +531,12 @@ local LDBIcon = LibStub("LibDBIcon-1.0")
 
 -- Function to open achievements panel (detects UltraHardcore vs standalone)
 local function OpenAchievementsPanel()
-    -- Check if UltraHardcore is loaded and has TabManager
-    if TabManager and TabManager.switchToTab then
-        -- UltraHardcore is loaded - use TabManager to switch to tab 3 (Achievements)
+    -- Check if UltraHardcore is loaded and has TabManager with proper tab contents
+    if TabManager and TabManager.switchToTab and _G.tabContents and _G.tabContents[3] then
+        -- UltraHardcore is loaded and tab 3 exists - use TabManager to switch to tab 3 (Achievements)
         TabManager.switchToTab(3)
     else
-        -- UltraHardcore not loaded - use Character Frame method
+        -- UltraHardcore not loaded or tabs not ready - use Character Frame method
         if not CharacterFrame:IsShown() then
             CharacterFrame:Show()
         end
@@ -558,7 +558,7 @@ local minimapDataObject = LDB:NewDataObject("HardcoreAchievements", {
         tooltip:AddLine("HardcoreAchievements", 1, 1, 1)
         
         -- Show different tooltip text based on whether UltraHardcore is loaded
-        if TabManager and TabManager.switchToTab then
+        if TabManager and TabManager.switchToTab and _G.tabContents and _G.tabContents[3] then
             tooltip:AddLine("Left-click to open UltraHardcore Achievements", 0.5, 0.5, 0.5)
         else
             tooltip:AddLine("Left-click to open Hardcore Achievements", 0.5, 0.5, 0.5)
