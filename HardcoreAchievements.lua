@@ -522,53 +522,6 @@ function HardcoreAchievements_CleanupOldData()
 end
 
 -- =========================================================
--- Events
--- =========================================================
-
-local initFrame = CreateFrame("Frame")
-initFrame:RegisterEvent("PLAYER_LOGIN")
-initFrame:RegisterEvent("PLAYER_LEVEL_UP")
-initFrame:RegisterEvent("ADDON_LOADED")
-initFrame:SetScript("OnEvent", function(self, event, ...)
-    if event == "PLAYER_LOGIN" then
-        playerGUID = UnitGUID("player")
-
-        -- Run migration first, before setting up current character
-        MigrateFromLeaderboardDB()
-
-        local db, cdb = GetCharDB()
-        if cdb then
-            local name, realm = UnitName("player"), GetRealmName()
-            local className = UnitClass("player")
-            cdb.meta.name      = name
-            cdb.meta.realm     = realm
-            cdb.meta.className = className
-            cdb.meta.race      = UnitRace("player")
-            cdb.meta.level     = UnitLevel("player")
-            cdb.meta.faction   = UnitFactionGroup("player")
-            cdb.meta.lastLogin = time()
-            RestoreCompletionsFromDB()
-            CheckPendingCompletions()
-            RefreshOutleveledAll()
-        end
-        SortAchievementRows()
-        ApplySelfFoundBonus()
-        
-        -- Initialize minimap button
-        InitializeMinimapButton()
-
-    elseif event == "PLAYER_LEVEL_UP" then
-        RefreshOutleveledAll()
-        CheckPendingCompletions()
-    elseif event == "ADDON_LOADED" then
-        local addonName = ...
-        if addonName == ADDON_NAME then
-            -- Addon loaded, but wait for PLAYER_LOGIN for minimap button
-        end
-    end
-end)
-
--- =========================================================
 -- Minimap Button Implementation
 -- =========================================================
 
@@ -642,6 +595,53 @@ local function InitializeMinimapButton()
         LDBIcon:Show("HardcoreAchievements")
     end
 end
+
+-- =========================================================
+-- Events
+-- =========================================================
+
+local initFrame = CreateFrame("Frame")
+initFrame:RegisterEvent("PLAYER_LOGIN")
+initFrame:RegisterEvent("PLAYER_LEVEL_UP")
+initFrame:RegisterEvent("ADDON_LOADED")
+initFrame:SetScript("OnEvent", function(self, event, ...)
+    if event == "PLAYER_LOGIN" then
+        playerGUID = UnitGUID("player")
+
+        -- Run migration first, before setting up current character
+        MigrateFromLeaderboardDB()
+
+        local db, cdb = GetCharDB()
+        if cdb then
+            local name, realm = UnitName("player"), GetRealmName()
+            local className = UnitClass("player")
+            cdb.meta.name      = name
+            cdb.meta.realm     = realm
+            cdb.meta.className = className
+            cdb.meta.race      = UnitRace("player")
+            cdb.meta.level     = UnitLevel("player")
+            cdb.meta.faction   = UnitFactionGroup("player")
+            cdb.meta.lastLogin = time()
+            RestoreCompletionsFromDB()
+            CheckPendingCompletions()
+            RefreshOutleveledAll()
+        end
+        SortAchievementRows()
+        ApplySelfFoundBonus()
+        
+        -- Initialize minimap button
+        InitializeMinimapButton()
+
+    elseif event == "PLAYER_LEVEL_UP" then
+        RefreshOutleveledAll()
+        CheckPendingCompletions()
+    elseif event == "ADDON_LOADED" then
+        local addonName = ...
+        if addonName == ADDON_NAME then
+            -- Addon loaded, but wait for PLAYER_LOGIN for minimap button
+        end
+    end
+end)
 
 -- =========================================================
 -- Setting up the Interface
