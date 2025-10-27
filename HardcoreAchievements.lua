@@ -678,6 +678,26 @@ local isDragging = false
 local isVerticalMode = false
 local originalTabText = "Achievements"
 
+-- Helper: convert screen-space (e.g., from GetCenter/GetLeft/GetTop) into parent-space offsets
+local function ScreenToParent(x, y, parent)
+    local s = parent:GetEffectiveScale()
+    local left, bottom = parent:GetLeft(), parent:GetBottom() -- screen-space
+    return (x - left) / s, (y - bottom) / s
+end
+
+-- Helper: convert cursor to parent-space coords (BOTTOMLEFT origin)
+local function CursorToParent(parent)
+    local cx, cy = GetCursorPosition()                 -- screen pixels * UI scale
+    local ui = UIParent:GetEffectiveScale()
+    local s = parent:GetEffectiveScale()
+    local left, bottom = parent:GetLeft(), parent:GetBottom() -- screen pixels
+    local xScreen, yScreen = cx / ui, cy / ui
+    return (xScreen - left) / s, (yScreen - bottom) / s
+end
+
+local VISUAL_PAD_X = -10   -- shift left ~10px on RIGHT-edge anchors
+local VISUAL_PAD_Y =  46   -- shift up ~30px on BOTTOM-edge anchors
+
 -- Function to switch to vertical mode
 local function SwitchToVerticalMode()
     if isVerticalMode then return end
@@ -691,7 +711,8 @@ local function SwitchToVerticalMode()
     
     -- Position on right edge
     Tab:ClearAllPoints()
-    Tab:SetPoint("RIGHT", CharacterFrame, "RIGHT", 0, 0)
+    Tab:SetPoint("RIGHT", CharacterFrame, "RIGHT", VISUAL_PAD_X, 0)
+    Tab:SetRotation(math.pi/2)
 end
 
 -- Function to switch to horizontal mode
@@ -707,7 +728,7 @@ local function SwitchToHorizontalMode()
     
     -- Position on bottom edge
     Tab:ClearAllPoints()
-    Tab:SetPoint("BOTTOM", CharacterFrame, "BOTTOM", 0, 0)
+    Tab:SetPoint("RIGHT", _G["CharacterFrameTab"..Tabs], "RIGHT", 43, VISUAL_PAD_Y)
 end
 
 -- Function to constrain tab position within character frame bounds
@@ -725,7 +746,7 @@ local function ConstrainTabPosition()
         if tabTop > charFrameTop then
             -- Tab exceeds top edge
             Tab:ClearAllPoints()
-            Tab:SetPoint("TOPRIGHT", CharacterFrame, "TOPRIGHT", 0, 0)
+            Tab:SetPoint("TOPRIGHT", CharacterFrame, "TOPRIGHT", VISUAL_PAD_X, VISUAL_PAD_Y)
         elseif tabBottom < charFrameBottom then
             -- Tab exceeds bottom edge - snap back to horizontal mode
             SwitchToHorizontalMode()
@@ -749,7 +770,7 @@ local function ConstrainTabPosition()
         elseif tabLeft < charFrameLeft then
             -- Tab exceeds left edge, move it right
             Tab:ClearAllPoints()
-            Tab:SetPoint("LEFT", CharacterFrame, "LEFT", 0, 0)
+            Tab:SetPoint("LEFT", CharacterFrame, "LEFT", VISUAL_PAD_X, VISUAL_PAD_Y)
         end
     end
 end
@@ -760,21 +781,23 @@ local function SaveTabPosition()
     if not db.tabPosition then
         db.tabPosition = {}
     end
-    
+
     db.tabPosition.isVertical = isVerticalMode
-    
+
+    local parentScale = CharacterFrame:GetEffectiveScale()
+
     if isVerticalMode then
-        -- Save vertical position (offset from top)
+        -- Save vertical offset from the top, in parent space
         local charFrameTop = CharacterFrame:GetTop()
         local tabTop = Tab:GetTop()
-        local offset = charFrameTop - tabTop
-        db.tabPosition.y = offset
+        local offsetScreen = charFrameTop - tabTop
+        db.tabPosition.y = offsetScreen / parentScale
     else
-        -- Save horizontal position (offset from left)
+        -- Save horizontal offset from the left, in parent space
         local charFrameLeft = CharacterFrame:GetLeft()
         local tabLeft = Tab:GetLeft()
-        local offset = tabLeft - charFrameLeft
-        db.tabPosition.x = offset
+        local offsetScreen = tabLeft - charFrameLeft
+        db.tabPosition.x = offsetScreen / parentScale
     end
 end
 
@@ -786,69 +809,67 @@ local function RestoreTabPosition()
             SwitchToVerticalMode()
             if db.tabPosition.y then
                 Tab:ClearAllPoints()
-                Tab:SetPoint("TOPRIGHT", CharacterFrame, "TOPRIGHT", 0, -db.tabPosition.y)
+                Tab:SetPoint("TOPRIGHT", CharacterFrame, "TOPRIGHT", VISUAL_PAD_X, -db.tabPosition.y)
             end
         else
             SwitchToHorizontalMode()
             if db.tabPosition.x then
                 Tab:ClearAllPoints()
-                Tab:SetPoint("LEFT", CharacterFrame, "LEFT", db.tabPosition.x, 0)
+                Tab:SetPoint("LEFT", CharacterFrame, "LEFT", db.tabPosition.x, VISUAL_PAD_Y)
             end
         end
         ConstrainTabPosition()
     end
 end
-
--- Visual feedback for dragging
-Tab:SetScript("OnEnter", function(self)
-    if not isDragging then
-        self:SetScript("OnUpdate", function()
-            -- Show resize cursor to indicate draggable
-            if self:IsMouseOver() then
-                SetCursor("Interface\\Cursors\\UI-Cursor-Move")
-            end
-        end)
-    end
-end)
-
-Tab:SetScript("OnLeave", function(self)
-    if not isDragging then
-        self:SetScript("OnUpdate", nil)
-        ResetCursor()
-    end
-end)
-
 -- Drag event handlers
 Tab:SetScript("OnDragStart", function(self)
     isDragging = true
-    self:StartMoving()
+    
+    -- Calculate the initial offset between cursor and tab center
+    local cursorX, cursorY = CursorToParent(CharacterFrame)
+    local tabCenterX, tabCenterY
+    
+    if isVerticalMode then
+        tabCenterX = CharacterFrame:GetWidth() + VISUAL_PAD_X
+        tabCenterY = self:GetCenter() - CharacterFrame:GetBottom()
+    else
+        tabCenterX = self:GetCenter() - CharacterFrame:GetLeft()
+        tabCenterY = VISUAL_PAD_Y
+    end
+    
+    local dragOffsetX = cursorX - tabCenterX
+    local dragOffsetY = cursorY - tabCenterY
+    
+    -- No StartMoving(): we'll drive it ourselves via cursor
     self:SetScript("OnUpdate", function()
+        local pX, pY = CursorToParent(CharacterFrame)
+        
+        -- Apply the drag offset to maintain relative position
+        local adjustedX = pX - dragOffsetX
+        local adjustedY = pY - dragOffsetY
+
+        self:ClearAllPoints()
         if isVerticalMode then
-            -- Vertical mode: constrain to Y-axis only, allow unlimited downward movement
-            local x, y = self:GetCenter()
-            local charFrameCenterX, charFrameCenterY = CharacterFrame:GetCenter()
-            self:ClearAllPoints()
-            self:SetPoint("CENTER", UIParent, "BOTTOMLEFT", charFrameCenterX, y)
+            -- Lock to RIGHT edge; move only along Y relative to CharacterFrame's vertical center
+            local yOff = adjustedY - (CharacterFrame:GetHeight() / 2)
+            self:SetPoint("RIGHT", CharacterFrame, "RIGHT", VISUAL_PAD_X, yOff)
         else
-            -- Horizontal mode: constrain to X-axis only
-            local x, y = self:GetCenter()
-            local charFrameCenterX, charFrameCenterY = CharacterFrame:GetCenter()
-            self:ClearAllPoints()
-            self:SetPoint("CENTER", UIParent, "BOTTOMLEFT", x, charFrameCenterY)
+            -- Lock to BOTTOM edge; move only along X relative to CharacterFrame's horizontal center
+            local xOff = adjustedX - (CharacterFrame:GetWidth() / 2)
+            self:SetPoint("BOTTOM", CharacterFrame, "BOTTOM", xOff, VISUAL_PAD_Y)
         end
+
         ConstrainTabPosition()
     end)
 end)
 
 Tab:SetScript("OnDragStop", function(self)
     isDragging = false
-    self:StopMovingOrSizing()
+    -- No StopMovingOrSizing(): we never started moving
     self:SetScript("OnUpdate", nil)
-    ResetCursor()
     ConstrainTabPosition()
     SaveTabPosition()
 end)
-
 
 -- Restore position when character frame is shown
 CharacterFrame:HookScript("OnShow", function()
