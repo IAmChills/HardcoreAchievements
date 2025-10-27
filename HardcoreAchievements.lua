@@ -533,42 +533,8 @@ local LDBIcon = LibStub("LibDBIcon-1.0")
 local function OpenAchievementsPanel()
     -- Check if UltraHardcore is loaded and has TabManager
     if TabManager and TabManager.switchToTab then
-        -- UltraHardcore is loaded - try different approaches to initialize tab
-        
-        -- Method 1: Try to call InitializeAchievementTab if it exists
-        if _G.InitializeAchievementTab then
-            _G.InitializeAchievementTab()
-        end
-        
-        -- Method 2: Try to create tabContents[3] if it doesn't exist
-        if not _G.tabContents then
-            _G.tabContents = {}
-        end
-        if not _G.tabContents[3] then
-            _G.tabContents[3] = CreateFrame("Frame")
-            _G.tabContents[3].initialized = false
-        end
-        
-        -- Method 3: Try to initialize it manually if not initialized
-        if _G.tabContents[3] and not _G.tabContents[3].initialized then
-            _G.tabContents[3].initialized = true
-            local achievementsTitle = _G.tabContents[3]:CreateFontString(nil, 'OVERLAY', 'GameFontHighlight')
-            achievementsTitle:SetPoint('CENTER', _G.tabContents[3], 'CENTER', 0, 0)
-            achievementsTitle:SetText('Achievements Coming In Phase 3!')
-            achievementsTitle:SetFontObject('GameFontNormalLarge')
-        end
-        
-        -- Now try to switch to the tab
-        if _G.tabContents and _G.tabContents[3] then
-            TabManager.switchToTab(3)
-        else
-            -- Tab still not available, fall back to Character Frame
-            print("|cff00ff00[HardcoreAchievements]|r UltraHardcore tab creation failed, using Character Frame")
-            if not CharacterFrame:IsShown() then
-                CharacterFrame:Show()
-            end
-            HCA_ShowAchievementTab()
-        end
+        -- UltraHardcore is loaded - use TabManager to switch to tab 3 (Achievements)
+        TabManager.switchToTab(3)
     else
         -- UltraHardcore not loaded - use Character Frame method
         if not CharacterFrame:IsShown() then
