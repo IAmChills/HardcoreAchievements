@@ -533,11 +533,28 @@ local LDBIcon = LibStub("LibDBIcon-1.0")
 local function OpenAchievementsPanel()
     -- Check if UltraHardcore is loaded and has TabManager
     if TabManager and TabManager.switchToTab then
-        -- UltraHardcore is loaded - initialize the achievement tab if needed, then switch to it
+        -- UltraHardcore is loaded - try to initialize the achievement tab if needed
         if _G.InitializeAchievementTab then
             _G.InitializeAchievementTab()
+        else
+            print("|cff00ff00[HardcoreAchievements]|r InitializeAchievementTab function not found")
         end
-        TabManager.switchToTab(3)
+        
+        -- Check if tabContents[3] exists after initialization attempt
+        if _G.tabContents and _G.tabContents[3] then
+            TabManager.switchToTab(3)
+        else
+            -- Tab still not available, fall back to Character Frame
+            print("|cff00ff00[HardcoreAchievements]|r UltraHardcore tab not ready, using Character Frame")
+            print("|cff00ff00[HardcoreAchievements]|r tabContents exists:", _G.tabContents ~= nil)
+            if _G.tabContents then
+                print("|cff00ff00[HardcoreAchievements]|r tabContents[3] exists:", _G.tabContents[3] ~= nil)
+            end
+            if not CharacterFrame:IsShown() then
+                CharacterFrame:Show()
+            end
+            HCA_ShowAchievementTab()
+        end
     else
         -- UltraHardcore not loaded - use Character Frame method
         if not CharacterFrame:IsShown() then
