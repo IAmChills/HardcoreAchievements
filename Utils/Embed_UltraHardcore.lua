@@ -321,10 +321,10 @@ function EMBED:Rebuild()
             -- Out-leveled: Desaturated
             icon.Icon:SetDesaturated(true)
             icon.Icon:SetAlpha(1.0)
-            icon.Icon:SetVertexColor(1.0, 1.0, 1.0) -- Reset to normal color
+            icon.Icon:SetVertexColor(1, 0.0, 0.0) -- Reset to normal color
           else
             -- Available but has level requirement: Full color
-            icon.Icon:SetDesaturated(false)
+            icon.Icon:SetDesaturated(true)
             icon.Icon:SetAlpha(1.0)
             icon.Icon:SetVertexColor(1.0, 1.0, 1.0) -- Full color
           end

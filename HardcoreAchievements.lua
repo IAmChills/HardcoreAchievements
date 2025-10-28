@@ -109,6 +109,23 @@ function HCA_GetTotalPoints()
     return total
 end
 
+-- Export function to get achievement count data
+function HCA_AchievementCount()
+    local completed = 0
+    local total = 0
+    
+    if AchievementPanel and AchievementPanel.achievements then
+        for _, row in ipairs(AchievementPanel.achievements) do
+            total = total + 1
+            if row.completed then
+                completed = completed + 1
+            end
+        end
+    end
+    
+    return completed, total
+end
+
 function HCA_UpdateTotalPoints()
     local total = HCA_GetTotalPoints()
     if AchievementPanel and AchievementPanel.TotalPoints then
@@ -780,10 +797,10 @@ AchievementPanel.Scroll:SetScript("OnSizeChanged", function(self)
 end)
 
 -- AchievementPanel.PortraitCover = AchievementPanel:CreateTexture(nil, "OVERLAY")
--- AchievementPanel.PortraitCover:SetTexture("Interface\\AddOns\\HardcoreAchievements\\Images\\HardcoreAchievements.tga")
--- AchievementPanel.PortraitCover:SetSize(58, 58)
--- AchievementPanel.PortraitCover:SetPoint("TOPLEFT", CharacterFramePortrait, "TOPLEFT", 4, -1)
--- AchievementPanel.PortraitCover:Hide()
+-- AchievementPanel.PortraitCover:SetTexture("Interface\\AddOns\\HardcoreAchievements\\Images\\HardcoreAchievementsButton.tga")
+-- AchievementPanel.PortraitCover:SetSize(75, 75)
+-- AchievementPanel.PortraitCover:SetPoint("TOPLEFT", CharacterFramePortrait, "TOPLEFT", -5, 6)
+-- AchievementPanel.PortraitCover:Show()
 
 -- Optional: mouse wheel support
 AchievementPanel.Scroll:EnableMouseWheel(true)
