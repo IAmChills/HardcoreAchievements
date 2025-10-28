@@ -667,214 +667,97 @@ Tab:SetPoint("RIGHT", _G["CharacterFrameTab"..Tabs], "RIGHT", 43, 0)
 Tab:SetText("Achievements")
 PanelTemplates_DeselectTab(Tab)
 
--- Make tab draggable with snapping functionality
-Tab:SetMovable(true)
-Tab:EnableMouse(true)
-Tab:RegisterForDrag("LeftButton")
+-- === Draggable "curl" behavior for Achievements tab (bottom ↔ right edges only) ===
+-- Place this immediately after the lines that create `Tab` and set its text.
+-- Keeps default anchoring until the user drags; then constrains motion to bottom or right edge.
+do
+    local PAD_LEFT  = -10   -- keep at least 30px away from left edge while on bottom
+    local PAD_TOP   = 46   -- keep at least 30px away from top edge while on right
+    local EDGE_EPS  = 2    -- small epsilon to treat "past right edge" as snap condition
+    local dragging  = false
+    local mode      = "bottom"  -- "bottom" (horizontal only) or "right" (vertical only)
 
--- Store initial position offset and mode
-local tabOffsetX = 43
-local isDragging = false
-local isVerticalMode = false
-local originalTabText = "Achievements"
-
--- Helper: convert screen-space (e.g., from GetCenter/GetLeft/GetTop) into parent-space offsets
-local function ScreenToParent(x, y, parent)
-    local s = parent:GetEffectiveScale()
-    local left, bottom = parent:GetLeft(), parent:GetBottom() -- screen-space
-    return (x - left) / s, (y - bottom) / s
-end
-
--- Helper: convert cursor to parent-space coords (BOTTOMLEFT origin)
-local function CursorToParent(parent)
-    local cx, cy = GetCursorPosition()                 -- screen pixels * UI scale
-    local ui = UIParent:GetEffectiveScale()
-    local s = parent:GetEffectiveScale()
-    local left, bottom = parent:GetLeft(), parent:GetBottom() -- screen pixels
-    local xScreen, yScreen = cx / ui, cy / ui
-    return (xScreen - left) / s, (yScreen - bottom) / s
-end
-
-local VISUAL_PAD_X = -10   -- shift left ~10px on RIGHT-edge anchors
-local VISUAL_PAD_Y =  46   -- shift up ~30px on BOTTOM-edge anchors
-
--- Function to switch to vertical mode
-local function SwitchToVerticalMode()
-    if isVerticalMode then return end
-    
-    isVerticalMode = true
-    Tab:SetText("HCA")
-    
-    -- Rotate the tab for vertical display
-    Tab:SetWidth(32)
-    Tab:SetHeight(120)
-    
-    -- Position on right edge
-    Tab:ClearAllPoints()
-    Tab:SetPoint("RIGHT", CharacterFrame, "RIGHT", VISUAL_PAD_X, 0)
-    Tab:SetRotation(math.pi/2)
-end
-
--- Function to switch to horizontal mode
-local function SwitchToHorizontalMode()
-    if not isVerticalMode then return end
-    
-    isVerticalMode = false
-    Tab:SetText(originalTabText)
-    
-    -- Restore normal tab dimensions
-    Tab:SetWidth(120)
-    Tab:SetHeight(32)
-    
-    -- Position on bottom edge
-    Tab:ClearAllPoints()
-    Tab:SetPoint("RIGHT", _G["CharacterFrameTab"..Tabs], "RIGHT", 43, VISUAL_PAD_Y)
-end
-
--- Function to constrain tab position within character frame bounds
-local function ConstrainTabPosition()
-    if not Tab or not CharacterFrame then return end
-    
-    if isVerticalMode then
-        -- Vertical mode constraints
-        local charFrameTop = CharacterFrame:GetTop()
-        local charFrameBottom = CharacterFrame:GetBottom()
-        local tabTop = Tab:GetTop()
-        local tabBottom = Tab:GetBottom()
-        
-        -- Constrain vertical movement (only top limit, no bottom limit)
-        if tabTop > charFrameTop then
-            -- Tab exceeds top edge
-            Tab:ClearAllPoints()
-            Tab:SetPoint("TOPRIGHT", CharacterFrame, "TOPRIGHT", VISUAL_PAD_X, VISUAL_PAD_Y)
-        elseif tabBottom < charFrameBottom then
-            -- Tab exceeds bottom edge - snap back to horizontal mode
-            SwitchToHorizontalMode()
-            return
-        end
-    else
-        -- Horizontal mode constraints
-        local charFrameWidth = CharacterFrame:GetWidth()
-        local tabWidth = Tab:GetWidth()
-        local charFrameLeft = CharacterFrame:GetLeft()
-        local charFrameRight = charFrameLeft + charFrameWidth
-        
-        -- Get current tab position
-        local tabLeft = Tab:GetLeft()
-        local tabRight = tabLeft + tabWidth
-        
-        -- Check if tab should snap to vertical mode
-        if tabRight > charFrameRight then
-            SwitchToVerticalMode()
-            return
-        elseif tabLeft < charFrameLeft then
-            -- Tab exceeds left edge, move it right
-            Tab:ClearAllPoints()
-            Tab:SetPoint("LEFT", CharacterFrame, "LEFT", VISUAL_PAD_X, VISUAL_PAD_Y)
-        end
-    end
-end
-
--- Function to save tab position and mode
-local function SaveTabPosition()
-    local db = EnsureDB()
-    if not db.tabPosition then
-        db.tabPosition = {}
+    -- Helper: get cursor position in UIParent scale
+    local function GetCursorInUI()
+        local x, y = GetCursorPosition()
+        local scale = UIParent:GetEffectiveScale()
+        return x / scale, y / scale
     end
 
-    db.tabPosition.isVertical = isVerticalMode
-
-    local parentScale = CharacterFrame:GetEffectiveScale()
-
-    if isVerticalMode then
-        -- Save vertical offset from the top, in parent space
-        local charFrameTop = CharacterFrame:GetTop()
-        local tabTop = Tab:GetTop()
-        local offsetScreen = charFrameTop - tabTop
-        db.tabPosition.y = offsetScreen / parentScale
-    else
-        -- Save horizontal offset from the left, in parent space
-        local charFrameLeft = CharacterFrame:GetLeft()
-        local tabLeft = Tab:GetLeft()
-        local offsetScreen = tabLeft - charFrameLeft
-        db.tabPosition.x = offsetScreen / parentScale
+    -- Helper: clamp
+    local function clamp(v, lo, hi)
+        if v < lo then return lo end
+        if v > hi then return hi end
+        return v
     end
-end
 
--- Function to restore tab position and mode
-local function RestoreTabPosition()
-    local db = EnsureDB()
-    if db.tabPosition then
-        if db.tabPosition.isVertical then
-            SwitchToVerticalMode()
-            if db.tabPosition.y then
-                Tab:ClearAllPoints()
-                Tab:SetPoint("TOPRIGHT", CharacterFrame, "TOPRIGHT", VISUAL_PAD_X, -db.tabPosition.y)
-            end
-        else
-            SwitchToHorizontalMode()
-            if db.tabPosition.x then
-                Tab:ClearAllPoints()
-                Tab:SetPoint("LEFT", CharacterFrame, "LEFT", db.tabPosition.x, VISUAL_PAD_Y)
-            end
-        end
-        ConstrainTabPosition()
-    end
-end
--- Drag event handlers
-Tab:SetScript("OnDragStart", function(self)
-    isDragging = true
-    
-    -- Calculate the initial offset between cursor and tab center
-    local cursorX, cursorY = CursorToParent(CharacterFrame)
-    local tabCenterX, tabCenterY
-    
-    if isVerticalMode then
-        tabCenterX = CharacterFrame:GetWidth() + VISUAL_PAD_X
-        tabCenterY = self:GetCenter() - CharacterFrame:GetBottom()
-    else
-        tabCenterX = self:GetCenter() - CharacterFrame:GetLeft()
-        tabCenterY = VISUAL_PAD_Y
-    end
-    
-    local dragOffsetX = cursorX - tabCenterX
-    local dragOffsetY = cursorY - tabCenterY
-    
-    -- No StartMoving(): we'll drive it ourselves via cursor
-    self:SetScript("OnUpdate", function()
-        local pX, pY = CursorToParent(CharacterFrame)
-        
-        -- Apply the drag offset to maintain relative position
-        local adjustedX = pX - dragOffsetX
-        local adjustedY = pY - dragOffsetY
+    -- Begin drag on left button only
+    Tab:RegisterForDrag("LeftButton")
+    Tab:EnableMouse(true)
+    Tab:SetMovable(false)      -- we are not using StartMoving(); we re-anchor manually
 
+    Tab:HookScript("OnDragStart", function(self)
+        dragging = true
+        -- When a new drag starts, assume we’re on the bottom unless cursor is already past the right
+        local left, bottom, right, top = CharacterFrame:GetLeft(), CharacterFrame:GetBottom(), CharacterFrame:GetRight(), CharacterFrame:GetTop()
+        local cx = select(1, GetCursorInUI())
+        mode = (cx > right + EDGE_EPS) and "right" or "bottom"
         self:ClearAllPoints()
-        if isVerticalMode then
-            -- Lock to RIGHT edge; move only along Y relative to CharacterFrame's vertical center
-            local yOff = adjustedY - (CharacterFrame:GetHeight() / 2)
-            self:SetPoint("RIGHT", CharacterFrame, "RIGHT", VISUAL_PAD_X, yOff)
+        -- Anchor to bottom by default so first frame is stable
+        if mode == "bottom" then
+            self:SetPoint("BOTTOMLEFT", CharacterFrame, "BOTTOMLEFT", 0, 0)
         else
-            -- Lock to BOTTOM edge; move only along X relative to CharacterFrame's horizontal center
-            local xOff = adjustedX - (CharacterFrame:GetWidth() / 2)
-            self:SetPoint("BOTTOM", CharacterFrame, "BOTTOM", xOff, VISUAL_PAD_Y)
+            self:SetPoint("TOPRIGHT", CharacterFrame, "TOPRIGHT", 0, 0)
         end
+        self:SetScript("OnUpdate", function(s, elapsed)
+            if not dragging then s:SetScript("OnUpdate", nil) return end
 
-        ConstrainTabPosition()
+            local cxl, cyl = GetCursorInUI()
+            local L, B, R, T = CharacterFrame:GetLeft(), CharacterFrame:GetBottom(), CharacterFrame:GetRight(), CharacterFrame:GetTop()
+            local width  = R - L
+            local height = T - B
+
+            -- Switch modes if crossing the right edge (or back inside)
+            if mode == "bottom" and cxl > R + EDGE_EPS then
+                -- snap to right edge
+                mode = "right"
+                s:ClearAllPoints()
+                s:SetPoint("TOPRIGHT", CharacterFrame, "TOPRIGHT", 0, 0)
+            elseif mode == "right" and cxl <= R then
+                -- return to bottom edge behavior
+                mode = "bottom"
+                s:ClearAllPoints()
+                s:SetPoint("BOTTOMLEFT", CharacterFrame, "BOTTOMLEFT", 0, 0)
+            end
+
+            if mode == "bottom" then
+                -- Horizontal-only along bottom edge
+                local relX = cxl - L
+                -- Respect left padding; allow going all the way to right edge
+                relX = clamp(relX, PAD_LEFT, width)
+                -- Keep tab exactly on bottom edge (y=0 relative to bottom)
+                s:ClearAllPoints()
+                s:SetPoint("BOTTOMLEFT", CharacterFrame, "BOTTOMLEFT", relX, 0)
+
+            else -- mode == "right"
+                -- Vertical-only along right edge
+                local relYFromTop = T - cyl
+                -- Respect top padding; allow going all the way to bottom edge
+                relYFromTop = clamp(relYFromTop, PAD_TOP, height)
+                -- Keep tab exactly on right edge (x=0 relative to right)
+                s:ClearAllPoints()
+                s:SetPoint("TOPRIGHT", CharacterFrame, "TOPRIGHT", 0, -relYFromTop)
+            end
+        end)
     end)
-end)
 
-Tab:SetScript("OnDragStop", function(self)
-    isDragging = false
-    -- No StopMovingOrSizing(): we never started moving
-    self:SetScript("OnUpdate", nil)
-    ConstrainTabPosition()
-    SaveTabPosition()
-end)
-
--- Restore position when character frame is shown
-CharacterFrame:HookScript("OnShow", function()
-    C_Timer.After(0.1, RestoreTabPosition)
-end)
+    Tab:HookScript("OnDragStop", function(self)
+        dragging = false
+        self:SetScript("OnUpdate", nil)
+        -- Leave the tab where it was dropped; no extra snapping here (already snapped in-mode).
+    end)
+end
+-- === end draggable curl behavior ===
  
 AchievementPanel = CreateFrame("Frame", "Achievements", CharacterFrame)
 AchievementPanel:Hide()
