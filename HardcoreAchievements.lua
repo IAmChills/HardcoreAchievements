@@ -523,6 +523,7 @@ end
 function HardcoreAchievements_GetProgress(achId) return GetProgress(achId) end
 function HardcoreAchievements_SetProgress(achId, key, value) SetProgress(achId, key, value) end
 function HardcoreAchievements_ClearProgress(achId) ClearProgress(achId) end
+function HardcoreAchievements_GetCharDB() return GetCharDB() end
 
 -- Export migration functions for manual use
 function HardcoreAchievements_MigrateFromLeaderboard() 
@@ -592,19 +593,9 @@ local minimapDataObject = LDB:NewDataObject("HardcoreAchievements", {
         end
         
         -- Show current achievement count
-        local _, cdb = GetCharDB()
-        if cdb and cdb.achievements then
-            local completedCount = 0
-            local totalCount = 0
-            for _, achievement in pairs(cdb.achievements) do
-                totalCount = totalCount + 1
-                if achievement.completed then
-                    completedCount = completedCount + 1
-                end
-            end
-            tooltip:AddLine(" ")
-            tooltip:AddLine(string.format("Completed: %d/%d", completedCount, totalCount), 0.6, 0.9, 0.6)
-        end
+        local completedCount, totalCount = HCA_AchievementCount()
+        tooltip:AddLine(" ")
+        tooltip:AddLine(string.format("Completed: %d/%d", completedCount, totalCount), 0.6, 0.9, 0.6)
     end,
 })
 
