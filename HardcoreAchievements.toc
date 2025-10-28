@@ -1,7 +1,7 @@
-## Interface: 11508
+﻿## Interface: 11508
 ## Title: HardcoreAchievements
 ## Author: Chills
-## Version: 1.0.4
+## Version: 1.0.7
 ## Notes: Hardcore achievements system
 ## SavedVariables: HardcoreAchievementsDB
 ## IconTexture: Interface\AddOns\HardcoreAchievements\Images\Logo
@@ -29,3 +29,4 @@ Achievements\FourCandles.lua
 
 Utils\Embed_UltraHardcore.lua
 Utils\CommandHandler.lua
+Utils\CharacterInspection.lua
