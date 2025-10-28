@@ -1,11 +1,9 @@
 # folders
 .git
+Admin
 
 # files
 *.md
 *.addonpackignore
-*.ps1
 *.svg
 *.png
-AdminPanel.lua
-AdminPanelTest.lua
