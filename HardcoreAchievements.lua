@@ -690,7 +690,7 @@ local TabID = CharacterFrame.numTabs + 1
 -- Create and configure the subframe
 local Tab = CreateFrame("Button" , "$parentTab"..TabID, CharacterFrame, "CharacterFrameTabButtonTemplate")
 Tab:SetPoint("RIGHT", _G["CharacterFrameTab"..Tabs], "RIGHT", 43, 0)
-Tab:SetText("Achievements")
+Tab:SetText(ACHIEVEMENTS)
 PanelTemplates_DeselectTab(Tab)
 
 -- === Draggable "curl" behavior for Achievements tab (bottom ↔ right edges only) ===
@@ -867,7 +867,7 @@ do
                 self.highlight:Show()
             end
             GameTooltip:SetOwner(self, "ANCHOR_RIGHT", -30, 0)
-            GameTooltip:SetText("Achievements", 1, 1, 1)
+            GameTooltip:SetText(ACHIEVEMENTS, 1, 1, 1)
             GameTooltip:AddLine("Shift + Left Click to drag \nMust not be active", 0.5, 0.5, 0.5)
             GameTooltip:Show()
         end)
@@ -1177,7 +1177,7 @@ end)
 
 --AchievementPanel.Text = AchievementPanel:CreateFontString(nil, "OVERLAY", "GameFontNormal")
 --AchievementPanel.Text:SetPoint("TOP", 5, -45)
---AchievementPanel.Text:SetText("Achievements")
+--AchievementPanel.Text:SetText(ACHIEVEMENTS)
 --AchievementPanel.Text:SetTextColor(1, 1, 0)
 
 AchievementPanel.TotalPoints = AchievementPanel:CreateFontString(nil, "OVERLAY", "GameFontHighlightLarge")
@@ -1499,7 +1499,7 @@ Tab:HookScript("OnEnter", function(self)
     
     -- Show tooltip with drag instructions
     GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-    GameTooltip:SetText("Achievements", 1, 1, 1)
+    GameTooltip:SetText(ACHIEVEMENTS, 1, 1, 1)
     GameTooltip:AddLine("Shift + Left Click to drag \nMust not be active", 0.5, 0.5, 0.5)
     GameTooltip:Show()
 end)

@@ -362,7 +362,7 @@ end
 local function HideCustomAchievementTab()
     -- Hide the custom Achievement tab created in HardcoreAchievements.lua
     local tab = _G["CharacterFrameTab" .. (CharacterFrame.numTabs + 1)]
-    if tab and tab:GetText() and tab:GetText():find("Achievements") then
+    if tab and tab:GetText() and tab:GetText():find(ACHIEVEMENTS) then
         tab:Hide()
         tab:SetScript("OnClick", function() end) -- Disable click functionality
     end
@@ -466,7 +466,7 @@ local function BuildEmbedIfNeeded()
     end
     HardcoreAchievementsDB.showCustomTab = isChecked
     
-    if tab and tab:GetText() and tab:GetText():find("Achievements") then
+    if tab and tab:GetText() and tab:GetText():find(ACHIEVEMENTS) then
       if isChecked then
         -- Show custom tab
         tab:Show()
@@ -517,7 +517,7 @@ local function BuildEmbedIfNeeded()
   local savedState = HardcoreAchievementsDB and HardcoreAchievementsDB.showCustomTab
   if savedState ~= nil then
     local tab = _G["CharacterFrameTab" .. (CharacterFrame.numTabs + 1)]
-    if tab and tab:GetText() and tab:GetText():find("Achievements") then
+    if tab and tab:GetText() and tab:GetText():find(ACHIEVEMENTS) then
       if savedState then
         -- Show custom tab
         tab:Show()
@@ -629,7 +629,7 @@ f:SetScript("OnEvent", function(self, event, addonName)
       if not GetSourceRows() then
         -- Show custom achievement tab as fallback
         local tab = _G["CharacterFrameTab" .. (CharacterFrame.numTabs + 1)]
-        if tab and tab:GetText() and tab:GetText():find("Achievements") then
+        if tab and tab:GetText() and tab:GetText():find(ACHIEVEMENTS) then
           tab:Show()
           tab:SetScript("OnClick", function(self)
             if HCA_ShowAchievementTab then
