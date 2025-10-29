@@ -525,15 +525,17 @@ function HardcoreAchievements_SetProgress(achId, key, value) SetProgress(achId, 
 function HardcoreAchievements_ClearProgress(achId) ClearProgress(achId) end
 function HardcoreAchievements_GetCharDB() return GetCharDB() end
   
-  -- Exported: hide custom vertical tab if present (used by embedded UI)
-  function HardcoreAchievements_HideVerticalTab()
-      if Tab and Tab.squareFrame then
-          Tab.squareFrame:Hide()
-          Tab.squareFrame:EnableMouse(false)
-          return true
-      end
-      return false
-  end
+-- Exported: hide custom vertical tab if present (used by embedded UI)
+function HardcoreAchievements_HideVerticalTab()
+    print("In function")
+    if Tab and Tab.squareFrame then
+        print("Should hide")
+        Tab.squareFrame:Hide()
+        Tab.squareFrame:EnableMouse(false)
+        return true
+    end
+    return false
+end
 
 -- Export migration functions for manual use
 function HardcoreAchievements_MigrateFromLeaderboard() 
@@ -732,6 +734,16 @@ function LoadTabPosition()
         local posX = db.tabSettings.position.x
         local posY = db.tabSettings.position.y
         
+        -- Respect user preference: hide custom tab entirely if disabled
+        if not db.showCustomTab then
+            Tab:Hide()
+            if Tab.squareFrame then
+                Tab.squareFrame:Hide()
+                Tab.squareFrame:EnableMouse(false)
+            end
+            return
+        end
+        
         Tab:ClearAllPoints()
         if savedMode == "bottom" then
             Tab:SetPoint("BOTTOMLEFT", CharacterFrame, "BOTTOMLEFT", posX, 45)
@@ -755,6 +767,7 @@ function LoadTabPosition()
                 Tab.squareFrame:ClearAllPoints()
                 Tab.squareFrame:SetPoint("TOPRIGHT", CharacterFrame, "TOPRIGHT", posX, posY)
                 Tab.squareFrame:EnableMouse(true)
+                Tab.squareFrame:Show()
             end
         end
         
@@ -1545,6 +1558,15 @@ end)
 
 -- Hook CharacterFrame OnShow to restore square frame visibility if in vertical mode
 CharacterFrame:HookScript("OnShow", function()
+    local db = EnsureDB()
+    if not db.showCustomTab then
+        Tab:Hide()
+        if Tab.squareFrame then
+            Tab.squareFrame:Hide()
+            Tab.squareFrame:EnableMouse(false)
+        end
+        return
+    end
     if Tab.squareFrame and Tab.mode == "right" then
         Tab.squareFrame:Show()
         -- Reposition the square frame to match the tab's current position

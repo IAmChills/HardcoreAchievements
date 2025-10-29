@@ -367,8 +367,8 @@ local function HideCustomAchievementTab()
         tab:SetScript("OnClick", function() end) -- Disable click functionality
     end
     -- Also hide the custom vertical tab (square) if available
-    if type(_G.HardcoreAchievements_HideVerticalTab) == "function" then
-        _G.HardcoreAchievements_HideVerticalTab()
+    if type(HardcoreAchievements_HideVerticalTab) == "function" then
+        HardcoreAchievements_HideVerticalTab()
     end
 end
 
@@ -523,6 +523,9 @@ local function BuildEmbedIfNeeded()
         -- Hide custom tab
         tab:Hide()
         tab:SetScript("OnClick", function() end) -- Disable click functionality
+        if type(HardcoreAchievements_HideVerticalTab) == "function" then
+            HardcoreAchievements_HideVerticalTab()
+        end
       end
     end
   end
