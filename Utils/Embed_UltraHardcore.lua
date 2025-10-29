@@ -476,10 +476,18 @@ local function BuildEmbedIfNeeded()
             HCA_ShowAchievementTab()
           end
         end)
+        -- Also restore vertical tab if it was in vertical mode
+        if type(_G.HardcoreAchievements_LoadTabPosition) == "function" then
+          _G.HardcoreAchievements_LoadTabPosition()
+        end
       else
         -- Hide custom tab
         tab:Hide()
         tab:SetScript("OnClick", function() end) -- Disable click functionality
+        -- Also hide vertical tab immediately
+        if type(_G.HardcoreAchievements_HideVerticalTab) == "function" then
+          _G.HardcoreAchievements_HideVerticalTab()
+        end
       end
     end
   end)

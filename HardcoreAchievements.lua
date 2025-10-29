@@ -527,14 +527,17 @@ function HardcoreAchievements_GetCharDB() return GetCharDB() end
   
 -- Exported: hide custom vertical tab if present (used by embedded UI)
 function HardcoreAchievements_HideVerticalTab()
-    print("In function")
     if Tab and Tab.squareFrame then
-        print("Should hide")
         Tab.squareFrame:Hide()
         Tab.squareFrame:EnableMouse(false)
         return true
     end
     return false
+end
+
+-- Exported: reload tab position (used by embedded UI)
+function HardcoreAchievements_LoadTabPosition()
+    LoadTabPosition()
 end
 
 -- Export migration functions for manual use
