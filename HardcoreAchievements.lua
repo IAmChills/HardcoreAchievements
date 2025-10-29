@@ -770,7 +770,6 @@ function LoadTabPosition()
                 Tab.squareFrame:ClearAllPoints()
                 Tab.squareFrame:SetPoint("TOPRIGHT", CharacterFrame, "TOPRIGHT", posX, posY)
                 Tab.squareFrame:EnableMouse(true)
-                Tab.squareFrame:Show()
             end
         end
         
