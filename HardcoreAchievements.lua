@@ -524,6 +524,16 @@ function HardcoreAchievements_GetProgress(achId) return GetProgress(achId) end
 function HardcoreAchievements_SetProgress(achId, key, value) SetProgress(achId, key, value) end
 function HardcoreAchievements_ClearProgress(achId) ClearProgress(achId) end
 function HardcoreAchievements_GetCharDB() return GetCharDB() end
+  
+  -- Exported: hide custom vertical tab if present (used by embedded UI)
+  function HardcoreAchievements_HideVerticalTab()
+      if Tab and Tab.squareFrame then
+          Tab.squareFrame:Hide()
+          Tab.squareFrame:EnableMouse(false)
+          return true
+      end
+      return false
+  end
 
 -- Export migration functions for manual use
 function HardcoreAchievements_MigrateFromLeaderboard() 

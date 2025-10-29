@@ -310,29 +310,27 @@ function EMBED:Rebuild()
 
         -- Set icon appearance based on status
         if data.completed then
-          -- Completed: Full color
+          -- Completed: full color
           icon.Icon:SetDesaturated(false)
           icon.Icon:SetAlpha(1.0)
-          icon.Icon:SetVertexColor(1.0, 1.0, 1.0) -- Full color
-        elseif data.maxLevel and data.maxLevel > 0 then
-          -- Check if player is out-leveled
-          local playerLevel = UnitLevel("player") or 0
-          if playerLevel > data.maxLevel then
-            -- Out-leveled: Desaturated
-            icon.Icon:SetDesaturated(true)
-            icon.Icon:SetAlpha(1.0)
-            icon.Icon:SetVertexColor(1, 0.0, 0.0) -- Reset to normal color
-          else
-            -- Available but has level requirement: Full color
-            icon.Icon:SetDesaturated(true)
-            icon.Icon:SetAlpha(1.0)
-            icon.Icon:SetVertexColor(1.0, 1.0, 1.0) -- Full color
-          end
+          icon.Icon:SetVertexColor(1.0, 1.0, 1.0)
         else
-          -- Available/Incomplete: Full color
-          icon.Icon:SetDesaturated(false)
-          icon.Icon:SetAlpha(1.0)
-          icon.Icon:SetVertexColor(1.0, 1.0, 1.0) -- Full color
+          local isOverLeveled = false
+          if data.maxLevel and data.maxLevel > 0 then
+            local playerLevel = UnitLevel("player") or 0
+            isOverLeveled = playerLevel > data.maxLevel
+          end
+          if isOverLeveled then
+            -- Over-leveled: soft red tint, not desaturated
+            icon.Icon:SetDesaturated(true)
+            icon.Icon:SetAlpha(1.0)
+            icon.Icon:SetVertexColor(1.0, 0.7, 0.7)
+          else
+            -- Incomplete and available: desaturated
+            icon.Icon:SetDesaturated(true)
+            icon.Icon:SetAlpha(1.0)
+            icon.Icon:SetVertexColor(1.0, 1.0, 1.0)
+          end
         end
 
         -- Set completion border
@@ -367,6 +365,10 @@ local function HideCustomAchievementTab()
     if tab and tab:GetText() and tab:GetText():find("Achievements") then
         tab:Hide()
         tab:SetScript("OnClick", function() end) -- Disable click functionality
+    end
+    -- Also hide the custom vertical tab (square) if available
+    if type(_G.HardcoreAchievements_HideVerticalTab) == "function" then
+        _G.HardcoreAchievements_HideVerticalTab()
     end
 end
 
