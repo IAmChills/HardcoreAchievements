@@ -721,28 +721,29 @@ function LoadTabPosition()
             Tab:SetAlpha(1)
             Tab:EnableMouse(true)   -- Enable tab mouse events in horizontal mode
             if Tab.squareFrame then
+                Tab.squareFrame:EnableMouse(false)
                 Tab.squareFrame:Hide()
             end
         else
             Tab:SetPoint("TOPRIGHT", CharacterFrame, "TOPRIGHT", posX, posY)
             -- Switch to right mode
             Tab:SetAlpha(0)
-            Tab:EnableMouse(true)  -- DEnable tab mouse events in vertical mode
+            Tab:EnableMouse(false)  -- Disable tab mouse events in vertical mode; use square frame instead
             -- Ensure square frame exists
             if not Tab.squareFrame then
                 CreateSquareFrame()
             end
             if Tab.squareFrame then
-                Tab.squareFrame:Show()
                 Tab.squareFrame:ClearAllPoints()
                 Tab.squareFrame:SetPoint("TOPRIGHT", CharacterFrame, "TOPRIGHT", posX, posY)
+                Tab.squareFrame:EnableMouse(true)
             end
         end
         
         -- Set the mode on the tab object
         Tab.mode = savedMode
     end
-    -- If no saved data, leave tab at default position
+    -- If no saved data, leave tab at default position    
 end
 
 function ResetTabPosition()
@@ -778,13 +779,18 @@ do
     -- Store mode on Tab object for persistence functions
     Tab.mode = mode
     
+    -- Forward declare so CreateSquareFrame's closures can reference these
+    local SwitchTabMode
+    local GetCursorInUI
+    local clamp
     
     -- Create custom square frame for vertical mode
     function CreateSquareFrame()
         if Tab.squareFrame then return Tab.squareFrame end
         
-        local squareFrame = CreateFrame("Frame", nil, UIParent) -- Parent to UIParent instead of Tab
+        local squareFrame = CreateFrame("Button", nil, UIParent) -- Parent to UIParent instead of Tab; use Button for clicks/drag
         squareFrame:SetSize(SQUARE_SIZE, SQUARE_SIZE)
+        squareFrame:SetHitRectInsets(0, 30, 0, 0) -- shrink hitbox by 15px from right edge
         squareFrame:SetFrameStrata("BACKGROUND") -- Move to background strata
         squareFrame:SetFrameLevel(1) -- Low frame level to appear below borders
         squareFrame:Hide()
@@ -813,21 +819,126 @@ do
         highlight:Hide()
         squareFrame.highlight = highlight
         
-        -- Don't capture mouse events - let the tab handle everything
+        -- Interaction wiring; initially disabled (enabled only in right mode)
         squareFrame:EnableMouse(false)
+        squareFrame:RegisterForClicks("LeftButtonUp")
+        squareFrame:SetScript("OnClick", function()
+            if HCA_ShowAchievementTab then
+                HCA_ShowAchievementTab()
+            end
+        end)
+
+        -- Hover highlight + tooltip (mirrors Tab hooks)
+        squareFrame:HookScript("OnEnter", function(self)
+            if self.highlight then
+                self.highlight:Show()
+            end
+            GameTooltip:SetOwner(self, "ANCHOR_RIGHT", -30, 0)
+            GameTooltip:SetText("Achievements", 1, 1, 1)
+            GameTooltip:AddLine("Shift + Left Click to drag \nMust not be active", 0.5, 0.5, 0.5)
+            GameTooltip:Show()
+        end)
+        squareFrame:HookScript("OnLeave", function(self)
+            if self.highlight and not AchievementPanel:IsShown() then
+                self.highlight:Hide()
+            end
+            GameTooltip:Hide()
+        end)
+
+        -- Drag support in vertical mode; moves both the hidden Tab and the square
+        squareFrame:RegisterForDrag("LeftButton")
+        squareFrame:HookScript("OnDragStart", function(self)
+            if not IsShiftKeyDown() then return false end
+            dragging = true
+            mode = "right"
+            Tab.mode = mode
+            SwitchTabMode("right")
+            self:ClearAllPoints()
+            self:SetPoint("TOPRIGHT", CharacterFrame, "TOPRIGHT", 25, 0)
+            Tab:ClearAllPoints()
+            Tab:SetPoint("TOPRIGHT", CharacterFrame, "TOPRIGHT", 25, 0)
+            self:SetScript("OnUpdate", function(s)
+                if not dragging then s:SetScript("OnUpdate", nil) return end
+                if not IsMouseButtonDown("LeftButton") then
+                    dragging = false
+                    s:SetScript("OnUpdate", nil)
+                    SaveTabPosition()
+                    if mode == "bottom" then
+                        SwitchTabMode("bottom") -- finalize hide of square
+                    end
+                    return
+                end
+                if not IsShiftKeyDown() then
+                    dragging = false
+                    s:SetScript("OnUpdate", nil)
+                    SaveTabPosition()
+                    return
+                end
+                local cxl, cyl = GetCursorInUI()
+                local L, B, R, T = CharacterFrame:GetLeft(), CharacterFrame:GetBottom(), CharacterFrame:GetRight(), CharacterFrame:GetTop()
+                local width  = R - L
+                local height = T - B
+                local transitionPoint = R - TAB_WIDTH
+
+                -- Mode switching while dragging from the square
+                if mode == "right" and cxl <= transitionPoint then
+                    mode = "bottom"
+                    Tab.mode = mode
+                    SwitchTabMode("bottom", true) -- keep square alive until mouse up
+                elseif mode == "bottom" and cxl > transitionPoint + EDGE_EPS then
+                    mode = "right"
+                    Tab.mode = mode
+                    SwitchTabMode("right")
+                end
+
+                if mode == "bottom" then
+                    -- Horizontal-only along bottom edge while still dragging from square
+                    local relX = cxl - L
+                    local maxRelX = width - TAB_WIDTH - 15
+                    relX = clamp(relX, PAD_LEFT, maxRelX)
+                    Tab:ClearAllPoints()
+                    Tab:SetPoint("BOTTOMLEFT", CharacterFrame, "BOTTOMLEFT", relX, 45)
+                    -- Keep square near Tab but hidden in bottom mode
+                    if Tab.squareFrame then
+                        Tab.squareFrame:ClearAllPoints()
+                        Tab.squareFrame:SetPoint("TOPRIGHT", CharacterFrame, "TOPRIGHT", 25, 0)
+                        Tab.squareFrame:SetAlpha(0)
+                    end
+                else
+                    -- Vertical-only along right edge
+                    local relYFromTop = T - cyl
+                    relYFromTop = clamp(relYFromTop, PAD_TOP, height - TAB_HEIGHT - 95)
+                    s:ClearAllPoints()
+                    s:SetPoint("TOPRIGHT", CharacterFrame, "TOPRIGHT", 25, -relYFromTop)
+                    Tab:ClearAllPoints()
+                    Tab:SetPoint("TOPRIGHT", CharacterFrame, "TOPRIGHT", 25, -relYFromTop)
+                    if Tab.squareFrame then
+                        Tab.squareFrame:SetAlpha(1)
+                    end
+                end
+            end)
+        end)
+        squareFrame:HookScript("OnDragStop", function(self)
+            dragging = false
+            self:SetScript("OnUpdate", nil)
+            SaveTabPosition()
+        end)
         
         Tab.squareFrame = squareFrame
         return squareFrame
     end
     
-    -- Function to switch between tab modes
-    local function SwitchTabMode(newMode)
+    -- Function to switch between tab modes (assigned to the forward-declared local)
+    -- keepSquareVisible: when true (during an active drag), don't hide the square immediately
+    SwitchTabMode = function(newMode, keepSquareVisible)
         if newMode == "right" then
             -- Show square frame, hide default tab
             Tab:SetAlpha(0) -- Hide the default tab
-            Tab:EnableMouse(true)  -- Enable tab mouse events in vertical mode
+            Tab:EnableMouse(false) -- Disable Tab mouse in vertical mode; use square frame instead
             local squareFrame = CreateSquareFrame()
             squareFrame:Show()
+            squareFrame:EnableMouse(true)
+            squareFrame:SetAlpha(1)
             -- Position the square frame to match the tab's current position
             squareFrame:ClearAllPoints()
             squareFrame:SetPoint("TOPRIGHT", CharacterFrame, "TOPRIGHT", 20, 0)
@@ -837,20 +948,26 @@ do
             Tab:SetAlpha(1) -- Show the default tab
             Tab:EnableMouse(true)   -- Enable tab mouse events in horizontal mode
             if Tab.squareFrame then
-                Tab.squareFrame:Hide()
+                Tab.squareFrame:EnableMouse(false)
+                if keepSquareVisible then
+                    Tab.squareFrame:SetAlpha(0) -- keep around for drag completion but invisible
+                    Tab.squareFrame:Show()
+                else
+                    Tab.squareFrame:Hide()
+                end
             end
         end
     end
 
     -- Helper: get cursor position in UIParent scale
-    local function GetCursorInUI()
+    GetCursorInUI = function()
         local x, y = GetCursorPosition()
         local scale = UIParent:GetEffectiveScale()
         return x / scale, y / scale
     end
 
     -- Helper: clamp
-    local function clamp(v, lo, hi)
+    clamp = function(v, lo, hi)
         if v < lo then return lo end
         if v > hi then return hi end
         return v
@@ -883,10 +1000,17 @@ do
         self:SetScript("OnUpdate", function(s, elapsed)
             if not dragging then s:SetScript("OnUpdate", nil) return end
             
-            -- Stop dragging if Shift key is released
+            -- Stop dragging if Left button or Shift key is released
+            if not IsMouseButtonDown("LeftButton") then
+                dragging = false
+                s:SetScript("OnUpdate", nil)
+                SaveTabPosition()
+                return
+            end
             if not IsShiftKeyDown() then
                 dragging = false
                 s:SetScript("OnUpdate", nil)
+                SaveTabPosition()
                 return
             end
 
@@ -1343,7 +1467,7 @@ Tab:HookScript("OnEnter", function(self)
     -- Show tooltip with drag instructions
     GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
     GameTooltip:SetText("Achievements", 1, 1, 1)
-    GameTooltip:AddLine("Shift + Left Click to drag", 0.5, 0.5, 0.5)
+    GameTooltip:AddLine("Shift + Left Click to drag \nMust not be active", 0.5, 0.5, 0.5)
     GameTooltip:Show()
 end)
 
