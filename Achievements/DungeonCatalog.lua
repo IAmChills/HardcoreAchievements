@@ -3,16 +3,16 @@ local Dungeons = {
   -- Ragefire Chasm (Horde, Level 13-18)
   {
     achId = "RFC",
-    title = "Ragefire Chasm",
-    tooltip = "Complete the bosses of |cff0091e6Ragefire Chasm|r before level 16 (including party members)",
+    title = DUNGEON_FLOOR_RAGEFIRE1,
+    tooltip = "Complete the bosses of |cff0091e6"..DUNGEON_FLOOR_RAGEFIRE1.."|r before level 16 (including party members)",
     icon = 237582,
     level = 15,
     points = 10,
     requiredQuestId = nil,
     staticPoints = false,
-    zone = "Ragefire Chasm",
+    zone = DUNGEON_FLOOR_RAGEFIRE1,
     requiredMapId = 389,
-    faction = "Horde",
+    faction = FACTION_HORDE,
     requiredKills = {
       [11520] = 1, -- Taragaman the Hungerer
       [11517] = 1, -- Oggleflint
@@ -24,14 +24,14 @@ local Dungeons = {
   -- The Deadmines (Alliance, Level 10-20)
   {
     achId = "DM",
-    title = "The Deadmines",
-    tooltip = "Complete the bosses of |cff0091e6The Deadmines|r before level 20 (including party members)",
+    title = DUNGEON_FLOOR_THEDEADMINES1,
+    tooltip = "Complete the bosses of |cff0091e6"..DUNGEON_FLOOR_THEDEADMINES1.."|r before level 20 (including party members)",
     icon = 236404,
     level = 19,
     points = 10,
     requiredQuestId = nil,
     staticPoints = false,
-    zone = "The Deadmines",
+    zone = DUNGEON_FLOOR_THEDEADMINES1,
     requiredMapId = UPDATEME,
     requiredKills = {
       [644] = 1,   -- Rhahk'Zor
@@ -46,14 +46,14 @@ local Dungeons = {
   -- Wailing Caverns (Both, Level 15-25)
   {
     achId = "WC",
-    title = "Wailing Caverns",
-    tooltip = "Complete the bosses of |cff0091e6Wailing Caverns|r before level 20 (including party members)",
+    title = DUNGEON_FLOOR_WAILINGCAVERNS1,
+    tooltip = "Complete the bosses of |cff0091e6"..DUNGEON_FLOOR_WAILINGCAVERNS1.."|r before level 20 (including party members)",
     icon = 236717,
     level = 21,
     points = 10,
     requiredQuestId = nil,
     staticPoints = false,
-    zone = "Wailing Caverns",
+    zone = DUNGEON_FLOOR_WAILINGCAVERNS1,
     requiredMapId = 43,
     requiredKills = {
       [3653] = 1,  -- Kresh
@@ -119,16 +119,16 @@ local Dungeons = {
   -- The Stockade (Alliance, Level 22-30)
   {
     achId = "STOCK",
-    title = "The Stockade",
-    tooltip = "Complete the bosses of |cff0091e6The Stockade|r before level 29 (including party members)",
+    title = DUNGEON_FLOOR_THETHESTOCKADE1,
+    tooltip = "Complete the bosses of |cff0091e6"..DUNGEON_FLOOR_THETHESTOCKADE1.."|r before level 29 (including party members)",
     icon = 236448,
     level = 28,
     points = 10,
     requiredQuestId = nil,
     staticPoints = false,
-    zone = "The Stockade",
+    zone = DUNGEON_FLOOR_THETHESTOCKADE1,
     requiredMapId = 34,
-    faction = "Alliance",
+    faction = FACTION_ALLIANCE,
     requiredKills = {
       [1696] = 1,  -- Targorr the Dread
       [1666] = 1,  -- Kam Deepfury
@@ -141,14 +141,14 @@ local Dungeons = {
   -- Gnomeregan (Alliance, Level 24-33)
   {
     achId = "GNOM",
-    title = "Gnomeregan",
-    tooltip = "Complete the bosses of |cff0091e6Gnomeregan|r before level 34 (including party members)",
+    title = DUNGEON_FLOOR_DUNMOROGH10,
+    tooltip = "Complete the bosses of |cff0091e6"..DUNGEON_FLOOR_DUNMOROGH10.."|r before level 34 (including party members)",
     icon = 134152,
     level = 33,
     points = 10,
     requiredQuestId = nil,
     staticPoints = false,
-    zone = "Gnomeregan",
+    zone = DUNGEON_FLOOR_DUNMOROGH10,
     requiredMapId = 90,
     requiredKills = {
       [7361] = 1,  -- Grubbis
@@ -163,14 +163,14 @@ local Dungeons = {
   -- Razorfen Kraul (Both, Level 25-35)
   {
     achId = "RFK",
-    title = "Razorfen Kraul",
-    tooltip = "Complete the bosses of |cff0091e6Razorfen Kraul|r before level 33 (including party members)",
+    title = DUNGEON_FLOOR_RAZORFENKRAUL1,
+    tooltip = "Complete the bosses of |cff0091e6"..DUNGEON_FLOOR_RAZORFENKRAUL1.."|r before level 33 (including party members)",
     icon = 236756,
     level = 32,
     points = 10,
     requiredQuestId = nil,
     staticPoints = false,
-    zone = "Razorfen Kraul",
+    zone = DUNGEON_FLOOR_RAZORFENKRAUL1,
     requiredMapId = 47,
     requiredKills = {
       [6168] = 1,  -- Roogug
@@ -209,14 +209,14 @@ local Dungeons = {
   -- Razorfen Downs (Both, Level 35-45)
   {
     achId = "RFD",
-    title = "Razorfen Downs",
-    tooltip = "Complete the bosses of |cff0091e6Razorfen Downs|r before level 41 (including party members)",
+    title = DUNGEON_FLOOR_RAZORFENDOWNS1,
+    tooltip = "Complete the bosses of |cff0091e6"..DUNGEON_FLOOR_RAZORFENDOWNS1.."|r before level 41 (including party members)",
     icon = 236405,
     level = 40,
     points = 10,
     requiredQuestId = nil,
     staticPoints = false,
-    zone = "Razorfen Downs",
+    zone = DUNGEON_FLOOR_RAZORFENDOWNS1,
     requiredMapId = 129,
     requiredKills = {
       [7355] = 1,  -- Tuten'kash
@@ -255,14 +255,14 @@ local Dungeons = {
   -- Zul'Farrak (Both, Level 44-54)
   {
     achId = "ZF",
-    title = "Zul'Farrak",
-    tooltip = "Complete the bosses of |cff0091e6Zul'Farrak|r before level 48 (including party members)",
+    title = DUNGEON_FLOOR_ZULFARRAK,
+    tooltip = "Complete the bosses of |cff0091e6"..DUNGEON_FLOOR_ZULFARRAK.."|r before level 48 (including party members)",
     icon = 236865,
     level = 47,
     points = 10,
     requiredQuestId = nil,
     staticPoints = false,
-    zone = "Zul'Farrak",
+    zone = DUNGEON_FLOOR_ZULFARRAK,
     requiredMapId = 209,
     requiredKills = {
       [8127] = 1,  -- Antu'sul
@@ -304,14 +304,14 @@ local Dungeons = {
   -- The Temple of Atal'Hakkar (Both, Level 50-60)
   {
     achId = "ST",
-    title = "The Temple of Atal'Hakkar",
-    tooltip = "Complete the bosses of |cff0091e6The Temple of Atal'Hakkar|r before level 55 (including party members)",
+    title = DUNGEON_FLOOR_THETEMPLEOFATALHAKKAR1,
+    tooltip = "Complete the bosses of |cff0091e6"..DUNGEON_FLOOR_THETEMPLEOFATALHAKKAR1.."|r before level 55 (including party members)",
     icon = 134157,
     level = 54,
     points = 10,
     requiredQuestId = nil,
     staticPoints = false,
-    zone = "The Temple of Atal'Hakkar",
+    zone = DUNGEON_FLOOR_THETEMPLEOFATALHAKKAR1,
     requiredMapId = 109,
     requiredKills = {
       [8580] = 1,  -- Atal'alarion
@@ -329,14 +329,14 @@ local Dungeons = {
   -- Blackrock Depths (Both, Level 52-60)
   {
     achId = "BRD",
-    title = "Blackrock Depths",
-    tooltip = "Complete the bosses of |cff0091e6Blackrock Depths|r before level 59 (including party members)",
+    title = DUNGEON_FLOOR_BURNINGSTEPPES16,
+    tooltip = "Complete the bosses of |cff0091e6"..DUNGEON_FLOOR_BURNINGSTEPPES16.."|r before level 59 (including party members)",
     icon = 135790,
     level = 58,
     points = 10,
     requiredQuestId = nil,
     staticPoints = false,
-    zone = "Blackrock Depths",
+    zone = DUNGEON_FLOOR_BURNINGSTEPPES16,
     requiredMapId = 230,
     requiredKills = {
       [9025] = 1,  -- Lord Roccor

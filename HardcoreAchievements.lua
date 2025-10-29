@@ -85,8 +85,10 @@ local function FormatTimestamp(timestamp)
     if not timestamp then return "" end
     
     local dateInfo = date("*t", timestamp)
-    local monthNames = {"Jan", "Feb", "Mar", "Apr", "May", "Jun", 
-                       "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"}
+    local monthNames = {FULLDATE_MONTH_JANUARY, FULLDATE_MONTH_FEBRUARY, FULLDATE_MONTH_MARCH,
+                        FULLDATE_MONTH_APRIL, FULLDATE_MONTH_MAY, FULLDATE_MONTH_JUNE, 
+                        FULLDATE_MONTH_JULY, FULLDATE_MONTH_AUGUST, FULLDATE_MONTH_SEPTEMBER,
+                        FULLDATE_MONTH_OCTOBER, FULLDATE_MONTH_NOVEMBER, FULLDATE_MONTH_DECEMBER}
     
     return string.format("%s %d, %d %02d:%02d", 
         monthNames[dateInfo.month], 
@@ -182,7 +184,7 @@ function HCA_MarkRowCompleted(row)
     row.completed = true
 
     if row.Title and row.Title.SetTextColor then row.Title:SetTextColor(0.6, 0.9, 0.6) end
-    if row.Sub then row.Sub:SetText("Completed!") end
+    if row.Sub then row.Sub:SetText(AUCTION_TIME_LEFT0) end
     if row.Points then row.Points:SetTextColor(0.6, 0.9, 0.6) end
     if row.TS then row.TS:SetText(FormatTimestamp(time())) end
     if row.Icon and row.Icon.SetDesaturated then row.Icon:SetDesaturated(false) end
@@ -212,6 +214,12 @@ function HCA_MarkRowCompleted(row)
         ClearProgress(id)
         HCA_UpdateTotalPoints()
     end
+    
+    -- Broadcast achievement completion to emote channel
+    local playerName = UnitName("player")
+    local achievementTitle = row.Title and row.Title:GetText() or "Unknown Achievement"
+    local broadcastMessage = string.format(ACHIEVEMENT_BROADCAST, playerName, achievementTitle)
+    SendChatMessage(broadcastMessage, "EMOTE")
     
     -- Re-apply filter after completion state changes
     if ApplyFilter then
@@ -246,7 +254,7 @@ local function RestoreCompletionsFromDB()
         if rec and rec.completed then
             row.completed = true
             if row.Title and row.Title.SetTextColor then row.Title:SetTextColor(0.6, 0.9, 0.6) end
-            if row.Sub then row.Sub:SetText("Completed!") end
+            if row.Sub then row.Sub:SetText(AUCTION_TIME_LEFT0) end
             if row.TS then row.TS:SetText(FormatTimestamp(rec.completedAt)) end
             if row.Points then row.Points:SetTextColor(0.6, 0.9, 0.6) end
             
@@ -327,7 +335,7 @@ local function HCA_CreateAchToast()
     -- "Achievement Unlocked" small label (optional)
     local unlocked = f:CreateFontString(nil, "OVERLAY", "GameFontBlackTiny")
     unlocked:SetPoint("TOP", f, "TOP", 7, -26)
-    unlocked:SetText("Achievement Earned")
+    unlocked:SetText(ACHIEVEMENT_UNLOCKED)
     f.unlocked = unlocked
 
     -- Shield & points
@@ -423,7 +431,7 @@ function HCA_AchToast_Show(iconTex, title, pts)
 
     f:Show()
 
-    print("|cff00ff00Congratulations!|r You completed the achievement: " .. title)
+    print(ACHIEVEMENT_BROADCAST_SELF:format(title))
     PlaySoundFile("Interface\\AddOns\\HardcoreAchievements\\Sounds\\AchievementSound1.ogg", "Effects")
 
     holdSeconds = holdSeconds or 3
@@ -610,7 +618,8 @@ local minimapDataObject = LDB:NewDataObject("HardcoreAchievements", {
         -- Show current achievement count
         local completedCount, totalCount = HCA_AchievementCount()
         tooltip:AddLine(" ")
-        tooltip:AddLine(string.format("Completed: %d/%d", completedCount, totalCount), 0.6, 0.9, 0.6)
+        local countStr = string.format("%d/%d", completedCount, totalCount)
+        tooltip:AddLine(string.format(ACHIEVEMENT_META_COMPLETED_DATE, countStr), 0.6, 0.9, 0.6)
     end,
 })
 
@@ -1122,10 +1131,10 @@ local currentFilter = "all"
 
 local function PopulateFilterDropdown()
     local filterList = {
-        { text = "All", value = "all" },
-        { text = "Completed", value = "completed" },
-        { text = "Not Completed", value = "not_completed" },
-        { text = "Failed", value = "failed" },
+        { text = ACHIEVEMENTFRAME_FILTER_ALL, value = "all" },
+        { text = ACHIEVEMENTFRAME_FILTER_COMPLETED, value = "completed" },
+        { text = ACHIEVEMENTFRAME_FILTER_INCOMPLETE, value = "not_completed" },
+        { text = FAILED, value = "failed" },
     }
     return filterList
 end
@@ -1316,7 +1325,7 @@ function CreateAchievementRow(parent, achId, title, tooltip, icon, level, points
     row.Sub:SetJustifyH("LEFT")
     row.Sub:SetJustifyV("TOP")
     row.Sub:SetWordWrap(true)
-    row.Sub:SetText(level and ("Level %d"):format(level) or "—")
+    row.Sub:SetText(level and string.format(LEVEL, level) or "—")
 
     -- points
     row.Points = row:CreateFontString(nil, "OVERLAY", "GameFontNormal")

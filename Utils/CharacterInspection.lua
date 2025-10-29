@@ -429,7 +429,7 @@ function CharacterInspection.CreateInspectionAchievementRow(parent, achId, title
     row.Sub:SetJustifyH("LEFT")
     row.Sub:SetJustifyV("TOP")
     row.Sub:SetWordWrap(true)
-    row.Sub:SetText(level and ("Level %d"):format(level) or "—")
+    row.Sub:SetText(level and string.format(LEVEL, level) or "—")
     
     -- Points
     row.Points = row:CreateFontString(nil, "OVERLAY", "GameFontNormal")
@@ -482,8 +482,11 @@ function CharacterInspection.CreateInspectionAchievementRow(parent, achId, title
             local timestamp = achievementData.completedAt
             if timestamp then
                 local dateInfo = date("*t", timestamp)
-                local monthNames = {"Jan", "Feb", "Mar", "Apr", "May", "Jun", 
-                                   "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"}
+                local monthNames = {FULLDATE_MONTH_JANUARY, FULLDATE_MONTH_FEBRUARY, FULLDATE_MONTH_MARCH,
+                                    FULLDATE_MONTH_APRIL, FULLDATE_MONTH_MAY, FULLDATE_MONTH_JUNE, 
+                                    FULLDATE_MONTH_JULY, FULLDATE_MONTH_AUGUST, FULLDATE_MONTH_SEPTEMBER,
+                                    FULLDATE_MONTH_OCTOBER, FULLDATE_MONTH_NOVEMBER, FULLDATE_MONTH_DECEMBER}
+
                 row.TS:SetText(string.format("%s %d, %d %02d:%02d", 
                     monthNames[dateInfo.month], 
                     dateInfo.day, 

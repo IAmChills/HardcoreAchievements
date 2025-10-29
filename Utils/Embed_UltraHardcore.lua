@@ -16,10 +16,10 @@ end
 
 local function PopulateFilterDropdown()
   local filterList = {
-    { text = "All", value = "all" },
-    { text = "Completed", value = "completed" },
-    { text = "Not Completed", value = "not_completed" },
-    { text = "Failed", value = "failed" },
+    { text = ACHIEVEMENTFRAME_FILTER_ALL, value = "all" },
+    { text = ACHIEVEMENTFRAME_FILTER_COMPLETED, value = "completed" },
+    { text = ACHIEVEMENTFRAME_FILTER_INCOMPLETE, value = "not_completed" },
+    { text = FAILED, value = "failed" },
   }
   return filterList
 end
@@ -120,7 +120,7 @@ local function CreateEmbedIcon(parent)
     GameTooltip:SetText(self.title or "", 1, 0.82, 0)
     
     if self.maxLevel and self.maxLevel > 0 then
-      GameTooltip:AddLine(("Max Level: %d"):format(self.maxLevel), 0.7, 0.7, 0.7)
+      GameTooltip:AddLine(string.format(GUILD_RECRUITMENT_MAXLEVEL, self.maxLevel), 0.7, 0.7, 0.7)
     end
 
     -- Check if this is a dungeon achievement with requiredKills
