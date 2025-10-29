@@ -169,12 +169,13 @@ local function HandleSlashCommand(msg)
         else
             print("|cffff0000[HardcoreAchievements]|r Custom achievement tab not found")
         end
-    elseif command == "reset" or command == "reset tab" then
+    elseif command == "reset tab" then
         ResetTabPosition()
         print("|cff00ff00[HardcoreAchievements]|r Tab position reset to default")
     else
         print("|cff00ff00[HardcoreAchievements]|r Available commands:")
         print("  |cffffff00/hca show|r - Enable and show the custom achievement tab")
+        print("  |cffffff00/hca reset tab|r - Reset the tab position to default")
     end
 end
 
