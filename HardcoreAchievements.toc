@@ -29,4 +29,3 @@ Achievements\FourCandles.lua
 
 Utils\Embed_UltraHardcore.lua
 Utils\CommandHandler.lua
-Utils\CharacterInspection.lua
