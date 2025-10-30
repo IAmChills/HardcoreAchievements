@@ -457,16 +457,13 @@ end
 
 function IsSelfFound()
     -- Check for Hardcore Self-Found buff
-    print("Checking for Self-Found buff")
     for i = 1, 40 do
         local name, _, _, _, _, _, _, _, _, spellId = UnitBuff("player", i)
         if not name then break end
         if spellId == 431567 or name == "Self-Found Adventurer" then
-            print("Self-Found buff found")
             return true
         end
     end
-    print("No Self-Found buff found")
     return false
 end
 
@@ -1224,6 +1221,7 @@ AchievementPanel.MultiplierText:SetPoint("TOP", 5, -40)
 -- Build the label text based on available information
 local function BuildPresetLabelText()
     local selfFound = IsSelfFound()
+    print("Self Found: " .. tostring(selfFound))
     local labelText = ""
     if selfFound then
         labelText = "Point Multiplier (Self Found)"
