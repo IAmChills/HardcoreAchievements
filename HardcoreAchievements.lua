@@ -485,6 +485,24 @@ local function ApplySelfFoundBonus()
     end
 end
 
+-- Recalculate and update all visible row point values when Self-Found becomes active
+local function RefreshAllRowPointsForSelfFound()
+    if not AchievementPanel or not AchievementPanel.achievements then return end
+    if not IsSelfFound() then return end
+    for _, row in ipairs(AchievementPanel.achievements) do
+        if row and not row.completed then
+            -- Respect static points if flagged
+            local base = tonumber(row.originalPoints) or tonumber(row.points) or 0
+            local effective = base + (row.staticPoints and 0 or SELF_FOUND_BONUS)
+            row.points = effective
+            if row.Points then
+                row.Points:SetText(tostring(effective) .. " pts")
+            end
+        end
+    end
+    HCA_UpdateTotalPoints()
+end
+
 -- =========================================================
 -- Outleveled (missed) indicator
 -- =========================================================
@@ -666,8 +684,28 @@ local initFrame = CreateFrame("Frame")
 initFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
 initFrame:RegisterEvent("PLAYER_LEVEL_UP")
 initFrame:RegisterEvent("ADDON_LOADED")
+initFrame:RegisterEvent("UNIT_AURA") -- Register for UNIT_AURA to detect Self-Found buff
+
+local selfFoundDetected = false -- Flag to track if Self-Found was detected
+local selfFoundTimer -- Timer to poll for Self-Found buff
+
+-- Function to detect Self-Found buff and refresh points
+local function OnSelfFoundDetected()
+    if IsSelfFound() then
+        selfFoundDetected = true
+        RefreshAllRowPointsForSelfFound()
+    end
+end
+
+-- Store original handler to avoid double-running
+local oldHandler = initFrame:GetScript("OnEvent")
 initFrame:SetScript("OnEvent", function(self, event, ...)
-    if event == "PLAYER_ENTERING_WORLD" then
+    if event == "UNIT_AURA" then
+        local unit = ...
+        if unit == "player" then
+            OnSelfFoundDetected()
+        end
+    elseif event == "PLAYER_ENTERING_WORLD" then
         local isInitialLogin, isReloadingUi = ...
         if not isInitialLogin then return end
         playerGUID = UnitGUID("player")
@@ -699,6 +737,18 @@ initFrame:SetScript("OnEvent", function(self, event, ...)
         -- Load saved tab position
         LoadTabPosition()
 
+        -- Start polling for 3s
+        selfFoundDetected = false
+        if selfFoundTimer then selfFoundTimer:Cancel() end
+        local duration, interval, elapsed = 3, 0.2, 0
+        selfFoundTimer = C_Timer.NewTicker(interval, function()
+            elapsed = elapsed + interval
+            OnSelfFoundDetected()
+            if selfFoundDetected or elapsed >= duration then
+                selfFoundTimer:Cancel()
+            end
+        end)
+
         self:UnregisterEvent("PLAYER_ENTERING_WORLD")
 
     elseif event == "PLAYER_LEVEL_UP" then
@@ -709,6 +759,9 @@ initFrame:SetScript("OnEvent", function(self, event, ...)
         if addonName == ADDON_NAME then
             -- Addon loaded, placeholder
         end
+    end
+    if oldHandler then
+        oldHandler(self, event, ...)
     end
 end)
 
