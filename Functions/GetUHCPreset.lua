@@ -193,7 +193,9 @@ eventFrame:SetScript("OnEvent", function(self, event, addonName)
             end
             
             -- Update all achievement points with new multiplier
-            UpdateAllAchievementPoints()
+            C_Timer.After(0.1, function()
+                UpdateAllAchievementPoints()
+            end)
         end)
     end
 end)

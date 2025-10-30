@@ -1335,7 +1335,7 @@ function CreateAchievementRow(parent, achId, title, tooltip, icon, level, points
     -- icon
     row.Icon = row:CreateTexture(nil, "ARTWORK")
     row.Icon:SetSize(32, 32)
-    row.Icon:SetPoint("LEFT", row, "LEFT", 1, 0) -- Moved 2 pixels right to account for border
+    row.Icon:SetPoint("LEFT", row, "LEFT", -1, 0) -- Moved 2 pixels right to account for border
     row.Icon:SetTexture(icon or 136116)
     
     -- Create completion border as a green square outline around the icon
