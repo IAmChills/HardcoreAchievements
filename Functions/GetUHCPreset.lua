@@ -159,7 +159,7 @@ eventFrame:RegisterEvent("ADDON_LOADED")
 eventFrame:SetScript("OnEvent", function(self, event, addonName)
     if addonName == "UltraHardcore" then
         -- UltraHardcore has loaded, trigger multiplier text update
-        C_Timer.After(0.1, function()
+        C_Timer.After(3, function()
             -- Update multiplier text in embedded UI if it exists
             if DEST and DEST.MultiplierText then
                 local preset = GetPlayerPresetFromSettings()
@@ -181,6 +181,11 @@ eventFrame:SetScript("OnEvent", function(self, event, addonName)
                 DEST.MultiplierText:SetTextColor(0.8, 0.8, 0.8)
             end
             
+            -- Update all achievement points with new multiplier
+            UpdateAllAchievementPoints()
+        end)
+    elseif addonName == "HardcoreAchievements" then        
+        C_Timer.After(3, function()
             -- Update multiplier text in standalone UI if it exists
             if AchievementPanel and AchievementPanel.MultiplierText then
                 local preset = GetPlayerPresetFromSettings()
@@ -200,16 +205,9 @@ eventFrame:SetScript("OnEvent", function(self, event, addonName)
                 
                 AchievementPanel.MultiplierText:SetText(labelText)
                 AchievementPanel.MultiplierText:SetTextColor(0.8, 0.8, 0.8)
-            end
-            
-            -- Update all achievement points with new multiplier
-            C_Timer.After(3, function()
+
                 UpdateAllAchievementPoints()
             end)
-        end)
-    elseif addonName == "HardcoreAchievements" then
-        C_Timer.After(3, function()
-            UpdateAllAchievementPoints()
         end)
     end
 end)
