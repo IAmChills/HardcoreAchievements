@@ -21,6 +21,8 @@ Functions\GetUHCPreset.lua
 
 HardcoreAchievements.lua
 
+Functions\CharacterInspection.lua
+
 Achievements\Common.lua
 Achievements\DungeonCommon.lua
 Achievements\Catalog.lua

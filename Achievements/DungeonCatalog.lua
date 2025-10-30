@@ -119,14 +119,14 @@ local Dungeons = {
   -- The Stockade (Alliance, Level 22-30)
   {
     achId = "STOCK",
-    title = DUNGEON_FLOOR_THETHESTOCKADE1,
-    tooltip = "Complete the bosses of |cff0091e6"..DUNGEON_FLOOR_THETHESTOCKADE1.."|r before level 29 (including party members)",
+    title = DUNGEON_FLOOR_THESTOCKADE1,
+    tooltip = "Complete the bosses of |cff0091e6"..DUNGEON_FLOOR_THESTOCKADE1.."|r before level 29 (including party members)",
     icon = 236448,
     level = 28,
     points = 10,
     requiredQuestId = nil,
     staticPoints = false,
-    zone = DUNGEON_FLOOR_THETHESTOCKADE1,
+    zone = DUNGEON_FLOOR_THESTOCKADE1,
     requiredMapId = 34,
     faction = FACTION_ALLIANCE,
     requiredKills = {

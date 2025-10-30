@@ -188,6 +188,11 @@ function HCA_MarkRowCompleted(row)
     if row.Points then row.Points:SetTextColor(0.6, 0.9, 0.6) end
     if row.TS then row.TS:SetText(FormatTimestamp(time())) end
     if row.Icon and row.Icon.SetDesaturated then row.Icon:SetDesaturated(false) end
+    
+    -- Update icon borders for completion status
+    if row.GreenBorder then row.GreenBorder:Show() end
+    if row.RedBorder then row.RedBorder:Hide() end
+    if row.YellowBorder then row.YellowBorder:Hide() end
 
     local _, cdb = GetCharDB()
     if cdb then
@@ -259,6 +264,11 @@ local function RestoreCompletionsFromDB()
             if row.Points then row.Points:SetTextColor(0.6, 0.9, 0.6) end
             
             if row.Icon and row.Icon.SetDesaturated then row.Icon:SetDesaturated(false) end
+            
+            -- Update icon borders for completion status
+            if row.GreenBorder then row.GreenBorder:Show() end
+            if row.RedBorder then row.RedBorder:Hide() end
+            if row.YellowBorder then row.YellowBorder:Hide() end
 
             if rec.points then
                 row.points = rec.points
@@ -490,6 +500,16 @@ local function ApplyOutleveledStyle(row)
     if IsRowOutleveled(row) and row.Title and row.Title.SetTextColor then
         -- simple: red title to indicate you missed the pre-level requirement
         row.Title:SetTextColor(0.9, 0.2, 0.2)
+        
+        -- Update icon borders for failed status
+        if row.RedBorder then row.RedBorder:Show() end
+        if row.GreenBorder then row.GreenBorder:Hide() end
+        if row.YellowBorder then row.YellowBorder:Hide() end
+    elseif not row.completed then
+        -- Available (not completed, not outleveled)
+        if row.YellowBorder then row.YellowBorder:Show() end
+        if row.GreenBorder then row.GreenBorder:Hide() end
+        if row.RedBorder then row.RedBorder:Hide() end
     end
 end
 
@@ -1310,12 +1330,33 @@ function CreateAchievementRow(parent, achId, title, tooltip, icon, level, points
     -- icon
     row.Icon = row:CreateTexture(nil, "ARTWORK")
     row.Icon:SetSize(32, 32)
-    row.Icon:SetPoint("LEFT", row, "LEFT", -1, 0)
+    row.Icon:SetPoint("LEFT", row, "LEFT", 1, 0) -- Moved 2 pixels right to account for border
     row.Icon:SetTexture(icon or 136116)
+    
+    -- Create completion border as a green square outline around the icon
+    row.GreenBorder = row:CreateTexture(nil, "BORDER")
+    row.GreenBorder:SetSize(34, 34) -- Slightly larger than icon
+    row.GreenBorder:SetPoint("CENTER", row.Icon, "CENTER", 0, 0)
+    row.GreenBorder:SetColorTexture(0.6, 0.9, 0.6, 0.8) -- Green square
+    row.GreenBorder:Hide()
+    
+    -- Create failed border as a red square outline around the icon
+    row.RedBorder = row:CreateTexture(nil, "BORDER")
+    row.RedBorder:SetSize(34, 34) -- Slightly larger than icon
+    row.RedBorder:SetPoint("CENTER", row.Icon, "CENTER", 0, 0)
+    row.RedBorder:SetColorTexture(0.53, 0.02, 0.03, 0.8) -- Red square
+    row.RedBorder:Hide()
+    
+    -- Create available border as a yellow square outline around the icon
+    row.YellowBorder = row:CreateTexture(nil, "BORDER")
+    row.YellowBorder:SetSize(34, 34) -- Slightly larger than icon
+    row.YellowBorder:SetPoint("CENTER", row.Icon, "CENTER", 0, 0)
+    row.YellowBorder:SetColorTexture(1, 0.82, 0, 0.8) -- Goldish yellow square
+    row.YellowBorder:Hide()
 
     -- title
     row.Title = row:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    row.Title:SetPoint("LEFT", row.Icon, "RIGHT", 8, 10)
+    row.Title:SetPoint("LEFT", row.Icon, "RIGHT", 8, 10) -- Title stays anchored to icon
     row.Title:SetText(title or ("Achievement %d"):format(index))
 
     -- subtitle / progress
@@ -1325,7 +1366,7 @@ function CreateAchievementRow(parent, achId, title, tooltip, icon, level, points
     row.Sub:SetJustifyH("LEFT")
     row.Sub:SetJustifyV("TOP")
     row.Sub:SetWordWrap(true)
-    row.Sub:SetText(level and string.format(LEVEL, level) or "—")
+    row.Sub:SetText(level and (LEVEL .. " " .. level) or "—")
 
     -- points
     row.Points = row:CreateFontString(nil, "OVERLAY", "GameFontNormal")
