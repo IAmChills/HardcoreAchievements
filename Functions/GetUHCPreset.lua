@@ -180,9 +180,6 @@ eventFrame:SetScript("OnEvent", function(self, event, addonName)
                 DEST.MultiplierText:SetText(labelText)
                 DEST.MultiplierText:SetTextColor(0.8, 0.8, 0.8)
             end
-            
-            -- Update all achievement points with new multiplier
-            UpdateAllAchievementPoints()
         end)
     elseif addonName == "HardcoreAchievements" then        
         C_Timer.After(3, function()
@@ -206,6 +203,7 @@ eventFrame:SetScript("OnEvent", function(self, event, addonName)
                 AchievementPanel.MultiplierText:SetText(labelText)
                 AchievementPanel.MultiplierText:SetTextColor(0.8, 0.8, 0.8)
 
+                -- Update all achievement points with new multiplier and bonus
                 UpdateAllAchievementPoints()
             end
         end)
