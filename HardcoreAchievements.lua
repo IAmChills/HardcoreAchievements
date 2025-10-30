@@ -713,6 +713,65 @@ initFrame:SetScript("OnEvent", function(self, event, ...)
 end)
 
 -- =========================================================
+-- Self Found Detection: Robust Event + Timer Polling
+-- =========================================================
+
+local selfFoundDetected, selfFoundTimer = false, nil
+
+local function OnSelfFoundDetected()
+    if not selfFoundDetected and IsSelfFound() then
+        selfFoundDetected = true
+        -- Your hook: recalculate points, refresh UI, etc.
+        ApplySelfFoundBonus()
+        CheckPendingCompletions()
+        HCA_UpdateTotalPoints()
+        AchievementPanel.MultiplierText:SetText(BuildPresetLabelText())
+        -- Optionally unregister event and cancel timer if you don't want to update repeatedly
+        if initFrame and initFrame.UnregisterEvent then
+            initFrame:UnregisterEvent("UNIT_AURA")
+        end
+        if selfFoundTimer then
+            selfFoundTimer:Cancel()
+        end
+    end
+end
+
+-- Hook UNIT_AURA and post-login polling
+initFrame:RegisterEvent("UNIT_AURA")
+local oldHandler = initFrame:GetScript("OnEvent")
+initFrame:SetScript("OnEvent", function(self, event, ...)
+    if event == "UNIT_AURA" then
+        local unit = ...
+        if unit == "player" then
+            OnSelfFoundDetected()
+        end
+    elseif event == "PLAYER_ENTERING_WORLD" then
+        local isInitialLogin, isReloadingUi = ...
+        if not isInitialLogin then return end
+        -- ... (existing initialization code) ...
+        -- After all your normal setup, start polling for 3s
+        selfFoundDetected = false
+        if selfFoundTimer then selfFoundTimer:Cancel() end
+        local duration, interval, elapsed = 3, 0.2, 0
+        selfFoundTimer = C_Timer.NewTicker(interval, function()
+            elapsed = elapsed + interval
+            OnSelfFoundDetected()
+            if selfFoundDetected or elapsed >= duration then
+                selfFoundTimer:Cancel()
+            end
+        end)
+        -- ... your normal PLAYER_ENTERING_WORLD init code ...
+        if oldHandler then
+            oldHandler(self, event, ...)
+        end
+        return -- do not double run base PLAYER_ENTERING_WORLD logic below
+    end
+    if oldHandler and event ~= "UNIT_AURA" then
+        oldHandler(self, event, ...)
+    end
+end)
+
+-- =========================================================
 -- Setting up the Interface
 -- =========================================================
 
