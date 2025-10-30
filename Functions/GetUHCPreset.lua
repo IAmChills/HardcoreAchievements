@@ -207,7 +207,7 @@ eventFrame:SetScript("OnEvent", function(self, event, addonName)
                 AchievementPanel.MultiplierText:SetTextColor(0.8, 0.8, 0.8)
 
                 UpdateAllAchievementPoints()
-            end)
+            end
         end)
     end
 end)
