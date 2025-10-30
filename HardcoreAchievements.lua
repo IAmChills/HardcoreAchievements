@@ -1,6 +1,6 @@
 local ADDON_NAME = ...
 local playerGUID
-local SELF_FOUND_BONUS = 5
+HCA_SELF_FOUND_BONUS = 5
 
 local function EnsureDB()
     HardcoreAchievementsDB = HardcoreAchievementsDB or {}
@@ -85,8 +85,10 @@ local function FormatTimestamp(timestamp)
     if not timestamp then return "" end
     
     local dateInfo = date("*t", timestamp)
-    local monthNames = {"Jan", "Feb", "Mar", "Apr", "May", "Jun", 
-                       "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"}
+    local monthNames = {FULLDATE_MONTH_JANUARY, FULLDATE_MONTH_FEBRUARY, FULLDATE_MONTH_MARCH,
+                        FULLDATE_MONTH_APRIL, FULLDATE_MONTH_MAY, FULLDATE_MONTH_JUNE, 
+                        FULLDATE_MONTH_JULY, FULLDATE_MONTH_AUGUST, FULLDATE_MONTH_SEPTEMBER,
+                        FULLDATE_MONTH_OCTOBER, FULLDATE_MONTH_NOVEMBER, FULLDATE_MONTH_DECEMBER}
     
     return string.format("%s %d, %d %02d:%02d", 
         monthNames[dateInfo.month], 
@@ -182,10 +184,15 @@ function HCA_MarkRowCompleted(row)
     row.completed = true
 
     if row.Title and row.Title.SetTextColor then row.Title:SetTextColor(0.6, 0.9, 0.6) end
-    if row.Sub then row.Sub:SetText("Completed!") end
+    if row.Sub then row.Sub:SetText(AUCTION_TIME_LEFT0) end
     if row.Points then row.Points:SetTextColor(0.6, 0.9, 0.6) end
     if row.TS then row.TS:SetText(FormatTimestamp(time())) end
     if row.Icon and row.Icon.SetDesaturated then row.Icon:SetDesaturated(false) end
+    
+    -- Update icon borders for completion status
+    -- if row.GreenBorder then row.GreenBorder:Show() end
+    -- if row.RedBorder then row.RedBorder:Hide() end
+    -- if row.YellowBorder then row.YellowBorder:Hide() end
 
     local _, cdb = GetCharDB()
     if cdb then
@@ -212,6 +219,12 @@ function HCA_MarkRowCompleted(row)
         ClearProgress(id)
         HCA_UpdateTotalPoints()
     end
+    
+    -- Broadcast achievement completion to emote channel
+    local playerName = UnitName("player")
+    local achievementTitle = row.Title and row.Title:GetText() or "Unknown Achievement"
+    local broadcastMessage = string.format(ACHIEVEMENT_BROADCAST, playerName, achievementTitle)
+    SendChatMessage(broadcastMessage, "EMOTE")
     
     -- Re-apply filter after completion state changes
     if ApplyFilter then
@@ -246,11 +259,16 @@ local function RestoreCompletionsFromDB()
         if rec and rec.completed then
             row.completed = true
             if row.Title and row.Title.SetTextColor then row.Title:SetTextColor(0.6, 0.9, 0.6) end
-            if row.Sub then row.Sub:SetText("Completed!") end
+            if row.Sub then row.Sub:SetText(AUCTION_TIME_LEFT0) end
             if row.TS then row.TS:SetText(FormatTimestamp(rec.completedAt)) end
             if row.Points then row.Points:SetTextColor(0.6, 0.9, 0.6) end
             
             if row.Icon and row.Icon.SetDesaturated then row.Icon:SetDesaturated(false) end
+            
+            -- Update icon borders for completion status
+            -- if row.GreenBorder then row.GreenBorder:Show() end
+            -- if row.RedBorder then row.RedBorder:Hide() end
+            -- if row.YellowBorder then row.YellowBorder:Hide() end
 
             if rec.points then
                 row.points = rec.points
@@ -327,7 +345,7 @@ local function HCA_CreateAchToast()
     -- "Achievement Unlocked" small label (optional)
     local unlocked = f:CreateFontString(nil, "OVERLAY", "GameFontBlackTiny")
     unlocked:SetPoint("TOP", f, "TOP", 7, -26)
-    unlocked:SetText("Achievement Earned")
+    unlocked:SetText(ACHIEVEMENT_UNLOCKED)
     f.unlocked = unlocked
 
     -- Shield & points
@@ -423,7 +441,7 @@ function HCA_AchToast_Show(iconTex, title, pts)
 
     f:Show()
 
-    print("|cff00ff00Congratulations!|r You completed the achievement: " .. title)
+    print(ACHIEVEMENT_BROADCAST_SELF:format(title))
     PlaySoundFile("Interface\\AddOns\\HardcoreAchievements\\Sounds\\AchievementSound1.ogg", "Effects")
 
     holdSeconds = holdSeconds or 3
@@ -438,7 +456,7 @@ end
 -- =========================================================
 
 function IsSelfFound()
-    -- Check for UltraHardcore Self-Found buff
+    -- Check for Hardcore Self-Found buff
     for i = 1, 40 do
         local name, _, _, _, _, _, _, _, _, spellId = UnitBuff("player", i)
         if not name then break end
@@ -460,7 +478,7 @@ local function ApplySelfFoundBonus()
     local updatedCount = 0
     for achId, ach in pairs(charData.achievements) do
         if ach.completed and not ach.SFMod then
-            ach.points = (ach.points or 0) + SELF_FOUND_BONUS
+            ach.points = (ach.points or 0) + HCA_SELF_FOUND_BONUS
             ach.SFMod = true
             updatedCount = updatedCount + 1
         end
@@ -482,6 +500,16 @@ local function ApplyOutleveledStyle(row)
     if IsRowOutleveled(row) and row.Title and row.Title.SetTextColor then
         -- simple: red title to indicate you missed the pre-level requirement
         row.Title:SetTextColor(0.9, 0.2, 0.2)
+        
+    --     -- Update icon borders for failed status
+    --     if row.RedBorder then row.RedBorder:Show() end
+    --     if row.GreenBorder then row.GreenBorder:Hide() end
+    --     if row.YellowBorder then row.YellowBorder:Hide() end
+    -- elseif not row.completed then
+    --     -- Available (not completed, not outleveled)
+    --     if row.YellowBorder then row.YellowBorder:Show() end
+    --     if row.GreenBorder then row.GreenBorder:Hide() end
+    --     if row.RedBorder then row.RedBorder:Hide() end
     end
 end
 
@@ -610,7 +638,8 @@ local minimapDataObject = LDB:NewDataObject("HardcoreAchievements", {
         -- Show current achievement count
         local completedCount, totalCount = HCA_AchievementCount()
         tooltip:AddLine(" ")
-        tooltip:AddLine(string.format("Completed: %d/%d", completedCount, totalCount), 0.6, 0.9, 0.6)
+        local countStr = string.format("%d/%d", completedCount, totalCount)
+        tooltip:AddLine(string.format(ACHIEVEMENT_META_COMPLETED_DATE, countStr), 0.6, 0.9, 0.6)
     end,
 })
 
@@ -660,7 +689,6 @@ initFrame:SetScript("OnEvent", function(self, event, ...)
             RefreshOutleveledAll()
         end
         SortAchievementRows()
-        ApplySelfFoundBonus()
         
         -- Initialize minimap button
         InitializeMinimapButton()
@@ -674,7 +702,9 @@ initFrame:SetScript("OnEvent", function(self, event, ...)
     elseif event == "ADDON_LOADED" then
         local addonName = ...
         if addonName == ADDON_NAME then
-            -- Addon loaded, but wait for PLAYER_LOGIN for minimap button
+            C_Timer.After(3, function()
+                ApplySelfFoundBonus()
+            end)
         end
     end
 end)
@@ -1122,10 +1152,10 @@ local currentFilter = "all"
 
 local function PopulateFilterDropdown()
     local filterList = {
-        { text = "All", value = "all" },
-        { text = "Completed", value = "completed" },
-        { text = "Not Completed", value = "not_completed" },
-        { text = "Failed", value = "failed" },
+        { text = ACHIEVEMENTFRAME_FILTER_ALL, value = "all" },
+        { text = ACHIEVEMENTFRAME_FILTER_COMPLETED, value = "completed" },
+        { text = ACHIEVEMENTFRAME_FILTER_INCOMPLETE, value = "not_completed" },
+        { text = FAILED, value = "failed" },
     }
     return filterList
 end
@@ -1188,18 +1218,7 @@ AchievementPanel.TotalPoints:SetTextColor(0.6, 0.9, 0.6)
 -- Preset multiplier label, e.g. "Point Multiplier (Lite +)"
 AchievementPanel.MultiplierText = AchievementPanel:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
 AchievementPanel.MultiplierText:SetPoint("TOP", 5, -40)
-
--- Build the label text based on available information
-local function BuildPresetLabelText()
-    local selfFound = IsSelfFound()
-    local labelText = ""
-    if selfFound then
-        labelText = "Point Multiplier (Self Found)"
-    end
-    return labelText
-end
-
-AchievementPanel.MultiplierText:SetText(BuildPresetLabelText())
+AchievementPanel.MultiplierText:SetText("")
 AchievementPanel.MultiplierText:SetTextColor(0.8, 0.8, 0.8)
 
 -- Scrollable container inside the AchievementPanel
@@ -1301,12 +1320,33 @@ function CreateAchievementRow(parent, achId, title, tooltip, icon, level, points
     -- icon
     row.Icon = row:CreateTexture(nil, "ARTWORK")
     row.Icon:SetSize(32, 32)
-    row.Icon:SetPoint("LEFT", row, "LEFT", -1, 0)
+    row.Icon:SetPoint("LEFT", row, "LEFT", -1, 0) -- Moved 2 pixels right to account for border
     row.Icon:SetTexture(icon or 136116)
+    
+    -- Create completion border as a green square outline around the icon
+    row.GreenBorder = row:CreateTexture(nil, "BORDER")
+    row.GreenBorder:SetSize(34, 34) -- Slightly larger than icon
+    row.GreenBorder:SetPoint("CENTER", row.Icon, "CENTER", 0, 0)
+    row.GreenBorder:SetColorTexture(0.6, 0.9, 0.6, 0.8) -- Green square
+    row.GreenBorder:Hide()
+    
+    -- Create failed border as a red square outline around the icon
+    row.RedBorder = row:CreateTexture(nil, "BORDER")
+    row.RedBorder:SetSize(34, 34) -- Slightly larger than icon
+    row.RedBorder:SetPoint("CENTER", row.Icon, "CENTER", 0, 0)
+    row.RedBorder:SetColorTexture(0.53, 0.02, 0.03, 0.8) -- Red square
+    row.RedBorder:Hide()
+    
+    -- Create available border as a yellow square outline around the icon
+    row.YellowBorder = row:CreateTexture(nil, "BORDER")
+    row.YellowBorder:SetSize(34, 34) -- Slightly larger than icon
+    row.YellowBorder:SetPoint("CENTER", row.Icon, "CENTER", 0, 0)
+    row.YellowBorder:SetColorTexture(1, 0.82, 0, 0.8) -- Goldish yellow square
+    row.YellowBorder:Hide()
 
     -- title
     row.Title = row:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    row.Title:SetPoint("LEFT", row.Icon, "RIGHT", 8, 10)
+    row.Title:SetPoint("LEFT", row.Icon, "RIGHT", 8, 10) -- Title stays anchored to icon
     row.Title:SetText(title or ("Achievement %d"):format(index))
 
     -- subtitle / progress
@@ -1316,7 +1356,7 @@ function CreateAchievementRow(parent, achId, title, tooltip, icon, level, points
     row.Sub:SetJustifyH("LEFT")
     row.Sub:SetJustifyV("TOP")
     row.Sub:SetWordWrap(true)
-    row.Sub:SetText(level and ("Level %d"):format(level) or "—")
+    row.Sub:SetText(level and (LEVEL .. " " .. level) or "—")
 
     -- points
     row.Points = row:CreateFontString(nil, "OVERLAY", "GameFontNormal")
@@ -1324,7 +1364,7 @@ function CreateAchievementRow(parent, achId, title, tooltip, icon, level, points
     row.Points:SetWidth(100)
     row.Points:SetJustifyH("RIGHT")
     row.Points:SetJustifyV("TOP")
-    row.Points:SetText(((points or 0) + (IsSelfFound() and SELF_FOUND_BONUS or 0)) .. " pts")
+    row.Points:SetText(points or 0 .. " pts")
     row.Points:SetTextColor(1, 1, 1)
 
     -- timestamp
@@ -1365,7 +1405,7 @@ function CreateAchievementRow(parent, achId, title, tooltip, icon, level, points
 
     row.originalPoints = points or 0  -- Store original points before any multipliers
     row.staticPoints = staticPoints or false  -- Store static points flag
-    row.points = ((points or 0) + (IsSelfFound() and SELF_FOUND_BONUS or 0))
+    row.points = (points or 0)
     row.completed = false
     row.maxLevel = tonumber(level) or 0
     row.tooltip = tooltip  -- Store the tooltip for later access

@@ -136,6 +136,16 @@ local function UpdateAllAchievementPoints()
             end
         end
     end
+
+    local isSelfFound = IsSelfFound()
+    if isSelfFound then
+        for _, row in ipairs(AchievementPanel.achievements) do
+            if row.id and not row.completed then
+                row.points = row.points + HCA_SELF_FOUND_BONUS
+                row.Points:SetText(tostring(row.points) .. " pts")
+            end
+        end
+    end
     
     -- Update total points
     if HCA_UpdateTotalPoints then
@@ -149,7 +159,7 @@ eventFrame:RegisterEvent("ADDON_LOADED")
 eventFrame:SetScript("OnEvent", function(self, event, addonName)
     if addonName == "UltraHardcore" then
         -- UltraHardcore has loaded, trigger multiplier text update
-        C_Timer.After(0.1, function()
+        C_Timer.After(3, function()
             -- Update multiplier text in embedded UI if it exists
             if DEST and DEST.MultiplierText then
                 local preset = GetPlayerPresetFromSettings()
@@ -170,7 +180,9 @@ eventFrame:SetScript("OnEvent", function(self, event, addonName)
                 DEST.MultiplierText:SetText(labelText)
                 DEST.MultiplierText:SetTextColor(0.8, 0.8, 0.8)
             end
-            
+        end)
+    elseif addonName == "HardcoreAchievements" then        
+        C_Timer.After(3, function()
             -- Update multiplier text in standalone UI if it exists
             if AchievementPanel and AchievementPanel.MultiplierText then
                 local preset = GetPlayerPresetFromSettings()
@@ -190,10 +202,10 @@ eventFrame:SetScript("OnEvent", function(self, event, addonName)
                 
                 AchievementPanel.MultiplierText:SetText(labelText)
                 AchievementPanel.MultiplierText:SetTextColor(0.8, 0.8, 0.8)
+
+                -- Update all achievement points with new multiplier and bonus
+                UpdateAllAchievementPoints()
             end
-            
-            -- Update all achievement points with new multiplier
-            UpdateAllAchievementPoints()
         end)
     end
 end)

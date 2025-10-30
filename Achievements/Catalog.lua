@@ -14,7 +14,7 @@ local Achievements = {
     points = 10,
     requiredQuestId = 2561,
     targetNpcId = 7318,
-    faction = "Alliance",
+    faction = FACTION_ALLIANCE,
     zone = "Teldrassil"
 }, {
     achId = "Vagash",
@@ -25,7 +25,7 @@ local Achievements = {
     points = 10,
     requiredQuestId = 314,
     targetNpcId = 1388,
-    faction = "Alliance",
+    faction = FACTION_ALLIANCE,
     zone = "Dun Morogh"
 }, {
     achId = "Hogger",
@@ -36,7 +36,7 @@ local Achievements = {
     points = 10,
     requiredQuestId = 176,
     targetNpcId = 448,
-    faction = "Alliance",
+    faction = FACTION_ALLIANCE,
     zone = "Elwynn Forest"
 }, {
     achId = "Grawmug",
@@ -47,7 +47,7 @@ local Achievements = {
     points = 10,
     requiredQuestId = 217,
     targetNpcId = 1205,
-    faction = "Alliance",
+    faction = FACTION_ALLIANCE,
     zone = "Loch Modan"
 }, {
     achId = "AbsentMindedProspector",
@@ -58,7 +58,7 @@ local Achievements = {
     points = 10,
     requiredQuestId = 731,
     targetNpcId = nil,
-    faction = "Alliance",
+    faction = FACTION_ALLIANCE,
     zone = "Darkshore"
 }, {
     achId = "Fangore",
@@ -69,7 +69,7 @@ local Achievements = {
     points = 10,
     requiredQuestId = 180,
     targetNpcId = 703,
-    faction = "Alliance",
+    faction = FACTION_ALLIANCE,
     zone = "Redridge Mountains"
 }, {
     achId = "Foulborne",
@@ -80,7 +80,7 @@ local Achievements = {
     points = 10,
     requiredQuestId = 1017,
     targetNpcId = 3986,
-    faction = "Alliance",
+    faction = FACTION_ALLIANCE,
     zone = "Ashenvale"
 }, {
     achId = "Nekrosh",
@@ -91,7 +91,7 @@ local Achievements = {
     points = 10,
     requiredQuestId = 474,
     targetNpcId = 2091,
-    faction = "Alliance",
+    faction = FACTION_ALLIANCE,
     zone = "Wetlands"
 }, {
     achId = "MorLadim",
@@ -102,7 +102,7 @@ local Achievements = {
     points = 10,
     requiredQuestId = 228,
     targetNpcId = 522,
-    faction = "Alliance",
+    faction = FACTION_ALLIANCE,
     zone = "Duskwood"
 }, {
     achId = "ForsakenCourier",
@@ -113,7 +113,7 @@ local Achievements = {
     points = 10,
     requiredQuestId = 658,
     targetNpcId = 2714,
-    faction = "Alliance",
+    faction = FACTION_ALLIANCE,
     zone = "Arathi Highlands"
 }, {
     achId = "StinkysEscape",
@@ -124,7 +124,7 @@ local Achievements = {
     points = 10,
     requiredQuestId = 1222,
     targetNpcId = nil,
-    faction = "Alliance",
+    faction = FACTION_ALLIANCE,
     zone = "Dustwallow Marsh"
 }, {
     achId = "ThogrunAlliance",
@@ -135,7 +135,7 @@ local Achievements = {
     points = 10,
     requiredQuestId = 732,
     targetNpcId = 2944,
-    faction = "Alliance",
+    faction = FACTION_ALLIANCE,
     zone = "Badlands"
 }, {
     achId = "LordShalzaru",
@@ -146,7 +146,7 @@ local Achievements = {
     points = 10,
     requiredQuestId = 2870,
     targetNpcId = 8136,
-    faction = "Alliance",
+    faction = FACTION_ALLIANCE,
     zone = "Feralas"
 }, {
     achId = "DragonkinMenace",
@@ -157,7 +157,7 @@ local Achievements = {
     points = 10,
     requiredQuestId = 4182,
     targetNpcId = 7044,
-    faction = "Alliance",
+    faction = FACTION_ALLIANCE,
     zone = "Burning Steppes"
 },
 
@@ -171,7 +171,7 @@ local Achievements = {
     points = 10,
     requiredQuestId = 408,
     targetNpcId = 1658,
-    faction = "Horde",
+    faction = FACTION_HORDE,
     zone = "Tirisfal Glades"
 }, {
     achId = "Arrachea",
@@ -182,7 +182,7 @@ local Achievements = {
     points = 10,
     requiredQuestId = 776,
     targetNpcId = 3058,
-    faction = "Horde",
+    faction = FACTION_HORDE,
     zone = "Thunder Bluff"
 }, {
     achId = "Gazzuz",
@@ -193,7 +193,7 @@ local Achievements = {
     points = 10,
     requiredQuestId = 832,
     targetNpcId = 3204,
-    faction = "Horde",
+    faction = FACTION_HORDE,
     zone = "Orgrimmar"
 }, {
     achId = "Fizzle",
@@ -204,7 +204,7 @@ local Achievements = {
     points = 10,
     requiredQuestId = 806,
     targetNpcId = 3203,
-    faction = "Horde",
+    faction = FACTION_HORDE,
     zone = "Durotar"
 }, {
     achId = "Goggeroc",
@@ -215,7 +215,7 @@ local Achievements = {
     points = 10,
     requiredQuestId = 6481,
     targetNpcId = 11920,
-    faction = "Horde",
+    faction = FACTION_HORDE,
     zone = "Stonetalon Mountains"
 }, {
     achId = "Kromzar",
@@ -226,7 +226,7 @@ local Achievements = {
     points = 10,
     requiredQuestId = 4021,
     targetNpcId = nil,
-    faction = "Horde",
+    faction = FACTION_HORDE,
     zone = "The Barrens"
 }, {
     achId = "Ataeric",
@@ -237,7 +237,7 @@ local Achievements = {
     points = 10,
     requiredQuestId = 480,
     targetNpcId = 2120,
-    faction = "Horde",
+    faction = FACTION_HORDE,
     zone = "Silverpine Forest"
 }, {
     achId = "TheHunt",
@@ -248,7 +248,7 @@ local Achievements = {
     points = 10,
     requiredQuestId = 247,
     targetNpcId = 12677, -- Shadumbra
-    faction = "Horde",
+    faction = FACTION_HORDE,
     zone = "Ashenvale"
 }, {
     achId = "Gizmo",
@@ -259,7 +259,7 @@ local Achievements = {
     points = 10,
     requiredQuestId = 5151,
     targetNpcId = 10992,
-    faction = "Horde",
+    faction = FACTION_HORDE,
     zone = "Thousand Needles"
 }, {
     achId = "Grenka",
@@ -270,7 +270,7 @@ local Achievements = {
     points = 10,
     requiredQuestId = 1150,
     targetNpcId = 4490,
-    faction = "Horde",
+    faction = FACTION_HORDE,
     zone = "Thousand Needles"
 }, {
     achId = "Ironhill",
@@ -281,7 +281,7 @@ local Achievements = {
     points = 10,
     requiredQuestId = 541,
     targetNpcId = 2304,
-    faction = "Horde",
+    faction = FACTION_HORDE,
     zone = "Hillsbrad Foothills"
 }, {
     achId = "ThogrunHorde",
@@ -292,7 +292,7 @@ local Achievements = {
     points = 10,
     requiredQuestId = 782,
     targetNpcId = 2944,
-    faction = "Horde",
+    faction = FACTION_HORDE,
     zone = "Badlands"
 }, {
     achId = "NothingButTruth",
@@ -303,7 +303,7 @@ local Achievements = {
     points = 10,
     requiredQuestId = 1391,
     targetNpcId = nil,
-    faction = "Horde",
+    faction = FACTION_HORDE,
     zone = "Duskwood"
 }, {
     achId = "Mugthol",
@@ -314,7 +314,7 @@ local Achievements = {
     points = 10,
     requiredQuestId = 520,
     targetNpcId = 2257,
-    faction = "Horde",
+    faction = FACTION_HORDE,
     zone = "Hillsbrad Foothills"
 }, {
     achId = "Hatetalon",
@@ -325,7 +325,7 @@ local Achievements = {
     points = 10,
     requiredQuestId = 3062,
     targetNpcId = 8075,
-    faction = "Horde",
+    faction = FACTION_HORDE,
     zone = "Feralas"
 }, {
     achId = "Kromgrul",
@@ -336,7 +336,7 @@ local Achievements = {
     points = 10,
     requiredQuestId = 3822,
     targetNpcId = 8977,
-    faction = "Horde",
+    faction = FACTION_HORDE,
     zone = "Burning Steppes"
 }, {
     achId = "Hitahya",
@@ -347,7 +347,7 @@ local Achievements = {
     points = 10,
     requiredQuestId = 7846,
     targetNpcId = 10802,
-    faction = "Horde",
+    faction = FACTION_HORDE,
     zone = "Hinterlands"
 },
 
@@ -598,7 +598,7 @@ local Achievements = {
     points = 10,
     requiredQuestId = 2478,
     targetNpcId = 7288,
-    faction = "Horde",
+    faction = FACTION_HORDE,
     class = "ROGUE",
     zone = "Barrens"
 },
@@ -613,7 +613,7 @@ local Achievements = {
     points = 10,
     requiredQuestId = 1960,
     targetNpcId = nil,
-    faction = "Horde",
+    faction = FACTION_HORDE,
     class = "MAGE",
     zone = "Undercity"
 }, {
@@ -625,7 +625,7 @@ local Achievements = {
     points = 10,
     requiredQuestId = 1920,
     targetNpcId = nil,
-    faction = "Alliance",
+    faction = FACTION_ALLIANCE,
     class = "MAGE",
     zone = "Stormwind City"
 }

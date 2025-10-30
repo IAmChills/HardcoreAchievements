@@ -16,10 +16,10 @@ end
 
 local function PopulateFilterDropdown()
   local filterList = {
-    { text = "All", value = "all" },
-    { text = "Completed", value = "completed" },
-    { text = "Not Completed", value = "not_completed" },
-    { text = "Failed", value = "failed" },
+    { text = ACHIEVEMENTFRAME_FILTER_ALL, value = "all" },
+    { text = ACHIEVEMENTFRAME_FILTER_COMPLETED, value = "completed" },
+    { text = ACHIEVEMENTFRAME_FILTER_INCOMPLETE, value = "not_completed" },
+    { text = FAILED, value = "failed" },
   }
   return filterList
 end
@@ -120,7 +120,7 @@ local function CreateEmbedIcon(parent)
     GameTooltip:SetText(self.title or "", 1, 0.82, 0)
     
     if self.maxLevel and self.maxLevel > 0 then
-      GameTooltip:AddLine(("Max Level: %d"):format(self.maxLevel), 0.7, 0.7, 0.7)
+      GameTooltip:AddLine(string.format(GUILD_RECRUITMENT_MAXLEVEL, self.maxLevel), 0.7, 0.7, 0.7)
     end
 
     -- Check if this is a dungeon achievement with requiredKills
@@ -212,41 +212,41 @@ local function SyncContentWidth()
   UHCA.Content:SetWidth(w)
 end
 
-  -- Function to update multiplier text
-  local function UpdateMultiplierText()
-    if not UHCA.MultiplierText then return end
-    
-    local preset = GetPlayerPresetFromSettings()
-    local isSelfFound = IsSelfFound()
-    
-    local labelText = ""
-    if preset or isSelfFound then
-        labelText = "Point Multiplier ("
-        if preset then
-            labelText = labelText .. preset
-        end
-        if isSelfFound then
-            labelText = labelText .. ", Self Found"
-        end
-        labelText = labelText .. ")"
-    end
-    
-    UHCA.MultiplierText:SetText(labelText)
-    UHCA.MultiplierText:SetTextColor(0.8, 0.8, 0.8)
+-- Function to update multiplier text
+local function UpdateMultiplierText()
+  if not UHCA.MultiplierText then return end
+  
+  local preset = GetPlayerPresetFromSettings()
+  local isSelfFound = IsSelfFound()
+  
+  local labelText = ""
+  if preset or isSelfFound then
+      labelText = "Point Multiplier ("
+      if preset then
+          labelText = labelText .. preset
+      end
+      if isSelfFound then
+          labelText = labelText .. ", Self Found"
+      end
+      labelText = labelText .. ")"
   end
+  
+  UHCA.MultiplierText:SetText(labelText)
+  UHCA.MultiplierText:SetTextColor(0.8, 0.8, 0.8)
+end
 
-  -- Function to update total points text
-  local function UpdateTotalPointsText()
-    if not UHCA.TotalPointsText then return end
-    
-    local totalPoints = 0
-    if _G.HCA_GetTotalPoints then
-      totalPoints = _G.HCA_GetTotalPoints()
-    end
-    
-    UHCA.TotalPointsText:SetText(totalPoints .. " pts")
-    UHCA.TotalPointsText:SetTextColor(0.6, 0.9, 0.6)
+-- Function to update total points text
+local function UpdateTotalPointsText()
+  if not UHCA.TotalPointsText then return end
+  
+  local totalPoints = 0
+  if _G.HCA_GetTotalPoints then
+    totalPoints = _G.HCA_GetTotalPoints()
   end
+  
+  UHCA.TotalPointsText:SetText(totalPoints .. " pts")
+  UHCA.TotalPointsText:SetTextColor(0.6, 0.9, 0.6)
+end
 
 -- ---------- Rebuild ----------
 function EMBED:Rebuild()
