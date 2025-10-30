@@ -663,11 +663,13 @@ end
 -- =========================================================
 
 local initFrame = CreateFrame("Frame")
-initFrame:RegisterEvent("PLAYER_LOGIN")
+initFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
 initFrame:RegisterEvent("PLAYER_LEVEL_UP")
 initFrame:RegisterEvent("ADDON_LOADED")
 initFrame:SetScript("OnEvent", function(self, event, ...)
-    if event == "PLAYER_LOGIN" then
+    if event == "PLAYER_ENTERING_WORLD" then
+        local isInitialLogin, isReloadingUi = ...
+        if not isInitialLogin then return end
         playerGUID = UnitGUID("player")
 
         -- Run migration first, before setting up current character
@@ -697,13 +699,15 @@ initFrame:SetScript("OnEvent", function(self, event, ...)
         -- Load saved tab position
         LoadTabPosition()
 
+        self:UnregisterEvent("PLAYER_ENTERING_WORLD")
+
     elseif event == "PLAYER_LEVEL_UP" then
         RefreshOutleveledAll()
         CheckPendingCompletions()
     elseif event == "ADDON_LOADED" then
         local addonName = ...
         if addonName == ADDON_NAME then
-            -- Addon loaded, but wait for PLAYER_LOGIN for minimap button
+            -- Addon loaded, placeholder
         end
     end
 end)
@@ -1221,7 +1225,7 @@ AchievementPanel.MultiplierText:SetPoint("TOP", 5, -40)
 -- Build the label text based on available information
 local function BuildPresetLabelText()
     local selfFound = IsSelfFound()
-    print("Self Found: " .. tostring(selfFound))
+
     local labelText = ""
     if selfFound then
         labelText = "Point Multiplier (Self Found)"
