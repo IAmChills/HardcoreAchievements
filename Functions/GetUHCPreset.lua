@@ -136,6 +136,16 @@ local function UpdateAllAchievementPoints()
             end
         end
     end
+
+    local isSelfFound = IsSelfFound()
+    if isSelfFound then
+        for _, row in ipairs(AchievementPanel.achievements) do
+            if row.id and not row.completed then
+                row.points = row.points + HCA_SELF_FOUND_BONUS
+                row.Points:SetText(tostring(row.points) .. " pts")
+            end
+        end
+    end
     
     -- Update total points
     if HCA_UpdateTotalPoints then
@@ -193,7 +203,7 @@ eventFrame:SetScript("OnEvent", function(self, event, addonName)
             end
             
             -- Update all achievement points with new multiplier
-            C_Timer.After(0.1, function()
+            C_Timer.After(1, function()
                 UpdateAllAchievementPoints()
             end)
         end)

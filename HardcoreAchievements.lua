@@ -1,6 +1,6 @@
 local ADDON_NAME = ...
 local playerGUID
-local SELF_FOUND_BONUS = 5
+HCA_SELF_FOUND_BONUS = 5
 
 local function EnsureDB()
     HardcoreAchievementsDB = HardcoreAchievementsDB or {}
@@ -478,7 +478,7 @@ local function ApplySelfFoundBonus()
     local updatedCount = 0
     for achId, ach in pairs(charData.achievements) do
         if ach.completed and not ach.SFMod then
-            ach.points = (ach.points or 0) + SELF_FOUND_BONUS
+            ach.points = (ach.points or 0) + HCA_SELF_FOUND_BONUS
             ach.SFMod = true
             updatedCount = updatedCount + 1
         end
@@ -1379,7 +1379,7 @@ function CreateAchievementRow(parent, achId, title, tooltip, icon, level, points
     row.Points:SetWidth(100)
     row.Points:SetJustifyH("RIGHT")
     row.Points:SetJustifyV("TOP")
-    row.Points:SetText(((points or 0) + (IsSelfFound() and SELF_FOUND_BONUS or 0)) .. " pts")
+    row.Points:SetText(points or 0 .. " pts")
     row.Points:SetTextColor(1, 1, 1)
 
     -- timestamp
@@ -1420,7 +1420,7 @@ function CreateAchievementRow(parent, achId, title, tooltip, icon, level, points
 
     row.originalPoints = points or 0  -- Store original points before any multipliers
     row.staticPoints = staticPoints or false  -- Store static points flag
-    row.points = ((points or 0) + (IsSelfFound() and SELF_FOUND_BONUS or 0))
+    row.points = (points or 0)
     row.completed = false
     row.maxLevel = tonumber(level) or 0
     row.tooltip = tooltip  -- Store the tooltip for later access
