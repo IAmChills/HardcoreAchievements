@@ -1409,7 +1409,7 @@ function CreateAchievementRow(parent, achId, title, tooltip, icon, level, points
 
     row.originalPoints = points or 0  -- Store original points before any multipliers
     row.staticPoints = staticPoints or false  -- Store static points flag
-    --row.points = (points or 0)
+    row.points = (points or 0)
     row.completed = false
     row.maxLevel = tonumber(level) or 0
     row.tooltip = tooltip  -- Store the tooltip for later access
