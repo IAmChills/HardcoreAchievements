@@ -663,13 +663,11 @@ end
 -- =========================================================
 
 local initFrame = CreateFrame("Frame")
-initFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
+initFrame:RegisterEvent("PLAYER_LOGIN")
 initFrame:RegisterEvent("PLAYER_LEVEL_UP")
 initFrame:RegisterEvent("ADDON_LOADED")
 initFrame:SetScript("OnEvent", function(self, event, ...)
-    if event == "PLAYER_ENTERING_WORLD" then
-        local isInitialLogin, isReloadingUi = ...
-        if not isInitialLogin then return end
+    if event == "PLAYER_LOGIN" then
         playerGUID = UnitGUID("player")
 
         -- Run migration first, before setting up current character
@@ -697,8 +695,6 @@ initFrame:SetScript("OnEvent", function(self, event, ...)
         
         -- Load saved tab position
         LoadTabPosition()
-
-        self:UnregisterEvent("PLAYER_ENTERING_WORLD")
 
     elseif event == "PLAYER_LEVEL_UP" then
         RefreshOutleveledAll()
