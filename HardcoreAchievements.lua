@@ -691,7 +691,6 @@ initFrame:SetScript("OnEvent", function(self, event, ...)
             RefreshOutleveledAll()
         end
         SortAchievementRows()
-        ApplySelfFoundBonus()
         
         -- Initialize minimap button
         InitializeMinimapButton()
@@ -707,7 +706,9 @@ initFrame:SetScript("OnEvent", function(self, event, ...)
     elseif event == "ADDON_LOADED" then
         local addonName = ...
         if addonName == ADDON_NAME then
-            -- Addon loaded, placeholder
+            C_Timer.After(3, function()
+                ApplySelfFoundBonus()
+            end)
         end
     end
 end)
@@ -1221,19 +1222,7 @@ AchievementPanel.TotalPoints:SetTextColor(0.6, 0.9, 0.6)
 -- Preset multiplier label, e.g. "Point Multiplier (Lite +)"
 AchievementPanel.MultiplierText = AchievementPanel:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
 AchievementPanel.MultiplierText:SetPoint("TOP", 5, -40)
-
--- Build the label text based on available information
-local function BuildPresetLabelText()
-    local selfFound = IsSelfFound()
-
-    local labelText = ""
-    if selfFound then
-        labelText = "Point Multiplier (Self Found)"
-    end
-    return labelText
-end
-
-AchievementPanel.MultiplierText:SetText(BuildPresetLabelText())
+AchievementPanel.MultiplierText:SetText("")
 AchievementPanel.MultiplierText:SetTextColor(0.8, 0.8, 0.8)
 
 -- Scrollable container inside the AchievementPanel

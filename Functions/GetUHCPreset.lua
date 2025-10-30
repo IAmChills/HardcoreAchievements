@@ -203,12 +203,12 @@ eventFrame:SetScript("OnEvent", function(self, event, addonName)
             end
             
             -- Update all achievement points with new multiplier
-            C_Timer.After(1, function()
+            C_Timer.After(3, function()
                 UpdateAllAchievementPoints()
             end)
         end)
     elseif addonName == "HardcoreAchievements" then
-        C_Timer.After(1, function()
+        C_Timer.After(3, function()
             UpdateAllAchievementPoints()
         end)
     end
