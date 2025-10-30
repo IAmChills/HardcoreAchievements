@@ -691,9 +691,48 @@ local selfFoundTimer -- Timer to poll for Self-Found buff
 
 -- Function to detect Self-Found buff and refresh points
 local function OnSelfFoundDetected()
-    if IsSelfFound() then
+    if not selfFoundDetected and IsSelfFound() then
         selfFoundDetected = true
+        -- Your hook: recalculate points, refresh UI, etc.
+        ApplySelfFoundBonus()
         RefreshAllRowPointsForSelfFound()
+        -- Apply preset multiplier adjustments if UltraHardcore preset logic is available
+        if type(UpdateAllAchievementPoints) == "function" then
+            UpdateAllAchievementPoints()
+        end
+        -- Update multiplier label text to include preset and Self Found if available
+        if AchievementPanel and AchievementPanel.MultiplierText then
+            local labelText = ""
+            if type(GetPlayerPresetFromSettings) == "function" then
+                local preset = GetPlayerPresetFromSettings()
+                if preset or IsSelfFound() then
+                    labelText = "Point Multiplier ("
+                    if preset then
+                        labelText = labelText .. preset
+                    end
+                    if IsSelfFound() then
+                        labelText = (labelText ~= "Point Multiplier (" and (labelText .. ", ") or labelText) .. "Self Found"
+                    end
+                    labelText = labelText .. ")"
+                end
+            else
+                -- Fallback: show Self Found only
+                if IsSelfFound() then
+                    labelText = "Point Multiplier (Self Found)"
+                end
+            end
+            AchievementPanel.MultiplierText:SetText(labelText)
+            AchievementPanel.MultiplierText:SetTextColor(0.8, 0.8, 0.8)
+        end
+        CheckPendingCompletions()
+        HCA_UpdateTotalPoints()
+        -- Optionally unregister event and cancel timer if you don't want to update repeatedly
+        if initFrame and initFrame.UnregisterEvent then
+            initFrame:UnregisterEvent("UNIT_AURA")
+        end
+        if selfFoundTimer then
+            selfFoundTimer:Cancel()
+        end
     end
 end
 
