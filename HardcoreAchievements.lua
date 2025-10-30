@@ -190,9 +190,9 @@ function HCA_MarkRowCompleted(row)
     if row.Icon and row.Icon.SetDesaturated then row.Icon:SetDesaturated(false) end
     
     -- Update icon borders for completion status
-    if row.GreenBorder then row.GreenBorder:Show() end
-    if row.RedBorder then row.RedBorder:Hide() end
-    if row.YellowBorder then row.YellowBorder:Hide() end
+    -- if row.GreenBorder then row.GreenBorder:Show() end
+    -- if row.RedBorder then row.RedBorder:Hide() end
+    -- if row.YellowBorder then row.YellowBorder:Hide() end
 
     local _, cdb = GetCharDB()
     if cdb then
@@ -266,9 +266,9 @@ local function RestoreCompletionsFromDB()
             if row.Icon and row.Icon.SetDesaturated then row.Icon:SetDesaturated(false) end
             
             -- Update icon borders for completion status
-            if row.GreenBorder then row.GreenBorder:Show() end
-            if row.RedBorder then row.RedBorder:Hide() end
-            if row.YellowBorder then row.YellowBorder:Hide() end
+            -- if row.GreenBorder then row.GreenBorder:Show() end
+            -- if row.RedBorder then row.RedBorder:Hide() end
+            -- if row.YellowBorder then row.YellowBorder:Hide() end
 
             if rec.points then
                 row.points = rec.points
@@ -485,24 +485,6 @@ local function ApplySelfFoundBonus()
     end
 end
 
--- Recalculate and update all visible row point values when Self-Found becomes active
-local function RefreshAllRowPointsForSelfFound()
-    if not AchievementPanel or not AchievementPanel.achievements then return end
-    if not IsSelfFound() then return end
-    for _, row in ipairs(AchievementPanel.achievements) do
-        if row and not row.completed then
-            -- Respect static points if flagged
-            local base = tonumber(row.originalPoints) or tonumber(row.points) or 0
-            local effective = base + (row.staticPoints and 0 or SELF_FOUND_BONUS)
-            row.points = effective
-            if row.Points then
-                row.Points:SetText(tostring(effective) .. " pts")
-            end
-        end
-    end
-    HCA_UpdateTotalPoints()
-end
-
 -- =========================================================
 -- Outleveled (missed) indicator
 -- =========================================================
@@ -519,15 +501,15 @@ local function ApplyOutleveledStyle(row)
         -- simple: red title to indicate you missed the pre-level requirement
         row.Title:SetTextColor(0.9, 0.2, 0.2)
         
-        -- Update icon borders for failed status
-        if row.RedBorder then row.RedBorder:Show() end
-        if row.GreenBorder then row.GreenBorder:Hide() end
-        if row.YellowBorder then row.YellowBorder:Hide() end
-    elseif not row.completed then
-        -- Available (not completed, not outleveled)
-        if row.YellowBorder then row.YellowBorder:Show() end
-        if row.GreenBorder then row.GreenBorder:Hide() end
-        if row.RedBorder then row.RedBorder:Hide() end
+    --     -- Update icon borders for failed status
+    --     if row.RedBorder then row.RedBorder:Show() end
+    --     if row.GreenBorder then row.GreenBorder:Hide() end
+    --     if row.YellowBorder then row.YellowBorder:Hide() end
+    -- elseif not row.completed then
+    --     -- Available (not completed, not outleveled)
+    --     if row.YellowBorder then row.YellowBorder:Show() end
+    --     if row.GreenBorder then row.GreenBorder:Hide() end
+    --     if row.RedBorder then row.RedBorder:Hide() end
     end
 end
 
@@ -684,31 +666,8 @@ local initFrame = CreateFrame("Frame")
 initFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
 initFrame:RegisterEvent("PLAYER_LEVEL_UP")
 initFrame:RegisterEvent("ADDON_LOADED")
-initFrame:RegisterEvent("UNIT_AURA") -- Register for UNIT_AURA to detect Self-Found buff
-
-local selfFoundDetected = false -- Flag to track if Self-Found was detected
-local selfFoundTimer -- Timer to poll for Self-Found buff
-
--- Function to detect Self-Found buff and refresh points
-local function OnSelfFoundDetected()
-    if IsSelfFound() then
-        selfFoundDetected = true
-        RefreshAllRowPointsForSelfFound()
-        if type(UpdateAllAchievementPoints) == "function" then
-            UpdateAllAchievementPoints()
-        end
-    end
-end
-
--- Store original handler to avoid double-running
-local oldHandler = initFrame:GetScript("OnEvent")
 initFrame:SetScript("OnEvent", function(self, event, ...)
-    if event == "UNIT_AURA" then
-        local unit = ...
-        if unit == "player" then
-            OnSelfFoundDetected()
-        end
-    elseif event == "PLAYER_ENTERING_WORLD" then
+    if event == "PLAYER_ENTERING_WORLD" then
         local isInitialLogin, isReloadingUi = ...
         if not isInitialLogin then return end
         playerGUID = UnitGUID("player")
@@ -740,18 +699,6 @@ initFrame:SetScript("OnEvent", function(self, event, ...)
         -- Load saved tab position
         LoadTabPosition()
 
-        -- Start polling for 3s
-        selfFoundDetected = false
-        if selfFoundTimer then selfFoundTimer:Cancel() end
-        local duration, interval, elapsed = 3, 0.2, 0
-        selfFoundTimer = C_Timer.NewTicker(interval, function()
-            elapsed = elapsed + interval
-            OnSelfFoundDetected()
-            if selfFoundDetected or elapsed >= duration then
-                selfFoundTimer:Cancel()
-            end
-        end)
-
         self:UnregisterEvent("PLAYER_ENTERING_WORLD")
 
     elseif event == "PLAYER_LEVEL_UP" then
@@ -762,9 +709,6 @@ initFrame:SetScript("OnEvent", function(self, event, ...)
         if addonName == ADDON_NAME then
             -- Addon loaded, placeholder
         end
-    end
-    if oldHandler then
-        oldHandler(self, event, ...)
     end
 end)
 
