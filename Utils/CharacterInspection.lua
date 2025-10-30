@@ -68,7 +68,7 @@ function CharacterInspection.SetupInspectionTab()
     local tabID = InspectFrame.numTabs + 1
     local achievementTab = CreateFrame("Button", "InspectFrameTab" .. tabID, InspectFrame, "CharacterFrameTabButtonTemplate")
     achievementTab:SetPoint("RIGHT", _G["InspectFrameTab" .. (tabID - 1)], "RIGHT", 43, 0)
-    achievementTab:SetText("Achievements")
+    achievementTab:SetText(ACHIEVEMENTS)
     PanelTemplates_DeselectTab(achievementTab)
     
     -- Create achievement panel for inspection
@@ -99,10 +99,10 @@ function CharacterInspection.SetupInspectionAchievementPanel()
     if not inspectionAchievementPanel then return end
     
     -- Title
-    inspectionAchievementPanel.Title = inspectionAchievementPanel:CreateFontString(nil, "OVERLAY", "GameFontHighlightLarge")
-    inspectionAchievementPanel.Title:SetPoint("TOP", inspectionAchievementPanel, "TOP", 0, -20)
-    inspectionAchievementPanel.Title:SetText("Achievements")
-    inspectionAchievementPanel.Title:SetTextColor(1, 1, 0)
+    -- inspectionAchievementPanel.Title = inspectionAchievementPanel:CreateFontString(nil, "OVERLAY", "GameFontHighlightLarge")
+    -- inspectionAchievementPanel.Title:SetPoint("TOP", inspectionAchievementPanel, "TOP", 0, -20)
+    -- inspectionAchievementPanel.Title:SetText(ACHIEVEMENTS)
+    -- inspectionAchievementPanel.Title:SetTextColor(1, 1, 0)
     
     -- Total points display
     inspectionAchievementPanel.TotalPoints = inspectionAchievementPanel:CreateFontString(nil, "OVERLAY", "GameFontHighlightLarge")
@@ -476,7 +476,7 @@ function CharacterInspection.CreateInspectionAchievementRow(parent, achId, title
     if achievementData and achievementData.completed then
         row.completed = true
         if row.Title and row.Title.SetTextColor then row.Title:SetTextColor(0.6, 0.9, 0.6) end
-        if row.Sub then row.Sub:SetText("Completed!") end
+        if row.Sub then row.Sub:SetText(AUCTION_TIME_LEFT0) end
         if row.Points then row.Points:SetTextColor(0.6, 0.9, 0.6) end
         if row.TS then 
             local timestamp = achievementData.completedAt
