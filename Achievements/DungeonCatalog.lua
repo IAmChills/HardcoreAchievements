@@ -343,9 +343,9 @@ local Dungeons = {
       [9016] = 1,  -- Bael'Gar
       [9319] = 1,  -- Houndmaster Grebmar
       [9018] = 1,  -- High Interrogator Gerstahn
-      [10096] = 1, -- High Justice Grimstone
+      -- Ring of Law
       [9024] = 1,  -- Pyromancer Loregrain
-      [9033] = 1,  -- General Angerforge
+      [9033] = 1,  -- General Angerforge (Might be broken)
       [8983] = 1,  -- Golem Lord Argelmach
       [9017] = 1,  -- Lord Incendius
       [9056] = 1,  -- Fineous Darkvire
