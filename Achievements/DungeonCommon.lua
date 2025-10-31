@@ -301,7 +301,16 @@ function DungeonCommon.registerDungeonAchievement(def)
           GameTooltip:SetOwner(row, "ANCHOR_RIGHT")
           GameTooltip:ClearLines()
           GameTooltip:SetText(title or "", 1, 1, 1)
+          -- Level (left) and Points (right) on one line
+          local leftText = (level and tonumber(level)) and (LEVEL .. " " .. tostring(level)) or " "
+          local rightText = (points and tonumber(points) and tonumber(points) > 0) and ("Points: " .. tostring(points)) or " "
+          GameTooltip:AddDoubleLine(leftText, rightText, 1, 1, 1, 0.7, 0.9, 0.7)
+          -- Description in default yellow
           GameTooltip:AddLine(baseTooltip, nil, nil, nil, true)
+          -- Zone in gray under the description
+          if zone and tostring(zone) ~= "" then
+            GameTooltip:AddLine(tostring(zone), 0.5, 0.5, 0.5)
+          end
           
           if next(requiredKills) ~= nil then
             GameTooltip:AddLine("\nRequired Bosses:", 0, 1, 0) -- Green header

@@ -67,6 +67,7 @@ local function ReadRowData(src)
     completed = not not src.completed,
     outleveled = IsRowOutleveled(src),
     requiredKills = src.requiredKills,  -- Store requiredKills for dungeon achievements
+    zone = src.zone,
   }
 end
 
@@ -117,10 +118,13 @@ local function CreateEmbedIcon(parent)
 
   icon:SetScript("OnEnter", function(self)
     GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-    GameTooltip:SetText(self.title or "", 1, 0.82, 0)
+    GameTooltip:SetText(self.title or "", 1, 1, 1)
     
-    if self.maxLevel and self.maxLevel > 0 then
-      GameTooltip:AddLine(string.format(GUILD_RECRUITMENT_MAXLEVEL, self.maxLevel), 0.7, 0.7, 0.7)
+    -- Level (left) and Points (right) on one line
+    local leftText = (self.maxLevel and self.maxLevel > 0) and (LEVEL .. " " .. self.maxLevel) or " "
+    local rightText = (type(self.points) == "number" and self.points > 0) and (tostring(self.points) .. " pts") or " "
+    if leftText ~= " " or rightText ~= " " then
+      GameTooltip:AddDoubleLine(leftText, rightText, 1, 1, 1, 0.6, 0.9, 0.6)
     end
 
     -- Check if this is a dungeon achievement with requiredKills
@@ -130,7 +134,12 @@ local function CreateEmbedIcon(parent)
     if isDungeonAchievement then
       -- Build dynamic tooltip with boss completion status
       if self.tooltip and self.tooltip ~= "" then
-        GameTooltip:AddLine(self.tooltip, 0.9, 0.9, 0.9, true)
+        -- Default yellow (match in-game color)
+        GameTooltip:AddLine(self.tooltip, nil, nil, nil, true)
+      end
+      -- Zone in gray under the description
+      if self.zone and tostring(self.zone) ~= "" then
+        GameTooltip:AddLine(tostring(self.zone), 0.6, 1, 0.86)
       end
       
       GameTooltip:AddLine("\nRequired Bosses:", 0, 1, 0) -- Green header
@@ -154,13 +163,16 @@ local function CreateEmbedIcon(parent)
     else
       -- Standard tooltip
       if self.tooltip and self.tooltip ~= "" then
-        GameTooltip:AddLine(self.tooltip, 0.9, 0.9, 0.9, true)
+        -- Default yellow (match in-game color)
+        GameTooltip:AddLine(self.tooltip, nil, nil, nil, true)
+      end
+      -- Zone in gray under the description
+      if self.zone and tostring(self.zone) ~= "" then
+        GameTooltip:AddLine(tostring(self.zone), 0.6, 1, 0.86)
       end
     end
     
-    if type(self.points) == "number" and self.points > 0 then
-      GameTooltip:AddLine("\n" .. ("Points: %d"):format(self.points), 0.7, 0.9, 0.7)
-    end
+    -- Points shown via AddDoubleLine with level above
     
     if self.completed then
       GameTooltip:AddLine("Completed", 0.6, 0.9, 0.6)
@@ -170,6 +182,30 @@ local function CreateEmbedIcon(parent)
     GameTooltip:AddLine("\nShift + Left Click to link in chat", 0.5, 0.5, 0.5)
 
     GameTooltip:Show()
+  end)
+  
+  -- Shift + Left Click to link achievement bracket into chat (matches CreateAchievementRow behavior)
+  icon:SetScript("OnMouseUp", function(self, button)
+    if button == "LeftButton" and IsShiftKeyDown() and self.achId then
+      local achId = tostring(self.achId)
+      local iconTexture = self.Icon and self.Icon.GetTexture and self.Icon:GetTexture() or ""
+      local pts = tonumber(self.points) or 0
+      local bracket = string.format("[HCA:(%s,%s,%s)]", achId, tostring(iconTexture), tostring(pts))
+
+      local editBox = ChatEdit_GetActiveWindow()
+      if not editBox or not editBox:IsVisible() then
+        ChatEdit_ActivateChat(ChatFrame1)
+        editBox = ChatFrame1EditBox
+      end
+      local currentText = editBox and (editBox:GetText() or "") or ""
+      if currentText == "" then
+        editBox:SetText(bracket)
+      else
+        editBox:SetText(currentText .. " " .. bracket)
+      end
+      editBox:SetFocus()
+      return
+    end
   end)
   icon:SetScript("OnLeave", function() GameTooltip:Hide() end)
 
@@ -304,6 +340,7 @@ function EMBED:Rebuild()
         icon.maxLevel  = data.maxLevel
         icon.completed = data.completed
         icon.requiredKills = data.requiredKills  -- Store requiredKills for dungeon achievements
+        icon.zone      = data.zone
 
         if data.iconTex then
           icon.Icon:SetTexture(data.iconTex)

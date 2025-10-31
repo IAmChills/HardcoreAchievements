@@ -1393,7 +1393,7 @@ function CreateAchievementRow(parent, achId, title, tooltip, icon, level, points
             GameTooltip:SetText(title or "", 1, 1, 1)
             GameTooltip:AddLine(tooltip, nil, nil, nil, true)
             if self.zone then
-                GameTooltip:AddLine(self.zone, 0.6, 1, 0.86) -- Gray text for zone
+                GameTooltip:AddLine(self.zone, 0.6, 1, 0.86)
             end
 			-- Hint for linking the achievement in chat
 			GameTooltip:AddLine("\nShift + Left Click to link in chat", 0.5, 0.5, 0.5)
