@@ -446,6 +446,10 @@ function HCA_AchToast_Show(iconTex, title, pts)
     print(ACHIEVEMENT_BROADCAST_SELF:format(title))
     PlaySoundFile("Interface\\AddOns\\HardcoreAchievements\\Sounds\\AchievementSound1.ogg", "Effects")
 
+    C_Timer.After(1, function()
+        Screenshot()
+    end)
+
     holdSeconds = holdSeconds or 3
     fadeSeconds = fadeSeconds or 0.6
     C_Timer.After(holdSeconds, function()
@@ -623,8 +627,8 @@ local minimapDataObject = LDB:NewDataObject("HardcoreAchievements", {
                     end
                     if HCA_ShowAchievementTab then HCA_ShowAchievementTab() else OpenAchievementsPanel() end
                 end
-            elseif type(OpenSettingsToTab) == "function" then
-                -- Toggle UltraHardcore Tab 3 (Achievements)
+            elseif type(ToggleSettings) == "function" then
+                -- Toggle UltraHardcore settings window and switch to tab 3 when opening
                 local container = nil
                 if TabManager and TabManager.getTabContent then
                     container = TabManager.getTabContent(3)
@@ -632,22 +636,16 @@ local minimapDataObject = LDB:NewDataObject("HardcoreAchievements", {
                 if not container and _G.tabContents and _G.tabContents[3] then
                     container = _G.tabContents[3]
                 end
-                if container and container.IsShown and container:IsShown() then
-                    -- Hide the top-most parent frame to fully close the UHC window
-                    local root = container
-                    while root and root.GetParent and root:GetParent() and root:GetParent() ~= UIParent do
-                        root = root:GetParent()
-                    end
-                    if root and root.Hide then root:Hide() else container:Hide() end
-                else
-                    -- Ensure the root frame is shown before switching to Tab 3
-                    local root = container
-                    while root and root.GetParent and root:GetParent() and root:GetParent() ~= UIParent do
-                        root = root:GetParent()
-                    end
-                    if root and root.Show then root:Show() end
+                -- Check if window is currently shown to determine if we should close or open
+                local isShown = container and container.IsShown and container:IsShown()
+                ToggleSettings()
+                -- If window was closed, it should now be open - switch to tab 3
+                if not isShown and type(OpenSettingsToTab) == "function" then
                     OpenSettingsToTab(3)
                 end
+            elseif type(OpenSettingsToTab) == "function" then
+                -- Fallback if ToggleSettings doesn't exist but OpenSettingsToTab does
+                OpenSettingsToTab(3)
             else
                 -- Fallback: behave like custom tab toggling
                 if CharacterFrame and CharacterFrame.IsShown and CharacterFrame:IsShown() and AchievementPanel and AchievementPanel.IsShown and AchievementPanel:IsShown() then
