@@ -194,8 +194,7 @@ local function CreateEmbedIcon(parent)
 
       local editBox = ChatEdit_GetActiveWindow()
       if not editBox or not editBox:IsVisible() then
-        ChatEdit_ActivateChat(ChatFrame1)
-        editBox = ChatFrame1EditBox
+        return
       end
       local currentText = editBox and (editBox:GetText() or "") or ""
       if currentText == "" then

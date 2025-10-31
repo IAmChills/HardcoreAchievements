@@ -1454,9 +1454,9 @@ function CreateAchievementRow(parent, achId, title, tooltip, icon, level, points
             local bracket = string.format("[HCA:(%s,%s,%s)]", tostring(row.achId), tostring(iconTexture), tostring(pts))
 
             local editBox = ChatEdit_GetActiveWindow()
+            -- If no chat edit box is currently active/visible, do nothing
             if not editBox or not editBox:IsVisible() then
-                ChatEdit_ActivateChat(ChatFrame1)
-                editBox = ChatFrame1EditBox
+                return
             end
             local currentText = editBox and (editBox:GetText() or "") or ""
             if currentText == "" then
