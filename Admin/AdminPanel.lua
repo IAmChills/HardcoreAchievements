@@ -170,6 +170,8 @@ local function CreateAdminPanel()
 	-- Force update checkbox
 	local forceCheck = CreateFrame("CheckButton", nil, adminFrame, "ChatConfigCheckButtonTemplate")
 	forceCheck:SetPoint("TOP", adminFrame, "TOP", 0, -165)
+	-- Prevent the template from expanding the clickable area far to the right
+	forceCheck:SetHitRectInsets(0, 0, 0, 0)
 	forceCheck.tooltip = "Override existing completion and update points"
 	local forceLabel = adminFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
 	forceLabel:SetPoint("TOP", adminFrame, "TOP", 0, -200)
