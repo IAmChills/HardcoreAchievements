@@ -612,15 +612,52 @@ local minimapDataObject = LDB:NewDataObject("HardcoreAchievements", {
     icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\HardcoreAchievementsButton.tga",
     OnClick = function(self, button)
         if button == "LeftButton" then
-            -- Toggle: if our AchievementPanel is visible, close it; otherwise open
-            if AchievementPanel and AchievementPanel.IsShown and AchievementPanel:IsShown() then
-                if CharacterFrame and CharacterFrame.IsShown and CharacterFrame:IsShown() then
+            local db = EnsureDB()
+            if db.showCustomTab then
+                -- Toggle custom Character Frame Achievements tab
+                if CharacterFrame and CharacterFrame.IsShown and CharacterFrame:IsShown() and AchievementPanel and AchievementPanel.IsShown and AchievementPanel:IsShown() then
                     CharacterFrame:Hide()
                 else
-                    AchievementPanel:Hide()
+                    if not CharacterFrame or not (CharacterFrame.IsShown and CharacterFrame:IsShown()) then
+                        if CharacterFrame and CharacterFrame.Show then CharacterFrame:Show() end
+                    end
+                    if HCA_ShowAchievementTab then HCA_ShowAchievementTab() else OpenAchievementsPanel() end
+                end
+            elseif type(OpenSettingsToTab) == "function" then
+                -- Toggle UltraHardcore Tab 3 (Achievements)
+                local container = nil
+                if TabManager and TabManager.getTabContent then
+                    container = TabManager.getTabContent(3)
+                end
+                if not container and _G.tabContents and _G.tabContents[3] then
+                    container = _G.tabContents[3]
+                end
+                if container and container.IsShown and container:IsShown() then
+                    -- Hide the top-most parent frame to fully close the UHC window
+                    local root = container
+                    while root and root.GetParent and root:GetParent() and root:GetParent() ~= UIParent do
+                        root = root:GetParent()
+                    end
+                    if root and root.Hide then root:Hide() else container:Hide() end
+                else
+                    -- Ensure the root frame is shown before switching to Tab 3
+                    local root = container
+                    while root and root.GetParent and root:GetParent() and root:GetParent() ~= UIParent do
+                        root = root:GetParent()
+                    end
+                    if root and root.Show then root:Show() end
+                    OpenSettingsToTab(3)
                 end
             else
-                OpenAchievementsPanel()
+                -- Fallback: behave like custom tab toggling
+                if CharacterFrame and CharacterFrame.IsShown and CharacterFrame:IsShown() and AchievementPanel and AchievementPanel.IsShown and AchievementPanel:IsShown() then
+                    CharacterFrame:Hide()
+                else
+                    if not CharacterFrame or not (CharacterFrame.IsShown and CharacterFrame:IsShown()) then
+                        if CharacterFrame and CharacterFrame.Show then CharacterFrame:Show() end
+                    end
+                    if HCA_ShowAchievementTab then HCA_ShowAchievementTab() else OpenAchievementsPanel() end
+                end
             end
         end
     end,
