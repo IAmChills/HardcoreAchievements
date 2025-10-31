@@ -12,5 +12,3 @@ New Achievements
 - Professions
 
 Add level input to admin panel
-
-add preset to leaderboard tooltips
