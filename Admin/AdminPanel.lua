@@ -169,10 +169,10 @@ local function CreateAdminPanel()
 
 	-- Force update checkbox
 	local forceCheck = CreateFrame("CheckButton", nil, adminFrame, "ChatConfigCheckButtonTemplate")
-	forceCheck:SetPoint("TOP", adminFrame, "TOP", -55, -168)
+	forceCheck:SetPoint("TOP", adminFrame, "TOP", 0, -165)
 	forceCheck.tooltip = "Override existing completion and update points"
 	local forceLabel = adminFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-	forceLabel:SetPoint("TOP", adminFrame, "TOP", 70, -172)
+	forceLabel:SetPoint("TOP", adminFrame, "TOP", 0, -200)
 	forceLabel:SetText("Force Update (override if completed)")
 
 	-- Override points input
@@ -189,11 +189,11 @@ local function CreateAdminPanel()
 
 	-- Override level input
 	local levelLabel = adminFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-	levelLabel:SetPoint("TOP", adminFrame, "TOP", -110, -180)
+	levelLabel:SetPoint("TOP", adminFrame, "TOP", 100, -150)
 	levelLabel:SetText("Override Level (optional)")
 
 	local levelInput = CreateFrame("EditBox", nil, adminFrame, "InputBoxTemplate")
-	levelInput:SetPoint("TOP", adminFrame, "TOP", -110, -195)
+	levelInput:SetPoint("TOP", adminFrame, "TOP", 100, -165)
 	levelInput:SetSize(80, 28)
 	levelInput:SetAutoFocus(false)
 	levelInput:SetNumeric(true)
@@ -201,13 +201,13 @@ local function CreateAdminPanel()
     
     -- Send button
     local sendButton = CreateFrame("Button", nil, adminFrame, "UIPanelButtonTemplate")
-    sendButton:SetPoint("BOTTOM", adminFrame, "BOTTOM", 0, 60)
+    sendButton:SetPoint("BOTTOM", adminFrame, "BOTTOM", 0, 40)
     sendButton:SetSize(120, 32)
     sendButton:SetText("Send Command")
     
     -- Status text
     local statusText = adminFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    statusText:SetPoint("BOTTOM", adminFrame, "BOTTOM", 0, -20)
+    statusText:SetPoint("BOTTOM", adminFrame, "BOTTOM", 0, -30)
     statusText:SetSize(360, 60)
     statusText:SetJustifyH("LEFT")
     statusText:SetJustifyV("TOP")

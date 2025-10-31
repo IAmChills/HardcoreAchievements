@@ -629,6 +629,8 @@ local Achievements = {
     class = "MAGE",
     zone = "Stormwind City"
 }
+
+-- Hideen
 }
 
 local function IsEligible(def)
