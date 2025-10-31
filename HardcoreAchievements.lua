@@ -1402,6 +1402,31 @@ function CreateAchievementRow(parent, achId, title, tooltip, icon, level, points
         GameTooltip:Hide()
     end)
 
+    row:SetScript("OnMouseUp", function(self, button)
+        if button == "LeftButton" and IsShiftKeyDown() and row.achId then
+            local titleText = row.Title and row.Title:GetText() or tostring(row.achId)
+            -- Sanitize title for bracket placeholder to avoid nested [] issues
+            local iconTexture = row.Icon and row.Icon:GetTexture() or ""
+            local pts = tonumber(row.points) or 0
+            -- Send bracketed placeholder using commas (no pipes) to avoid chat escape codes
+            -- Compact bracket tag without title to avoid special characters breaking chat parsing
+            local bracket = string.format("[HCA:(%s,%s,%s)]", tostring(row.achId), tostring(iconTexture), tostring(pts))
+
+            local editBox = ChatEdit_GetActiveWindow()
+            if not editBox or not editBox:IsVisible() then
+                ChatEdit_ActivateChat(ChatFrame1)
+                editBox = ChatFrame1EditBox
+            end
+            local currentText = editBox and (editBox:GetText() or "") or ""
+            if currentText == "" then
+                editBox:SetText(bracket)
+            else
+                editBox:SetText(currentText .. " " .. bracket)
+            end
+            editBox:SetFocus()
+            return
+        end
+    end)
 
     row.originalPoints = points or 0  -- Store original points before any multipliers
     row.staticPoints = staticPoints or false  -- Store static points flag

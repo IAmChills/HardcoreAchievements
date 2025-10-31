@@ -15,6 +15,20 @@ function DungeonCommon.registerDungeonAchievement(def)
   local requiredKills = def.requiredKills or {}
   local faction = def.faction
 
+  -- Expose this definition for external lookups (e.g., chat link tooltips)
+  _G.HCA_AchievementDefs = _G.HCA_AchievementDefs or {}
+  _G.HCA_AchievementDefs[tostring(achId)] = {
+    achId = achId,
+    title = title,
+    tooltip = tooltip,
+    icon = icon,
+    points = points,
+    zone = def.zone,
+    mapID = def.requiredMapId,
+    mapName = def.title,
+    requiredKills = requiredKills,
+  }
+
   -- State for the current achievement session only
   local state = {
     counts = {},           -- npcId => kills this achievement
