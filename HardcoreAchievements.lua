@@ -587,28 +587,6 @@ end
 local LDB = LibStub("LibDataBroker-1.1")
 local LDBIcon = LibStub("LibDBIcon-1.0")
 
--- Function to open achievements panel (detects UltraHardcore vs standalone)
-local function OpenAchievementsPanel()
-    -- Check if user prefers the custom Character Frame tab
-    local db = EnsureDB()
-    if db.showCustomTab then
-        -- User prefers Character Frame tab - use that instead
-        if not CharacterFrame:IsShown() then
-            CharacterFrame:Show()
-        end
-        HCA_ShowAchievementTab()
-    elseif type(OpenSettingsToTab) == "function" then
-        -- UltraHardcore's public API: initializes the frame & tabs, then switches
-        OpenSettingsToTab(3)  -- Achievements tab
-    else
-        -- UltraHardcore not loaded - use Character Frame method
-        if not CharacterFrame:IsShown() then
-            CharacterFrame:Show()
-        end
-        HCA_ShowAchievementTab()
-    end
-end
-
 -- Create the data object for the minimap button
 local minimapDataObject = LDB:NewDataObject("HardcoreAchievements", {
     type = "data source",
@@ -617,16 +595,26 @@ local minimapDataObject = LDB:NewDataObject("HardcoreAchievements", {
     OnClick = function(self, button)
         if button == "LeftButton" then
             local db = EnsureDB()
-            if db.showCustomTab then
-                -- Toggle custom Character Frame Achievements tab
-                if CharacterFrame and CharacterFrame.IsShown and CharacterFrame:IsShown() and AchievementPanel and AchievementPanel.IsShown and AchievementPanel:IsShown() then
+            
+            -- Helper function to toggle Character Frame with achievements tab
+            local function toggleCharacterFrameTab()
+                local isShown = CharacterFrame and CharacterFrame:IsShown() and 
+                               AchievementPanel and AchievementPanel:IsShown()
+                if isShown then
                     CharacterFrame:Hide()
                 else
-                    if not CharacterFrame or not (CharacterFrame.IsShown and CharacterFrame:IsShown()) then
-                        if CharacterFrame and CharacterFrame.Show then CharacterFrame:Show() end
+                    if CharacterFrame and not CharacterFrame:IsShown() then
+                        CharacterFrame:Show()
                     end
-                    if HCA_ShowAchievementTab then HCA_ShowAchievementTab() else OpenAchievementsPanel() end
+                    if HCA_ShowAchievementTab then
+                        HCA_ShowAchievementTab()
+                    end
                 end
+            end
+            
+            -- Check if using custom Character Frame tab
+            if db.showCustomTab then
+                toggleCharacterFrameTab()
             elseif type(ToggleSettings) == "function" then
                 -- Toggle UltraHardcore settings window and switch to tab 3 when opening
                 local container = nil
@@ -647,15 +635,8 @@ local minimapDataObject = LDB:NewDataObject("HardcoreAchievements", {
                 -- Fallback if ToggleSettings doesn't exist but OpenSettingsToTab does
                 OpenSettingsToTab(3)
             else
-                -- Fallback: behave like custom tab toggling
-                if CharacterFrame and CharacterFrame.IsShown and CharacterFrame:IsShown() and AchievementPanel and AchievementPanel.IsShown and AchievementPanel:IsShown() then
-                    CharacterFrame:Hide()
-                else
-                    if not CharacterFrame or not (CharacterFrame.IsShown and CharacterFrame:IsShown()) then
-                        if CharacterFrame and CharacterFrame.Show then CharacterFrame:Show() end
-                    end
-                    if HCA_ShowAchievementTab then HCA_ShowAchievementTab() else OpenAchievementsPanel() end
-                end
+                -- Fallback: use Character Frame method
+                toggleCharacterFrameTab()
             end
         end
     end,
