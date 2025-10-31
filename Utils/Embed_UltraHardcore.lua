@@ -166,6 +166,9 @@ local function CreateEmbedIcon(parent)
       GameTooltip:AddLine("Completed", 0.6, 0.9, 0.6)
     end
     
+    -- Hint for linking the achievement in chat
+    GameTooltip:AddLine("\nShift + Left Click to link in chat", 0.5, 0.5, 0.5)
+
     GameTooltip:Show()
   end)
   icon:SetScript("OnLeave", function() GameTooltip:Hide() end)

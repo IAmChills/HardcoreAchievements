@@ -319,6 +319,8 @@ function DungeonCommon.registerDungeonAchievement(def)
               end
             end
           end
+          -- Hint for linking the achievement in chat
+          GameTooltip:AddLine("\nShift + Left Click to link in chat", 0.5, 0.5, 0.5)
           
           GameTooltip:Show()
         end

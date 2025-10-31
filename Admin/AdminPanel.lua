@@ -23,15 +23,21 @@ local function CreatePayloadHash(payload)
     return hash % 1000000 -- Simple hash for validation
 end
 
-local function CreateSecurePayload(achievementId, targetCharacter)
+local function CreateSecurePayload(achievementId, targetCharacter, opts)
     local payload = {
         version = 1,
         timestamp = time(),
         achievementId = achievementId,
         targetCharacter = targetCharacter,
         adminSignature = ADMIN_SIGNATURE,
-        validationHash = 0 -- Will be set after creation
+		validationHash = 0 -- Will be set after creation
     }
+	
+	-- Optional update/override fields (not part of validation hash)
+	if opts then
+		if opts.forceUpdate ~= nil then payload.forceUpdate = opts.forceUpdate and true or false end
+		if opts.overridePoints ~= nil then payload.overridePoints = tonumber(opts.overridePoints) end
+	end
     
     payload.validationHash = CreatePayloadHash(payload)
     return payload
@@ -42,13 +48,13 @@ local function AddResponseMessage(character, message)
     print(message)
 end
 
-local function SendAdminCommand(achievementId, targetCharacter)
+local function SendAdminCommand(achievementId, targetCharacter, forceUpdate, overridePoints)
     if not achievementId or not targetCharacter then
         print("|cffff0000[HardcoreAchievements Admin]|r Invalid achievement ID or character name")
         return
     end
     
-    local payload = CreateSecurePayload(achievementId, targetCharacter)
+	local payload = CreateSecurePayload(achievementId, targetCharacter, { forceUpdate = forceUpdate, overridePoints = overridePoints })
     local serializedPayload = AceSerialize:Serialize(payload)
     
     if not serializedPayload then
@@ -59,7 +65,10 @@ local function SendAdminCommand(achievementId, targetCharacter)
     -- Send the command via AceComm
     AceComm:SendCommMessage(COMM_PREFIX, serializedPayload, "WHISPER", targetCharacter)
     
-    print("|cff00ff00[HardcoreAchievements Admin]|r Sent achievement completion command for '" .. achievementId .. "' to " .. targetCharacter)
+	local suffix = ""
+	if forceUpdate then suffix = suffix .. " [Force Update]" end
+	if overridePoints and tonumber(overridePoints) then suffix = suffix .. " [Override Points: " .. tostring(overridePoints) .. "]" end
+	print("|cff00ff00[HardcoreAchievements Admin]|r Sent achievement command for '" .. achievementId .. "' to " .. targetCharacter .. suffix)
     
     -- Log the admin action
     if not HardcoreAchievementsDB then HardcoreAchievementsDB = {} end
@@ -69,18 +78,33 @@ local function SendAdminCommand(achievementId, targetCharacter)
         timestamp = time(),
         achievementId = achievementId,
         targetCharacter = targetCharacter,
-        adminCharacter = UnitName("player")
+		adminCharacter = UnitName("player"),
+		forceUpdate = forceUpdate and true or false,
+		overridePoints = overridePoints and tonumber(overridePoints) or nil
     })
 end
 
 local function CreateAdminPanel()
     if adminFrame then return adminFrame end
     
-    -- Create main frame
-    adminFrame = CreateFrame("Frame", "HardcoreAchievementsAdminPanel", UIParent, "BasicFrameTemplateWithInset")
+	-- Create main frame (use a unique name that doesn't collide with exported table)
+	adminFrame = CreateFrame("Frame", "HardcoreAchievementsAdminPanelFrame", UIParent, "BasicFrameTemplateWithInset")
     adminFrame:SetSize(400, 300)
     adminFrame:SetPoint("CENTER")
     adminFrame:Hide()
+
+	-- Allow closing with ESC key via UISpecialFrames
+	local frameName = adminFrame:GetName()
+	local exists = false
+	for i = 1, #UISpecialFrames do
+		if UISpecialFrames[i] == frameName then
+			exists = true
+			break
+		end
+	end
+	if not exists then
+		table.insert(UISpecialFrames, frameName)
+	end
     
     -- Create title manually since BasicFrameTemplateWithInset doesn't have SetTitle
     local titleText = adminFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
@@ -94,14 +118,40 @@ local function CreateAdminPanel()
     adminFrame:SetScript("OnDragStart", adminFrame.StartMoving)
     adminFrame:SetScript("OnDragStop", adminFrame.StopMovingOrSizing)
     
-    -- Achievement dropdown
-    local achievementLabel = adminFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    achievementLabel:SetPoint("TOP", adminFrame, "TOP", 0, -40)
-    achievementLabel:SetText("Achievement")
-    
-    local achievementDropdown = CreateFrame("Frame", nil, adminFrame, "UIDropDownMenuTemplate")
-    achievementDropdown:SetPoint("TOP", adminFrame, "TOP", 0, -55)
-    UIDropDownMenu_SetWidth(achievementDropdown, 200)
+	-- Achievement selector (scrollable list)
+	local achievementLabel = adminFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+	achievementLabel:SetPoint("TOP", adminFrame, "TOP", 0, -40)
+	achievementLabel:SetText("Achievement")
+
+	local achievementSelectButton = CreateFrame("Button", nil, adminFrame, "UIPanelButtonTemplate")
+	achievementSelectButton:SetPoint("TOP", adminFrame, "TOP", 0, -55)
+	achievementSelectButton:SetSize(220, 22)
+	achievementSelectButton:SetText("Select Achievement...")
+
+	-- Dropdown-like scrollable frame
+	local achievementListFrame = CreateFrame("Frame", nil, adminFrame)
+	achievementListFrame:SetSize(260, 180)
+	achievementListFrame:SetPoint("TOP", achievementSelectButton, "BOTTOM", 0, -2)
+	achievementListFrame:Hide()
+	achievementListFrame:SetFrameStrata("DIALOG")
+
+	-- Simple background
+	local bg = achievementListFrame:CreateTexture(nil, "BACKGROUND")
+	bg:SetAllPoints()
+	bg:SetColorTexture(0, 0, 0, 0.8)
+
+	local border = achievementListFrame:CreateTexture(nil, "BORDER")
+	border:SetAllPoints()
+	border:SetColorTexture(1, 1, 1, 0.08)
+
+	local scroll = CreateFrame("ScrollFrame", nil, achievementListFrame, "UIPanelScrollFrameTemplate")
+	scroll:SetPoint("TOPLEFT", achievementListFrame, "TOPLEFT", 6, -6)
+	scroll:SetPoint("BOTTOMRIGHT", achievementListFrame, "BOTTOMRIGHT", -28, 6)
+	scroll:EnableMouseWheel(true)
+
+	local content = CreateFrame("Frame", nil, scroll)
+	content:SetSize(1, 1)
+	scroll:SetScrollChild(content)
     
     -- Character name input
     local characterLabel = adminFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
@@ -113,6 +163,26 @@ local function CreateAdminPanel()
     characterInput:SetSize(125, 32)
     characterInput:SetAutoFocus(false)
     characterInput:SetText("")
+
+	-- Force update checkbox
+	local forceCheck = CreateFrame("CheckButton", nil, adminFrame, "ChatConfigCheckButtonTemplate")
+	forceCheck:SetPoint("TOP", adminFrame, "TOP", -55, -168)
+	forceCheck.tooltip = "Override existing completion and update points"
+	local forceLabel = adminFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+	forceLabel:SetPoint("TOP", adminFrame, "TOP", 70, -172)
+	forceLabel:SetText("Force Update (override if completed)")
+
+	-- Override points input
+	local pointsLabel = adminFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+	pointsLabel:SetPoint("TOP", adminFrame, "TOP", -110, -150)
+	pointsLabel:SetText("Override Points (optional)")
+
+	local pointsInput = CreateFrame("EditBox", nil, adminFrame, "InputBoxTemplate")
+	pointsInput:SetPoint("TOP", adminFrame, "TOP", -110, -165)
+	pointsInput:SetSize(80, 28)
+	pointsInput:SetAutoFocus(false)
+	pointsInput:SetNumeric(false)
+	pointsInput:SetText("")
     
     -- Send button
     local sendButton = CreateFrame("Button", nil, adminFrame, "UIPanelButtonTemplate")
@@ -129,14 +199,14 @@ local function CreateAdminPanel()
     statusText:SetText("Select an achievement and enter the target character name, then click Send Command to manually complete the achievement for that player.")
     
     -- Populate achievement dropdown
-    local function PopulateAchievementDropdown()
+	local function PopulateAchievementDropdown()
         local achievementList = {}
         
         -- Get achievements from the catalog
         if _G.Achievements then
             for _, achievement in ipairs(_G.Achievements) do
                 table.insert(achievementList, {
-                    text = achievement.title .. " (Level " .. achievement.level .. ")",
+					text = achievement.title .. " (Level " .. achievement.level .. ")",
                     value = achievement.achId,
                     achievement = achievement
                 })
@@ -149,25 +219,59 @@ local function CreateAdminPanel()
         end)
         
         local selectedAchievement = nil
+
+		-- Build scrollable buttons
+		local ROW_H = 20
+		local GAP = 2
+		local totalHeight = 0
+		local buttons = {}
+		
+		local function CreateOrUpdateButtons()
+			for i, item in ipairs(achievementList) do
+				local btn = buttons[i]
+				if not btn then
+					btn = CreateFrame("Button", nil, content)
+					btn:SetSize(210, ROW_H)
+					btn.text = btn:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+					btn.text:SetPoint("LEFT", btn, "LEFT", 6, 0)
+					btn.hl = btn:CreateTexture(nil, "BACKGROUND")
+					btn.hl:SetAllPoints()
+					btn.hl:SetColorTexture(1, 1, 1, 0.08)
+					btn.hl:Hide()
+					btn:SetScript("OnEnter", function(s) s.hl:Show() end)
+					btn:SetScript("OnLeave", function(s) s.hl:Hide() end)
+					buttons[i] = btn
+				end
+				btn:ClearAllPoints()
+				if i == 1 then
+					btn:SetPoint("TOPLEFT", content, "TOPLEFT", 0, 0)
+				else
+					btn:SetPoint("TOPLEFT", buttons[i-1], "BOTTOMLEFT", 0, -GAP)
+				end
+				btn.text:SetText(item.text)
+				btn:SetScript("OnMouseUp", function()
+					selectedAchievement = item.achievement
+					achievementSelectButton:SetText(item.text)
+					achievementListFrame:Hide()
+				end)
+				btn:Show()
+			end
+			totalHeight = (#achievementList > 0) and ((ROW_H * #achievementList) + (GAP * math.max(0, #achievementList - 1))) or 1
+			content:SetSize(210, totalHeight)
+			scroll:UpdateScrollChildRect()
+		end
+
+		CreateOrUpdateButtons()
+
+		achievementSelectButton:SetScript("OnClick", function()
+			if achievementListFrame:IsShown() then
+				achievementListFrame:Hide()
+			else
+				achievementListFrame:Show()
+			end
+		end)
         
-        UIDropDownMenu_SetText(achievementDropdown, "Select Achievement...")
-        UIDropDownMenu_Initialize(achievementDropdown, function(self, level)
-            if level == 1 then
-                for _, item in ipairs(achievementList) do
-                    local info = UIDropDownMenu_CreateInfo()
-                    info.text = item.text
-                    info.value = item.value
-                    info.func = function()
-                        UIDropDownMenu_SetSelectedValue(achievementDropdown, item.value)
-                        UIDropDownMenu_SetText(achievementDropdown, item.text)
-                        selectedAchievement = item.achievement
-                    end
-                    UIDropDownMenu_AddButton(info)
-                end
-            end
-        end)
-        
-        -- Send button click handler
+		-- Send button click handler
         sendButton:SetScript("OnClick", function()
             local characterName = characterInput:GetText():trim()
             if not selectedAchievement then
@@ -178,8 +282,11 @@ local function CreateAdminPanel()
                 print("|cffff0000[HardcoreAchievements Admin]|r Please enter a character name")
                 return
             end
-            
-            SendAdminCommand(selectedAchievement.achId, characterName)
+			
+			local forceUpdate = forceCheck:GetChecked() and true or false
+			local overridePoints = tonumber(pointsInput:GetText())
+			
+			SendAdminCommand(selectedAchievement.achId, characterName, forceUpdate, overridePoints)
         end)
     end
     
