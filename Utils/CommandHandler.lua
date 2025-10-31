@@ -122,6 +122,9 @@ local function ProcessAdminCommand(payload, sender)
 				-- Use overridePoints if provided, otherwise keep existing or row.points
 				local newPoints = tonumber(payload.overridePoints) or rec.points or achievementRow.points or 0
 				rec.points = newPoints
+				-- Use overrideLevel if provided, otherwise keep existing or UnitLevel("player")
+				local newLevel = tonumber(payload.overrideLevel) or rec.level or (UnitLevel("player") or nil)
+				rec.level = newLevel
 				cdb.achievements[id] = rec
 				-- Reflect in UI
 				achievementRow.points = newPoints
@@ -159,6 +162,23 @@ local function ProcessAdminCommand(payload, sender)
 
 	-- Complete the achievement
 	HCA_MarkRowCompleted(achievementRow)
+	
+	-- Optionally override level after completion (if provided)
+	if payload.overrideLevel then
+		local lvl = tonumber(payload.overrideLevel)
+		if lvl then
+			local _, cdb = HardcoreAchievements_GetCharDB()
+			if cdb then
+				cdb.achievements = cdb.achievements or {}
+				local id = achievementRow.id
+				local rec = cdb.achievements[id]
+				if rec then
+					rec.level = lvl
+					cdb.achievements[id] = rec
+				end
+			end
+		end
+	end
 	
 	-- Show achievement toast
 	HCA_AchToast_Show(achievementRow.Icon:GetTexture(), achievementRow.Title:GetText(), achievementRow.points)

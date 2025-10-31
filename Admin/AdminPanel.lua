@@ -37,6 +37,7 @@ local function CreateSecurePayload(achievementId, targetCharacter, opts)
 	if opts then
 		if opts.forceUpdate ~= nil then payload.forceUpdate = opts.forceUpdate and true or false end
 		if opts.overridePoints ~= nil then payload.overridePoints = tonumber(opts.overridePoints) end
+		if opts.overrideLevel ~= nil then payload.overrideLevel = tonumber(opts.overrideLevel) end
 	end
     
     payload.validationHash = CreatePayloadHash(payload)
@@ -48,13 +49,13 @@ local function AddResponseMessage(character, message)
     print(message)
 end
 
-local function SendAdminCommand(achievementId, targetCharacter, forceUpdate, overridePoints)
+local function SendAdminCommand(achievementId, targetCharacter, forceUpdate, overridePoints, overrideLevel)
     if not achievementId or not targetCharacter then
         print("|cffff0000[HardcoreAchievements Admin]|r Invalid achievement ID or character name")
         return
     end
     
-	local payload = CreateSecurePayload(achievementId, targetCharacter, { forceUpdate = forceUpdate, overridePoints = overridePoints })
+	local payload = CreateSecurePayload(achievementId, targetCharacter, { forceUpdate = forceUpdate, overridePoints = overridePoints, overrideLevel = overrideLevel })
     local serializedPayload = AceSerialize:Serialize(payload)
     
     if not serializedPayload then
@@ -68,6 +69,7 @@ local function SendAdminCommand(achievementId, targetCharacter, forceUpdate, ove
 	local suffix = ""
 	if forceUpdate then suffix = suffix .. " [Force Update]" end
 	if overridePoints and tonumber(overridePoints) then suffix = suffix .. " [Override Points: " .. tostring(overridePoints) .. "]" end
+	if overrideLevel and tonumber(overrideLevel) then suffix = suffix .. " [Override Level: " .. tostring(overrideLevel) .. "]" end
 	print("|cff00ff00[HardcoreAchievements Admin]|r Sent achievement command for '" .. achievementId .. "' to " .. targetCharacter .. suffix)
     
     -- Log the admin action
@@ -80,7 +82,8 @@ local function SendAdminCommand(achievementId, targetCharacter, forceUpdate, ove
         targetCharacter = targetCharacter,
 		adminCharacter = UnitName("player"),
 		forceUpdate = forceUpdate and true or false,
-		overridePoints = overridePoints and tonumber(overridePoints) or nil
+		overridePoints = overridePoints and tonumber(overridePoints) or nil,
+		overrideLevel = overrideLevel and tonumber(overrideLevel) or nil
     })
 end
 
@@ -183,6 +186,18 @@ local function CreateAdminPanel()
 	pointsInput:SetAutoFocus(false)
 	pointsInput:SetNumeric(false)
 	pointsInput:SetText("")
+
+	-- Override level input
+	local levelLabel = adminFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+	levelLabel:SetPoint("TOP", adminFrame, "TOP", -110, -180)
+	levelLabel:SetText("Override Level (optional)")
+
+	local levelInput = CreateFrame("EditBox", nil, adminFrame, "InputBoxTemplate")
+	levelInput:SetPoint("TOP", adminFrame, "TOP", -110, -195)
+	levelInput:SetSize(80, 28)
+	levelInput:SetAutoFocus(false)
+	levelInput:SetNumeric(true)
+	levelInput:SetText("")
     
     -- Send button
     local sendButton = CreateFrame("Button", nil, adminFrame, "UIPanelButtonTemplate")
@@ -285,8 +300,9 @@ local function CreateAdminPanel()
 			
 			local forceUpdate = forceCheck:GetChecked() and true or false
 			local overridePoints = tonumber(pointsInput:GetText())
+			local overrideLevel = tonumber(levelInput:GetText())
 			
-			SendAdminCommand(selectedAchievement.achId, characterName, forceUpdate, overridePoints)
+			SendAdminCommand(selectedAchievement.achId, characterName, forceUpdate, overridePoints, overrideLevel)
         end)
     end
     
