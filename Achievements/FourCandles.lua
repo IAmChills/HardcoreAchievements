@@ -154,6 +154,18 @@ end)
 -- Four Candles self-registration (kept minimal)
 _G.FourCandle_IsCompleted = function() return false end
 
+-- Expose this definition so chat link tooltips can resolve details
+_G.HCA_AchievementDefs = _G.HCA_AchievementDefs or {}
+_G.HCA_AchievementDefs[tostring(achId)] = {
+  achId = achId,
+  title = title,
+  tooltip = tooltip,
+  icon = icon,
+  points = points,
+  zone = zone,
+  mapID = REQUIRED_MAP_ID,
+}
+
 local function HCA_RegisterFourCandles()
   if not _G.CreateAchievementRow or not _G.AchievementPanel then return end
   if _G.FourCandle_Row then return end

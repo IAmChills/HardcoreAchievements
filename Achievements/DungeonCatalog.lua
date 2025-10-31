@@ -23,7 +23,7 @@ local Dungeons = {
 
   -- The Deadmines (Alliance, Level 10-20)
   {
-    achId = "DM",
+    achId = "VC",
     title = DUNGEON_FLOOR_THEDEADMINES1,
     tooltip = "Complete the bosses of |cff0091e6"..DUNGEON_FLOOR_THEDEADMINES1.."|r before level 20 (including party members)",
     icon = 236404,

@@ -95,19 +95,75 @@ local function ProcessAdminCommand(payload, sender)
         return false
     end
     
-    -- Check if achievement is already completed
-    if achievementRow.completed then
-        SendResponseToAdmin(sender, "|cffff0000[HardcoreAchievements]|r Admin command rejected: Achievement already completed")
-        return false
-    end
-    
-    -- Complete the achievement
-    HCA_MarkRowCompleted(achievementRow)
-    
-    -- Show achievement toast
-    HCA_AchToast_Show(achievementRow.Icon:GetTexture(), achievementRow.Title:GetText(), achievementRow.points)
-    
-    SendResponseToAdmin(sender, "|cff00ff00[HardcoreAchievements]|r Achievement '" .. payload.achievementId .. "' completed via admin command")
+	-- Helper to format timestamp with long localized month names
+	local function LongFormatTimestamp(timestamp)
+		if not timestamp then return "" end
+		local d = date("*t", timestamp)
+		local monthNames = {FULLDATE_MONTH_JANUARY, FULLDATE_MONTH_FEBRUARY, FULLDATE_MONTH_MARCH,
+							FULLDATE_MONTH_APRIL, FULLDATE_MONTH_MAY, FULLDATE_MONTH_JUNE,
+							FULLDATE_MONTH_JULY, FULLDATE_MONTH_AUGUST, FULLDATE_MONTH_SEPTEMBER,
+							FULLDATE_MONTH_OCTOBER, FULLDATE_MONTH_NOVEMBER, FULLDATE_MONTH_DECEMBER}
+		return string.format("%s %d, %d %02d:%02d", monthNames[d.month], d.day, d.year, d.hour, d.min)
+	end
+
+	-- If already completed, allow forced update when flagged
+	if achievementRow.completed then
+		if payload.forceUpdate then
+			local _, cdb = HardcoreAchievements_GetCharDB()
+			if cdb then
+				cdb.achievements = cdb.achievements or {}
+				local id = achievementRow.id
+				local rec = cdb.achievements[id] or {}
+				rec.completed = true
+				-- Preserve existing completion timestamp if present; otherwise set now
+				if not rec.completedAt then
+					rec.completedAt = time()
+				end
+				-- Use overridePoints if provided, otherwise keep existing or row.points
+				local newPoints = tonumber(payload.overridePoints) or rec.points or achievementRow.points or 0
+				rec.points = newPoints
+				cdb.achievements[id] = rec
+				-- Reflect in UI
+				achievementRow.points = newPoints
+				if achievementRow.Points then
+					achievementRow.Points:SetText(tostring(newPoints) .. " pts")
+					achievementRow.Points:SetTextColor(0.6, 0.9, 0.6)
+				end
+				if achievementRow.TS then
+					achievementRow.TS:SetText(LongFormatTimestamp(rec.completedAt))
+				end
+				if type(HCA_UpdateTotalPoints) == "function" then
+					HCA_UpdateTotalPoints()
+				end
+				-- Toast to indicate update
+				HCA_AchToast_Show(achievementRow.Icon:GetTexture(), achievementRow.Title:GetText(), newPoints)
+				SendResponseToAdmin(sender, "|cff00ff00[HardcoreAchievements]|r Achievement '" .. payload.achievementId .. "' updated via admin command")
+				return true
+			end
+		else
+			SendResponseToAdmin(sender, "|cffff0000[HardcoreAchievements]|r Admin command rejected: Achievement already completed")
+			return false
+		end
+	end
+
+	-- Not completed yet: optionally override points before completion
+	if payload.overridePoints then
+		local p = tonumber(payload.overridePoints)
+		if p then
+			achievementRow.points = p
+			if achievementRow.Points then
+				achievementRow.Points:SetText(tostring(p) .. " pts")
+			end
+		end
+	end
+
+	-- Complete the achievement
+	HCA_MarkRowCompleted(achievementRow)
+	
+	-- Show achievement toast
+	HCA_AchToast_Show(achievementRow.Icon:GetTexture(), achievementRow.Title:GetText(), achievementRow.points)
+	
+	SendResponseToAdmin(sender, "|cff00ff00[HardcoreAchievements]|r Achievement '" .. payload.achievementId .. "' completed via admin command")
     
     -- Log the admin command
     if not HardcoreAchievementsDB then HardcoreAchievementsDB = {} end

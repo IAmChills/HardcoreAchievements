@@ -221,9 +221,11 @@ function HCA_MarkRowCompleted(row)
     end
     
     -- Broadcast achievement completion to emote channel
-    local playerName = UnitName("player")
-    local achievementTitle = row.Title and row.Title:GetText() or "Unknown Achievement"
-    local broadcastMessage = string.format(ACHIEVEMENT_BROADCAST, playerName, achievementTitle)
+	local playerName = UnitName("player")
+	local achievementTitle = row.Title and row.Title:GetText() or "Unknown Achievement"
+	local broadcastMessage = string.format(ACHIEVEMENT_BROADCAST, "", achievementTitle)
+	-- Remove leading whitespace so EMOTE doesn't show a double space before 'has'
+	broadcastMessage = broadcastMessage:gsub("^%s+", "")
     SendChatMessage(broadcastMessage, "EMOTE")
     
     -- Re-apply filter after completion state changes
@@ -498,18 +500,9 @@ end
 
 local function ApplyOutleveledStyle(row)
     if IsRowOutleveled(row) and row.Title and row.Title.SetTextColor then
-        -- simple: red title to indicate you missed the pre-level requirement
         row.Title:SetTextColor(0.9, 0.2, 0.2)
-        
-    --     -- Update icon borders for failed status
-    --     if row.RedBorder then row.RedBorder:Show() end
-    --     if row.GreenBorder then row.GreenBorder:Hide() end
-    --     if row.YellowBorder then row.YellowBorder:Hide() end
-    -- elseif not row.completed then
-    --     -- Available (not completed, not outleveled)
-    --     if row.YellowBorder then row.YellowBorder:Show() end
-    --     if row.GreenBorder then row.GreenBorder:Hide() end
-    --     if row.RedBorder then row.RedBorder:Hide() end
+        row.Icon:SetDesaturated(true)
+
     end
 end
 
@@ -619,7 +612,16 @@ local minimapDataObject = LDB:NewDataObject("HardcoreAchievements", {
     icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\HardcoreAchievementsButton.tga",
     OnClick = function(self, button)
         if button == "LeftButton" then
-            OpenAchievementsPanel()
+            -- Toggle: if our AchievementPanel is visible, close it; otherwise open
+            if AchievementPanel and AchievementPanel.IsShown and AchievementPanel:IsShown() then
+                if CharacterFrame and CharacterFrame.IsShown and CharacterFrame:IsShown() then
+                    CharacterFrame:Hide()
+                else
+                    AchievementPanel:Hide()
+                end
+            else
+                OpenAchievementsPanel()
+            end
         end
     end,
     OnTooltipShow = function(tooltip)
@@ -1391,8 +1393,10 @@ function CreateAchievementRow(parent, achId, title, tooltip, icon, level, points
             GameTooltip:SetText(title or "", 1, 1, 1)
             GameTooltip:AddLine(tooltip, nil, nil, nil, true)
             if self.zone then
-                GameTooltip:AddLine(self.zone, 0.5, 0.5, 0.5) -- Gray text for zone
+                GameTooltip:AddLine(self.zone, 0.6, 1, 0.86)
             end
+			-- Hint for linking the achievement in chat
+			GameTooltip:AddLine("\nShift + Left Click to link in chat", 0.5, 0.5, 0.5)
             GameTooltip:Show()
         end
     end)
@@ -1402,6 +1406,31 @@ function CreateAchievementRow(parent, achId, title, tooltip, icon, level, points
         GameTooltip:Hide()
     end)
 
+    row:SetScript("OnMouseUp", function(self, button)
+        if button == "LeftButton" and IsShiftKeyDown() and row.achId then
+            local titleText = row.Title and row.Title:GetText() or tostring(row.achId)
+            -- Sanitize title for bracket placeholder to avoid nested [] issues
+            local iconTexture = row.Icon and row.Icon:GetTexture() or ""
+            local pts = tonumber(row.points) or 0
+            -- Send bracketed placeholder using commas (no pipes) to avoid chat escape codes
+            -- Compact bracket tag without title to avoid special characters breaking chat parsing
+            local bracket = string.format("[HCA:(%s,%s,%s)]", tostring(row.achId), tostring(iconTexture), tostring(pts))
+
+            local editBox = ChatEdit_GetActiveWindow()
+            if not editBox or not editBox:IsVisible() then
+                ChatEdit_ActivateChat(ChatFrame1)
+                editBox = ChatFrame1EditBox
+            end
+            local currentText = editBox and (editBox:GetText() or "") or ""
+            if currentText == "" then
+                editBox:SetText(bracket)
+            else
+                editBox:SetText(currentText .. " " .. bracket)
+            end
+            editBox:SetFocus()
+            return
+        end
+    end)
 
     row.originalPoints = points or 0  -- Store original points before any multipliers
     row.staticPoints = staticPoints or false  -- Store static points flag
