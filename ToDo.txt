@@ -5,12 +5,5 @@ Arc Challenges
 - etc
 
 New Achievements
-- Something for Sulvanas (secret)
-- Snowball at Thrall (secret) [UNIT_SPELLCAST_SENT, "player" "Thrall", 21343]
-- Kill a rat (hidden)
 - drink a noggenfogger (secret)
 - Professions
-
-Add level input to admin panel
-
-Toggle not working, checkbox not showing character tab

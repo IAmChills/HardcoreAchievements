@@ -650,8 +650,9 @@ local minimapDataObject = LDB:NewDataObject("HardcoreAchievements", {
                 if isShown then
                     CharacterFrame:Hide()
                 else
-                    if CharacterFrame and not CharacterFrame:IsShown() then
-                        CharacterFrame:Show()
+                    -- Use ToggleCharacter to properly register the frame for ESC key support
+                    if not CharacterFrame:IsShown() then
+                        ToggleCharacter("PaperDollFrame")
                     end
                     if HCA_ShowAchievementTab then
                         HCA_ShowAchievementTab()
@@ -1210,19 +1211,6 @@ AchievementPanel = CreateFrame("Frame", "Achievements", CharacterFrame)
 AchievementPanel:Hide()
 AchievementPanel:EnableMouse(true)
 AchievementPanel:SetAllPoints(CharacterFrame)
-
--- Allow closing with ESC key via UISpecialFrames
-local frameName = AchievementPanel:GetName()
-local exists = false
-for i = 1, #UISpecialFrames do
-    if UISpecialFrames[i] == frameName then
-        exists = true
-        break
-    end
-end
-if not exists then
-    table.insert(UISpecialFrames, frameName)
-end
 
 -- Filter dropdown
 local filterDropdown = CreateFrame("Frame", nil, AchievementPanel, "UIDropDownMenuTemplate")
