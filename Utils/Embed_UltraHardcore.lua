@@ -675,6 +675,7 @@ end
 local f = CreateFrame("Frame")
 f:RegisterEvent("PLAYER_LOGIN")
 f:RegisterEvent("ADDON_LOADED")
+f:RegisterEvent("PLAYER_ENTERING_WORLD")
 f:SetScript("OnEvent", function(self, event, addonName)
   -- Wait for UltraHardcore addon to be loaded
   if event == "ADDON_LOADED" and addonName == "UltraHardcore" then
@@ -706,19 +707,53 @@ f:SetScript("OnEvent", function(self, event, addonName)
     end)
   end
 
-  -- Show custom achievement tab as fallback if needed (only if UltraHardcore is not loaded)
-  if not GetSourceRows() then
+  -- Set showCustomTab to true if UltraHardcore is not loaded
+  -- Check once after all addons have had time to load
+  if event == "PLAYER_ENTERING_WORLD" then
     C_Timer.After(1.0, function()
-      if not GetSourceRows() then
-        -- Show custom achievement tab as fallback
-        local tab = _G["CharacterFrameTab" .. (CharacterFrame.numTabs + 1)]
-        if tab and tab:GetText() and tab:GetText():find(ACHIEVEMENTS) then
-          tab:Show()
-          tab:SetScript("OnClick", function(self)
-            if HCA_ShowAchievementTab then
-              HCA_ShowAchievementTab()
+      -- Check if UltraHardcore is loaded
+      local isUltraHardcoreLoaded = IsAddOnLoaded("UltraHardcore")
+      local hasUHCA = UHCA and UHCA.Scroll and UHCA.Content
+      
+      if not isUltraHardcoreLoaded and not hasUHCA then
+        -- UltraHardcore is not loaded, so set showCustomTab to true
+        if type(HardcoreAchievements_GetCharDB) == "function" then
+          local _, cdb = HardcoreAchievements_GetCharDB()
+          if cdb then
+            cdb.settings = cdb.settings or {}
+            cdb.settings.showCustomTab = true
+            
+            -- Load tab position to apply the setting and show the tab
+            if type(_G.HardcoreAchievements_LoadTabPosition) == "function" then
+              _G.HardcoreAchievements_LoadTabPosition()
             end
-          end)
+            
+            -- Ensure the tab is visible if it exists (even if LoadTabPosition had no saved data)
+            local tab = _G["CharacterFrameTab" .. (CharacterFrame.numTabs + 1)]
+            if tab and tab:GetText() and tab:GetText():find(ACHIEVEMENTS) then
+              tab:Show()
+              -- Make sure the tab is enabled and has the click handler
+              tab:EnableMouse(true)
+              tab:SetScript("OnClick", function(self)
+                if HCA_ShowAchievementTab then
+                  HCA_ShowAchievementTab()
+                end
+              end)
+              
+              -- If LoadTabPosition had no saved data, ensure the tab is at default position and visible
+              -- Check if tab is positioned (has points set), if not, it needs default positioning
+              local point, relativeTo, relativePoint = tab:GetPoint()
+              if not point then
+                -- Tab has no position, set it to default position
+                tab:SetPoint("RIGHT", _G["CharacterFrameTab" .. CharacterFrame.numTabs], "RIGHT", 43, 0)
+              end
+              
+              -- Ensure tab is not hidden
+              if not tab:IsShown() then
+                tab:Show()
+              end
+            end
+          end
         end
       end
     end)

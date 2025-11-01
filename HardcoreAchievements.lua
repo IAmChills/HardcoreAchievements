@@ -863,6 +863,9 @@ function LoadTabPosition()
             return
         end
         
+        -- Only show the tab/squareFrame if CharacterFrame is currently shown
+        local isCharacterFrameShown = CharacterFrame and CharacterFrame:IsShown()
+        
         Tab:ClearAllPoints()
         if savedMode == "bottom" then
             Tab:SetPoint("BOTTOMLEFT", CharacterFrame, "BOTTOMLEFT", posX, 45)
@@ -872,6 +875,12 @@ function LoadTabPosition()
             if Tab.squareFrame then
                 Tab.squareFrame:EnableMouse(false)
                 Tab.squareFrame:Hide()
+            end
+            -- Only show tab if CharacterFrame is shown
+            if isCharacterFrameShown then
+                Tab:Show()
+            else
+                Tab:Hide()
             end
         else
             Tab:SetPoint("TOPRIGHT", CharacterFrame, "TOPRIGHT", posX, posY)
@@ -886,13 +895,26 @@ function LoadTabPosition()
                 Tab.squareFrame:ClearAllPoints()
                 Tab.squareFrame:SetPoint("TOPRIGHT", CharacterFrame, "TOPRIGHT", posX, posY)
                 Tab.squareFrame:EnableMouse(true)
+                -- Only show square frame if CharacterFrame is shown
+                if isCharacterFrameShown then
+                    Tab.squareFrame:Show()
+                else
+                    Tab.squareFrame:Hide()
+                end
             end
         end
         
         -- Set the mode on the tab object
         Tab.mode = savedMode
+    else
+        -- If no saved data, hide the tab by default
+        -- It will be shown when CharacterFrame is opened via the OnShow hook
+        Tab:Hide()
+        if Tab.squareFrame then
+            Tab.squareFrame:Hide()
+            Tab.squareFrame:EnableMouse(false)
+        end
     end
-    -- If no saved data, leave tab at default position    
 end
 
 function ResetTabPosition()
@@ -1748,7 +1770,7 @@ function HCA_ShowAchievementTab()
 
     -- Show our AchievementPanel directly (no CharacterFrame_ShowSubFrame)
     AchievementPanel:Show()
-    Tab.squareFrame:Show()
+    --Tab.squareFrame:Show()
     
     -- Apply current filter when opening panel
     if ApplyFilter then
@@ -1838,12 +1860,20 @@ CharacterFrame:HookScript("OnShow", function()
         end
         return
     end
+    
+    -- Load tab position first to restore saved mode and position
+    LoadTabPosition()
+    
+    -- Ensure square frame is shown if in vertical mode
     if Tab.squareFrame and Tab.mode == "right" then
         Tab.squareFrame:Show()
+        Tab.squareFrame:EnableMouse(true)
         -- Reposition the square frame to match the tab's current position
         local _, _, _, x, y = Tab:GetPoint()
-        Tab.squareFrame:ClearAllPoints()
-        Tab.squareFrame:SetPoint("TOPRIGHT", CharacterFrame, "TOPRIGHT", x, y)
+        if x and y then
+            Tab.squareFrame:ClearAllPoints()
+            Tab.squareFrame:SetPoint("TOPRIGHT", CharacterFrame, "TOPRIGHT", x, y)
+        end
     end
 end)
 
