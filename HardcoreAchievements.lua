@@ -72,6 +72,7 @@ local function GetCharDB()
         meta = {},            -- name/realm/class/race/level/faction/lastLogin
 		achievements = {},    -- [id] = { completed=true, completedAt=time(), level=nn, mapID=123 }
 		progress = {},
+        settings = {},
     }
     return db, db.chars[playerGUID]
 end
@@ -626,6 +627,12 @@ function HardcoreAchievements_CleanupOldData()
     return cleaned
 end
 
+function HardcoreAchievements_GetSettings()
+    local _, cdb = GetCharDB()
+    if not cdb then return {} end
+    return cdb.settings
+end
+
 -- =========================================================
 -- Minimap Button Implementation
 -- =========================================================
@@ -641,14 +648,15 @@ local minimapDataObject = LDB:NewDataObject("HardcoreAchievements", {
     icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\HardcoreAchievementsButton.tga",
     OnClick = function(self, button)
         if button == "LeftButton" then
-            local db = EnsureDB()
+            local _, cdb = GetCharDB()
             
             -- Helper function to toggle Character Frame with achievements tab
             local function toggleCharacterFrameTab()
                 local isShown = CharacterFrame and CharacterFrame:IsShown() and 
-                               AchievementPanel and AchievementPanel:IsShown()
+                               (AchievementPanel and AchievementPanel:IsShown() or Tab.squareFrame and Tab.squareFrame:IsShown())
                 if isShown then
-                    CharacterFrame:Hide()
+                    ToggleCharacter("PaperDollFrame")
+                    ToggleCharacter("PaperDollFrame")
                 else
                     -- Use ToggleCharacter to properly register the frame for ESC key support
                     if not CharacterFrame:IsShown() then
@@ -661,7 +669,7 @@ local minimapDataObject = LDB:NewDataObject("HardcoreAchievements", {
             end
             
             -- Check if using custom Character Frame tab
-            if db.showCustomTab then
+            if cdb and cdb.settings and cdb.settings.showCustomTab then
                 toggleCharacterFrameTab()
             elseif type(ToggleSettings) == "function" then
                 -- Toggle UltraHardcore settings window and switch to tab 3 when opening
@@ -672,12 +680,21 @@ local minimapDataObject = LDB:NewDataObject("HardcoreAchievements", {
                 if not container and _G.tabContents and _G.tabContents[3] then
                     container = _G.tabContents[3]
                 end
-                -- Check if window is currently shown to determine if we should close or open
-                local isShown = container and container.IsShown and container:IsShown()
-                ToggleSettings()
-                -- If window was closed, it should now be open - switch to tab 3
-                if not isShown and type(OpenSettingsToTab) == "function" then
-                    OpenSettingsToTab(3)
+                -- Check if the achievements tab container is currently shown
+                local isContainerShown = container and container.IsShown and container:IsShown()
+                
+                -- If the container is shown, we're on achievements tab and should just close
+                if isContainerShown then
+                    ToggleSettings()
+                else
+                    -- Container is not shown, open the settings window
+                    ToggleSettings()
+                    -- After opening, switch to tab 3
+                    if TabManager and TabManager.switchToTab then
+                        TabManager.switchToTab(3)
+                    elseif type(OpenSettingsToTab) == "function" then
+                        OpenSettingsToTab(3)
+                    end
                 end
             elseif type(OpenSettingsToTab) == "function" then
                 -- Fallback if ToggleSettings doesn't exist but OpenSettingsToTab does
@@ -692,8 +709,8 @@ local minimapDataObject = LDB:NewDataObject("HardcoreAchievements", {
         tooltip:AddLine("HardcoreAchievements", 1, 1, 1)
         
         -- Show different tooltip text based on user preference and UltraHardcore availability
-        local db = EnsureDB()
-        if db.showCustomTab then
+        local _, cdb = GetCharDB()
+        if cdb and cdb.settings and cdb.settings.showCustomTab then
             tooltip:AddLine("Left-click to open Hardcore Achievements", 0.5, 0.5, 0.5)
         elseif type(OpenSettingsToTab) == "function" then
             tooltip:AddLine("Left-click to open UltraHardcore Achievements", 0.5, 0.5, 0.5)
@@ -741,10 +758,8 @@ initFrame:SetScript("OnEvent", function(self, event, ...)
 
         local db, cdb = GetCharDB()
         if cdb then
-            -- Migrate global showCustomTab setting to character-specific if present
-            if db.showCustomTab ~= nil and cdb.showCustomTab == nil then
-                cdb.showCustomTab = db.showCustomTab
-            end
+            -- Ensure settings table exists
+            cdb.settings = cdb.settings or {}
             local name, realm = UnitName("player"), GetRealmName()
             local className = UnitClass("player")
             cdb.meta.name      = name
@@ -838,7 +853,8 @@ function LoadTabPosition()
         local posY = db.tabSettings.position.y
         
         -- Respect user preference: hide custom tab entirely if disabled
-        if not db.showCustomTab then
+        local _, cdb = GetCharDB()
+        if not (cdb and cdb.settings and cdb.settings.showCustomTab) then
             Tab:Hide()
             if Tab.squareFrame then
                 Tab.squareFrame:Hide()
@@ -846,6 +862,9 @@ function LoadTabPosition()
             end
             return
         end
+        
+        -- Only show the tab/squareFrame if CharacterFrame is currently shown
+        local isCharacterFrameShown = CharacterFrame and CharacterFrame:IsShown()
         
         Tab:ClearAllPoints()
         if savedMode == "bottom" then
@@ -856,6 +875,12 @@ function LoadTabPosition()
             if Tab.squareFrame then
                 Tab.squareFrame:EnableMouse(false)
                 Tab.squareFrame:Hide()
+            end
+            -- Only show tab if CharacterFrame is shown
+            if isCharacterFrameShown then
+                Tab:Show()
+            else
+                Tab:Hide()
             end
         else
             Tab:SetPoint("TOPRIGHT", CharacterFrame, "TOPRIGHT", posX, posY)
@@ -870,13 +895,26 @@ function LoadTabPosition()
                 Tab.squareFrame:ClearAllPoints()
                 Tab.squareFrame:SetPoint("TOPRIGHT", CharacterFrame, "TOPRIGHT", posX, posY)
                 Tab.squareFrame:EnableMouse(true)
+                -- Only show square frame if CharacterFrame is shown
+                if isCharacterFrameShown then
+                    Tab.squareFrame:Show()
+                else
+                    Tab.squareFrame:Hide()
+                end
             end
         end
         
         -- Set the mode on the tab object
         Tab.mode = savedMode
+    else
+        -- If no saved data, hide the tab by default
+        -- It will be shown when CharacterFrame is opened via the OnShow hook
+        Tab:Hide()
+        if Tab.squareFrame then
+            Tab.squareFrame:Hide()
+            Tab.squareFrame:EnableMouse(false)
+        end
     end
-    -- If no saved data, leave tab at default position    
 end
 
 function ResetTabPosition()
@@ -1732,6 +1770,7 @@ function HCA_ShowAchievementTab()
 
     -- Show our AchievementPanel directly (no CharacterFrame_ShowSubFrame)
     AchievementPanel:Show()
+    --Tab.squareFrame:Show()
     
     -- Apply current filter when opening panel
     if ApplyFilter then
@@ -1812,8 +1851,8 @@ end)
 
 -- Hook CharacterFrame OnShow to restore square frame visibility if in vertical mode
 CharacterFrame:HookScript("OnShow", function()
-    local db = EnsureDB()
-    if not db.showCustomTab then
+    local _, cdb = GetCharDB()
+    if not (cdb and cdb.settings and cdb.settings.showCustomTab) then
         Tab:Hide()
         if Tab.squareFrame then
             Tab.squareFrame:Hide()
@@ -1821,12 +1860,20 @@ CharacterFrame:HookScript("OnShow", function()
         end
         return
     end
+    
+    -- Load tab position first to restore saved mode and position
+    LoadTabPosition()
+    
+    -- Ensure square frame is shown if in vertical mode
     if Tab.squareFrame and Tab.mode == "right" then
         Tab.squareFrame:Show()
+        Tab.squareFrame:EnableMouse(true)
         -- Reposition the square frame to match the tab's current position
         local _, _, _, x, y = Tab:GetPoint()
-        Tab.squareFrame:ClearAllPoints()
-        Tab.squareFrame:SetPoint("TOPRIGHT", CharacterFrame, "TOPRIGHT", x, y)
+        if x and y then
+            Tab.squareFrame:ClearAllPoints()
+            Tab.squareFrame:SetPoint("TOPRIGHT", CharacterFrame, "TOPRIGHT", x, y)
+        end
     end
 end)
 

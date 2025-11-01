@@ -430,7 +430,7 @@ end
 
 -- ---------- Build / Hooks ----------
 local function BuildEmbedIfNeeded()
-  if UHCA and UHCA.Scroll and UHCA.Content and EMBED.Content then return true end
+  if UHCA and UHCA.Scroll and UHCA.Content and UHCA._initialized then return true end
   
   local container = GetAchievementsContainer()
   if not container then return false end
@@ -459,107 +459,140 @@ local function BuildEmbedIfNeeded()
   -- Hide custom achievement tab when embedded UI loads
   HideCustomAchievementTab()
 
-  UHCA.Scroll = CreateFrame("ScrollFrame", nil, UHCA, "UIPanelScrollFrameTemplate")
-  UHCA.Scroll:SetPoint("TOPLEFT", UHCA, "TOPLEFT", -4, -60)
-  UHCA.Scroll:SetPoint("BOTTOMRIGHT", UHCA, "BOTTOMRIGHT", -8, -15)
+  -- Only create Scroll and Content if they don't already exist
+  if not UHCA.Scroll then
+    UHCA.Scroll = CreateFrame("ScrollFrame", nil, UHCA, "UIPanelScrollFrameTemplate")
+    UHCA.Scroll:SetPoint("TOPLEFT", UHCA, "TOPLEFT", -4, -60)
+    UHCA.Scroll:SetPoint("BOTTOMRIGHT", UHCA, "BOTTOMRIGHT", -8, -15)
+    
+    -- Hide the scroll bar but keep it functional
+    if UHCA.Scroll.ScrollBar then
+      UHCA.Scroll.ScrollBar:Hide()
+    end
+  end
   
-  -- Hide the scroll bar but keep it functional
-  if UHCA.Scroll.ScrollBar then
-    UHCA.Scroll.ScrollBar:Hide()
+  if not UHCA.Content then
+    UHCA.Content = CreateFrame("Frame", nil, UHCA.Scroll)
+    UHCA.Content:SetSize(1, 1)
+    UHCA.Scroll:SetScrollChild(UHCA.Content)
   end
 
-  UHCA.Content = CreateFrame("Frame", nil, UHCA.Scroll)
-  UHCA.Content:SetSize(1, 1)
-  UHCA.Scroll:SetScrollChild(UHCA.Content)
+  -- Only create UI elements if they don't exist
+  if not UHCA.MultiplierText then
+    -- Add multiplier text (like in standalone mode)
+    UHCA.MultiplierText = UHCA:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    UHCA.MultiplierText:SetPoint("TOP", UHCA, "TOP", 0, -35)
+    UHCA.MultiplierText:SetText("") -- Will be set by UpdateMultiplierText
+  end
 
-  -- Add multiplier text (like in standalone mode)
-  UHCA.MultiplierText = UHCA:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-  UHCA.MultiplierText:SetPoint("TOP", UHCA, "TOP", 0, -35)
-  UHCA.MultiplierText:SetText("") -- Will be set by UpdateMultiplierText
+  if not UHCA.TotalPointsText then
+    -- Add total points text in top left corner
+    UHCA.TotalPointsText = UHCA:CreateFontString(nil, "OVERLAY", "GameFontHighlightLarge")
+    UHCA.TotalPointsText:SetPoint("TOPLEFT", UHCA, "TOPLEFT", 5, -35)
+    UHCA.TotalPointsText:SetText("0 pts") -- Will be updated by UpdateTotalPointsText
+  end
 
-  -- Add total points text in top left corner
-  UHCA.TotalPointsText = UHCA:CreateFontString(nil, "OVERLAY", "GameFontHighlightLarge")
-  UHCA.TotalPointsText:SetPoint("TOPLEFT", UHCA, "TOPLEFT", 5, -35)
-  UHCA.TotalPointsText:SetText("0 pts") -- Will be updated by UpdateTotalPointsText
-
-  -- Add filter dropdown
-  local filterDropdown = CreateFrame("Frame", nil, UHCA, "UIDropDownMenuTemplate")
-  filterDropdown:SetPoint("TOPRIGHT", UHCA, "TOPRIGHT", 30, -25)
-  UIDropDownMenu_SetWidth(filterDropdown, 110)
-  UIDropDownMenu_SetText(filterDropdown, "All")
-
-  -- Add checkbox to control custom tab visibility
-  UHCA.HideCustomTabCheckbox = CreateFrame("CheckButton", nil, UHCA, "UICheckButtonTemplate")
-  UHCA.HideCustomTabCheckbox:SetPoint("BOTTOMRIGHT", UHCA, "BOTTOMRIGHT", 8, -40)
-  UHCA.HideCustomTabCheckbox:SetSize(20, 20)
-  UHCA.HideCustomTabCheckbox:SetChecked(HardcoreAchievementsDB and HardcoreAchievementsDB.showCustomTab == true) -- Default to not showing custom tab, but respect saved state
-  
-  -- Add label for the checkbox
-  UHCA.HideCustomTabLabel = UHCA:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-  UHCA.HideCustomTabLabel:SetPoint("RIGHT", UHCA.HideCustomTabCheckbox, "LEFT", -3, 0)
-  UHCA.HideCustomTabLabel:SetText("Show Achievements on the Character Info Panel")
-  UHCA.HideCustomTabLabel:SetTextColor(0.8, 0.8, 0.8)
-  
-  -- Handle checkbox changes
-  UHCA.HideCustomTabCheckbox:SetScript("OnClick", function(self)
-    local isChecked = self:GetChecked()
-    local tab = _G["CharacterFrameTab" .. (CharacterFrame.numTabs + 1)]
+  -- Only create filter dropdown if it doesn't exist
+  local filterDropdown = UHCA.FilterDropdown
+  if not filterDropdown then
+    filterDropdown = CreateFrame("Frame", nil, UHCA, "UIDropDownMenuTemplate")
+    filterDropdown:SetPoint("TOPRIGHT", UHCA, "TOPRIGHT", 30, -25)
+    UIDropDownMenu_SetWidth(filterDropdown, 110)
+    UIDropDownMenu_SetText(filterDropdown, "All")
+    UHCA.FilterDropdown = filterDropdown
     
-    -- Save the state to the database
-    if not HardcoreAchievementsDB then
-      HardcoreAchievementsDB = {}
-    end
-    HardcoreAchievementsDB.showCustomTab = isChecked
-    
-    if tab and tab:GetText() and tab:GetText():find(ACHIEVEMENTS) then
-      if isChecked then
-        -- Show custom tab
-        tab:Show()
-        tab:SetScript("OnClick", function(self)
-          -- Use the same logic as the main achievement tab
-          if HCA_ShowAchievementTab then
-            HCA_ShowAchievementTab()
+    -- Initialize filter dropdown
+    UIDropDownMenu_Initialize(filterDropdown, function(self, level)
+      if level == 1 then
+        for _, filter in ipairs(PopulateFilterDropdown()) do
+          local info = UIDropDownMenu_CreateInfo()
+          info.text = filter.text
+          info.value = filter.value
+          info.func = function()
+            UIDropDownMenu_SetSelectedValue(filterDropdown, filter.value)
+            UIDropDownMenu_SetText(filterDropdown, filter.text)
+            currentFilter = filter.value
+            ApplyFilter()
           end
-        end)
-        -- Also restore vertical tab if it was in vertical mode
-        if type(_G.HardcoreAchievements_LoadTabPosition) == "function" then
-          _G.HardcoreAchievements_LoadTabPosition()
-        end
-      else
-        -- Hide custom tab
-        tab:Hide()
-        tab:SetScript("OnClick", function() end) -- Disable click functionality
-        -- Also hide vertical tab immediately
-        if type(_G.HardcoreAchievements_HideVerticalTab) == "function" then
-          _G.HardcoreAchievements_HideVerticalTab()
+          UIDropDownMenu_AddButton(info)
         end
       end
-    end
-  end)
+    end)
+  end
 
-  -- Initialize filter dropdown
-  UIDropDownMenu_Initialize(filterDropdown, function(self, level)
-    if level == 1 then
-      for _, filter in ipairs(PopulateFilterDropdown()) do
-        local info = UIDropDownMenu_CreateInfo()
-        info.text = filter.text
-        info.value = filter.value
-        info.func = function()
-          UIDropDownMenu_SetSelectedValue(filterDropdown, filter.value)
-          UIDropDownMenu_SetText(filterDropdown, filter.text)
-          currentFilter = filter.value
-          ApplyFilter()
-        end
-        UIDropDownMenu_AddButton(info)
+  if not UHCA.HideCustomTabCheckbox then
+    -- Add checkbox to control custom tab visibility
+    UHCA.HideCustomTabCheckbox = CreateFrame("CheckButton", nil, UHCA, "UICheckButtonTemplate")
+    UHCA.HideCustomTabCheckbox:SetPoint("BOTTOMRIGHT", UHCA, "BOTTOMRIGHT", 8, -40)
+    UHCA.HideCustomTabCheckbox:SetSize(20, 20)
+    
+    local function GetShowCustomTabSetting()
+      if type(HardcoreAchievements_GetCharDB) == "function" then
+        local _, cdb = HardcoreAchievements_GetCharDB()
+        return cdb and cdb.settings and cdb.settings.showCustomTab == true
       end
+      return false
     end
-  end)
+    UHCA.HideCustomTabCheckbox:SetChecked(GetShowCustomTabSetting()) -- Default to not showing custom tab, but respect saved state
+    
+    -- Add label for the checkbox
+    UHCA.HideCustomTabLabel = UHCA:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    UHCA.HideCustomTabLabel:SetPoint("RIGHT", UHCA.HideCustomTabCheckbox, "LEFT", -3, 0)
+    UHCA.HideCustomTabLabel:SetText("Show Achievements on the Character Info Panel")
+    UHCA.HideCustomTabLabel:SetTextColor(0.8, 0.8, 0.8)
+    
+    -- Handle checkbox changes
+    UHCA.HideCustomTabCheckbox:SetScript("OnClick", function(self)
+      local isChecked = self:GetChecked()
+      local tab = _G["CharacterFrameTab" .. (CharacterFrame.numTabs + 1)]
+      
+      -- Save the state to the database
+      if type(HardcoreAchievements_GetCharDB) == "function" then
+        local _, cdb = HardcoreAchievements_GetCharDB()
+        if cdb then
+          cdb.settings = cdb.settings or {}
+          cdb.settings.showCustomTab = isChecked
+        end
+      end
+      
+      if tab and tab:GetText() and tab:GetText():find(ACHIEVEMENTS) then
+        if isChecked then
+          -- Show custom tab
+          tab:Show()
+          tab:SetScript("OnClick", function(self)
+            -- Use the same logic as the main achievement tab
+            if HCA_ShowAchievementTab then
+              HCA_ShowAchievementTab()
+            end
+          end)
+          -- Also restore vertical tab if it was in vertical mode
+          if type(_G.HardcoreAchievements_LoadTabPosition) == "function" then
+            _G.HardcoreAchievements_LoadTabPosition()
+          end
+        else
+          -- Hide custom tab
+          tab:Hide()
+          tab:SetScript("OnClick", function() end) -- Disable click functionality
+          -- Also hide vertical tab immediately
+          if type(_G.HardcoreAchievements_HideVerticalTab) == "function" then
+            _G.HardcoreAchievements_HideVerticalTab()
+          end
+        end
+      end
+    end)
+  end
 
   EMBED.Content = UHCA.Content
   SyncContentWidth()
   
   -- Apply saved state on initialization
-  local savedState = HardcoreAchievementsDB and HardcoreAchievementsDB.showCustomTab
+  local savedState = nil
+  if type(HardcoreAchievements_GetCharDB) == "function" then
+    local _, cdb = HardcoreAchievements_GetCharDB()
+    if cdb and cdb.settings then
+      savedState = cdb.settings.showCustomTab
+    end
+  end
   if savedState ~= nil then
     local tab = _G["CharacterFrameTab" .. (CharacterFrame.numTabs + 1)]
     if tab and tab:GetText() and tab:GetText():find(ACHIEVEMENTS) then
@@ -583,20 +616,26 @@ local function BuildEmbedIfNeeded()
     end
   end
 
-  UHCA:HookScript("OnShow", function()
-    if not EMBED.Content or EMBED.Content ~= UHCA.Content then
-      EMBED.Content = UHCA.Content
-    end
-    SyncContentWidth()
-    ApplyFilter()
-  end)
+  -- Only hook once to prevent duplicate scripts
+  if not UHCA._hooked then
+    UHCA:HookScript("OnShow", function()
+      if not EMBED.Content or EMBED.Content ~= UHCA.Content then
+        EMBED.Content = UHCA.Content
+      end
+      SyncContentWidth()
+      ApplyFilter()
+    end)
 
-  UHCA.Scroll:SetScript("OnSizeChanged", function(self)
-    self:UpdateScrollChildRect()
-    SyncContentWidth()
-    ApplyFilter()
-  end)
+    UHCA.Scroll:SetScript("OnSizeChanged", function(self)
+      self:UpdateScrollChildRect()
+      SyncContentWidth()
+      ApplyFilter()
+    end)
+    
+    UHCA._hooked = true
+  end
 
+  UHCA._initialized = true
   return true
 end
 
@@ -636,6 +675,7 @@ end
 local f = CreateFrame("Frame")
 f:RegisterEvent("PLAYER_LOGIN")
 f:RegisterEvent("ADDON_LOADED")
+f:RegisterEvent("PLAYER_ENTERING_WORLD")
 f:SetScript("OnEvent", function(self, event, addonName)
   -- Wait for UltraHardcore addon to be loaded
   if event == "ADDON_LOADED" and addonName == "UltraHardcore" then
@@ -667,19 +707,53 @@ f:SetScript("OnEvent", function(self, event, addonName)
     end)
   end
 
-  -- Show custom achievement tab as fallback if needed (only if UltraHardcore is not loaded)
-  if not GetSourceRows() then
+  -- Set showCustomTab to true if UltraHardcore is not loaded
+  -- Check once after all addons have had time to load
+  if event == "PLAYER_ENTERING_WORLD" then
     C_Timer.After(1.0, function()
-      if not GetSourceRows() then
-        -- Show custom achievement tab as fallback
-        local tab = _G["CharacterFrameTab" .. (CharacterFrame.numTabs + 1)]
-        if tab and tab:GetText() and tab:GetText():find(ACHIEVEMENTS) then
-          tab:Show()
-          tab:SetScript("OnClick", function(self)
-            if HCA_ShowAchievementTab then
-              HCA_ShowAchievementTab()
+      -- Check if UltraHardcore is loaded
+      local isUltraHardcoreLoaded = IsAddOnLoaded("UltraHardcore")
+      local hasUHCA = UHCA and UHCA.Scroll and UHCA.Content
+      
+      if not isUltraHardcoreLoaded and not hasUHCA then
+        -- UltraHardcore is not loaded, so set showCustomTab to true
+        if type(HardcoreAchievements_GetCharDB) == "function" then
+          local _, cdb = HardcoreAchievements_GetCharDB()
+          if cdb then
+            cdb.settings = cdb.settings or {}
+            cdb.settings.showCustomTab = true
+            
+            -- Load tab position to apply the setting and show the tab
+            if type(_G.HardcoreAchievements_LoadTabPosition) == "function" then
+              _G.HardcoreAchievements_LoadTabPosition()
             end
-          end)
+            
+            -- Ensure the tab is visible if it exists (even if LoadTabPosition had no saved data)
+            local tab = _G["CharacterFrameTab" .. (CharacterFrame.numTabs + 1)]
+            if tab and tab:GetText() and tab:GetText():find(ACHIEVEMENTS) then
+              tab:Show()
+              -- Make sure the tab is enabled and has the click handler
+              tab:EnableMouse(true)
+              tab:SetScript("OnClick", function(self)
+                if HCA_ShowAchievementTab then
+                  HCA_ShowAchievementTab()
+                end
+              end)
+              
+              -- If LoadTabPosition had no saved data, ensure the tab is at default position and visible
+              -- Check if tab is positioned (has points set), if not, it needs default positioning
+              local point, relativeTo, relativePoint = tab:GetPoint()
+              if not point then
+                -- Tab has no position, set it to default position
+                tab:SetPoint("RIGHT", _G["CharacterFrameTab" .. CharacterFrame.numTabs], "RIGHT", 43, 0)
+              end
+              
+              -- Ensure tab is not hidden
+              if not tab:IsShown() then
+                tab:Show()
+              end
+            end
+          end
         end
       end
     end)
