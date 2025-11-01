@@ -141,8 +141,11 @@ local function UpdateAllAchievementPoints()
     if isSelfFound then
         for _, row in ipairs(AchievementPanel.achievements) do
             if row.id and not row.completed then
-                row.points = row.points + HCA_SELF_FOUND_BONUS
-                row.Points:SetText(tostring(row.points) .. " pts")
+                -- Do not apply self-found bonus to secret or static-point rows
+                if not row.isSecretAchievement and not row.staticPoints then
+                    row.points = row.points + HCA_SELF_FOUND_BONUS
+                    row.Points:SetText(tostring(row.points) .. " pts")
+                end
             end
         end
     end
@@ -213,7 +216,7 @@ end)
 function GetPlayerPresetFromSettings()
     -- Return early if UltraHardcoreDB doesn't exist
     if not UltraHardcoreDB then
-        return "1"
+        return
     end
 
     -- Get player's settings from UltraHardcoreDB
@@ -226,7 +229,7 @@ function GetPlayerPresetFromSettings()
     end
 
     if not settings then
-        return "2"
+        return
     end
 
     -- Tier sets (cumulative)

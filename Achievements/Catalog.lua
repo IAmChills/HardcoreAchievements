@@ -2,7 +2,7 @@ local Achievements = {
 
 --{ achId="Test",  title="Boar Test",  level=8, tooltip="Kill |cff0091e6a boar", icon=134400, points=10, requiredQuestId=nil, targetNpcId=3098, faction="Horde", zone="Durotar" },
 --{ achId="Test2", title="Easy Quest Test", level=8, tooltip="Orc starter quest", icon=134400, points=10, requiredQuestId=4641, targetNpcId=nil, faction="Horde", zone="Durotar" },
---{ achId="Test3", title="Kill + Quest", level=8, tooltip="Kill a boar and complete the orc starter quest", icon=134400, points=10, requiredQuestId=4641, targetNpcId=3098, faction="Horde", zone="Durotar" },
+--{ achId="Test3", title="Kill + Quest", level=4, tooltip="Kill a boar and complete the orc starter quest", icon=134400, points=10, requiredQuestId=33, targetNpcId=299, faction="Alliance", zone="Elwynn Forest" },
 
 -- Alliance
 {
@@ -417,16 +417,6 @@ local Achievements = {
     targetNpcId = nil,
     zone = "Swamp of Sorrows"
 }, {
-    achId = "KingBangalash",
-    title = "King of the Jungle",
-    level = 39,
-    tooltip = "Complete |cff0091e6Big Game Hunter|r before level 40",
-    icon = 134176,
-    points = 10,
-    requiredQuestId = 208,
-    targetNpcId = 731,
-    zone = "Stranglethorn Vale"
-}, {
     achId = "GetMeOutOfHere",
     title = "Outta Here!",
     level = 41,
@@ -436,6 +426,16 @@ local Achievements = {
     requiredQuestId = 6132,
     targetNpcId = nil,
     zone = "Desolace"
+}, {
+    achId = "KingBangalash",
+    title = "King of the Jungle",
+    level = 42,
+    tooltip = "Complete |cff0091e6Big Game Hunter|r before level 43",
+    icon = 134176,
+    points = 10,
+    requiredQuestId = 208,
+    targetNpcId = 731,
+    zone = "Stranglethorn Vale"
 }, {
     achId = "OOX",
     title = "Oox I Did It Again",
@@ -628,9 +628,110 @@ local Achievements = {
     faction = FACTION_ALLIANCE,
     class = "MAGE",
     zone = "Stormwind City"
-}
+}, 
 
--- Hideen
+-- Secret Achievements
+{
+    achId = "SnowballHorde",
+    title = "Snowball at Thrall",
+    level = nil,
+    tooltip = "Throw a snowball at Thrall",
+    icon = 236710,
+    points = 1,
+    faction = FACTION_HORDE,
+    zone = "Orgrimmar",
+    customIsCompleted = function() return false end,
+    customSpell = function(spellId, targetName)
+        if targetName == "Thrall" and spellId == 21343 then
+            return true
+        end
+        return false
+    end,
+    -- Secret presentation before completion
+    secret = true,
+    secretTitle = "Who Threw That?",
+    secretTooltip = "I wonder who to throw a snowball at...",
+    secretIcon = 132387,
+    --secretPoints = 1,
+    staticPoints = true,
+}, {
+    achId = "SnowballAlliance",
+    title = "Snowball at Highlord Bolvar Fordragon",
+    level = nil,
+    tooltip = "Throw a snowball at Highlord Bolvar Fordragon",
+    icon = 236710,
+    points = 1,
+    faction = FACTION_ALLIANCE,
+    zone = "Stormwind City",
+    customIsCompleted = function() return false end,
+    customSpell = function(spellId, targetName)
+        if targetName == "Highlord Bolvar Fordragon" and spellId == 21343 then
+            return true
+        end
+        return false
+    end,
+    -- Secret presentation before completion
+    secret = true,
+    secretTitle = "Who Threw That?",
+    secretTooltip = "I wonder who to throw a snowball at...",
+    secretIcon = 132387,
+    --secretPoints = 1,
+    staticPoints = true,
+}, {
+    achId = "Secret1",
+    title = "Rats! Rats! Rats!",
+    level = nil,
+    tooltip = "You have completed the secret achievement: |cff0091e6Kill a rat|r",
+    icon = 294480,
+    points = 1,
+    targetNpcId = {4075, 13016, 2110},
+    secret = true,
+    secreTitle = "Secret Achievement",
+    secretTooltip = "You will probably complete this achievement by accident",
+    --secretIcon = 132387,
+    staticPoints = true,
+}, {
+    achId = "Secret100",
+    title = "You've Got the Chills",
+    level = nil,
+    tooltip = "You've unlocked the authors hidden achievement",
+    icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Chills.blp",
+    points = 0,
+    customIsCompleted = function() return false end,
+    customEmote = function(token)
+        return token == "COLD"
+      end,
+    -- Secret presentation before completion
+    secret = true,
+    --secretTitle = "",
+    --secretTooltip = "",
+    --secretIcon = 132387,
+    --secretPoints = 1,
+    staticPoints = true,
+    hiddenUntilComplete = true,
+}
+-- {
+--     achId = "Sylvanas",
+--     title = "Something for Sylvanas",
+--     level = 60,
+--     tooltip = "Give Sylvanas a gift",
+--     icon = 236560,
+--     points = 1,
+--     faction = FACTION_HORDE,
+--     zone = "Undercity",
+--     customIsCompleted = function() return false end,
+--     customEmote = function(token, targetName)
+--         return token == "BOW" and targetName == "Lady Sylvanas Windrunner"
+--       end,
+--     -- Secret presentation before completion
+--     secret = true,
+--     secretTitle = "Secret",
+--     secretTooltip = "I wonder who to give a gift to...",
+--     secretIcon = 132387,
+--     --secretPoints = 1,
+--     staticPoints = true,
+--     hiddenUntilComplete = true,
+-- }
 }
 
 local function IsEligible(def)
@@ -698,7 +799,8 @@ for _, def in ipairs(Achievements) do
       killFn,
       questFn,
       def.staticPoints,
-      def.zone
+      def.zone,
+      def
     )
   end
 end

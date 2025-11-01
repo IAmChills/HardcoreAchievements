@@ -5,10 +5,5 @@ Arc Challenges
 - etc
 
 New Achievements
-- Something for Sulvanas (secret)
-- Snowball at Thrall (secret)
-- Kill a rat (hidden)
 - drink a noggenfogger (secret)
 - Professions
-
-Add level input to admin panel

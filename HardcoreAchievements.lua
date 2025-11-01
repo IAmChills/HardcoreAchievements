@@ -70,7 +70,8 @@ local function GetCharDB()
     if not playerGUID then return db, nil end
     db.chars[playerGUID] = db.chars[playerGUID] or {
         meta = {},            -- name/realm/class/race/level/faction/lastLogin
-        achievements = {}     -- [id] = { completed=true, completedAt=time(), level=nn, mapID=123 }
+		achievements = {},    -- [id] = { completed=true, completedAt=time(), level=nn, mapID=123 }
+		progress = {},
     }
     return db, db.chars[playerGUID]
 end
@@ -146,7 +147,9 @@ local function SortAchievementRows()
     end
 
     table.sort(AchievementPanel.achievements, function(a, b)
-        local la, lb = (a.maxLevel or 0), (b.maxLevel or 0)
+        -- Treat uncapped (nil) maxLevel as very large so they sort to the bottom
+        local la = (a.maxLevel ~= nil) and a.maxLevel or 9999
+        local lb = (b.maxLevel ~= nil) and b.maxLevel or 9999
         if la ~= lb then return la < lb end
         local aIsLvl, bIsLvl = isLevelMilestone(a), isLevelMilestone(b)
         if aIsLvl ~= bIsLvl then
@@ -194,6 +197,14 @@ function HCA_MarkRowCompleted(row)
     -- if row.RedBorder then row.RedBorder:Hide() end
     -- if row.YellowBorder then row.YellowBorder:Hide() end
 
+    -- Reveal secret achievements before persisting/toast
+    if row.isSecretAchievement then
+        if row.revealTitle and row.Title then row.Title:SetText(row.revealTitle) end
+        if row.revealIcon and row.Icon then row.Icon:SetTexture(row.revealIcon) end
+        if row.revealTooltip then row.tooltip = row.revealTooltip end
+        row.staticPoints = row.revealStaticPoints or false
+    end
+
     local _, cdb = GetCharDB()
     if cdb then
         local id = row.id or (row.Title and row.Title:GetText()) or ("row"..tostring(row))
@@ -204,14 +215,29 @@ function HCA_MarkRowCompleted(row)
         rec.level       = UnitLevel("player") or nil
         -- Check if we have pointsAtKill value in progress to use those points
         local finalPoints = tonumber(row.points) or 0
-        local progress = cdb.progress[id]
+		cdb.progress = cdb.progress or {}
+		local progress = cdb.progress[id]
 
         if progress and progress.pointsAtKill then
             -- Use the points that were stored at the time of kill
             finalPoints = tonumber(progress.pointsAtKill) or 0
         end
 
+        -- For secret achievements, compute final points from reveal base with multipliers/bonuses
+        if row.isSecretAchievement then
+            local base = tonumber(row.revealPointsBase or row.originalPoints) or 0
+            local computed = base
+            if not (row.revealStaticPoints) then
+                local preset = GetPlayerPresetFromSettings and GetPlayerPresetFromSettings() or nil
+                local multiplier = GetPresetMultiplier and GetPresetMultiplier(preset) or 1.0
+                computed = base + math.floor((base) * (multiplier - 1) + 0.5)
+            end
+            finalPoints = computed
+        end
+
         rec.points = finalPoints
+        -- Reflect final points in UI row and text immediately
+        row.points = finalPoints
         if row.Points then
             row.Points:SetText(tostring(finalPoints) .. " pts")
         end
@@ -228,6 +254,10 @@ function HCA_MarkRowCompleted(row)
 	broadcastMessage = broadcastMessage:gsub("^%s+", "")
     SendChatMessage(broadcastMessage, "EMOTE")
     
+    -- Ensure hidden-until-complete rows become visible now
+    if row.hiddenUntilComplete then
+        row:Show()
+    end
     -- Re-apply filter after completion state changes
     if ApplyFilter then
         C_Timer.After(0, ApplyFilter)
@@ -239,13 +269,10 @@ function CheckPendingCompletions()
 
     for _, row in ipairs(AchievementPanel.achievements) do
         if not row.completed then
-            if row.killTracker then
-            else
-                local id = row.id
-                local fn = _G[id .. "_IsCompleted"]
-                if type(fn) == "function" and fn() then
-                    HCA_MarkRowCompleted(row)
-                end
+            local id = row.id
+            local fn = _G[id .. "_IsCompleted"]
+            if type(fn) == "function" and fn() then
+                HCA_MarkRowCompleted(row)
             end
         end
     end
@@ -277,6 +304,14 @@ local function RestoreCompletionsFromDB()
                 if row.Points then
                     row.Points:SetText(tostring(rec.points) .. " pts")
                 end
+            end
+
+            -- Apply secret reveal visuals on load
+            if row.isSecretAchievement then
+                if row.revealTitle and row.Title then row.Title:SetText(row.revealTitle) end
+                if row.revealIcon and row.Icon then row.Icon:SetTexture(row.revealIcon) end
+                if row.revealTooltip then row.tooltip = row.revealTooltip end
+                row.staticPoints = row.revealStaticPoints or false
             end
         end
     end
@@ -481,12 +516,24 @@ local function ApplySelfFoundBonus()
     local charData = HardcoreAchievementsDB.chars[guid]
     if not charData or not charData.achievements then return end
 
+    local function isSecretAch(achId)
+        if not AchievementPanel or not AchievementPanel.achievements then return false end
+        for _, row in ipairs(AchievementPanel.achievements) do
+            if row.id == achId and row.isSecretAchievement then return true end
+        end
+        return false
+    end
+
     local updatedCount = 0
     for achId, ach in pairs(charData.achievements) do
         if ach.completed and not ach.SFMod then
+            if isSecretAch(achId) then
+                ach.SFMod = true -- mark so we don't try again later
+            else
             ach.points = (ach.points or 0) + HCA_SELF_FOUND_BONUS
             ach.SFMod = true
             updatedCount = updatedCount + 1
+            end
         end
     end
 end
@@ -603,8 +650,9 @@ local minimapDataObject = LDB:NewDataObject("HardcoreAchievements", {
                 if isShown then
                     CharacterFrame:Hide()
                 else
-                    if CharacterFrame and not CharacterFrame:IsShown() then
-                        CharacterFrame:Show()
+                    -- Use ToggleCharacter to properly register the frame for ESC key support
+                    if not CharacterFrame:IsShown() then
+                        ToggleCharacter("PaperDollFrame")
                     end
                     if HCA_ShowAchievementTab then
                         HCA_ShowAchievementTab()
@@ -693,6 +741,10 @@ initFrame:SetScript("OnEvent", function(self, event, ...)
 
         local db, cdb = GetCharDB()
         if cdb then
+            -- Migrate global showCustomTab setting to character-specific if present
+            if db.showCustomTab ~= nil and cdb.showCustomTab == nil then
+                cdb.showCustomTab = db.showCustomTab
+            end
             local name, realm = UnitName("player"), GetRealmName()
             local className = UnitClass("player")
             cdb.meta.name      = name
@@ -1195,6 +1247,11 @@ local function ApplyFilter()
             shouldShow = IsRowOutleveled(row)
         end
         
+        -- Force-hide rows designated as hidden until completion
+        if row.hiddenUntilComplete and not row.completed then
+            shouldShow = false
+        end
+        
         if shouldShow then
             row:Show()
         else
@@ -1320,7 +1377,7 @@ BR:SetPoint("BOTTOMRIGHT", AchievementPanel, "BOTTOMRIGHT", 2, -1)
 
 AchievementPanel.achievements = AchievementPanel.achievements or {}
 
-function CreateAchievementRow(parent, achId, title, tooltip, icon, level, points, killTracker, questTracker, staticPoints, zone)
+function CreateAchievementRow(parent, achId, title, tooltip, icon, level, points, killTracker, questTracker, staticPoints, zone, def)
     local rowParent = AchievementPanel and AchievementPanel.Content or parent or AchievementPanel
     AchievementPanel.achievements = AchievementPanel.achievements or {}
 
@@ -1374,7 +1431,14 @@ function CreateAchievementRow(parent, achId, title, tooltip, icon, level, points
     row.Sub:SetJustifyH("LEFT")
     row.Sub:SetJustifyV("TOP")
     row.Sub:SetWordWrap(true)
-    row.Sub:SetText(level and (LEVEL .. " " .. level) or "—")
+    do
+        local capNum = tonumber(level)
+        if capNum and capNum > 0 then
+            row.Sub:SetText(LEVEL .. " " .. capNum)
+        else
+            row.Sub:SetText("")
+        end
+    end
 
     -- points
     row.Points = row:CreateFontString(nil, "OVERLAY", "GameFontNormal")
@@ -1406,8 +1470,9 @@ function CreateAchievementRow(parent, achId, title, tooltip, icon, level, points
 
         if self.Title and self.Title.GetText then
             GameTooltip:SetOwner(row, "ANCHOR_RIGHT")
-            GameTooltip:SetText(title or "", 1, 1, 1)
-            GameTooltip:AddLine(tooltip, nil, nil, nil, true)
+            local currentTitle = (self.Title and self.Title.GetText and self.Title:GetText()) or (title or "")
+            GameTooltip:SetText(currentTitle, 1, 1, 1)
+            GameTooltip:AddLine(self.tooltip or tooltip or "", nil, nil, nil, true)
             if self.zone then
                 GameTooltip:AddLine(self.zone, 0.6, 1, 0.86)
             end
@@ -1452,7 +1517,10 @@ function CreateAchievementRow(parent, achId, title, tooltip, icon, level, points
     row.staticPoints = staticPoints or false  -- Store static points flag
     row.points = (points or 0)
     row.completed = false
-    row.maxLevel = tonumber(level) or 0
+    do
+        local capNum = tonumber(level)
+        row.maxLevel = (capNum and capNum > 0) and capNum or nil
+    end
     row.tooltip = tooltip  -- Store the tooltip for later access
     row.zone = zone  -- Store the zone for later access
     row.achId = achId
@@ -1465,6 +1533,46 @@ function CreateAchievementRow(parent, achId, title, tooltip, icon, level, points
     row.killTracker  = killTracker
     row.questTracker = questTracker
     row.id = achId
+    if def and type(def.customSpell) == "function" then
+        row.spellTracker = def.customSpell
+    end
+    if def and type(def.customChat) == "function" then
+        row.chatTracker = def.customChat
+    end
+    if def and type(def.customEmote) == "function" then
+        row.emoteTracker = def.customEmote
+    end
+    if def and def.hiddenUntilComplete == true then
+        row.hiddenUntilComplete = true
+        -- Hide initially; filter logic will show it after completion
+        row:Hide()
+    end
+
+    -- Secret/hidden achievement support (optional via def)
+    if def and (def.secret or def.secretTitle or def.secretTooltip or def.secretIcon or def.secretPoints) then
+        row.isSecretAchievement = true
+        -- Store reveal values (final state after completion)
+        row.revealTitle = title
+        row.revealTooltip = tooltip
+        row.revealIcon = icon or 136116
+        row.revealPointsBase = points or 0
+        row.revealStaticPoints = staticPoints or false
+
+        -- Store secret placeholder values (pre-completion)
+        row.secretTitle = def.secretTitle or "Secret"
+        row.secretTooltip = def.secretTooltip or "Hidden"
+        row.secretIcon = def.secretIcon or 134400 -- question mark icon
+        row.secretPoints = tonumber(def.secretPoints) or 0
+
+        -- Apply secret placeholder visuals initially
+        if row.Title then row.Title:SetText(row.secretTitle) end
+        row.tooltip = row.secretTooltip
+        if row.Icon then row.Icon:SetTexture(row.secretIcon) end
+        row.points = row.secretPoints
+        if row.Points then row.Points:SetText(tostring(row.secretPoints) .. " pts") end
+        -- Prevent multipliers from inflating placeholder points
+        row.staticPoints = true
+    end
 
     AchievementPanel.achievements[index] = row
     SortAchievementRows()
@@ -1482,10 +1590,12 @@ do
         AchievementPanel._achEvt = CreateFrame("Frame")
         AchievementPanel._achEvt:RegisterEvent("COMBAT_LOG_EVENT_UNFILTERED")
         AchievementPanel._achEvt:RegisterEvent("QUEST_TURNED_IN")
+        AchievementPanel._achEvt:RegisterEvent("UNIT_SPELLCAST_SENT")
+        AchievementPanel._achEvt:RegisterEvent("CHAT_MSG_TEXT_EMOTE")
         AchievementPanel._achEvt:SetScript("OnEvent", function(_, event, ...)
             if event == "COMBAT_LOG_EVENT_UNFILTERED" then
                 local _, subevent, _, _, _, _, _, destGUID = CombatLogGetCurrentEventInfo()
-                if subevent ~= "PARTY_KILL" then return end
+                if subevent ~= "PARTY_KILL" and subevent ~= "UNIT_DIED" then return end
                 for _, row in ipairs(AchievementPanel.achievements) do
                     if not row.completed and type(row.killTracker) == "function" then
                         if row.killTracker(destGUID) then
@@ -1523,8 +1633,65 @@ do
                         end
                     end
                 end
+            elseif event == "UNIT_SPELLCAST_SENT" then
+                -- Classic signature: unit, targetName, castGUID, spellId
+                local unit, targetName, castGUID, spellId = ...
+                if unit ~= "player" then return end
+                for _, row in ipairs(AchievementPanel.achievements) do
+                    if not row.completed and type(row.spellTracker) == "function" then
+                        -- Evaluate tracker and require true return value
+                        local ok, shouldComplete = pcall(row.spellTracker, tonumber(spellId), tostring(targetName or ""))
+                        if ok and shouldComplete == true then
+                            HCA_MarkRowCompleted(row)
+                            HCA_AchToast_Show(row.Icon:GetTexture(), row.Title:GetText(), row.points)
+                        end
+                    end
+                end
+            elseif event == "CHAT_MSG_TEXT_EMOTE" then
+                local msg, unit = ...
+                if unit ~= UnitName("player") then return end
+                for _, row in ipairs(AchievementPanel.achievements) do
+                    if not row.completed and type(row.chatTracker) == "function" then
+                        local ok, shouldComplete = pcall(row.chatTracker, tostring(msg or ""))
+                        if ok and shouldComplete == true then
+                            HCA_MarkRowCompleted(row)
+                            HCA_AchToast_Show(row.Icon:GetTexture(), row.Title:GetText(), row.points)
+                        end
+                    end
+                end
             end
         end)
+    end
+end
+
+-- =========================================================
+-- Cross-locale Emote Hook (token-based via DoEmote)
+-- =========================================================
+do
+    if not _G.HCA_EmoteHooked then
+        _G.HCA_EmoteHooked = true
+        if type(hooksecurefunc) == "function" then
+            hooksecurefunc("DoEmote", function(token, unit)
+                -- Resolve a reasonable target name
+                local targetName
+                if unit and UnitExists(unit) then
+                    targetName = UnitName(unit)
+                elseif UnitExists("target") then
+                    targetName = UnitName("target")
+                end
+
+                if not AchievementPanel or not AchievementPanel.achievements then return end
+                for _, row in ipairs(AchievementPanel.achievements) do
+                    if not row.completed and type(row.emoteTracker) == "function" then
+                        local ok, shouldComplete = pcall(row.emoteTracker, tostring(token or ""), tostring(targetName or ""), tostring(unit or ""))
+                        if ok and shouldComplete == true then
+                            HCA_MarkRowCompleted(row)
+                            HCA_AchToast_Show(row.Icon and row.Icon:GetTexture() or 136116, row.Title and row.Title:GetText() or "Achievement", row.points)
+                        end
+                    end
+                end
+            end)
+        end
     end
 end
 

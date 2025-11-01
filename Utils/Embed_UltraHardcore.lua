@@ -68,6 +68,7 @@ local function ReadRowData(src)
     outleveled = IsRowOutleveled(src),
     requiredKills = src.requiredKills,  -- Store requiredKills for dungeon achievements
     zone = src.zone,
+    hiddenUntilComplete = not not src.hiddenUntilComplete,
   }
 end
 
@@ -322,6 +323,9 @@ function EMBED:Rebuild()
       elseif currentFilter == "failed" then
         shouldShow = data.outleveled
       end
+      if data.hiddenUntilComplete and not data.completed then
+        shouldShow = false
+      end
       
       if shouldShow then
         needed = needed + 1
@@ -373,18 +377,20 @@ function EMBED:Rebuild()
         end
 
         -- Set completion border
-        if data.completed then
-          icon.GreenBorder:Show()
-          icon.YellowBorder:Hide()
-          icon.RedBorder:Hide()
-        elseif data.outleveled then
-          icon.RedBorder:Show()
-          icon.GreenBorder:Hide()
-          icon.YellowBorder:Hide()
-        else
-          icon.YellowBorder:Show()
-          icon.GreenBorder:Hide()
-          icon.RedBorder:Hide()
+        if icon.achId and icon.achId ~= "Secret100" then
+          if data.completed then
+            icon.GreenBorder:Show()
+            icon.YellowBorder:Hide()
+            icon.RedBorder:Hide()
+          elseif data.outleveled then
+            icon.RedBorder:Show()
+            icon.GreenBorder:Hide()
+            icon.YellowBorder:Hide()
+          else
+            icon.YellowBorder:Show()
+            icon.GreenBorder:Hide()
+            icon.RedBorder:Hide()
+          end
         end
         
         -- Show the icon
@@ -636,8 +642,7 @@ f:SetScript("OnEvent", function(self, event, addonName)
     HookTabManager()
     HookSourceSignals()
     
-    -- Hide custom achievement tab immediately when UltraHardcore loads
-    if not HardcoreAchievementsDB.showCustomTab then HideCustomAchievementTab() end
+    -- Don't try to access player data here - playerGUID may not be set yet
     
     -- Try modern integration approach first
     C_Timer.After(0.5, function()
