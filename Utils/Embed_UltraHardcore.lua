@@ -486,7 +486,11 @@ local function BuildEmbedIfNeeded()
   UHCA.HideCustomTabCheckbox = CreateFrame("CheckButton", nil, UHCA, "UICheckButtonTemplate")
   UHCA.HideCustomTabCheckbox:SetPoint("BOTTOMRIGHT", UHCA, "BOTTOMRIGHT", 8, -40)
   UHCA.HideCustomTabCheckbox:SetSize(20, 20)
-  UHCA.HideCustomTabCheckbox:SetChecked(HardcoreAchievementsDB and HardcoreAchievementsDB.showCustomTab == true) -- Default to not showing custom tab, but respect saved state
+  do
+    local _, cdb = HardcoreAchievements_GetCharDB and HardcoreAchievements_GetCharDB() or nil
+    local checked = cdb and cdb.showCustomTab == true
+    UHCA.HideCustomTabCheckbox:SetChecked(checked) -- Default to not showing custom tab, but respect saved state
+  end
   
   -- Add label for the checkbox
   UHCA.HideCustomTabLabel = UHCA:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
@@ -500,10 +504,10 @@ local function BuildEmbedIfNeeded()
     local tab = _G["CharacterFrameTab" .. (CharacterFrame.numTabs + 1)]
     
     -- Save the state to the database
-    if not HardcoreAchievementsDB then
-      HardcoreAchievementsDB = {}
+    do
+      local _, cdb = HardcoreAchievements_GetCharDB and HardcoreAchievements_GetCharDB() or nil
+      if cdb then cdb.showCustomTab = isChecked end
     end
-    HardcoreAchievementsDB.showCustomTab = isChecked
     
     if tab and tab:GetText() and tab:GetText():find(ACHIEVEMENTS) then
       if isChecked then
@@ -553,7 +557,10 @@ local function BuildEmbedIfNeeded()
   SyncContentWidth()
   
   -- Apply saved state on initialization
-  local savedState = HardcoreAchievementsDB and HardcoreAchievementsDB.showCustomTab
+  local savedState = (function()
+    local _, cdb = HardcoreAchievements_GetCharDB and HardcoreAchievements_GetCharDB() or nil
+    return cdb and cdb.showCustomTab
+  end)()
   if savedState ~= nil then
     local tab = _G["CharacterFrameTab" .. (CharacterFrame.numTabs + 1)]
     if tab and tab:GetText() and tab:GetText():find(ACHIEVEMENTS) then
@@ -637,7 +644,10 @@ f:SetScript("OnEvent", function(self, event, addonName)
     HookSourceSignals()
     
     -- Hide custom achievement tab immediately when UltraHardcore loads
-    if not HardcoreAchievementsDB.showCustomTab then HideCustomAchievementTab() end
+    do
+      local _, cdb = HardcoreAchievements_GetCharDB and HardcoreAchievements_GetCharDB() or nil
+      if not (cdb and cdb.showCustomTab) then HideCustomAchievementTab() end
+    end
     
     -- Try modern integration approach first
     C_Timer.After(0.5, function()

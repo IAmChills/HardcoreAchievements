@@ -75,6 +75,32 @@ local function GetCharDB()
     return db, db.chars[playerGUID]
 end
 
+-- Helper: character-specific toggle for showing the custom tab
+local function IsCustomTabEnabled()
+    local function IsUltraHardcoreLoaded()
+        if C_AddOns and C_AddOns.IsAddOnLoaded then
+            local loaded = C_AddOns.IsAddOnLoaded("UltraHardcore")
+            return loaded == true or loaded == 1
+        end
+        if IsAddOnLoaded then
+            local loaded = IsAddOnLoaded("UltraHardcore")
+            return loaded == true or loaded == 1
+        end
+        -- Heuristics: functions/frames created by UltraHardcore
+        if type(ToggleSettings) == "function" then return true end
+        if (TabManager and TabManager.getTabContent) or (_G.tabContents and _G.tabContents[3]) then return true end
+        return false
+    end
+
+    local db, cdb = GetCharDB()
+    -- If UltraHardcore is NOT loaded, default to showing the custom tab
+    if not IsUltraHardcoreLoaded() then
+        return true
+    end
+    -- When UltraHardcore IS loaded, respect per-character flag (default hidden unless explicitly true)
+    return cdb and cdb.showCustomTab == true
+end
+
 local function ClearProgress(achId)
     local _, cdb = GetCharDB()
     if cdb and cdb.progress then cdb.progress[achId] = nil end
@@ -239,13 +265,10 @@ function CheckPendingCompletions()
 
     for _, row in ipairs(AchievementPanel.achievements) do
         if not row.completed then
-            if row.killTracker then
-            else
-                local id = row.id
-                local fn = _G[id .. "_IsCompleted"]
-                if type(fn) == "function" and fn() then
-                    HCA_MarkRowCompleted(row)
-                end
+            local id = row.id
+            local fn = _G[id .. "_IsCompleted"]
+            if type(fn) == "function" and fn() then
+                HCA_MarkRowCompleted(row)
             end
         end
     end
@@ -594,7 +617,6 @@ local minimapDataObject = LDB:NewDataObject("HardcoreAchievements", {
     icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\HardcoreAchievementsButton.tga",
     OnClick = function(self, button)
         if button == "LeftButton" then
-            local db = EnsureDB()
             
             -- Helper function to toggle Character Frame with achievements tab
             local function toggleCharacterFrameTab()
@@ -612,8 +634,8 @@ local minimapDataObject = LDB:NewDataObject("HardcoreAchievements", {
                 end
             end
             
-            -- Check if using custom Character Frame tab
-            if db.showCustomTab then
+            -- Check if using custom Character Frame tab (character-specific)
+            if IsCustomTabEnabled() then
                 toggleCharacterFrameTab()
             elseif type(ToggleSettings) == "function" then
                 -- Toggle UltraHardcore settings window and switch to tab 3 when opening
@@ -644,8 +666,7 @@ local minimapDataObject = LDB:NewDataObject("HardcoreAchievements", {
         tooltip:AddLine("HardcoreAchievements", 1, 1, 1)
         
         -- Show different tooltip text based on user preference and UltraHardcore availability
-        local db = EnsureDB()
-        if db.showCustomTab then
+        if IsCustomTabEnabled() then
             tooltip:AddLine("Left-click to open Hardcore Achievements", 0.5, 0.5, 0.5)
         elseif type(OpenSettingsToTab) == "function" then
             tooltip:AddLine("Left-click to open UltraHardcore Achievements", 0.5, 0.5, 0.5)
@@ -693,6 +714,10 @@ initFrame:SetScript("OnEvent", function(self, event, ...)
 
         local db, cdb = GetCharDB()
         if cdb then
+            -- Migrate global showCustomTab setting to character-specific if present
+            if db.showCustomTab ~= nil and cdb.showCustomTab == nil then
+                cdb.showCustomTab = db.showCustomTab
+            end
             local name, realm = UnitName("player"), GetRealmName()
             local className = UnitClass("player")
             cdb.meta.name      = name
@@ -786,7 +811,7 @@ function LoadTabPosition()
         local posY = db.tabSettings.position.y
         
         -- Respect user preference: hide custom tab entirely if disabled
-        if not db.showCustomTab then
+        if not IsCustomTabEnabled() then
             Tab:Hide()
             if Tab.squareFrame then
                 Tab.squareFrame:Hide()
@@ -1645,8 +1670,7 @@ end)
 
 -- Hook CharacterFrame OnShow to restore square frame visibility if in vertical mode
 CharacterFrame:HookScript("OnShow", function()
-    local db = EnsureDB()
-    if not db.showCustomTab then
+    if not IsCustomTabEnabled() then
         Tab:Hide()
         if Tab.squareFrame then
             Tab.squareFrame:Hide()

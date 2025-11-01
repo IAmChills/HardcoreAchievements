@@ -81,21 +81,33 @@ function M.registerQuestAchievement(cfg)
         if not gate() or not belowMax() then
             return false
         end
-        
-        -- Check both state and progress table for kill/quest completion
-        local progressTable = HardcoreAchievements_GetProgress and HardcoreAchievements_GetProgress(ACH_ID)
-        local killFromProgress = progressTable and progressTable.killed
-        local questFromProgress = progressTable and progressTable.quest
-        
-        local killOk = (not TARGET_NPC_ID) or state.killed or killFromProgress
-        local questOk = (not REQUIRED_QUEST_ID) or state.quest or questFromProgress
-        
-        if killOk and questOk then
-            state.completed = true
-            setProg("completed", true)
-            return true
-        end
-        return false
+		
+		-- Check both state and progress table for kill/quest completion
+		local progressTable = HardcoreAchievements_GetProgress and HardcoreAchievements_GetProgress(ACH_ID)
+		local killFromProgress = progressTable and progressTable.killed
+		local questFromProgress = progressTable and progressTable.quest
+		
+		local questOk = (not REQUIRED_QUEST_ID) or state.quest or questFromProgress
+		
+		-- If both a quest and an NPC are required, the quest alone should fulfill
+		-- the achievement (NPC kill becomes optional when quest is defined).
+		if REQUIRED_QUEST_ID and TARGET_NPC_ID then
+			if questOk then
+				state.completed = true
+				setProg("completed", true)
+				return true
+			end
+			return false
+		end
+
+		-- Otherwise, require each defined component individually
+		local killOk = (not TARGET_NPC_ID) or state.killed or killFromProgress
+		if killOk and questOk then
+			state.completed = true
+			setProg("completed", true)
+			return true
+		end
+		return false
     end
 
     do

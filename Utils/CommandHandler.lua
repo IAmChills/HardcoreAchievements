@@ -227,10 +227,10 @@ local function HandleSlashCommand(msg)
     
     if command == "show" then
         -- Set database flag to show custom tab
-        if not HardcoreAchievementsDB then
-            HardcoreAchievementsDB = {}
+        do
+            local _, cdb = HardcoreAchievements_GetCharDB and HardcoreAchievements_GetCharDB() or nil
+            if cdb then cdb.showCustomTab = true end
         end
-        HardcoreAchievementsDB.showCustomTab = true
         
         -- Immediately show the custom tab
         local tab = _G["CharacterFrameTab" .. (CharacterFrame.numTabs + 1)]

@@ -213,7 +213,7 @@ end)
 function GetPlayerPresetFromSettings()
     -- Return early if UltraHardcoreDB doesn't exist
     if not UltraHardcoreDB then
-        return "1"
+        return
     end
 
     -- Get player's settings from UltraHardcoreDB
@@ -226,7 +226,7 @@ function GetPlayerPresetFromSettings()
     end
 
     if not settings then
-        return "2"
+        return
     end
 
     -- Tier sets (cumulative)
