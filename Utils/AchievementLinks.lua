@@ -18,6 +18,25 @@ local function GetAchievementById(achId)
 	return nil
 end
 
+local function ViewerHasCompletedAchievement(achId)
+    local key = tostring(achId)
+    local getDB = _G.HardcoreAchievements_GetCharDB
+    if type(getDB) == "function" then
+        local _, cdb = getDB()
+        if cdb and cdb.achievements and cdb.achievements[key] and cdb.achievements[key].completed then
+            return true
+        end
+    end
+    if _G.AchievementPanel and _G.AchievementPanel.achievements then
+        for _, row in ipairs(_G.AchievementPanel.achievements) do
+            if tostring(row.id) == key and row.completed then
+                return true
+            end
+        end
+    end
+    return false
+end
+
 -- Public: build a hyperlink string for an achievement id and title
 function HCA_GetAchievementHyperlink(achId, title, icon, points)
     local sender = UnitGUID("player") or ""
@@ -38,11 +57,23 @@ if Old_ItemRef_SetHyperlink then
 			ItemRefTooltip:SetOwner(UIParent, "ANCHOR_PRESERVE")
 			ItemRefTooltip:ClearLines()
 
-			local rec = GetAchievementById(achId)
-			local title = rec and rec.title or ("Achievement " .. tostring(achId))
+            local rec = GetAchievementById(achId)
+            local title = rec and rec.title or ("Achievement " .. tostring(achId))
             local tooltip = rec and rec.tooltip or ""
             local icon = 136116
             local points = 0
+
+            -- Per-viewer secrecy: if secret and viewer hasn't completed, show secret placeholders
+            do
+                local isSecret = rec and rec.secret
+                local viewerCompleted = ViewerHasCompletedAchievement(achId)
+                if isSecret and not viewerCompleted then
+                    title = (rec and rec.secretTitle) or "Secret"
+                    tooltip = (rec and rec.secretTooltip) or "Hidden"
+                    icon = (rec and rec.secretIcon) or icon
+                    points = (rec and tonumber(rec.secretPoints)) or 0
+                end
+            end
 
             if iconStr and iconStr ~= "" then
                 local asNum = tonumber(iconStr)
@@ -96,26 +127,28 @@ if Old_ItemRef_SetHyperlink then
 				end
 			end
 
-			-- Non-dungeon: Zone (left) and Points (right) on the same line
-			if not showedDungeonDetails then
-				local zoneText
-				if rec then
-					if type(rec.zone) == "string" then
-						zoneText = rec.zone
-					elseif type(rec.zoneName) == "string" then
-						zoneText = rec.zoneName
-					elseif type(rec.zoneText) == "string" then
-						zoneText = rec.zoneText
-					elseif rec.mapName then
-						zoneText = tostring(rec.mapName)
-					elseif rec.mapID then
-						zoneText = tostring(rec.mapID)
-					end
-				end
-				if (zoneText and zoneText ~= "") or (points and points > 0) then
-					ItemRefTooltip:AddDoubleLine(zoneText or "", (points and points > 0) and string.format("%d pts", points) or "", 0.7, 0.7, 0.7, 0.7, 0.9, 0.7)
-				end
-			end
+            -- Non-dungeon: Zone (left) and Points (right) on the same line
+            if not showedDungeonDetails then
+                local zoneText
+                if rec then
+                    if type(rec.zone) == "string" then
+                        zoneText = rec.zone
+                    elseif type(rec.zoneName) == "string" then
+                        zoneText = rec.zoneName
+                    elseif type(rec.zoneText) == "string" then
+                        zoneText = rec.zoneText
+                    elseif rec.mapName then
+                        zoneText = tostring(rec.mapName)
+                    elseif rec.mapID then
+                        zoneText = tostring(rec.mapID)
+                    end
+                end
+                local left = zoneText or "\n"
+                local right = (points and points > 0) and string.format("%d pts", points) or ""
+                if left ~= "" or right ~= "" then
+                    ItemRefTooltip:AddDoubleLine(left, right, 0.7, 0.7, 0.7, 0.7, 0.9, 0.7)
+                end
+            end
 			ItemRefTooltip:Show()
 			return
 		end
@@ -146,12 +179,20 @@ end
 local function ChatFilter_HCA(chatFrame, _, msg, ...)
     if not msg or type(msg) ~= "string" then return end
     local changed = false
+    local function ViewerHasCompleted(id)
+        return ViewerHasCompletedAchievement(id)
+    end
     -- Extended form with icon and points: [HCA: Title (id,icon,points)]
     msg = msg:gsub("%[HCA:%s*(.-)%s*%(([^,%)]+)%s*,%s*([^,%)]+)%s*,%s*([^%)]*)%)%]", function(title, id, iconStr, pointsStr)
         local icon = (iconStr and iconStr ~= "") and iconStr or nil
         local pts = (pointsStr and pointsStr ~= "") and tonumber(pointsStr) or nil
         local rec = GetAchievementById(id)
-        local displayTitle = (rec and rec.title) or title
+        local displayTitle
+        if rec and rec.secret and not ViewerHasCompleted(id) then
+            displayTitle = rec.secretTitle or "Secret"
+        else
+            displayTitle = (rec and rec.title) or title
+        end
         local link = HCA_GetAchievementHyperlink(id, displayTitle, icon, pts)
         changed = true
         return link
@@ -161,7 +202,12 @@ local function ChatFilter_HCA(chatFrame, _, msg, ...)
         local icon = (iconStr and iconStr ~= "") and iconStr or nil
         local pts = (pointsStr and pointsStr ~= "") and tonumber(pointsStr) or nil
         local rec = GetAchievementById(id)
-        local displayTitle = (rec and rec.title) or tostring(id)
+        local displayTitle
+        if rec and rec.secret and not ViewerHasCompleted(id) then
+            displayTitle = rec.secretTitle or "Secret"
+        else
+            displayTitle = (rec and rec.title) or tostring(id)
+        end
         local link = HCA_GetAchievementHyperlink(id, displayTitle, icon, pts)
         changed = true
         return link
@@ -169,7 +215,12 @@ local function ChatFilter_HCA(chatFrame, _, msg, ...)
     -- Simple form without extras: [HCA: Title (id)] (id can be string)
     msg = msg:gsub("%[HCA:%s*(.-)%s*%(([^%)]*)%)%]", function(title, id)
         local rec = GetAchievementById(id)
-        local displayTitle = (rec and rec.title) or title
+        local displayTitle
+        if rec and rec.secret and not ViewerHasCompleted(id) then
+            displayTitle = rec.secretTitle or "Secret"
+        else
+            displayTitle = (rec and rec.title) or title
+        end
         local link = HCA_GetAchievementHyperlink(id, displayTitle)
         changed = true
         return link

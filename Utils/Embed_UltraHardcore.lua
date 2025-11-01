@@ -68,6 +68,7 @@ local function ReadRowData(src)
     outleveled = IsRowOutleveled(src),
     requiredKills = src.requiredKills,  -- Store requiredKills for dungeon achievements
     zone = src.zone,
+    hiddenUntilComplete = not not src.hiddenUntilComplete,
   }
 end
 
@@ -322,6 +323,9 @@ function EMBED:Rebuild()
       elseif currentFilter == "failed" then
         shouldShow = data.outleveled
       end
+      if data.hiddenUntilComplete and not data.completed then
+        shouldShow = false
+      end
       
       if shouldShow then
         needed = needed + 1
@@ -373,18 +377,20 @@ function EMBED:Rebuild()
         end
 
         -- Set completion border
-        if data.completed then
-          icon.GreenBorder:Show()
-          icon.YellowBorder:Hide()
-          icon.RedBorder:Hide()
-        elseif data.outleveled then
-          icon.RedBorder:Show()
-          icon.GreenBorder:Hide()
-          icon.YellowBorder:Hide()
-        else
-          icon.YellowBorder:Show()
-          icon.GreenBorder:Hide()
-          icon.RedBorder:Hide()
+        if icon.achId and icon.achId ~= "Secret100" then
+          if data.completed then
+            icon.GreenBorder:Show()
+            icon.YellowBorder:Hide()
+            icon.RedBorder:Hide()
+          elseif data.outleveled then
+            icon.RedBorder:Show()
+            icon.GreenBorder:Hide()
+            icon.YellowBorder:Hide()
+          else
+            icon.YellowBorder:Show()
+            icon.GreenBorder:Hide()
+            icon.RedBorder:Hide()
+          end
         end
         
         -- Show the icon
@@ -486,11 +492,7 @@ local function BuildEmbedIfNeeded()
   UHCA.HideCustomTabCheckbox = CreateFrame("CheckButton", nil, UHCA, "UICheckButtonTemplate")
   UHCA.HideCustomTabCheckbox:SetPoint("BOTTOMRIGHT", UHCA, "BOTTOMRIGHT", 8, -40)
   UHCA.HideCustomTabCheckbox:SetSize(20, 20)
-  do
-    local _, cdb = HardcoreAchievements_GetCharDB and HardcoreAchievements_GetCharDB() or nil
-    local checked = cdb and cdb.showCustomTab == true
-    UHCA.HideCustomTabCheckbox:SetChecked(checked) -- Default to not showing custom tab, but respect saved state
-  end
+  UHCA.HideCustomTabCheckbox:SetChecked(HardcoreAchievementsDB and HardcoreAchievementsDB.showCustomTab == true) -- Default to not showing custom tab, but respect saved state
   
   -- Add label for the checkbox
   UHCA.HideCustomTabLabel = UHCA:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
@@ -504,10 +506,10 @@ local function BuildEmbedIfNeeded()
     local tab = _G["CharacterFrameTab" .. (CharacterFrame.numTabs + 1)]
     
     -- Save the state to the database
-    do
-      local _, cdb = HardcoreAchievements_GetCharDB and HardcoreAchievements_GetCharDB() or nil
-      if cdb then cdb.showCustomTab = isChecked end
+    if not HardcoreAchievementsDB then
+      HardcoreAchievementsDB = {}
     end
+    HardcoreAchievementsDB.showCustomTab = isChecked
     
     if tab and tab:GetText() and tab:GetText():find(ACHIEVEMENTS) then
       if isChecked then
@@ -557,10 +559,7 @@ local function BuildEmbedIfNeeded()
   SyncContentWidth()
   
   -- Apply saved state on initialization
-  local savedState = (function()
-    local _, cdb = HardcoreAchievements_GetCharDB and HardcoreAchievements_GetCharDB() or nil
-    return cdb and cdb.showCustomTab
-  end)()
+  local savedState = HardcoreAchievementsDB and HardcoreAchievementsDB.showCustomTab
   if savedState ~= nil then
     local tab = _G["CharacterFrameTab" .. (CharacterFrame.numTabs + 1)]
     if tab and tab:GetText() and tab:GetText():find(ACHIEVEMENTS) then
@@ -643,11 +642,7 @@ f:SetScript("OnEvent", function(self, event, addonName)
     HookTabManager()
     HookSourceSignals()
     
-    -- Hide custom achievement tab immediately when UltraHardcore loads
-    do
-      local _, cdb = HardcoreAchievements_GetCharDB and HardcoreAchievements_GetCharDB() or nil
-      if not (cdb and cdb.showCustomTab) then HideCustomAchievementTab() end
-    end
+    -- Don't try to access player data here - playerGUID may not be set yet
     
     -- Try modern integration approach first
     C_Timer.After(0.5, function()

@@ -18,7 +18,21 @@ function M.registerQuestAchievement(cfg)
     local ACH_ID = cfg.achId
     local REQUIRED_QUEST_ID = cfg.requiredQuestId
     local TARGET_NPC_ID = cfg.targetNpcId
-    local MAX_LEVEL = cfg.maxLevel or 60
+    -- Support multiple target NPC IDs (number or {ids})
+    local function isTargetNpcId(npcId)
+        if not TARGET_NPC_ID then return false end
+        local n = tonumber(npcId)
+        if not n then return false end
+        if type(TARGET_NPC_ID) == "table" then
+            for _, id in pairs(TARGET_NPC_ID) do
+                if tonumber(id) == n then return true end
+            end
+            return false
+        end
+        return tonumber(TARGET_NPC_ID) == n
+    end
+
+    local MAX_LEVEL = tonumber(cfg.maxLevel)
     local FACTION, RACE, CLASS = cfg.faction, cfg.race, cfg.class
 
     local state = {
@@ -41,7 +55,11 @@ function M.registerQuestAchievement(cfg)
     end
 
     local function belowMax()
-        return (UnitLevel("player") or 1) <= MAX_LEVEL
+        local lvl = UnitLevel("player") or 1
+        if MAX_LEVEL and MAX_LEVEL > 0 then
+            return lvl <= MAX_LEVEL
+        end
+        return true -- no level cap
     end
 
     local function setProg(key, val)
@@ -126,7 +144,8 @@ function M.registerQuestAchievement(cfg)
             if state.completed or not belowMax() then
                 return false
             end
-            if getNpcIdFromGUID(destGUID) ~= TARGET_NPC_ID then
+            local destId = getNpcIdFromGUID(destGUID)
+            if not isTargetNpcId(destId) then
                 return false
             end
             state.killed = true
