@@ -13,6 +13,7 @@ function DungeonCommon.registerDungeonAchievement(def)
   local zone = def.zone
   local requiredMapId = def.requiredMapId
   local requiredKills = def.requiredKills or {}
+  local bossOrder = def.bossOrder  -- Optional ordering for tooltip display
   local faction = def.faction
 
   -- Expose this definition for external lookups (e.g., chat link tooltips)
@@ -74,7 +75,23 @@ function DungeonCommon.registerDungeonAchievement(def)
 
   local function CountsSatisfied()
     for npcId, need in pairs(requiredKills) do
-      if (state.counts[npcId] or 0) < need then
+      -- Support both single NPC IDs and arrays of NPC IDs
+      local isSatisfied = false
+      if type(need) == "table" then
+        -- Array of NPC IDs - check if any of them has been killed
+        for _, id in pairs(need) do
+          if (state.counts[id] or 0) >= 1 then
+            isSatisfied = true
+            break
+          end
+        end
+      else
+        -- Single NPC ID
+        if (state.counts[npcId] or 0) >= need then
+          isSatisfied = true
+        end
+      end
+      if not isSatisfied then
         return false
       end
     end
@@ -190,6 +207,14 @@ function DungeonCommon.registerDungeonAchievement(def)
       [9319] = "Houndmaster Grebmar",
       [9018] = "High Interrogator Gerstahn",
       [10096] = "High Justice Grimstone",
+      -- Ring of Law challengers
+      [9027] = "Gorosh the Dervish",
+      [9028] = "Grizzle",
+      [9029] = "Eviscerator",
+      [9030] = "Ok'thor the Breaker",
+      [9031] = "Anub'shiah",
+      [9032] = "Hedrum the Creeper",
+      -- Ring of Law challengers
       [9024] = "Pyromancer Loregrain",
       [9033] = "General Angerforge",
       [8983] = "Golem Lord Argelmach",
@@ -315,16 +340,59 @@ function DungeonCommon.registerDungeonAchievement(def)
           if next(requiredKills) ~= nil then
             GameTooltip:AddLine("\nRequired Bosses:", 0, 1, 0) -- Green header
             
-            for npcId, need in pairs(requiredKills) do
-              local idNum = tonumber(npcId) or npcId
-              local current = (state.counts[idNum] or state.counts[tostring(idNum)] or 0)
-              local bossName = HCA_GetBossName(idNum)
-              local done = current >= (tonumber(need) or 1)
+            -- Helper function to process a single boss entry
+            local function processBossEntry(npcId, need)
+              local done = false
+              local bossName = ""
+              
+              -- Support both single NPC IDs and arrays of NPC IDs
+              if type(need) == "table" then
+                -- Array of NPC IDs - check if any of them has been killed
+                local anyKilled = false
+                local bossNames = {}
+                for _, id in pairs(need) do
+                  local current = (state.counts[id] or state.counts[tostring(id)] or 0)
+                  local name = HCA_GetBossName(id)
+                  table.insert(bossNames, name)
+                  if current >= 1 then
+                    anyKilled = true
+                  end
+                end
+                done = anyKilled
+                -- Use the key as display name for string keys
+                if type(npcId) == "string" then
+                  -- Use the key as display name for string keys (e.g., "Ring Of Law")
+                  bossName = npcId
+                else
+                  -- For numeric keys, show all names
+                  bossName = table.concat(bossNames, " / ")
+                end
+              else
+                -- Single NPC ID
+                local idNum = tonumber(npcId) or npcId
+                local current = (state.counts[idNum] or state.counts[tostring(idNum)] or 0)
+                bossName = HCA_GetBossName(idNum)
+                done = current >= (tonumber(need) or 1)
+              end
               
               if done then
                 GameTooltip:AddLine(bossName, 1, 1, 1) -- White for completed
               else
                 GameTooltip:AddLine(bossName, 0.5, 0.5, 0.5) -- Gray for not completed
+              end
+            end
+            
+            -- Use ordered display if provided, otherwise use pairs
+            if bossOrder then
+              for _, npcId in ipairs(bossOrder) do
+                local need = requiredKills[npcId]
+                if need then
+                  processBossEntry(npcId, need)
+                end
+              end
+            else
+              for npcId, need in pairs(requiredKills) do
+                processBossEntry(npcId, need)
               end
             end
           end
@@ -380,11 +448,41 @@ function DungeonCommon.registerDungeonAchievement(def)
 
     local npcId = GetNpcIdFromGUID(destGUID)
     
-    if npcId and requiredKills[npcId] then
-        state.counts[npcId] = (state.counts[npcId] or 0) + 1
+    if npcId then
+      local found = false
+      -- Support both single NPC IDs and arrays of NPC IDs
+      if requiredKills[npcId] then
+        -- Direct lookup for single NPC ID
+        if type(requiredKills[npcId]) == "table" then
+          -- This is an array entry - increment the actual killed NPC ID
+          state.counts[npcId] = (state.counts[npcId] or 0) + 1
+          found = true
+        else
+          -- Single NPC ID with count requirement
+          state.counts[npcId] = (state.counts[npcId] or 0) + 1
+          found = true
+        end
+      else
+        -- Check if this NPC ID is in any array
+        for key, value in pairs(requiredKills) do
+          if type(value) == "table" then
+            for _, id in pairs(value) do
+              if id == npcId then
+                state.counts[npcId] = (state.counts[npcId] or 0) + 1
+                found = true
+                break
+              end
+            end
+            if found then break end
+          end
+        end
+      end
+      
+      if found then
         SaveProgress() -- Save progress after each kill
         UpdateTooltip() -- Update tooltip to show progress
         print("[HardcoreAchievements] " .. HCA_GetBossName(npcId) .. " killed as part of achievement: " .. title)
+      end
     end
 
     if CountsSatisfied() and IsGroupEligible() then

@@ -1684,6 +1684,7 @@ do
         AchievementPanel._achEvt:RegisterEvent("COMBAT_LOG_EVENT_UNFILTERED")
         AchievementPanel._achEvt:RegisterEvent("QUEST_TURNED_IN")
         AchievementPanel._achEvt:RegisterEvent("UNIT_SPELLCAST_SENT")
+        AchievementPanel._achEvt:RegisterEvent("UNIT_SPELLCAST_SUCCEEDED")
         AchievementPanel._achEvt:RegisterEvent("CHAT_MSG_TEXT_EMOTE")
         AchievementPanel._achEvt:RegisterEvent("PLAYER_LEVEL_UP")
         AchievementPanel._achEvt:SetScript("OnEvent", function(_, event, ...)
@@ -1739,6 +1740,18 @@ do
                             HCA_MarkRowCompleted(row)
                             HCA_AchToast_Show(row.Icon:GetTexture(), row.Title:GetText(), row.points)
                         end
+                    end
+                end
+            elseif event == "UNIT_SPELLCAST_SUCCEEDED" then
+                local unit, castGUID, spellId = ...
+                if unit ~= "player" then return end
+                if spellId ~= 11435 then return end
+                -- Only check MalletZF achievement for this specific spell
+                for _, row in ipairs(AchievementPanel.achievements) do
+                    if not row.completed and (row.id == "MalletZF" or row.achId == "MalletZF") then
+                        local toastPoints = row.points
+                        HCA_MarkRowCompleted(row)
+                        HCA_AchToast_Show(row.Icon:GetTexture(), row.Title:GetText(), toastPoints)
                     end
                 end
             elseif event == "CHAT_MSG_TEXT_EMOTE" then

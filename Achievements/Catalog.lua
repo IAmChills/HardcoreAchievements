@@ -359,7 +359,7 @@ local Achievements = {
     tooltip = "Reach level 10 without dying",
     icon = 894556,
     points = 10,
-    customIsCompleted = function(newLevel) return (newLevel or 1) >= 10 end,
+    customIsCompleted = function(newLevel) return (newLevel or UnitLevel("player") or 1) >= 10 end,
     staticPoints = true,
 }, {
     achId = "Level20",
@@ -368,7 +368,7 @@ local Achievements = {
     tooltip = "Reach level 20 without dying",
     icon = 894556,
     points = 20,
-    customIsCompleted = function() return (UnitLevel("player") or 1) >= 20 end,
+    customIsCompleted = function(newLevel) return (newLevel or UnitLevel("player") or 1) >= 20 end,
     staticPoints = true,
 }, {
     achId = "Level30",
@@ -377,7 +377,7 @@ local Achievements = {
     tooltip = "Reach level 30 without dying",
     icon = 894556,
     points = 30,
-    customIsCompleted = function() return (UnitLevel("player") or 1) >= 30 end,
+    customIsCompleted = function(newLevel) return (newLevel or UnitLevel("player") or 1) >= 30 end,
     staticPoints = true,
 }, {
     achId = "Level40",
@@ -386,7 +386,7 @@ local Achievements = {
     tooltip = "Reach level 40 without dying",
     icon = 894556,
     points = 40,
-    customIsCompleted = function() return (UnitLevel("player") or 1) >= 40 end,
+    customIsCompleted = function(newLevel) return (newLevel or UnitLevel("player") or 1) >= 40 end,
     staticPoints = true,
 }, {
     achId = "Level50",
@@ -395,7 +395,7 @@ local Achievements = {
     tooltip = "Reach level 50 without dying",
     icon = 894556,
     points = 50,
-    customIsCompleted = function() return (UnitLevel("player") or 1) >= 50 end,
+    customIsCompleted = function(newLevel) return (newLevel or UnitLevel("player") or 1) >= 50 end,
     staticPoints = true,
 }, {
     achId = "Level60",
@@ -404,7 +404,7 @@ local Achievements = {
     tooltip = "Reach level 60 without dying",
     icon = 894556,
     points = 60,
-    customIsCompleted = function() return (UnitLevel("player") or 1) >= 60 end,
+    customIsCompleted = function(newLevel) return (newLevel or UnitLevel("player") or 1) >= 60 end,
     staticPoints = true,
 }, {
     achId = "GalensEscape",
@@ -483,8 +483,7 @@ local Achievements = {
     tooltip = "Obtain the |cff0091e6Mallet of Zul'Farrak|r before level 50",
     icon = 134559,
     points = 10,
-    itemId = 9241,
-    customIsCompleted = function() return GetItemCount(9241, true) > 0 end,
+    customIsCompleted = function() return GetItemCount(9240, true) > 0 end,
     zone = "Hinterlands"
 }, {
     achId = "Hakkar",
@@ -637,7 +636,7 @@ local Achievements = {
     level = nil,
     tooltip = "Throw a snowball at Thrall",
     icon = 236710,
-    points = 1,
+    points = 0,
     faction = FACTION_HORDE,
     zone = "Orgrimmar",
     customIsCompleted = function() return false end,
@@ -660,7 +659,7 @@ local Achievements = {
     level = nil,
     tooltip = "Throw a snowball at Highlord Bolvar Fordragon",
     icon = 236710,
-    points = 1,
+    points = 0,
     faction = FACTION_ALLIANCE,
     zone = "Stormwind City",
     customIsCompleted = function() return false end,
@@ -689,6 +688,7 @@ local Achievements = {
     secreTitle = "Secret Achievement",
     secretTooltip = "You will probably complete this achievement by accident",
     --secretIcon = 132387,
+    secretPoints = 1,
     staticPoints = true,
 }, {
     achId = "Secret100",
