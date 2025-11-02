@@ -747,7 +747,6 @@ end
 
 local initFrame = CreateFrame("Frame")
 initFrame:RegisterEvent("PLAYER_LOGIN")
-initFrame:RegisterEvent("PLAYER_LEVEL_UP")
 initFrame:RegisterEvent("ADDON_LOADED")
 initFrame:SetScript("OnEvent", function(self, event, ...)
     if event == "PLAYER_LOGIN" then
@@ -781,9 +780,6 @@ initFrame:SetScript("OnEvent", function(self, event, ...)
         -- Load saved tab position
         LoadTabPosition()
 
-    elseif event == "PLAYER_LEVEL_UP" then
-        RefreshOutleveledAll()
-        CheckPendingCompletions()
     elseif event == "ADDON_LOADED" then
         local addonName = ...
         if addonName == ADDON_NAME then
@@ -804,7 +800,7 @@ local TabID = CharacterFrame.numTabs + 1
 
 -- Create and configure the subframe
 local Tab = CreateFrame("Button" , "$parentTab"..TabID, CharacterFrame, "CharacterFrameTabButtonTemplate")
-Tab:SetPoint("RIGHT", _G["CharacterFrameTab"..Tabs], "RIGHT", 43, 0)
+Tab:SetPoint("RIGHT", _G["CharacterFrameTab"..Tabs], "RIGHT", 43, 1)
 Tab:SetText(ACHIEVEMENTS)
 PanelTemplates_DeselectTab(Tab)
 
@@ -907,12 +903,38 @@ function LoadTabPosition()
         -- Set the mode on the tab object
         Tab.mode = savedMode
     else
-        -- If no saved data, hide the tab by default
-        -- It will be shown when CharacterFrame is opened via the OnShow hook
-        Tab:Hide()
-        if Tab.squareFrame then
-            Tab.squareFrame:Hide()
-            Tab.squareFrame:EnableMouse(false)
+        -- If no saved data, check showCustomTab setting
+        local _, cdb = GetCharDB()
+        local shouldShow = (cdb and cdb.settings and cdb.settings.showCustomTab)
+        
+        if shouldShow then
+            -- Show tab at default position if showCustomTab is true
+            local isCharacterFrameShown = CharacterFrame and CharacterFrame:IsShown()
+            
+            Tab:ClearAllPoints()
+            Tab:SetPoint("RIGHT", _G["CharacterFrameTab"..Tabs], "RIGHT", 43, 1)
+            Tab:SetAlpha(1)
+            Tab:EnableMouse(true)
+            Tab.mode = "bottom"
+            
+            if Tab.squareFrame then
+                Tab.squareFrame:EnableMouse(false)
+                Tab.squareFrame:Hide()
+            end
+            
+            -- Only show tab if CharacterFrame is shown
+            if isCharacterFrameShown then
+                Tab:Show()
+            else
+                Tab:Hide()
+            end
+        else
+            -- Hide the tab if showCustomTab is false
+            Tab:Hide()
+            if Tab.squareFrame then
+                Tab.squareFrame:Hide()
+                Tab.squareFrame:EnableMouse(false)
+            end
         end
     end
 end
@@ -1580,6 +1602,9 @@ function CreateAchievementRow(parent, achId, title, tooltip, icon, level, points
     if def and type(def.customEmote) == "function" then
         row.emoteTracker = def.customEmote
     end
+    if def and type(def.customIsCompleted) == "function" then
+        row.customIsCompleted = def.customIsCompleted
+    end
     if def and def.hiddenUntilComplete == true then
         row.hiddenUntilComplete = true
         -- Hide initially; filter logic will show it after completion
@@ -1630,6 +1655,7 @@ do
         AchievementPanel._achEvt:RegisterEvent("QUEST_TURNED_IN")
         AchievementPanel._achEvt:RegisterEvent("UNIT_SPELLCAST_SENT")
         AchievementPanel._achEvt:RegisterEvent("CHAT_MSG_TEXT_EMOTE")
+        AchievementPanel._achEvt:RegisterEvent("PLAYER_LEVEL_UP")
         AchievementPanel._achEvt:SetScript("OnEvent", function(_, event, ...)
             if event == "COMBAT_LOG_EVENT_UNFILTERED" then
                 local _, subevent, _, _, _, _, _, destGUID = CombatLogGetCurrentEventInfo()
@@ -1697,6 +1723,39 @@ do
                         end
                     end
                 end
+            elseif event == "PLAYER_LEVEL_UP" then
+                local newLevel = tonumber(...)
+                -- Check for level-based achievement completions
+                for _, row in ipairs(AchievementPanel.achievements) do
+                    if not row.completed then
+                        local isCompleted = false
+                        local fn = nil
+
+                        -- First try customIsCompleted on the row (direct from def)
+                        if type(row.customIsCompleted) == "function" then
+                            fn = row.customIsCompleted
+                        else
+                            -- Fallback to global _IsCompleted function
+                            local id = row.id or row.achId
+                            if id then
+                                fn = _G[id .. "_IsCompleted"]
+                            end
+                        end
+                        
+                        if type(fn) == "function" then
+                            local ok, result = pcall(fn, newLevel)
+                            if ok and result == true then
+                                isCompleted = true
+                            end
+                        end
+                        if isCompleted then
+                            local toastPoints = row.points
+                            HCA_MarkRowCompleted(row)
+                            HCA_AchToast_Show(row.Icon:GetTexture(), row.Title:GetText(), toastPoints)
+                        end
+                    end
+                end
+                RefreshOutleveledAll()
             end
         end)
     end
@@ -1864,15 +1923,37 @@ CharacterFrame:HookScript("OnShow", function()
     -- Load tab position first to restore saved mode and position
     LoadTabPosition()
     
-    -- Ensure square frame is shown if in vertical mode
-    if Tab.squareFrame and Tab.mode == "right" then
-        Tab.squareFrame:Show()
-        Tab.squareFrame:EnableMouse(true)
-        -- Reposition the square frame to match the tab's current position
-        local _, _, _, x, y = Tab:GetPoint()
-        if x and y then
-            Tab.squareFrame:ClearAllPoints()
-            Tab.squareFrame:SetPoint("TOPRIGHT", CharacterFrame, "TOPRIGHT", x, y)
+    -- Ensure tab is shown (LoadTabPosition may have hidden it if CharacterFrame wasn't shown)
+    -- Check if we have saved position data
+    local db = EnsureDB()
+    local hasSavedData = db.tabSettings and db.tabSettings.mode and db.tabSettings.position
+    
+    if not hasSavedData then
+        -- No saved data but showCustomTab is true, ensure tab is at default position and visible
+        Tab:ClearAllPoints()
+        Tab:SetPoint("RIGHT", _G["CharacterFrameTab"..Tabs], "RIGHT", 43, 1)
+        Tab:SetAlpha(1)
+        Tab:EnableMouse(true)
+        Tab.mode = "bottom"
+        Tab:Show()
+        
+        if Tab.squareFrame then
+            Tab.squareFrame:Hide()
+            Tab.squareFrame:EnableMouse(false)
+        end
+    else
+        -- Has saved data, LoadTabPosition should have handled it, but ensure tab/squareFrame is visible
+        if Tab.mode == "bottom" then
+            Tab:Show()
+        elseif Tab.mode == "right" and Tab.squareFrame then
+            Tab.squareFrame:Show()
+            Tab.squareFrame:EnableMouse(true)
+            -- Reposition the square frame to match the tab's current position
+            local _, _, _, x, y = Tab:GetPoint()
+            if x and y then
+                Tab.squareFrame:ClearAllPoints()
+                Tab.squareFrame:SetPoint("TOPRIGHT", CharacterFrame, "TOPRIGHT", x, y)
+            end
         end
     end
 end)
