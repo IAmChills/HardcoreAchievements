@@ -40,6 +40,83 @@ function HardcoreAchievements_ShouldTakeScreenshot()
     return true
 end
 
+-- Create Discord frame (will be created on first use)
+local discordFrame = nil
+local DISCORD_LINK = "discord.gg/MMh2Cv8X" -- Replace with actual Discord invite link
+
+local function CreateDiscordFrame()
+    if discordFrame then return discordFrame end
+    
+    -- Create the main frame
+    discordFrame = CreateFrame("Frame", nil, UIParent)
+    discordFrame:SetSize(250, 250)
+    discordFrame:SetPoint("CENTER")
+    discordFrame:SetFrameStrata("DIALOG")
+    discordFrame:Hide()
+    
+    -- Create simple semi-transparent background
+    local bgTexture = discordFrame:CreateTexture(nil, "BACKGROUND")
+    bgTexture:SetTexture("Interface\\DialogFrame\\UI-DialogBox-Background")
+    bgTexture:SetAllPoints(discordFrame)
+    bgTexture:SetVertexColor(0, 0, 0, 0.8)
+    
+    -- Title
+    local titleText = discordFrame:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+    titleText:SetPoint("TOP", 0, -10)
+    titleText:SetText("Discord Support")
+    titleText:SetTextColor(1, 1, 1, 1)
+    
+    -- QR Code image (fully opaque, no transparency inheritance)
+    local placeholderIcon = discordFrame:CreateTexture(nil, "OVERLAY")
+    placeholderIcon:SetSize(175, 175)
+    placeholderIcon:SetPoint("TOP", titleText, "BOTTOM", 0, -10)
+    placeholderIcon:SetTexture("Interface\\AddOns\\HardcoreAchievements\\Images\\DiscordQR.tga")
+    placeholderIcon:SetAlpha(1.0) -- Fully opaque, don't inherit transparency
+    
+    -- Discord link (read-only input box)
+    local discordLinkBox = CreateFrame("EditBox", nil, discordFrame, "InputBoxTemplate")
+    discordLinkBox:SetSize(150, 32)
+    discordLinkBox:SetPoint("TOP", placeholderIcon, "BOTTOM", 0, -5)
+    discordLinkBox:SetAutoFocus(false)
+    discordLinkBox:SetText(DISCORD_LINK)
+    discordLinkBox:SetTextColor(0.345, 0.396, 0.949, 1) -- Discord blurple color
+    discordLinkBox:SetScript("OnEscapePressed", function(self)
+        self:ClearFocus()
+    end)
+    
+    -- Make read-only (disable editing)
+    discordLinkBox:SetScript("OnEditFocusGained", function(self)
+        -- Allow selection but prevent editing
+        self:HighlightText()
+    end)
+    
+    -- Make it appear read-only by preventing text changes
+    discordLinkBox:SetScript("OnChar", function(self)
+        -- Prevent any text input - restore original text
+        self:SetText(DISCORD_LINK)
+    end)
+    
+    -- Close button
+    local closeButton = CreateFrame("Button", nil, discordFrame, "UIPanelCloseButton")
+    closeButton:SetPoint("TOPRIGHT", -5, -5)
+    closeButton:SetScript("OnClick", function(self)
+        discordFrame:Hide()
+    end)
+    
+    -- Make frame movable
+    discordFrame:SetMovable(true)
+    discordFrame:EnableMouse(true)
+    discordFrame:RegisterForDrag("LeftButton")
+    discordFrame:SetScript("OnDragStart", discordFrame.StartMoving)
+    discordFrame:SetScript("OnDragStop", discordFrame.StopMovingOrSizing)
+    
+    -- Store references
+    discordFrame.discordLinkBox = discordLinkBox
+    discordFrame.placeholderIcon = placeholderIcon
+    
+    return discordFrame
+end
+
 -- Create the main options panel
 local function CreateOptionsPanel()
     -- Create the panel frame
@@ -56,17 +133,30 @@ local function CreateOptionsPanel()
     subtitle:SetText("Configure settings for the Hardcore Achievements addon")
     subtitle:SetTextColor(0.7, 0.7, 0.7, 1)
     
-    -- Track current Y position for layout
-    local currentY = -60
-    local spacing = 30
+    -- =========================================================
+    -- Miscellaneous Category
+    -- =========================================================
+    local miscCategoryTitle = panel:CreateFontString(nil, "ARTWORK", "GameFontNormalLarge")
+    miscCategoryTitle:SetPoint("TOPLEFT", subtitle, "BOTTOMLEFT", 0, -40)
+    miscCategoryTitle:SetText("Miscellaneous")
     
+    -- Disable Screenshots checkbox
+    local disableScreenshotsCB = CreateFrame("CheckButton", nil, panel, "InterfaceOptionsCheckButtonTemplate")
+    disableScreenshotsCB:SetPoint("TOPLEFT", miscCategoryTitle, "BOTTOMLEFT", 0, -8)
+    disableScreenshotsCB.Text:SetText("Disable Screenshots")
+    disableScreenshotsCB.tooltipText = "Prevent the addon from taking screenshots when achievements are completed."
+    disableScreenshotsCB:SetChecked(GetSetting("disableScreenshots", false))
+    disableScreenshotsCB:SetScript("OnClick", function(self)
+        local isChecked = self:GetChecked()
+        SetSetting("disableScreenshots", isChecked)
+    end)
+
     -- =========================================================
     -- User Interface Category
     -- =========================================================
     local uiCategoryTitle = panel:CreateFontString(nil, "ARTWORK", "GameFontNormalLarge")
-    uiCategoryTitle:SetPoint("TOPLEFT", subtitle, "BOTTOMLEFT", 0, currentY)
+    uiCategoryTitle:SetPoint("TOPLEFT", disableScreenshotsCB, "BOTTOMLEFT", 0, -30)
     uiCategoryTitle:SetText("User Interface")
-    currentY = currentY - spacing
     
     -- Reset Achievements Tab button
     local resetTabButton = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
@@ -88,28 +178,33 @@ local function CreateOptionsPanel()
     resetTabDesc:SetWidth(600)
     resetTabDesc:SetJustifyH("LEFT")
     resetTabDesc:SetJustifyV("TOP")
-    currentY = currentY - (spacing * 2) -- Extra spacing for button and description
     
     -- =========================================================
-    -- Miscellaneous Category
+    -- Support & Contact Category
     -- =========================================================
-    currentY = currentY - 20 -- Extra spacing between categories
-    local miscCategoryTitle = panel:CreateFontString(nil, "ARTWORK", "GameFontNormalLarge")
-    miscCategoryTitle:SetPoint("TOPLEFT", subtitle, "BOTTOMLEFT", 0, currentY)
-    miscCategoryTitle:SetText("Miscellaneous")
-    currentY = currentY - spacing
+    local supportCategoryTitle = panel:CreateFontString(nil, "ARTWORK", "GameFontNormalLarge")
+    supportCategoryTitle:SetPoint("TOPLEFT", resetTabDesc, "BOTTOMLEFT", 0, -30)
+    supportCategoryTitle:SetText("Support & Contact")
     
-    -- Disable Screenshots checkbox
-    local disableScreenshotsCB = CreateFrame("CheckButton", nil, panel, "InterfaceOptionsCheckButtonTemplate")
-    disableScreenshotsCB:SetPoint("TOPLEFT", miscCategoryTitle, "BOTTOMLEFT", 0, -8)
-    disableScreenshotsCB.Text:SetText("Disable Screenshots")
-    disableScreenshotsCB.tooltipText = "Prevent the addon from taking screenshots when achievements are completed."
-    disableScreenshotsCB:SetChecked(GetSetting("disableScreenshots", false))
-    disableScreenshotsCB:SetScript("OnClick", function(self)
-        local isChecked = self:GetChecked()
-        SetSetting("disableScreenshots", isChecked)
+    -- Support text
+    local supportText = panel:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
+    supportText:SetPoint("TOPLEFT", supportCategoryTitle, "BOTTOMLEFT", 0, -8)
+    supportText:SetText("Found a bug or want to make an appeal? Contact me via Discord! All appeals must have clear evidence of your player name, level, and what the issue is.")
+    supportText:SetTextColor(0.8, 0.8, 0.8, 1)
+    supportText:SetWidth(600)
+    supportText:SetJustifyH("LEFT")
+    supportText:SetJustifyV("TOP")
+    
+    -- Discord button
+    local discordButton = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
+    discordButton:SetPoint("TOPLEFT", supportText, "BOTTOMLEFT", 0, -12)
+    discordButton:SetText("Discord")
+    discordButton:SetWidth(120)
+    discordButton:SetHeight(25)
+    discordButton:SetScript("OnClick", function(self)
+        local frame = CreateDiscordFrame()
+        frame:Show()
     end)
-    currentY = currentY - spacing
     
     -- Store references for future use
     panel.checkboxes = {
@@ -117,6 +212,7 @@ local function CreateOptionsPanel()
     }
     panel.buttons = {
         resetAchievementsTab = resetTabButton,
+        discord = discordButton,
     }
     
     -- Refresh function to update checkboxes when panel is shown
@@ -152,4 +248,3 @@ local optionsPanel = CreateOptionsPanel()
 
 -- Global reference for external access if needed
 _HardcoreAchievementsOptionsPanel = optionsPanel
-
