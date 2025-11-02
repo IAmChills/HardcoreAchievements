@@ -1,6 +1,12 @@
-local ADDON_NAME = ...
+local ADDON_NAME, addon = ...
 local playerGUID
 HCA_SELF_FOUND_BONUS = 5
+
+-- Create/initialize addon table and expose globally (similar to BugSack pattern)
+if not addon then
+    addon = {}
+end
+_G[ADDON_NAME] = addon
 
 local function EnsureDB()
     HardcoreAchievementsDB = HardcoreAchievementsDB or {}
@@ -483,7 +489,21 @@ function HCA_AchToast_Show(iconTex, title, pts)
     PlaySoundFile("Interface\\AddOns\\HardcoreAchievements\\Sounds\\AchievementSound1.ogg", "Effects")
 
     C_Timer.After(1, function()
-        Screenshot()
+        -- Check if screenshots are disabled before taking screenshot
+        local shouldTakeScreenshot = true
+        if type(HardcoreAchievements_ShouldTakeScreenshot) == "function" then
+            shouldTakeScreenshot = HardcoreAchievements_ShouldTakeScreenshot()
+        else
+            -- Fallback: check setting directly if function doesn't exist yet
+            local _, cdb = GetCharDB()
+            if cdb and cdb.settings and cdb.settings.disableScreenshots then
+                shouldTakeScreenshot = false
+            end
+        end
+        
+        if shouldTakeScreenshot then
+            Screenshot()
+        end
     end)
 
     holdSeconds = holdSeconds or 3
@@ -703,6 +723,11 @@ local minimapDataObject = LDB:NewDataObject("HardcoreAchievements", {
                 -- Fallback: use Character Frame method
                 toggleCharacterFrameTab()
             end
+        elseif button == "RightButton" then
+            -- Right-click to open options panel
+            if Settings and Settings.OpenToCategory then
+                Settings.OpenToCategory(addon.settingsCategory:GetID())
+            end
         end
     end,
     OnTooltipShow = function(tooltip)
@@ -717,6 +742,7 @@ local minimapDataObject = LDB:NewDataObject("HardcoreAchievements", {
         else
             tooltip:AddLine("Left-click to open Hardcore Achievements", 0.5, 0.5, 0.5)
         end
+        tooltip:AddLine("Right-click to open Options", 0.5, 0.5, 0.5)
         
         -- Show current achievement count
         local completedCount, totalCount = HCA_AchievementCount()
@@ -800,7 +826,7 @@ local TabID = CharacterFrame.numTabs + 1
 
 -- Create and configure the subframe
 local Tab = CreateFrame("Button" , "$parentTab"..TabID, CharacterFrame, "CharacterFrameTabButtonTemplate")
-Tab:SetPoint("RIGHT", _G["CharacterFrameTab"..Tabs], "RIGHT", 43, 1)
+-- Don't set position here - let LoadTabPosition handle it after CharacterFrame is fully initialized
 Tab:SetText(ACHIEVEMENTS)
 PanelTemplates_DeselectTab(Tab)
 
@@ -912,7 +938,7 @@ function LoadTabPosition()
             local isCharacterFrameShown = CharacterFrame and CharacterFrame:IsShown()
             
             Tab:ClearAllPoints()
-            Tab:SetPoint("RIGHT", _G["CharacterFrameTab"..Tabs], "RIGHT", 43, 1)
+            Tab:SetPoint("RIGHT", _G["CharacterFrameTab"..Tabs], "RIGHT", 43, 0)
             Tab:SetAlpha(1)
             Tab:EnableMouse(true)
             Tab.mode = "bottom"
@@ -1186,7 +1212,9 @@ do
         self:ClearAllPoints()
         -- Anchor to bottom by default so first frame is stable
         if mode == "bottom" then
-            self:SetPoint("BOTTOMLEFT", CharacterFrame, "BOTTOMLEFT", 0, 45)
+            -- Use RIGHT anchor to preserve 1-pixel offset (same as default horizontal position)
+            local Tabs = CharacterFrame.numTabs
+            self:SetPoint("RIGHT", _G["CharacterFrameTab"..Tabs], "RIGHT", 43, 0)
         else
             self:SetPoint("TOPRIGHT", CharacterFrame, "TOPRIGHT", 25, 0)
         end
@@ -1227,7 +1255,9 @@ do
                 Tab.mode = mode
                 SwitchTabMode("bottom")
                 s:ClearAllPoints()
-                s:SetPoint("BOTTOMLEFT", CharacterFrame, "BOTTOMLEFT", 0, 45)
+                -- Re-anchor using RIGHT anchor to preserve 1-pixel offset (same as default horizontal position)
+                local Tabs = CharacterFrame.numTabs
+                s:SetPoint("RIGHT", _G["CharacterFrameTab"..Tabs], "RIGHT", 43, 0)
             end
 
             if mode == "bottom" then
@@ -1931,7 +1961,7 @@ CharacterFrame:HookScript("OnShow", function()
     if not hasSavedData then
         -- No saved data but showCustomTab is true, ensure tab is at default position and visible
         Tab:ClearAllPoints()
-        Tab:SetPoint("RIGHT", _G["CharacterFrameTab"..Tabs], "RIGHT", 43, 1)
+        Tab:SetPoint("RIGHT", _G["CharacterFrameTab"..Tabs], "RIGHT", 43, 0)
         Tab:SetAlpha(1)
         Tab:EnableMouse(true)
         Tab.mode = "bottom"
