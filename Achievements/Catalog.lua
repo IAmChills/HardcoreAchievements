@@ -355,11 +355,11 @@ local Achievements = {
 {
     achId = "Level10",
     title = "This Isn't Too Bad...",
-    level = 2,
+    level = 10,
     tooltip = "Reach level 10 without dying",
     icon = 894556,
     points = 10,
-    customIsCompleted = function(newLevel) return (newLevel or 1) >= 2 end,
+    customIsCompleted = function(newLevel) return (newLevel or 1) >= 10 end,
     staticPoints = true,
 }, {
     achId = "Level20",
