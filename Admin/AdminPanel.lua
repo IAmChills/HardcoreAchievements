@@ -222,17 +222,20 @@ local function CreateAdminPanel()
         -- Get achievements from the catalog
         if _G.Achievements then
             for _, achievement in ipairs(_G.Achievements) do
+                local levelText = achievement.level and (" (Level " .. achievement.level .. ")") or " (No Level)"
                 table.insert(achievementList, {
-					text = achievement.title .. " (Level " .. achievement.level .. ")",
+					text = achievement.title .. levelText,
                     value = achievement.achId,
                     achievement = achievement
                 })
             end
         end
         
-        -- Sort by level
+        -- Sort by level (nil values go to the end)
         table.sort(achievementList, function(a, b)
-            return a.achievement.level < b.achievement.level
+            local levelA = a.achievement.level or 999
+            local levelB = b.achievement.level or 999
+            return levelA < levelB
         end)
         
         local selectedAchievement = nil
