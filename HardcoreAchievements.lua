@@ -1910,7 +1910,7 @@ do
                     end
                 end
             elseif event == "PLAYER_LEVEL_UP" then
-                local newLevel = tonumber(...)
+                local newLevel = tonumber(select(1, ...))
                 -- Check for level-based achievement completions
                 for _, row in ipairs(AchievementPanel.achievements) do
                     if not row.completed then
