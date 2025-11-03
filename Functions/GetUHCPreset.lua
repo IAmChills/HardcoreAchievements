@@ -150,30 +150,88 @@ local function UpdateAllAchievementPoints()
         end
     end
 
-    -- Apply solo achievements doubling if enabled (only for NPC kill achievements)
+    -- SSF toggle is now purely visual - show what points would be earned in solo mode
+    -- Actual solo validation happens at kill/quest time and points are stored then
+    -- Solo preview only shows if player is self-found
     local isSoloMode = _G.HardcoreAchievements_IsSoloModeEnabled and _G.HardcoreAchievements_IsSoloModeEnabled() or false
-    if isSoloMode then
+    if isSoloMode and isSelfFound then
         for _, row in ipairs(AchievementPanel.achievements) do
             if row.id and not row.completed then
-                -- Double points for solo mode (excluding static points, if achievement allows it)
+                -- Visual doubling: show what points would be in solo mode (excluding static points, if achievement allows it)
+                -- This is just a preview - actual points are determined at kill/quest time
                 if not row.staticPoints and row.allowSoloDouble then
-                    local currentPoints = tonumber(row.points) or 0
-                    row.points = currentPoints * 2
-                    row.Points:SetText(tostring(row.points) .. " pts")
+                    -- Check if we already have stored points from a previous kill/quest
+                    local progress = HardcoreAchievements_GetProgress and HardcoreAchievements_GetProgress(row.id)
+                    if not (progress and progress.pointsAtKill) then
+                        -- No stored points yet, show doubled points as preview
+                        local currentPoints = tonumber(row.points) or 0
+                        row.points = currentPoints * 2
+                        row.Points:SetText(tostring(row.points) .. " pts")
+                    end
                 end
                 
-                -- Update Sub text to show "Solo" if SSF mode is enabled
-                if row.allowSoloDouble and row.Sub and row.maxLevel and row.maxLevel > 0 then
+                -- Update Sub text - show "pending solo" if we have stored solo status, or preview "Solo" if solo mode toggle is on
+                -- Only update Sub text for incomplete achievements to preserve completed achievement solo indicators
+                if not row.completed and row.allowSoloDouble and row.Sub and row.maxLevel and row.maxLevel > 0 then
                     local levelText = LEVEL .. " " .. row.maxLevel
-                    row.Sub:SetText(levelText .. "\n|cFF9D3AFFSolo|r")
+                    local progress = HardcoreAchievements_GetProgress and HardcoreAchievements_GetProgress(row.id)
+                    local hasSoloStatus = progress and (progress.soloKill or progress.soloQuest)
+                    
+                    -- If we have stored pointsAtKill (solo kill/quest), use those points
+                    -- pointsAtKill doesn't include self-found bonus, so add it if applicable
+                    if progress and progress.pointsAtKill then
+                        local storedPoints = tonumber(progress.pointsAtKill) or row.points
+                        -- Add self-found bonus if applicable (pointsAtKill doesn't include it)
+                        if isSelfFound and not row.isSecretAchievement then
+                            storedPoints = storedPoints + HCA_SELF_FOUND_BONUS
+                        end
+                        row.points = storedPoints
+                        if row.Points then
+                            row.Points:SetText(tostring(storedPoints) .. " pts")
+                        end
+                    end
+                    
+                    -- Show "pending solo" if we have stored solo status, or preview "Solo" if solo mode toggle is on
+                    -- Solo indicators only show if player is self-found
+                    if hasSoloStatus and isSelfFound then
+                        row.Sub:SetText(levelText .. "\n|cFF9D3AFFPending solo|r")
+                    elseif isSoloMode and not hasSoloStatus and isSelfFound then
+                        row.Sub:SetText(levelText .. "\n|cFF9D3AFFSolo|r")
+                    else
+                        row.Sub:SetText(levelText)
+                    end
                 end
             end
         end
     else
-        -- When solo mode is disabled, update Sub text to remove "Solo"
+        -- When solo mode toggle is disabled, only show "pending solo" if we have stored solo status from previous kills/quests
+        local isSelfFound = IsSelfFound()
         for _, row in ipairs(AchievementPanel.achievements) do
             if row.id and not row.completed and row.Sub and row.maxLevel and row.maxLevel > 0 then
-                row.Sub:SetText(LEVEL .. " " .. row.maxLevel)
+                local levelText = LEVEL .. " " .. row.maxLevel
+                local progress = HardcoreAchievements_GetProgress and HardcoreAchievements_GetProgress(row.id)
+                local hasSoloStatus = progress and (progress.soloKill or progress.soloQuest)
+                
+                -- If we have stored pointsAtKill (solo kill/quest), use those points
+                -- pointsAtKill doesn't include self-found bonus, so add it if applicable
+                if progress and progress.pointsAtKill then
+                    local storedPoints = tonumber(progress.pointsAtKill) or row.points
+                    -- Check if self-found bonus should be added
+                    if isSelfFound and not row.isSecretAchievement then
+                        storedPoints = storedPoints + HCA_SELF_FOUND_BONUS
+                    end
+                    row.points = storedPoints
+                    if row.Points then
+                        row.Points:SetText(tostring(storedPoints) .. " pts")
+                    end
+                end
+                
+                -- Solo indicators only show if player is self-found
+                if hasSoloStatus and isSelfFound then
+                    row.Sub:SetText(levelText .. "\n|cFF9D3AFFPending solo|r")
+                else
+                    row.Sub:SetText(levelText)
+                end
             end
         end
     end
@@ -204,8 +262,11 @@ function HCA_RefreshAllAchievementPoints()
                 local multiplier = GetPresetMultiplier(preset)
                 finalPoints = math.floor(originalPoints * multiplier + 0.5)
                 
-                -- Apply solo mode doubling (if achievement allows it)
-                if isSoloMode and row.allowSoloDouble then
+                -- Visual preview: if solo mode toggle is on and no stored points, show doubled points
+                -- This is just a preview - actual points are determined at kill/quest time
+                -- Solo preview only applies if player is self-found
+                local progress = HardcoreAchievements_GetProgress and HardcoreAchievements_GetProgress(row.id)
+                if isSoloMode and row.allowSoloDouble and isSelfFound and not (progress and progress.pointsAtKill) then
                     finalPoints = finalPoints * 2
                 end
             end
@@ -220,11 +281,31 @@ function HCA_RefreshAllAchievementPoints()
                 row.Points:SetText(tostring(finalPoints) .. " pts")
             end
             
-            -- Update Sub text to show "Solo" if SSF mode is enabled
-            if row.Sub and row.maxLevel and row.maxLevel > 0 then
+            -- Update Sub text - check if we have stored solo status from previous kills/quests
+            -- Only update Sub text for incomplete achievements to preserve completed achievement solo indicators
+            if not row.completed and row.Sub and row.maxLevel and row.maxLevel > 0 then
                 local levelText = LEVEL .. " " .. row.maxLevel
-                if isSoloMode and row.allowSoloDouble then
-                    row.Sub:SetText(levelText .. "\n|cFF9D3AFFSolo|r")
+                -- Check progress for solo status
+                local progress = HardcoreAchievements_GetProgress and HardcoreAchievements_GetProgress(row.id)
+                local hasSoloStatus = progress and (progress.soloKill or progress.soloQuest)
+                
+                -- If we have stored pointsAtKill (solo kill/quest), use those points
+                -- pointsAtKill doesn't include self-found bonus, so add it if applicable
+                if progress and progress.pointsAtKill then
+                    finalPoints = tonumber(progress.pointsAtKill) or finalPoints
+                    -- Add self-found bonus if applicable (pointsAtKill doesn't include it)
+                    if isSelfFound and not row.isSecretAchievement then
+                        finalPoints = finalPoints + HCA_SELF_FOUND_BONUS
+                    end
+                    row.points = finalPoints
+                    if row.Points then
+                        row.Points:SetText(tostring(finalPoints) .. " pts")
+                    end
+                end
+                
+                -- Solo indicators only show if player is self-found
+                if hasSoloStatus and isSelfFound then
+                    row.Sub:SetText(levelText .. "\n|cFF9D3AFFPending solo|r")
                 else
                     row.Sub:SetText(levelText)
                 end

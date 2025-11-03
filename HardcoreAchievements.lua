@@ -194,7 +194,84 @@ function HCA_MarkRowCompleted(row)
     row.completed = true
 
     if row.Title and row.Title.SetTextColor then row.Title:SetTextColor(0.6, 0.9, 0.6) end
-    if row.Sub then row.Sub:SetText(AUCTION_TIME_LEFT0) end
+    
+    local _, cdb = GetCharDB()
+    local wasSolo = false
+    if cdb then
+        local id = row.id or (row.Title and row.Title:GetText()) or ("row"..tostring(row))
+        cdb.progress = cdb.progress or {}
+        local progress = cdb.progress[id]
+        
+        -- Check if achievement was completed solo before clearing progress
+        if progress and (progress.soloKill or progress.soloQuest) then
+            wasSolo = true
+        end
+        
+        cdb.achievements[id] = cdb.achievements[id] or {}
+        local rec = cdb.achievements[id]
+        rec.completed   = true
+        rec.completedAt = time()
+        rec.level       = UnitLevel("player") or nil
+        -- Store solo status in achievement record so it persists after progress is cleared
+        rec.wasSolo = wasSolo
+        -- Check if we have pointsAtKill value in progress to use those points
+        local finalPoints = tonumber(row.points) or 0
+
+        local usePointsAtKill = false
+        if progress and progress.pointsAtKill then
+            -- Use the points that were stored at the time of kill/quest (without self-found bonus)
+            finalPoints = tonumber(progress.pointsAtKill) or 0
+            usePointsAtKill = true
+            -- Add self-found bonus if applicable (pointsAtKill doesn't include it)
+            local isSelfFound = _G.IsSelfFound and _G.IsSelfFound() or false
+            if isSelfFound and not row.isSecretAchievement then
+                finalPoints = finalPoints + HCA_SELF_FOUND_BONUS
+                -- Mark that we've already applied self-found bonus so ApplySelfFoundBonus doesn't add it again
+                rec.SFMod = true
+            end
+        end
+
+        -- For secret achievements, compute final points from reveal base with multipliers/bonuses
+        if row.isSecretAchievement then
+            local base = tonumber(row.revealPointsBase or row.originalPoints) or 0
+            local computed = base
+            if not (row.revealStaticPoints) then
+                local preset = GetPlayerPresetFromSettings and GetPlayerPresetFromSettings() or nil
+                local multiplier = GetPresetMultiplier and GetPresetMultiplier(preset) or 1.0
+                computed = base + math.floor((base) * (multiplier - 1) + 0.5)
+            end
+            -- Add self-found bonus if applicable
+            local isSelfFound = _G.IsSelfFound and _G.IsSelfFound() or false
+            if isSelfFound then
+                computed = computed + HCA_SELF_FOUND_BONUS
+            end
+            finalPoints = computed
+        end
+
+        -- Points from pointsAtKill already include multiplier and solo doubling if applicable
+        -- We've added self-found bonus above if needed
+
+        rec.points = finalPoints
+        -- Reflect final points in UI row and text immediately
+        row.points = finalPoints
+        if row.Points then
+            row.Points:SetText(tostring(finalPoints) .. " pts")
+        end
+
+        ClearProgress(id)
+        HCA_UpdateTotalPoints()
+    end
+    
+    -- Set Sub text with "Solo" indicator if achievement was completed solo
+    -- Solo indicators only show if player is self-found
+    local isSelfFound = _G.IsSelfFound and _G.IsSelfFound() or false
+    if row.Sub then
+        if wasSolo and isSelfFound then
+            row.Sub:SetText(AUCTION_TIME_LEFT0 .. "\n|cFF9D3AFFSolo|r")
+        else
+            row.Sub:SetText(AUCTION_TIME_LEFT0)
+        end
+    end
     if row.Points then row.Points:SetTextColor(0.6, 0.9, 0.6) end
     if row.TS then row.TS:SetText(FormatTimestamp(time())) end
     if row.Icon and row.Icon.SetDesaturated then row.Icon:SetDesaturated(false) end
@@ -210,57 +287,6 @@ function HCA_MarkRowCompleted(row)
         if row.revealIcon and row.Icon then row.Icon:SetTexture(row.revealIcon) end
         if row.revealTooltip then row.tooltip = row.revealTooltip end
         row.staticPoints = row.revealStaticPoints or false
-    end
-
-    local _, cdb = GetCharDB()
-    if cdb then
-        local id = row.id or (row.Title and row.Title:GetText()) or ("row"..tostring(row))
-        cdb.achievements[id] = cdb.achievements[id] or {}
-        local rec = cdb.achievements[id]
-        rec.completed   = true
-        rec.completedAt = time()
-        rec.level       = UnitLevel("player") or nil
-        -- Check if we have pointsAtKill value in progress to use those points
-        local finalPoints = tonumber(row.points) or 0
-		cdb.progress = cdb.progress or {}
-		local progress = cdb.progress[id]
-
-        local usePointsAtKill = false
-        if progress and progress.pointsAtKill then
-            -- Use the points that were stored at the time of kill
-            finalPoints = tonumber(progress.pointsAtKill) or 0
-            usePointsAtKill = true
-        end
-
-        -- For secret achievements, compute final points from reveal base with multipliers/bonuses
-        if row.isSecretAchievement then
-            local base = tonumber(row.revealPointsBase or row.originalPoints) or 0
-            local computed = base
-            if not (row.revealStaticPoints) then
-                local preset = GetPlayerPresetFromSettings and GetPlayerPresetFromSettings() or nil
-                local multiplier = GetPresetMultiplier and GetPresetMultiplier(preset) or 1.0
-                computed = base + math.floor((base) * (multiplier - 1) + 0.5)
-            end
-            finalPoints = computed
-        end
-
-        -- Double points if solo achievements mode is enabled (if achievement allows it)
-        -- Only apply if we didn't use pointsAtKill (which already includes SSF doubling)
-        if not usePointsAtKill and _G.HardcoreAchievements_IsSoloModeEnabled and _G.HardcoreAchievements_IsSoloModeEnabled() then
-            if row.allowSoloDouble then
-                finalPoints = finalPoints * 2
-            end
-        end
-
-        rec.points = finalPoints
-        -- Reflect final points in UI row and text immediately
-        row.points = finalPoints
-        if row.Points then
-            row.Points:SetText(tostring(finalPoints) .. " pts")
-        end
-
-        ClearProgress(id)
-        HCA_UpdateTotalPoints()
     end
     
     -- Broadcast achievement completion to emote channel
@@ -305,7 +331,16 @@ local function RestoreCompletionsFromDB()
         if rec and rec.completed then
             row.completed = true
             if row.Title and row.Title.SetTextColor then row.Title:SetTextColor(0.6, 0.9, 0.6) end
-            if row.Sub then row.Sub:SetText(AUCTION_TIME_LEFT0) end
+            -- Check if achievement was completed solo and show indicator
+            -- Solo indicators only show if player is self-found
+            local isSelfFound = _G.IsSelfFound and _G.IsSelfFound() or false
+            if row.Sub then
+                if rec.wasSolo and isSelfFound then
+                    row.Sub:SetText(AUCTION_TIME_LEFT0 .. "\n|cFF9D3AFFSolo|r")
+                else
+                    row.Sub:SetText(AUCTION_TIME_LEFT0)
+                end
+            end
             if row.TS then row.TS:SetText(FormatTimestamp(rec.completedAt)) end
             if row.Points then row.Points:SetTextColor(0.6, 0.9, 0.6) end
             
@@ -476,7 +511,7 @@ end
 -- Call Achievement Toast
 -- =========================================================
 
-function HCA_AchToast_Show(iconTex, title, pts)
+function HCA_AchToast_Show(iconTex, title, pts, achIdOrRow)
     local f = HCA_CreateAchToast()
     f:Hide()
     f:SetAlpha(1)
@@ -488,10 +523,37 @@ function HCA_AchToast_Show(iconTex, title, pts)
     end
     if not tex then tex = 136116 end
 
+    -- Check for pointsAtKill and add self-found bonus if applicable
+    local finalPoints = pts or 0
+    if achIdOrRow then
+        local _, cdb = GetCharDB()
+        local achId = nil
+        local row = nil
+        
+        if type(achIdOrRow) == "table" then
+            -- It's a row object
+            row = achIdOrRow
+            achId = row.achId or row.id
+        else
+            -- It's an achievement ID string
+            achId = achIdOrRow
+        end
+        
+        if cdb and cdb.progress and achId and cdb.progress[achId] and cdb.progress[achId].pointsAtKill then
+            finalPoints = tonumber(cdb.progress[achId].pointsAtKill) or finalPoints
+            -- Add self-found bonus if applicable (pointsAtKill doesn't include it)
+            local isSelfFound = _G.IsSelfFound and _G.IsSelfFound() or false
+            local isSecretAchievement = row and row.isSecretAchievement or false
+            if isSelfFound and not isSecretAchievement then
+                finalPoints = finalPoints + HCA_SELF_FOUND_BONUS
+            end
+        end
+    end
+
     -- these exist because we exposed them in the factory
     f.icon:SetTexture(tex)
     f.name:SetText(title or "")
-    f.points:SetText(pts and tostring(pts) or "")
+    f.points:SetText(finalPoints and tostring(finalPoints) or "")
 
     f:Show()
 
@@ -1787,17 +1849,8 @@ do
                 for _, row in ipairs(AchievementPanel.achievements) do
                     if not row.completed and type(row.killTracker) == "function" then
                         if row.killTracker(destGUID) then
-                            -- Get pointsAtKill from progress if it exists, otherwise use row.points
-                            local toastPoints = row.points
-                            local _, cdb = GetCharDB()
-                            local achId = row.achId or row.id
-
-                            if cdb and cdb.progress and cdb.progress[achId] and cdb.progress[achId].pointsAtKill then
-                                toastPoints = tonumber(cdb.progress[achId].pointsAtKill) or row.points
-                            end
-                            
                             HCA_MarkRowCompleted(row)
-                            HCA_AchToast_Show(row.Icon:GetTexture(), row.Title:GetText(), toastPoints)
+                            HCA_AchToast_Show(row.Icon:GetTexture(), row.Title:GetText(), row.points, row)
                         end
                     end
                 end
@@ -1807,17 +1860,8 @@ do
                 for _, row in ipairs(AchievementPanel.achievements) do
                     if not row.completed and type(row.questTracker) == "function" then
                         if row.questTracker(questID) then
-                            -- Get pointsAtKill from progress if it exists, otherwise use row.points
-                            local toastPoints = row.points
-                            local _, cdb = GetCharDB()
-                            local achId = row.achId or row.id
-
-                            if cdb and cdb.progress and cdb.progress[achId] and cdb.progress[achId].pointsAtKill then
-                                toastPoints = tonumber(cdb.progress[achId].pointsAtKill) or row.points
-                            end
-
                             HCA_MarkRowCompleted(row)
-                            HCA_AchToast_Show(row.Icon:GetTexture(), row.Title:GetText(), toastPoints)
+                            HCA_AchToast_Show(row.Icon:GetTexture(), row.Title:GetText(), row.points, row)
                         end
                     end
                 end
@@ -1832,7 +1876,7 @@ do
                         local ok, shouldComplete = pcall(row.spellTracker, tonumber(spellId), tostring(targetName or ""))
                         if ok and shouldComplete == true then
                             HCA_MarkRowCompleted(row)
-                            HCA_AchToast_Show(row.Icon:GetTexture(), row.Title:GetText(), row.points)
+                            HCA_AchToast_Show(row.Icon:GetTexture(), row.Title:GetText(), row.points, row)
                         end
                     end
                 end
@@ -1843,9 +1887,8 @@ do
                 -- Only check MalletZF achievement for this specific spell
                 for _, row in ipairs(AchievementPanel.achievements) do
                     if not row.completed and (row.id == "MalletZF" or row.achId == "MalletZF") then
-                        local toastPoints = row.points
                         HCA_MarkRowCompleted(row)
-                        HCA_AchToast_Show(row.Icon:GetTexture(), row.Title:GetText(), toastPoints)
+                        HCA_AchToast_Show(row.Icon:GetTexture(), row.Title:GetText(), row.points, row)
                     end
                 end
             elseif event == "CHAT_MSG_TEXT_EMOTE" then
@@ -1856,7 +1899,7 @@ do
                         local ok, shouldComplete = pcall(row.chatTracker, tostring(msg or ""))
                         if ok and shouldComplete == true then
                             HCA_MarkRowCompleted(row)
-                            HCA_AchToast_Show(row.Icon:GetTexture(), row.Title:GetText(), row.points)
+                            HCA_AchToast_Show(row.Icon:GetTexture(), row.Title:GetText(), row.points, row)
                         end
                     end
                 end
@@ -1886,9 +1929,8 @@ do
                             end
                         end
                         if isCompleted then
-                            local toastPoints = row.points
                             HCA_MarkRowCompleted(row)
-                            HCA_AchToast_Show(row.Icon:GetTexture(), row.Title:GetText(), toastPoints)
+                            HCA_AchToast_Show(row.Icon:GetTexture(), row.Title:GetText(), row.points, row)
                         end
                     end
                 end
@@ -1906,7 +1948,7 @@ do
                     for _, row in ipairs(AchievementPanel.achievements) do
                         if not row.completed and row.id == "Secret99" then
                             HCA_MarkRowCompleted(row)
-                            HCA_AchToast_Show(row.Icon:GetTexture(), row.Title:GetText(), row.points)
+                            HCA_AchToast_Show(row.Icon:GetTexture(), row.Title:GetText(), row.points, row)
                         end
                     end
                 end
@@ -1995,11 +2037,11 @@ function HCA_ShowAchievementTab()
         local isSelfFound = _G.IsSelfFound and _G.IsSelfFound() or false
         if isSelfFound then
             AchievementPanel.SoloModeCheckbox:Enable()
-            AchievementPanel.SoloModeCheckbox.tooltip = "|cffffffffSolo Self Found|r \nAchievements require solo play (no group members nearby) to complete achievements. You will earn double the achievement points. \n\nThis setting can be toggled on and off at any time."
+            AchievementPanel.SoloModeCheckbox.tooltip = "|cffffffffSolo Self Found|r \nToggling this option on will display the total points you will receive if you complete this achievement solo (no party members within 40 yards)."
         else
             AchievementPanel.SoloModeCheckbox:Disable()
             AchievementPanel.SoloModeCheckbox.Text:SetTextColor(0.5, 0.5, 0.5, 1)
-            --AchievementPanel.SoloModeCheckbox.tooltip = "|cffffffffSolo Self Found|r \nAchievements require solo play (no group members nearby) to complete achievements. You will earn double the achievement points. \n\nThis setting can be toggled on and off at any time. |cffff0000(Requires Self-Found buff to enable)|r"
+            --AchievementPanel.SoloModeCheckbox.tooltip = "|cffffffffSolo Self Found|r \nToggling this option on will display the total points you will receive if you complete this achievement solo (no party members within 40 yards). |cffff0000(Requires Self-Found buff to enable)|r"
         end
         
         -- Update SSF borders for all achievements

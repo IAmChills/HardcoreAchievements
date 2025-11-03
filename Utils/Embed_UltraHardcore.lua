@@ -130,20 +130,62 @@ local function CreateEmbedIcon(parent)
   icon:SetScript("OnEnter", function(self)
     GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
     
-    -- Check if SSF mode is enabled and this achievement supports it
+    -- Get progress to check for solo status
+    local progress = nil
+    if self.achId then
+      progress = _G.HardcoreAchievements_GetProgress and _G.HardcoreAchievements_GetProgress(self.achId) or nil
+    end
+    
+    -- Check for actual solo status (completed or pending)
+    local hasSoloStatus = progress and (progress.soloKill or progress.soloQuest)
+    local wasSolo = false
+    if self.completed then
+      -- Check completed achievements for wasSolo flag
+      local _, cdb = _G.GetCharDB and _G.GetCharDB() or nil
+      if cdb and cdb.achievements and self.achId then
+        local achRec = cdb.achievements[self.achId]
+        wasSolo = achRec and achRec.wasSolo or false
+      end
+    end
+    
+    -- Show title with solo indicator if applicable
+    -- Solo indicators only show if player is self-found
     local isSoloMode = _G.HardcoreAchievements_IsSoloModeEnabled and _G.HardcoreAchievements_IsSoloModeEnabled() or false
-    if isSoloMode and self.allowSoloDouble then
-      -- Show title with "Solo" on the right
+    local isSelfFound = _G.IsSelfFound and _G.IsSelfFound() or false
+    if self.completed and wasSolo and isSelfFound then
+      -- Completed solo achievement
+      GameTooltip:AddDoubleLine(self.title or "", "|cFF9D3AFFSolo|r", 1, 1, 1, 0.5, 0.3, 0.9)
+    elseif not self.completed and hasSoloStatus and isSelfFound then
+      -- Pending solo (not yet completed but has solo status)
+      GameTooltip:AddDoubleLine(self.title or "", "|cFF9D3AFFPending solo|r", 1, 1, 1, 0.5, 0.3, 0.9)
+    elseif isSoloMode and self.allowSoloDouble and not hasSoloStatus and isSelfFound then
+      -- Solo mode preview (toggle on, no actual solo status yet)
       GameTooltip:AddDoubleLine(self.title or "", "|cFF9D3AFFSolo|r", 1, 1, 1, 0.5, 0.3, 0.9)
     else
       GameTooltip:SetText(self.title or "", 1, 1, 1)
     end
     
     -- Level (left) and Points (right) on one line
+    -- Show "pending solo" indicator if applicable
+    -- Solo indicators only show if player is self-found
     local leftText = (self.maxLevel and self.maxLevel > 0) and (LEVEL .. " " .. self.maxLevel) or " "
+    if not self.completed and hasSoloStatus and isSelfFound then
+      -- Add "pending solo" to level text
+      if leftText ~= " " then
+        leftText = leftText .. "\n|cFF9D3AFFPending solo|r"
+      else
+        leftText = "|cFF9D3AFFPending solo|r"
+      end
+    end
     local rightText = (type(self.points) == "number" and self.points > 0) and (tostring(self.points) .. " pts") or " "
     if leftText ~= " " or rightText ~= " " then
-      GameTooltip:AddDoubleLine(leftText, rightText, 1, 1, 1, 0.6, 0.9, 0.6)
+      -- Use AddLine for level text if it contains pending solo (multi-line)
+      if not self.completed and hasSoloStatus and isSelfFound and (self.maxLevel and self.maxLevel > 0) then
+        GameTooltip:AddLine(leftText, 1, 1, 1)
+        GameTooltip:AddDoubleLine(" ", rightText, 1, 1, 1, 0.6, 0.9, 0.6)
+      else
+        GameTooltip:AddDoubleLine(leftText, rightText, 1, 1, 1, 0.6, 0.9, 0.6)
+      end
     end
 
     -- Check if this is a dungeon achievement with requiredKills
@@ -441,7 +483,7 @@ function EMBED:Rebuild()
       local isSelfFound = _G.IsSelfFound and _G.IsSelfFound() or false
       if isSelfFound then
         UHCA.SoloModeCheckbox:Enable()
-        UHCA.SoloModeCheckbox.tooltip = "|cffffffffSolo Self Found|r \nAchievements require solo play (no group members nearby) to complete achievements. You will earn double the achievement points. \n\nThis setting can be toggled on and off at any time."
+        UHCA.SoloModeCheckbox.tooltip = "|cffffffffSolo Self Found|r \nToggling this option on will display the total points you will receive if you complete this achievement solo (no party members within 40 yards)."
       else
         UHCA.SoloModeCheckbox:Disable()
         UHCA.SoloModeCheckbox.Text:SetTextColor(0.5, 0.5, 0.5, 1)
