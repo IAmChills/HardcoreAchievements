@@ -338,17 +338,6 @@ local Achievements = {
     targetNpcId = 8977,
     faction = FACTION_HORDE,
     zone = "Burning Steppes"
-}, {
-    achId = "Hitahya",
-    title = "Keeper of Keys",
-    level = 56,
-    tooltip = "Complete |cff0091e6Recover the Key|r before level 57",
-    icon = 236780,
-    points = 10,
-    requiredQuestId = 7846,
-    targetNpcId = 10802,
-    faction = FACTION_HORDE,
-    zone = "Hinterlands"
 },
 
 -- Neutral (no faction)
@@ -469,8 +458,8 @@ local Achievements = {
 }, {
     achId = "Mukla",
     title = "King of the Jungle",
-    level = 48,
-    tooltip = "Complete |cff0091e6Message in a Bottle|r before level 49",
+    level = 50,
+    tooltip = "Complete |cff0091e6Message in a Bottle|r before level 51",
     icon = 132159,
     points = 10,
     requiredQuestId = 630,
@@ -478,7 +467,7 @@ local Achievements = {
     zone = "Stranglethorn Vale"
 }, {
     achId = "MalletZF",
-    title = "Bang a Gong",
+    title = string.format("%s the Keeper", GetUnitName("player")),
     level = 49,
     tooltip = "Obtain the |cff0091e6Mallet of Zul'Farrak|r before level 50",
     icon = 134559,
@@ -487,9 +476,9 @@ local Achievements = {
     zone = "Hinterlands"
 }, {
     achId = "Hakkar",
-    title = "Spirits, Tablets, Eggs, Oh My!",
-    level = 50,
-    tooltip = "Complete |cff0091e6The God Hakkar|r before level 51",
+    title = "Spirits, Tablets, and Eggs, Oh My!",
+    level = 53,
+    tooltip = "Complete |cff0091e6The God Hakkar|r before level 54",
     icon = 132209,
     points = 10,
     requiredQuestId = 3528,
@@ -691,6 +680,38 @@ local Achievements = {
     secretPoints = 1,
     staticPoints = true,
 }, {
+    achId = "Secret2",
+    title = "Taking the Edge Off",
+    level = nil,
+    tooltip = "You have completed the secret achievement: |cff0091e6Drink some Noggenfogger|r",
+    icon = 134863,
+    points = 1,
+    customIsCompleted = function() return false end,
+    customSpell = function(spellId, targetName)
+        if spellId == 16589 then
+            return true
+        end
+        return false
+    end,
+    secret = true,
+    secreTitle = "Secret Achievement",
+    secretTooltip = "You will probably complete this achievement by accident",
+    --secretIcon = 132387,
+    secretPoints = 1,
+    staticPoints = true,
+}, {
+    achId = "Secret99",
+    title = "Level 18? Ughhh",
+    level = nil,
+    tooltip = "You have completed the secret achievement: |cff0091e6Obtain the Forest Leather Belt|r",
+    icon = 132492,
+    points = 0,
+    customIsCompleted = function() return GetItemCount(6382, true) > 0 end,
+    -- Secret presentation before completion
+    secret = true,
+    staticPoints = true,
+    hiddenUntilComplete = true,
+}, {
     achId = "Secret100",
     title = "You've Got the Chills",
     level = nil,
@@ -703,10 +724,6 @@ local Achievements = {
       end,
     -- Secret presentation before completion
     secret = true,
-    --secretTitle = "",
-    --secretTooltip = "",
-    --secretIcon = 132387,
-    --secretPoints = 1,
     staticPoints = true,
     hiddenUntilComplete = true,
 }

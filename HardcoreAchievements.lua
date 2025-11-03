@@ -1687,6 +1687,7 @@ do
         AchievementPanel._achEvt:RegisterEvent("UNIT_SPELLCAST_SUCCEEDED")
         AchievementPanel._achEvt:RegisterEvent("CHAT_MSG_TEXT_EMOTE")
         AchievementPanel._achEvt:RegisterEvent("PLAYER_LEVEL_UP")
+        AchievementPanel._achEvt:RegisterEvent("CHAT_MSG_LOOT")
         AchievementPanel._achEvt:SetScript("OnEvent", function(_, event, ...)
             if event == "COMBAT_LOG_EVENT_UNFILTERED" then
                 local _, subevent, _, _, _, _, _, destGUID = CombatLogGetCurrentEventInfo()
@@ -1732,6 +1733,7 @@ do
                 -- Classic signature: unit, targetName, castGUID, spellId
                 local unit, targetName, castGUID, spellId = ...
                 if unit ~= "player" then return end
+                if spellId ~= 21343 and spellId ~= 16589 then return end
                 for _, row in ipairs(AchievementPanel.achievements) do
                     if not row.completed and type(row.spellTracker) == "function" then
                         -- Evaluate tracker and require true return value
@@ -1799,6 +1801,23 @@ do
                     end
                 end
                 RefreshOutleveledAll()
+            elseif event == "CHAT_MSG_LOOT" then
+                local msg, _, _, _, playerName = ...
+                if playerName == GetUnitName("player") then
+
+                -- Extract the item link and itemID from the chat message
+                local itemLink = msg:match("|Hitem:%d+.-|h%[.-%]|h")
+                if not itemLink then return end
+
+                local itemID = tonumber(itemLink:match("|Hitem:(%d+)"))
+                if itemID ~= 6382 then return end  -- Forest Leather Belt
+                    for _, row in ipairs(AchievementPanel.achievements) do
+                        if not row.completed and row.id == "Secret99" then
+                            HCA_MarkRowCompleted(row)
+                            HCA_AchToast_Show(row.Icon:GetTexture(), row.Title:GetText(), row.points)
+                        end
+                    end
+                end
             end
         end)
     end
