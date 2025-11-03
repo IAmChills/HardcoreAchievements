@@ -49,9 +49,9 @@ local Dungeons = {
   {
     achId = "WC",
     title = DUNGEON_FLOOR_WAILINGCAVERNS1,
-    tooltip = "Complete the bosses of |cff0091e6"..DUNGEON_FLOOR_WAILINGCAVERNS1.."|r before level 20 (including party members)",
+    tooltip = "Complete the bosses of |cff0091e6"..DUNGEON_FLOOR_WAILINGCAVERNS1.."|r before level 21 (including party members)",
     icon = 236717,
-    level = 21,
+    level = 20,
     points = 10,
     requiredQuestId = nil,
     staticPoints = false,
