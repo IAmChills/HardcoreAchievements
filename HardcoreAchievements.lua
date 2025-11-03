@@ -742,22 +742,23 @@ local minimapDataObject = LDB:NewDataObject("HardcoreAchievements", {
     text = "HardcoreAchievements",
     icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\HardcoreAchievementsButton.tga",
     OnClick = function(self, button)
-        if button == "LeftButton" then
+        if button == "LeftButton" and not IsShiftKeyDown() then
             local _, cdb = GetCharDB()
             
             -- Helper function to toggle Character Frame with achievements tab
             local function toggleCharacterFrameTab()
                 local isShown = CharacterFrame and CharacterFrame:IsShown() and 
-                               (AchievementPanel and AchievementPanel:IsShown() or Tab.squareFrame and Tab.squareFrame:IsShown())
+                               (AchievementPanel and AchievementPanel:IsShown() or (Tab and Tab.squareFrame and Tab.squareFrame:IsShown()))
                 if isShown then
                     ToggleCharacter("PaperDollFrame")
                     ToggleCharacter("PaperDollFrame")
-                else
-                    -- Use ToggleCharacter to properly register the frame for ESC key support
-                    if not CharacterFrame:IsShown() then
+                elseif not CharacterFrame:IsShown() then
                         ToggleCharacter("PaperDollFrame")
-                    end
                     if HCA_ShowAchievementTab then
+                        HCA_ShowAchievementTab()
+                    end
+                else
+                    if CharacterFrame:IsShown() then
                         HCA_ShowAchievementTab()
                     end
                 end
@@ -802,6 +803,11 @@ local minimapDataObject = LDB:NewDataObject("HardcoreAchievements", {
             -- Right-click to open options panel
             if Settings and Settings.OpenToCategory then
                 Settings.OpenToCategory(addon.settingsCategory:GetID())
+            end
+        elseif button == "LeftButton" and IsShiftKeyDown() then
+            -- Left-click with Shift to open admin panel
+            if AdminPanel and AdminPanel.Open then
+                AdminPanel.Open()
             end
         end
     end,
