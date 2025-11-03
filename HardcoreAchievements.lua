@@ -806,8 +806,8 @@ local minimapDataObject = LDB:NewDataObject("HardcoreAchievements", {
             end
         elseif button == "LeftButton" and IsShiftKeyDown() then
             -- Left-click with Shift to open admin panel
-            if AdminPanel and AdminPanel.Open then
-                AdminPanel.Open()
+            if HardcoreAchievementsAdminPanel and HardcoreAchievementsAdminPanel.Toggle then
+                HardcoreAchievementsAdminPanel:Toggle()
             end
         end
     end,
