@@ -148,6 +148,12 @@ function M.registerQuestAchievement(cfg)
             if not isTargetNpcId(destId) then
                 return false
             end
+            -- Check solo mode if enabled
+            if _G.HardcoreAchievements_IsSoloModeEnabled and _G.HardcoreAchievements_IsSoloModeEnabled() then
+                if not _G.PlayerIsSolo or not _G.PlayerIsSolo() then
+                    return false  -- Not solo, achievement cannot be completed
+                end
+            end
             state.killed = true
             setProg("killed", true)
             -- Save the current points at time of kill

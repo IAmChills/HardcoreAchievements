@@ -69,6 +69,7 @@ local function ReadRowData(src)
     requiredKills = src.requiredKills,  -- Store requiredKills for dungeon achievements
     zone = src.zone,
     hiddenUntilComplete = not not src.hiddenUntilComplete,
+    allowSoloDouble = not not src.allowSoloDouble,
   }
 end
 
@@ -116,10 +117,27 @@ local function CreateEmbedIcon(parent)
   icon.YellowBorder:SetTexCoord(0, 1, 0, 1)
   icon.YellowBorder:SetVertexColor(1, 0.82, 0, 0.8) -- Goldish yellow circle
   icon.YellowBorder:Hide()
+  
+  -- Create SSF mode border as a purple/blue glow circle around the icon
+  icon.SSFBorder = icon:CreateTexture(nil, "BACKGROUND")
+  icon.SSFBorder:SetSize(ICON_SIZE + 4, ICON_SIZE + 4) -- Slightly larger than other borders
+  icon.SSFBorder:SetPoint("CENTER", icon, "CENTER", 0, 0)
+  icon.SSFBorder:SetTexture("Interface\\CharacterFrame\\TempPortraitAlphaMask")
+  icon.SSFBorder:SetTexCoord(0, 1, 0, 1)
+  icon.SSFBorder:SetVertexColor(0.5, 0.3, 0.9, 0.6) -- Purple glow
+  icon.SSFBorder:Hide()
 
   icon:SetScript("OnEnter", function(self)
     GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-    GameTooltip:SetText(self.title or "", 1, 1, 1)
+    
+    -- Check if SSF mode is enabled and this achievement supports it
+    local isSoloMode = _G.HardcoreAchievements_IsSoloModeEnabled and _G.HardcoreAchievements_IsSoloModeEnabled() or false
+    if isSoloMode and self.allowSoloDouble then
+      -- Show title with "Solo" on the right
+      GameTooltip:AddDoubleLine(self.title or "", "|cFF9D3AFFSolo|r", 1, 1, 1, 0.5, 0.3, 0.9)
+    else
+      GameTooltip:SetText(self.title or "", 1, 1, 1)
+    end
     
     -- Level (left) and Points (right) on one line
     local leftText = (self.maxLevel and self.maxLevel > 0) and (LEVEL .. " " .. self.maxLevel) or " "
@@ -257,17 +275,26 @@ local function UpdateMultiplierText()
   
   local preset = GetPlayerPresetFromSettings()
   local isSelfFound = IsSelfFound()
+  local isSoloMode = _G.HardcoreAchievements_IsSoloModeEnabled and _G.HardcoreAchievements_IsSoloModeEnabled() or false
   
   local labelText = ""
-  if preset or isSelfFound then
-      labelText = "Point Multiplier ("
+  if preset or isSelfFound or isSoloMode then
+      -- Build array of modifiers (preset goes last)
+      local modifiers = {}
+      if isSelfFound and not isSoloMode then
+          table.insert(modifiers, "Self Found")
+      end
+      if isSoloMode and not isSelfFound then
+          table.insert(modifiers, "Solo")
+      end
+      if isSoloMode and isSelfFound then
+          table.insert(modifiers, "Solo Self Found")
+      end
       if preset then
-          labelText = labelText .. preset
+          table.insert(modifiers, preset)
       end
-      if isSelfFound then
-          labelText = labelText .. ", Self Found"
-      end
-      labelText = labelText .. ")"
+      
+      labelText = "Point Multiplier (" .. table.concat(modifiers, ", ") .. ")"
   end
   
   UHCA.MultiplierText:SetText(labelText)
@@ -344,6 +371,7 @@ function EMBED:Rebuild()
         icon.completed = data.completed
         icon.requiredKills = data.requiredKills  -- Store requiredKills for dungeon achievements
         icon.zone      = data.zone
+        icon.allowSoloDouble = data.allowSoloDouble
 
         if data.iconTex then
           icon.Icon:SetTexture(data.iconTex)
@@ -401,6 +429,26 @@ function EMBED:Rebuild()
   LayoutIcons(self.Content, self.icons)
   UpdateMultiplierText()
   UpdateTotalPointsText()
+  
+  -- Sync solo mode checkbox state
+  if UHCA and UHCA.SoloModeCheckbox then
+    if type(HardcoreAchievements_GetCharDB) == "function" then
+      local _, cdb = HardcoreAchievements_GetCharDB()
+      local isChecked = (cdb and cdb.settings and cdb.settings.soloAchievements) or false
+      UHCA.SoloModeCheckbox:SetChecked(isChecked)
+      
+      -- Update enable/disable state based on Self-Found status
+      local isSelfFound = _G.IsSelfFound and _G.IsSelfFound() or false
+      if isSelfFound then
+        UHCA.SoloModeCheckbox:Enable()
+        UHCA.SoloModeCheckbox.tooltip = "|cffffffffSolo Self Found|r \nAchievements require solo play (no group members nearby) to complete achievements. You will earn double the achievement points. \n\nThis setting can be toggled on and off at any time."
+      else
+        UHCA.SoloModeCheckbox:Disable()
+        UHCA.SoloModeCheckbox.Text:SetTextColor(0.5, 0.5, 0.5, 1)
+        --UHCA.SoloModeCheckbox.tooltip = "Require solo play (no group members nearby) to complete achievements. Doubles achievement points. |cffff0000(Requires Self-Found buff to enable)|r"
+      end
+    end
+  end
 end
 
 -- Hide the custom Achievement tab when embedded UI loads
@@ -492,6 +540,39 @@ local function BuildEmbedIfNeeded()
     UHCA.TotalPointsText:SetText("0 pts") -- Will be updated by UpdateTotalPointsText
   end
 
+  -- Solo mode checkbox
+  if not UHCA.SoloModeCheckbox then
+    UHCA.SoloModeCheckbox = CreateFrame("CheckButton", nil, UHCA, "InterfaceOptionsCheckButtonTemplate")
+    UHCA.SoloModeCheckbox:SetPoint("BOTTOMLEFT", UHCA, "BOTTOMLEFT", -10, -43)
+    UHCA.SoloModeCheckbox.Text:SetText("SSF")
+    UHCA.SoloModeCheckbox.Text:SetTextColor(1, 1, 1, 1)
+    UHCA.SoloModeCheckbox:SetScript("OnClick", function(self)
+      if self:IsEnabled() then
+        local isChecked = self:GetChecked()
+        if type(HardcoreAchievements_GetCharDB) == "function" then
+          local _, cdb = HardcoreAchievements_GetCharDB()
+          if cdb and cdb.settings then
+            cdb.settings.soloAchievements = isChecked
+            -- Refresh all achievement points immediately
+            if _G.HCA_RefreshAllAchievementPoints then
+              _G.HCA_RefreshAllAchievementPoints()
+            end
+          end
+        end
+      end
+    end)
+    UHCA.SoloModeCheckbox:SetScript("OnEnter", function(self)
+      if self.tooltip then
+        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+        GameTooltip:SetText(self.tooltip, nil, nil, nil, nil, true)
+        GameTooltip:Show()
+      end
+    end)
+    UHCA.SoloModeCheckbox:SetScript("OnLeave", function(self)
+      GameTooltip:Hide()
+    end)
+  end
+
   -- Only create filter dropdown if it doesn't exist
   local filterDropdown = UHCA.FilterDropdown
   if not filterDropdown then
@@ -523,7 +604,7 @@ local function BuildEmbedIfNeeded()
   if not UHCA.HideCustomTabCheckbox then
     -- Add checkbox to control custom tab visibility
     UHCA.HideCustomTabCheckbox = CreateFrame("CheckButton", nil, UHCA, "UICheckButtonTemplate")
-    UHCA.HideCustomTabCheckbox:SetPoint("BOTTOMRIGHT", UHCA, "BOTTOMRIGHT", 8, -40)
+    UHCA.HideCustomTabCheckbox:SetPoint("BOTTOMRIGHT", UHCA, "BOTTOMRIGHT", 8, -43)
     UHCA.HideCustomTabCheckbox:SetSize(20, 20)
     
     local function GetShowCustomTabSetting()

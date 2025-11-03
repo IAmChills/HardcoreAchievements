@@ -2,7 +2,7 @@ local Achievements = {
 
 --{ achId="Test",  title="Boar Test",  level=8, tooltip="Kill |cff0091e6a boar", icon=134400, points=10, requiredQuestId=nil, targetNpcId=3098, faction="Horde", zone="Durotar" },
 --{ achId="Test2", title="Easy Quest Test", level=8, tooltip="Orc starter quest", icon=134400, points=10, requiredQuestId=4641, targetNpcId=nil, faction="Horde", zone="Durotar" },
---{ achId="Test3", title="Kill + Quest", level=4, tooltip="Kill a boar and complete the orc starter quest", icon=134400, points=10, requiredQuestId=33, targetNpcId=299, faction="Alliance", zone="Elwynn Forest" },
+--{ achId="Test3", title="Kill + Quest", level=4, tooltip="Kill a boar and complete the orc starter quest", icon=134400, points=10, requiredQuestId=4641, targetNpcId=3098, faction="Horde", zone="Durotar" },
 
 -- Alliance
 {
@@ -56,6 +56,7 @@ local Achievements = {
     tooltip = "Complete |cff0091e6Absent Minded Prospector|r before level 20",
     icon = 236444,
     points = 10,
+    allowSoloDouble = true,
     requiredQuestId = 731,
     targetNpcId = nil,
     faction = FACTION_ALLIANCE,
@@ -116,12 +117,13 @@ local Achievements = {
     faction = FACTION_ALLIANCE,
     zone = "Arathi Highlands"
 }, {
-    achId = "StinkysEscape",
+    achId = "StinkysEscapeA",
     title = "Stinky Situation",
     level = 34,
     tooltip = "Complete |cff0091e6Stinky’s Escape|r before level 35",
     icon = 236758,
     points = 10,
+    allowSoloDouble = true,
     requiredQuestId = 1222,
     targetNpcId = nil,
     faction = FACTION_ALLIANCE,
@@ -284,6 +286,18 @@ local Achievements = {
     faction = FACTION_HORDE,
     zone = "Hillsbrad Foothills"
 }, {
+    achId = "StinkysEscapeH",
+    title = "Stinky Situation",
+    level = 34,
+    tooltip = "Complete |cff0091e6Stinky’s Escape|r before level 35",
+    icon = 236758,
+    points = 10,
+    allowSoloDouble = true,
+    requiredQuestId = 1270,
+    targetNpcId = nil,
+    faction = FACTION_HORDE,
+    zone = "Dustwallow Marsh"
+}, {
     achId = "ThogrunHorde",
     title = "Sign of the Earth",
     level = 40,
@@ -338,17 +352,6 @@ local Achievements = {
     targetNpcId = 8977,
     faction = FACTION_HORDE,
     zone = "Burning Steppes"
-}, {
-    achId = "Hitahya",
-    title = "Keeper of Keys",
-    level = 56,
-    tooltip = "Complete |cff0091e6Recover the Key|r before level 57",
-    icon = 236780,
-    points = 10,
-    requiredQuestId = 7846,
-    targetNpcId = 10802,
-    faction = FACTION_HORDE,
-    zone = "Hinterlands"
 },
 
 -- Neutral (no faction)
@@ -359,7 +362,7 @@ local Achievements = {
     tooltip = "Reach level 10 without dying",
     icon = 894556,
     points = 10,
-    customIsCompleted = function(newLevel) return (newLevel or 1) >= 10 end,
+    customIsCompleted = function(newLevel) return (newLevel or UnitLevel("player") or 1) >= 10 end,
     staticPoints = true,
 }, {
     achId = "Level20",
@@ -368,7 +371,7 @@ local Achievements = {
     tooltip = "Reach level 20 without dying",
     icon = 894556,
     points = 20,
-    customIsCompleted = function() return (UnitLevel("player") or 1) >= 20 end,
+    customIsCompleted = function(newLevel) return (newLevel or UnitLevel("player") or 1) >= 20 end,
     staticPoints = true,
 }, {
     achId = "Level30",
@@ -377,7 +380,7 @@ local Achievements = {
     tooltip = "Reach level 30 without dying",
     icon = 894556,
     points = 30,
-    customIsCompleted = function() return (UnitLevel("player") or 1) >= 30 end,
+    customIsCompleted = function(newLevel) return (newLevel or UnitLevel("player") or 1) >= 30 end,
     staticPoints = true,
 }, {
     achId = "Level40",
@@ -386,7 +389,7 @@ local Achievements = {
     tooltip = "Reach level 40 without dying",
     icon = 894556,
     points = 40,
-    customIsCompleted = function() return (UnitLevel("player") or 1) >= 40 end,
+    customIsCompleted = function(newLevel) return (newLevel or UnitLevel("player") or 1) >= 40 end,
     staticPoints = true,
 }, {
     achId = "Level50",
@@ -395,7 +398,7 @@ local Achievements = {
     tooltip = "Reach level 50 without dying",
     icon = 894556,
     points = 50,
-    customIsCompleted = function() return (UnitLevel("player") or 1) >= 50 end,
+    customIsCompleted = function(newLevel) return (newLevel or UnitLevel("player") or 1) >= 50 end,
     staticPoints = true,
 }, {
     achId = "Level60",
@@ -404,7 +407,7 @@ local Achievements = {
     tooltip = "Reach level 60 without dying",
     icon = 894556,
     points = 60,
-    customIsCompleted = function() return (UnitLevel("player") or 1) >= 60 end,
+    customIsCompleted = function(newLevel) return (newLevel or UnitLevel("player") or 1) >= 60 end,
     staticPoints = true,
 }, {
     achId = "GalensEscape",
@@ -413,6 +416,7 @@ local Achievements = {
     tooltip = "Complete |cff0091e6Galen's Escape|r before level 39",
     icon = 236845,
     points = 10,
+    allowSoloDouble = true,
     requiredQuestId = 1393,
     targetNpcId = nil,
     zone = "Swamp of Sorrows"
@@ -423,6 +427,7 @@ local Achievements = {
     tooltip = "Complete |cff0091e6Get Me Out of Here!|r before level 42",
     icon = 236742,
     points = 10,
+    allowSoloDouble = true,
     requiredQuestId = 6132,
     targetNpcId = nil,
     zone = "Desolace"
@@ -443,6 +448,7 @@ local Achievements = {
     tooltip = "Complete |cff0091e6An OOX of Your Own|r before level 46",
     icon = 133883,
     points = 10,
+    allowSoloDouble = true,
     requiredQuestId = 3721,
     targetNpcId = nil,
     zone = "Stranglethorn Vale"
@@ -453,6 +459,7 @@ local Achievements = {
     tooltip = "Complete |cff0091e6Cuergo’s Gold|r before level 46",
     icon = 237387,
     points = 10,
+    allowSoloDouble = true,
     requiredQuestId = 2882,
     targetNpcId = nil,
     zone = "Tanaris"
@@ -469,8 +476,8 @@ local Achievements = {
 }, {
     achId = "Mukla",
     title = "King of the Jungle",
-    level = 48,
-    tooltip = "Complete |cff0091e6Message in a Bottle|r before level 49",
+    level = 50,
+    tooltip = "Complete |cff0091e6Message in a Bottle|r before level 51",
     icon = 132159,
     points = 10,
     requiredQuestId = 630,
@@ -478,19 +485,19 @@ local Achievements = {
     zone = "Stranglethorn Vale"
 }, {
     achId = "MalletZF",
-    title = "Bang a Gong",
+    title = string.format("%s the Keeper", GetUnitName("player")),
     level = 49,
     tooltip = "Obtain the |cff0091e6Mallet of Zul'Farrak|r before level 50",
     icon = 134559,
     points = 10,
-    itemId = 9241,
-    customIsCompleted = function() return GetItemCount(9241, true) > 0 end,
+    allowSoloDouble = true,
+    customIsCompleted = function() return GetItemCount(9240, true) > 0 end,
     zone = "Hinterlands"
 }, {
     achId = "Hakkar",
-    title = "Spirits, Tablets, Eggs, Oh My!",
-    level = 50,
-    tooltip = "Complete |cff0091e6The God Hakkar|r before level 51",
+    title = "Spirits, Tablets, and Eggs, Oh My!",
+    level = 53,
+    tooltip = "Complete |cff0091e6The God Hakkar|r before level 54",
     icon = 132209,
     points = 10,
     requiredQuestId = 3528,
@@ -503,6 +510,7 @@ local Achievements = {
     tooltip = "Complete |cff0091e6Kim’Jael Indeed!|r before level 52",
     icon = 236714,
     points = 10,
+    allowSoloDouble = true,
     requiredQuestId = 3601,
     targetNpcId = nil,
     zone = "Azshara"
@@ -513,6 +521,7 @@ local Achievements = {
     tooltip = "Complete |cff0091e6The Stones That Bind Us|r before level 52",
     icon = 236720,
     points = 10,
+    allowSoloDouble = true,
     requiredQuestId = 2681,
     targetNpcId = nil,
     zone = "Blasted Lands"
@@ -611,6 +620,7 @@ local Achievements = {
     tooltip = "Complete |cff0091e6Investigate the Alchemist Shop|r before level 19",
     icon = 135734,
     points = 10,
+    allowSoloDouble = true,
     requiredQuestId = 1960,
     targetNpcId = nil,
     faction = FACTION_HORDE,
@@ -623,6 +633,7 @@ local Achievements = {
     tooltip = "Complete |cff0091e6Investigate the Alchemist Shop|r before level 19",
     icon = 135734,
     points = 10,
+    allowSoloDouble = true,
     requiredQuestId = 1920,
     targetNpcId = nil,
     faction = FACTION_ALLIANCE,
@@ -637,7 +648,7 @@ local Achievements = {
     level = nil,
     tooltip = "Throw a snowball at Thrall",
     icon = 236710,
-    points = 1,
+    points = 0,
     faction = FACTION_HORDE,
     zone = "Orgrimmar",
     customIsCompleted = function() return false end,
@@ -660,7 +671,7 @@ local Achievements = {
     level = nil,
     tooltip = "Throw a snowball at Highlord Bolvar Fordragon",
     icon = 236710,
-    points = 1,
+    points = 0,
     faction = FACTION_ALLIANCE,
     zone = "Stormwind City",
     customIsCompleted = function() return false end,
@@ -689,7 +700,40 @@ local Achievements = {
     secreTitle = "Secret Achievement",
     secretTooltip = "You will probably complete this achievement by accident",
     --secretIcon = 132387,
+    secretPoints = 1,
     staticPoints = true,
+}, {
+    achId = "Secret2",
+    title = "Taking the Edge Off",
+    level = nil,
+    tooltip = "You have completed the secret achievement: |cff0091e6Drink some Noggenfogger|r",
+    icon = 134863,
+    points = 1,
+    customIsCompleted = function() return false end,
+    customSpell = function(spellId, targetName)
+        if spellId == 16589 then
+            return true
+        end
+        return false
+    end,
+    secret = true,
+    secreTitle = "Secret Achievement",
+    secretTooltip = "You will probably complete this achievement by accident",
+    --secretIcon = 132387,
+    secretPoints = 1,
+    staticPoints = true,
+}, {
+    achId = "Secret99",
+    title = "Level 18? Ughhh",
+    level = nil,
+    tooltip = "You have completed the secret achievement: |cff0091e6Obtain the Forest Leather Belt|r",
+    icon = 132492,
+    points = 0,
+    customIsCompleted = function() return GetItemCount(6382, true) > 0 end,
+    -- Secret presentation before completion
+    secret = true,
+    staticPoints = true,
+    hiddenUntilComplete = true,
 }, {
     achId = "Secret100",
     title = "You've Got the Chills",
@@ -703,10 +747,6 @@ local Achievements = {
       end,
     -- Secret presentation before completion
     secret = true,
-    --secretTitle = "",
-    --secretTooltip = "",
-    --secretIcon = 132387,
-    --secretPoints = 1,
     staticPoints = true,
     hiddenUntilComplete = true,
 }

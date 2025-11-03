@@ -18,7 +18,8 @@ local Dungeons = {
       [11517] = 1, -- Oggleflint
       [11518] = 1, -- Jergosh the Invoker
       [11519] = 1, -- Bazzalan
-    }
+    },
+    bossOrder = {11517, 11520, 11518, 11519}
   },
 
   -- The Deadmines (Alliance, Level 10-20)
@@ -40,7 +41,8 @@ local Dungeons = {
       [646] = 1,   -- Mr. Smite
       [647] = 1,   -- Captain Greenskin
       [639] = 1,   -- Edwin VanCleef
-    }
+    },
+    bossOrder = {644, 643, 1763, 646, 647, 639}
   },
 
   -- Wailing Caverns (Both, Level 15-25)
@@ -64,7 +66,8 @@ local Dungeons = {
       [3673] = 1,  -- Lord Serpentis
       [5775] = 1,  -- Verdan the Everliving
       [3654] = 1,  -- Mutanus the Devourer
-    }
+    },
+    bossOrder = {3671, 3653, 3669, 3670, 3674, 3673, 5775, 3654}
   },
 
   -- Shadowfang Keep (Both, Level 18-25)
@@ -89,7 +92,8 @@ local Dungeons = {
       [4274] = 1,  -- Fenrus the Devourer
       [3927] = 1,  -- Wolf Master Nandos
       [4275] = 1,  -- Archmage Arugal
-    }
+    },
+    bossOrder = {3914, 3886, 3887, 4278, 4279, 3872, 4274, 3927, 4275}
   },
 
   -- Blackfathom Deeps (Both, Level 20-30)
@@ -113,7 +117,8 @@ local Dungeons = {
       [4832] = 1,  -- Twilight Lord Kelris
       [4830] = 1,  -- Old Serra'kis
       [4829] = 1,  -- Aku'mai
-    }
+    },
+    bossOrder = {4887, 4831, 6243, 12902, 12876, 4832, 4830, 4829}
   },
 
   -- The Stockade (Alliance, Level 22-30)
@@ -135,7 +140,8 @@ local Dungeons = {
       [1717] = 1,  -- Hamhock
       [1663] = 1,  -- Dextren Ward
       [1716] = 1,  -- Bazil Thredd
-    }
+    },
+    bossOrder = {1696, 1666, 1717, 1663, 1716}
   },
 
   -- Gnomeregan (Alliance, Level 24-33)
@@ -157,7 +163,8 @@ local Dungeons = {
       [6229] = 1,  -- Crowd Pummeler 9-60
       [6228] = 1,  -- Dark Iron Ambassador
       [7800] = 1,  -- Mekgineer Thermaplugg
-    }
+    },
+    bossOrder = {7361, 7079, 6235, 6229, 6228, 7800}
   },
 
   -- Razorfen Kraul (Both, Level 25-35)
@@ -179,7 +186,8 @@ local Dungeons = {
       [4420] = 1,  -- Overlord Ramtusk
       [4422] = 1,  -- Agathelos the Raging
       [4421] = 1,  -- Charlga Razorflank
-    }
+    },
+    bossOrder = {6168, 4424, 4428, 4420, 4422, 4421}
   },
 
   -- Scarlet Monastery (Both, Level 28-38)
@@ -203,7 +211,8 @@ local Dungeons = {
       [3976] = 1,  -- Scarlet Commander Mograine
       [3977] = 1,  -- High Inquisitor Whitemane
       [4542] = 1,  -- High Inquisitor Fairbanks
-    }
+    },
+    bossOrder = {3983, 4543, 3974, 6487, 3975, 4542, 3976, 3977}
   },
 
   -- Razorfen Downs (Both, Level 35-45)
@@ -225,7 +234,8 @@ local Dungeons = {
       [7354] = 1,  -- Ragglesnout
       [8567] = 1,  -- Glutton
       [7358] = 1,  -- Amnennar the Coldbringer
-    }
+    },
+    bossOrder = {7355, 7356, 7357, 7354, 8567, 7358}
   },
 
   -- Uldaman (Both, Level 35-45)
@@ -249,7 +259,8 @@ local Dungeons = {
       [7291] = 1,  -- Galgann Firehammer
       [4854] = 1,  -- Grimlok
       [2748] = 1,  -- Archaedas
-    }
+    },
+    bossOrder = {6910, 6906, 7228, 7023, 7206, 7291, 4854, 2748}
   },
 
   -- Zul'Farrak (Both, Level 44-54)
@@ -257,7 +268,7 @@ local Dungeons = {
     achId = "ZF",
     title = DUNGEON_FLOOR_ZULFARRAK,
     tooltip = "Complete the bosses of |cff0091e6"..DUNGEON_FLOOR_ZULFARRAK.."|r before level 48 (including party members)",
-    icon = 236865,
+    icon = 236846,
     level = 47,
     points = 10,
     requiredQuestId = nil,
@@ -274,7 +285,8 @@ local Dungeons = {
       [7795] = 1,  -- Hydromancer Velratha
       [7267] = 1,  -- Chief Ukorz Sandscalp
       [7797] = 1,  -- Ruuzlu
-    }
+    },
+    bossOrder = {8127, 7272, 7271, 7796, 7275, 7604, 7795, 7267, 7797}
   },
 
   -- Maraudon (Both, Level 40-50)
@@ -298,7 +310,8 @@ local Dungeons = {
       [13601] = 1, -- Tinkerer Gizlock
       [13596] = 1, -- Rotgrip
       [12201] = 1, -- Princess Theradras
-    }
+    },
+    bossOrder = {13282, 12258, 12236, 12225, 12203, 13601, 13596, 12201}
   },
 
   -- The Temple of Atal'Hakkar (Both, Level 50-60)
@@ -323,7 +336,8 @@ local Dungeons = {
       [5722] = 1,  -- Hazzas
       [8443] = 1,  -- Avatar of Hakkar
       [5709] = 1,  -- Shade of Eranikus
-    }
+    },
+    bossOrder = {8580, 5721, 5720, 5710, 5711, 5719, 5722, 8443, 5709}
   },
 
   -- Blackrock Depths (Both, Level 52-60)
@@ -343,7 +357,7 @@ local Dungeons = {
       [9016] = 1,  -- Bael'Gar
       [9319] = 1,  -- Houndmaster Grebmar
       [9018] = 1,  -- High Interrogator Gerstahn
-      -- Ring of Law
+      ["Ring Of Law"] = {9027, 9028, 9029, 9030, 9031, 9032},  -- Ring of Law (any one of the six)
       [9024] = 1,  -- Pyromancer Loregrain
       [9033] = 1,  -- General Angerforge (Might be broken)
       [8983] = 1,  -- Golem Lord Argelmach
@@ -355,7 +369,8 @@ local Dungeons = {
       [9938] = 1,  -- Magmus
       [8929] = 1,  -- Princess Moira Bronzebeard
       [9019] = 1,  -- Emperor Dagran Thaurissan
-    }
+    },
+    bossOrder = {9025, 9016, 9319, 9018, "Ring Of Law", 9024, 9033, 8983, 9017, 9056, 9041, 9042, 9156, 9938, 8929, 9019}
   },
 
   -- Blackrock Spire (Both, Level 55-60)
@@ -385,7 +400,8 @@ local Dungeons = {
       --[10339] = 1, -- Gyth
       --[10430] = 1, -- The Beast
       --[10363] = 1, -- General Drakkisath
-    }
+    },
+    bossOrder = {9196, 9236, 9237, 10596, 10584, 9736, 10268, 10220, 9568}
   },
 
   -- Stratholme (Both, Level 58-60)
@@ -420,7 +436,8 @@ local Dungeons = {
       [10436] = 1, -- Baroness Anastari
       [10439] = 1, -- Ramstein the Gorger
       [10440] = 1, -- Baron Rivendare
-    }
+    },
+    bossOrder = {11058, 10393, 10558, 10516, 11143, 10808, 11032, 10997, 11120, 10811, 10813, 10435, 10809, 10437, 11121, 10438, 10436, 10439, 10440}
   },
 
   -- Dire Maul (Both, Level 58-60)
@@ -454,7 +471,8 @@ local Dungeons = {
       [11488] = 1, -- Illyanna Ravenoak
       [11496] = 1, -- Immol'thar
       [11486] = 1, -- Prince Tortheldrin
-    }
+    },
+    bossOrder = {14354, 14327, 13280, 11490, 11492, 14326, 14322, 14321, 14323, 14325, 14324, 11501, 11489, 11487, 11467, 11488, 11496, 11486}
   },
 
   -- Scholomance (Both, Level 58-60)
@@ -483,7 +501,8 @@ local Dungeons = {
       [10504] = 1, -- Lord Alexei Barov
       [10502] = 1, -- Lady Illucia Barov
       [1853] = 1,  -- Darkmaster Gandling
-    }
+    },
+    bossOrder = {10506, 10503, 11622, 10433, 10432, 10508, 10505, 11261, 10901, 10507, 10504, 10502, 1853}
   }
 }
 

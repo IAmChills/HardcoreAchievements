@@ -141,10 +141,92 @@ local function UpdateAllAchievementPoints()
     if isSelfFound then
         for _, row in ipairs(AchievementPanel.achievements) do
             if row.id and not row.completed then
-                -- Do not apply self-found bonus to secret or static-point rows
-                if not row.isSecretAchievement and not row.staticPoints then
+                -- Do not apply self-found bonus to secret achievements only
+                if not row.isSecretAchievement then
                     row.points = row.points + HCA_SELF_FOUND_BONUS
                     row.Points:SetText(tostring(row.points) .. " pts")
+                end
+            end
+        end
+    end
+
+    -- Apply solo achievements doubling if enabled (only for NPC kill achievements)
+    local isSoloMode = _G.HardcoreAchievements_IsSoloModeEnabled and _G.HardcoreAchievements_IsSoloModeEnabled() or false
+    if isSoloMode then
+        for _, row in ipairs(AchievementPanel.achievements) do
+            if row.id and not row.completed then
+                -- Double points for solo mode (excluding static points, if achievement allows it)
+                if not row.staticPoints and row.allowSoloDouble then
+                    local currentPoints = tonumber(row.points) or 0
+                    row.points = currentPoints * 2
+                    row.Points:SetText(tostring(row.points) .. " pts")
+                end
+                
+                -- Update Sub text to show "Solo" if SSF mode is enabled
+                if row.allowSoloDouble and row.Sub and row.maxLevel and row.maxLevel > 0 then
+                    local levelText = LEVEL .. " " .. row.maxLevel
+                    row.Sub:SetText(levelText .. "\n|cFF9D3AFFSolo|r")
+                end
+            end
+        end
+    else
+        -- When solo mode is disabled, update Sub text to remove "Solo"
+        for _, row in ipairs(AchievementPanel.achievements) do
+            if row.id and not row.completed and row.Sub and row.maxLevel and row.maxLevel > 0 then
+                row.Sub:SetText(LEVEL .. " " .. row.maxLevel)
+            end
+        end
+    end
+    
+    -- Update total points
+    if HCA_UpdateTotalPoints then
+        HCA_UpdateTotalPoints()
+    end
+end
+
+-- Export function to refresh all achievement points from scratch
+function HCA_RefreshAllAchievementPoints()
+    if not AchievementPanel or not AchievementPanel.achievements then return end
+    
+    local preset = GetPlayerPresetFromSettings()
+    local isSelfFound = IsSelfFound()
+    local isSoloMode = _G.HardcoreAchievements_IsSoloModeEnabled and _G.HardcoreAchievements_IsSoloModeEnabled() or false
+    
+    for _, row in ipairs(AchievementPanel.achievements) do
+        if row.id and not row.completed then
+            -- Start from original points
+            local originalPoints = row.originalPoints or row.points or 0
+            local staticPoints = row.staticPoints or false
+            local finalPoints = originalPoints
+            
+            if not staticPoints then
+                -- Apply preset multiplier
+                local multiplier = GetPresetMultiplier(preset)
+                finalPoints = math.floor(originalPoints * multiplier + 0.5)
+                
+                -- Apply solo mode doubling (if achievement allows it)
+                if isSoloMode and row.allowSoloDouble then
+                    finalPoints = finalPoints * 2
+                end
+            end
+            
+            -- Apply self-found bonus (always, except for secret achievements)
+            if isSelfFound and not row.isSecretAchievement then
+                finalPoints = finalPoints + HCA_SELF_FOUND_BONUS
+            end
+            
+            row.points = finalPoints
+            if row.Points then
+                row.Points:SetText(tostring(finalPoints) .. " pts")
+            end
+            
+            -- Update Sub text to show "Solo" if SSF mode is enabled
+            if row.Sub and row.maxLevel and row.maxLevel > 0 then
+                local levelText = LEVEL .. " " .. row.maxLevel
+                if isSoloMode and row.allowSoloDouble then
+                    row.Sub:SetText(levelText .. "\n|cFF9D3AFFSolo|r")
+                else
+                    row.Sub:SetText(levelText)
                 end
             end
         end
@@ -153,6 +235,37 @@ local function UpdateAllAchievementPoints()
     -- Update total points
     if HCA_UpdateTotalPoints then
         HCA_UpdateTotalPoints()
+    end
+    
+    -- Update multiplier text if it exists
+    if AchievementPanel and AchievementPanel.MultiplierText then
+        local labelText = ""
+        if preset or isSelfFound or isSoloMode then
+            -- Build array of modifiers (preset goes last)
+            local modifiers = {}
+            if isSelfFound and not isSoloMode then
+                table.insert(modifiers, "Self Found")
+            end
+            if isSoloMode and not isSelfFound then
+                table.insert(modifiers, "Solo")
+            end
+            if isSoloMode and isSelfFound then
+                table.insert(modifiers, "Solo Self Found")
+            end
+            if preset then
+                table.insert(modifiers, preset)
+            end
+            
+            labelText = "Point Multiplier (" .. table.concat(modifiers, ", ") .. ")"
+        end
+        
+        AchievementPanel.MultiplierText:SetText(labelText)
+        AchievementPanel.MultiplierText:SetTextColor(0.8, 0.8, 0.8)
+    end
+    
+    -- Sync character panel checkbox state if it exists
+    if AchievementPanel and AchievementPanel.SoloModeCheckbox then
+        AchievementPanel.SoloModeCheckbox:SetChecked(isSoloMode)
     end
 end
 
@@ -167,17 +280,26 @@ eventFrame:SetScript("OnEvent", function(self, event, addonName)
             if DEST and DEST.MultiplierText then
                 local preset = GetPlayerPresetFromSettings()
                 local isSelfFound = IsSelfFound()
+                local isSoloMode = _G.HardcoreAchievements_IsSoloModeEnabled and _G.HardcoreAchievements_IsSoloModeEnabled() or false
                 
                 local labelText = ""
-                if preset or isSelfFound then
-                    labelText = "Point Multiplier ("
+                if preset or isSelfFound or isSoloMode then
+                    -- Build array of modifiers (preset goes last)
+                    local modifiers = {}
+                    if isSelfFound and not isSoloMode then
+                        table.insert(modifiers, "Self Found")
+                    end
+                    if isSoloMode and not isSelfFound then
+                        table.insert(modifiers, "Solo")
+                    end
+                    if isSoloMode and isSelfFound then
+                        table.insert(modifiers, "Solo Self Found")
+                    end
                     if preset then
-                        labelText = labelText .. preset
+                        table.insert(modifiers, preset)
                     end
-                    if isSelfFound then
-                        labelText = labelText .. ", Self Found"
-                    end
-                    labelText = labelText .. ")"
+                    
+                    labelText = "Point Multiplier (" .. table.concat(modifiers, ", ") .. ")"
                 end
                 
                 DEST.MultiplierText:SetText(labelText)
@@ -190,17 +312,26 @@ eventFrame:SetScript("OnEvent", function(self, event, addonName)
             if AchievementPanel and AchievementPanel.MultiplierText then
                 local preset = GetPlayerPresetFromSettings()
                 local isSelfFound = IsSelfFound()
+                local isSoloMode = _G.HardcoreAchievements_IsSoloModeEnabled and _G.HardcoreAchievements_IsSoloModeEnabled() or false
                 
                 local labelText = ""
-                if preset or isSelfFound then
-                    labelText = "Point Multiplier ("
+                if preset or isSelfFound or isSoloMode then
+                    -- Build array of modifiers (preset goes last)
+                    local modifiers = {}
+                    if isSelfFound and not isSoloMode then
+                        table.insert(modifiers, "Self Found")
+                    end
+                    if isSoloMode and not isSelfFound then
+                        table.insert(modifiers, "Solo")
+                    end
+                    if isSoloMode and isSelfFound then
+                        table.insert(modifiers, "Solo Self Found")
+                    end
                     if preset then
-                        labelText = labelText .. preset
+                        table.insert(modifiers, preset)
                     end
-                    if isSelfFound then
-                        labelText = labelText .. ", Self Found"
-                    end
-                    labelText = labelText .. ")"
+                    
+                    labelText = "Point Multiplier (" .. table.concat(modifiers, ", ") .. ")"
                 end
                 
                 AchievementPanel.MultiplierText:SetText(labelText)
