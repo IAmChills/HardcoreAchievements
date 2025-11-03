@@ -479,12 +479,25 @@ function DungeonCommon.registerDungeonAchievement(def)
       end
       
       if found then
-        -- Check solo mode if enabled before tracking the kill
-        if _G.HardcoreAchievements_IsSoloModeEnabled and _G.HardcoreAchievements_IsSoloModeEnabled() then
-          if not _G.PlayerIsSolo or not _G.PlayerIsSolo() then
-            return false  -- Not solo, don't track this kill
+        -- Dungeons do not support solo points - store regular points only
+        if AchievementPanel and AchievementPanel.achievements then
+          local rowVarName = achId .. "_Row"
+          local row = _G[rowVarName]
+          if row and row.points then
+            -- Calculate base points (row.points includes self-found bonus, subtract it)
+            -- Self-found bonus will be added at completion time
+            local basePoints = tonumber(row.points) or 0
+            local isSelfFound = _G.IsSelfFound and _G.IsSelfFound() or false
+            if isSelfFound and not row.isSecretAchievement then
+              basePoints = basePoints - HCA_SELF_FOUND_BONUS
+            end
+            
+            -- Store regular points (no solo doubling for dungeons)
+            local pointsToStore = basePoints
+            HardcoreAchievements_SetProgress(achId, "pointsAtKill", pointsToStore)
           end
         end
+        
         SaveProgress() -- Save progress after each kill
         UpdateTooltip() -- Update tooltip to show progress
         print("[HardcoreAchievements] " .. HCA_GetBossName(npcId) .. " killed as part of achievement: " .. title)
@@ -525,6 +538,10 @@ function DungeonCommon.registerDungeonAchievement(def)
     -- Load progress from database
     LoadProgress()
 
+    -- Ensure dungeons never have allowSoloDouble enabled
+    local dungeonDef = def or {}
+    dungeonDef.allowSoloDouble = false
+    
     _G[rowVarName] = CreateAchievementRow(
       AchievementPanel,
       achId,
@@ -537,7 +554,7 @@ function DungeonCommon.registerDungeonAchievement(def)
       requiredQuestId,
       staticPoints,
       zone,
-      def  -- Pass def so allowSoloDouble flag can be set
+      dungeonDef  -- Pass def with allowSoloDouble forced to false for dungeons
     )
     
     -- Store requiredKills on the row for the embed UI to access

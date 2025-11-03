@@ -476,7 +476,14 @@ function CharacterInspection.CreateInspectionAchievementRow(parent, achId, title
     if achievementData and achievementData.completed then
         row.completed = true
         if row.Title and row.Title.SetTextColor then row.Title:SetTextColor(0.6, 0.9, 0.6) end
-        if row.Sub then row.Sub:SetText(AUCTION_TIME_LEFT0) end
+        -- Check if achievement was completed solo and show indicator
+        if row.Sub then
+            if achievementData.wasSolo then
+                row.Sub:SetText(AUCTION_TIME_LEFT0 .. "\n|cFF9D3AFFSolo|r")
+            else
+                row.Sub:SetText(AUCTION_TIME_LEFT0)
+            end
+        end
         if row.Points then row.Points:SetTextColor(0.6, 0.9, 0.6) end
         if row.TS then 
             local timestamp = achievementData.completedAt

@@ -207,7 +207,7 @@ local function CreateOptionsPanel()
         end
     end)
     
-    local tooltipText = "|cffffffffSolo Self Found|r \nAchievements require solo play (no group members nearby) to complete achievements. You will earn double the achievement points. \n\nThis setting can be toggled on and off at any time."
+    local tooltipText = "|cffffffffSolo Self Found|r \nToggling this option on will display the total points you will receive if you complete this achievement solo (no party members within 40 yards)."
     AddTooltipToCheckbox(soloAchievementsCB, tooltipText)
 
     -- =========================================================
@@ -280,7 +280,7 @@ local function CreateOptionsPanel()
             if isSelfFound then
                 soloAchievementsCB:Enable()
                 -- Don't set color when enabling - let template handle default color
-                soloAchievementsCB.tooltip = "|cffffffffSolo Self Found|r \nAchievements require solo play (no group members nearby) to complete achievements. You will earn double the achievement points. \n\nThis setting can be toggled on and off at any time."
+                soloAchievementsCB.tooltip = "|cffffffffSolo Self Found|r \nToggling this option on will display the total points you will receive if you complete this achievement solo (no party members within 40 yards)."
             else
                 soloAchievementsCB:Disable()
                 soloAchievementsCB.Text:SetTextColor(0.5, 0.5, 0.5, 1) -- Gray out the text
