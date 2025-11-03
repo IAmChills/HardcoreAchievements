@@ -2,7 +2,7 @@ local Achievements = {
 
 --{ achId="Test",  title="Boar Test",  level=8, tooltip="Kill |cff0091e6a boar", icon=134400, points=10, requiredQuestId=nil, targetNpcId=3098, faction="Horde", zone="Durotar" },
 --{ achId="Test2", title="Easy Quest Test", level=8, tooltip="Orc starter quest", icon=134400, points=10, requiredQuestId=4641, targetNpcId=nil, faction="Horde", zone="Durotar" },
---{ achId="Test3", title="Kill + Quest", level=4, tooltip="Kill a boar and complete the orc starter quest", icon=134400, points=10, requiredQuestId=33, targetNpcId=299, faction="Alliance", zone="Elwynn Forest" },
+--{ achId="Test3", title="Kill + Quest", level=4, tooltip="Kill a boar and complete the orc starter quest", icon=134400, points=10, requiredQuestId=4641, targetNpcId=3098, faction="Horde", zone="Durotar" },
 
 -- Alliance
 {
@@ -56,6 +56,7 @@ local Achievements = {
     tooltip = "Complete |cff0091e6Absent Minded Prospector|r before level 20",
     icon = 236444,
     points = 10,
+    allowSoloDouble = true,
     requiredQuestId = 731,
     targetNpcId = nil,
     faction = FACTION_ALLIANCE,
@@ -116,12 +117,13 @@ local Achievements = {
     faction = FACTION_ALLIANCE,
     zone = "Arathi Highlands"
 }, {
-    achId = "StinkysEscape",
+    achId = "StinkysEscapeA",
     title = "Stinky Situation",
     level = 34,
     tooltip = "Complete |cff0091e6Stinky’s Escape|r before level 35",
     icon = 236758,
     points = 10,
+    allowSoloDouble = true,
     requiredQuestId = 1222,
     targetNpcId = nil,
     faction = FACTION_ALLIANCE,
@@ -284,6 +286,18 @@ local Achievements = {
     faction = FACTION_HORDE,
     zone = "Hillsbrad Foothills"
 }, {
+    achId = "StinkysEscapeH",
+    title = "Stinky Situation",
+    level = 34,
+    tooltip = "Complete |cff0091e6Stinky’s Escape|r before level 35",
+    icon = 236758,
+    points = 10,
+    allowSoloDouble = true,
+    requiredQuestId = 1270,
+    targetNpcId = nil,
+    faction = FACTION_HORDE,
+    zone = "Dustwallow Marsh"
+}, {
     achId = "ThogrunHorde",
     title = "Sign of the Earth",
     level = 40,
@@ -402,6 +416,7 @@ local Achievements = {
     tooltip = "Complete |cff0091e6Galen's Escape|r before level 39",
     icon = 236845,
     points = 10,
+    allowSoloDouble = true,
     requiredQuestId = 1393,
     targetNpcId = nil,
     zone = "Swamp of Sorrows"
@@ -412,6 +427,7 @@ local Achievements = {
     tooltip = "Complete |cff0091e6Get Me Out of Here!|r before level 42",
     icon = 236742,
     points = 10,
+    allowSoloDouble = true,
     requiredQuestId = 6132,
     targetNpcId = nil,
     zone = "Desolace"
@@ -432,6 +448,7 @@ local Achievements = {
     tooltip = "Complete |cff0091e6An OOX of Your Own|r before level 46",
     icon = 133883,
     points = 10,
+    allowSoloDouble = true,
     requiredQuestId = 3721,
     targetNpcId = nil,
     zone = "Stranglethorn Vale"
@@ -442,6 +459,7 @@ local Achievements = {
     tooltip = "Complete |cff0091e6Cuergo’s Gold|r before level 46",
     icon = 237387,
     points = 10,
+    allowSoloDouble = true,
     requiredQuestId = 2882,
     targetNpcId = nil,
     zone = "Tanaris"
@@ -472,6 +490,7 @@ local Achievements = {
     tooltip = "Obtain the |cff0091e6Mallet of Zul'Farrak|r before level 50",
     icon = 134559,
     points = 10,
+    allowSoloDouble = true,
     customIsCompleted = function() return GetItemCount(9240, true) > 0 end,
     zone = "Hinterlands"
 }, {
@@ -491,6 +510,7 @@ local Achievements = {
     tooltip = "Complete |cff0091e6Kim’Jael Indeed!|r before level 52",
     icon = 236714,
     points = 10,
+    allowSoloDouble = true,
     requiredQuestId = 3601,
     targetNpcId = nil,
     zone = "Azshara"
@@ -501,6 +521,7 @@ local Achievements = {
     tooltip = "Complete |cff0091e6The Stones That Bind Us|r before level 52",
     icon = 236720,
     points = 10,
+    allowSoloDouble = true,
     requiredQuestId = 2681,
     targetNpcId = nil,
     zone = "Blasted Lands"
@@ -599,6 +620,7 @@ local Achievements = {
     tooltip = "Complete |cff0091e6Investigate the Alchemist Shop|r before level 19",
     icon = 135734,
     points = 10,
+    allowSoloDouble = true,
     requiredQuestId = 1960,
     targetNpcId = nil,
     faction = FACTION_HORDE,
@@ -611,6 +633,7 @@ local Achievements = {
     tooltip = "Complete |cff0091e6Investigate the Alchemist Shop|r before level 19",
     icon = 135734,
     points = 10,
+    allowSoloDouble = true,
     requiredQuestId = 1920,
     targetNpcId = nil,
     faction = FACTION_ALLIANCE,

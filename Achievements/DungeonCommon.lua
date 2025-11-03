@@ -479,6 +479,12 @@ function DungeonCommon.registerDungeonAchievement(def)
       end
       
       if found then
+        -- Check solo mode if enabled before tracking the kill
+        if _G.HardcoreAchievements_IsSoloModeEnabled and _G.HardcoreAchievements_IsSoloModeEnabled() then
+          if not _G.PlayerIsSolo or not _G.PlayerIsSolo() then
+            return false  -- Not solo, don't track this kill
+          end
+        end
         SaveProgress() -- Save progress after each kill
         UpdateTooltip() -- Update tooltip to show progress
         print("[HardcoreAchievements] " .. HCA_GetBossName(npcId) .. " killed as part of achievement: " .. title)
@@ -529,7 +535,9 @@ function DungeonCommon.registerDungeonAchievement(def)
       points,
       KillTracker,  -- Use the local function directly
       requiredQuestId,
-      staticPoints
+      staticPoints,
+      zone,
+      def  -- Pass def so allowSoloDouble flag can be set
     )
     
     -- Store requiredKills on the row for the embed UI to access

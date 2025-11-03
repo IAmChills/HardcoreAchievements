@@ -225,9 +225,11 @@ function HCA_MarkRowCompleted(row)
 		cdb.progress = cdb.progress or {}
 		local progress = cdb.progress[id]
 
+        local usePointsAtKill = false
         if progress and progress.pointsAtKill then
             -- Use the points that were stored at the time of kill
             finalPoints = tonumber(progress.pointsAtKill) or 0
+            usePointsAtKill = true
         end
 
         -- For secret achievements, compute final points from reveal base with multipliers/bonuses
@@ -240,6 +242,14 @@ function HCA_MarkRowCompleted(row)
                 computed = base + math.floor((base) * (multiplier - 1) + 0.5)
             end
             finalPoints = computed
+        end
+
+        -- Double points if solo achievements mode is enabled (if achievement allows it)
+        -- Only apply if we didn't use pointsAtKill (which already includes SSF doubling)
+        if not usePointsAtKill and _G.HardcoreAchievements_IsSoloModeEnabled and _G.HardcoreAchievements_IsSoloModeEnabled() then
+            if row.allowSoloDouble then
+                finalPoints = finalPoints * 2
+            end
         end
 
         rec.points = finalPoints
@@ -529,6 +539,9 @@ function IsSelfFound()
     return false
 end
 
+-- Export IsSelfFound globally
+_G.IsSelfFound = IsSelfFound
+
 local function ApplySelfFoundBonus()
     if not IsSelfFound() then return end
     if not HardcoreAchievementsDB or not HardcoreAchievementsDB.chars then return end
@@ -805,16 +818,44 @@ initFrame:SetScript("OnEvent", function(self, event, ...)
         
         -- Load saved tab position
         LoadTabPosition()
+        
+        -- Refresh options panel to sync checkbox states
+        if _HardcoreAchievementsOptionsPanel and _HardcoreAchievementsOptionsPanel.refresh then
+            _HardcoreAchievementsOptionsPanel:refresh()
+        end
 
     elseif event == "ADDON_LOADED" then
         local addonName = ...
         if addonName == ADDON_NAME then
             C_Timer.After(3, function()
                 ApplySelfFoundBonus()
+                addon:ShowWelcomeMessage()
             end)
         end
     end
 end)
+
+-- Function to show welcome message popup on first login
+function addon:ShowWelcomeMessage()
+    local _, cdb = GetCharDB()
+    if not cdb.settings.showWelcomeMessage and IsSelfFound() then
+        StaticPopup_Show("Hardcore Achievements")
+        cdb.settings.showWelcomeMessage = true
+    end
+end
+
+-- Define the welcome message popup
+StaticPopupDialogs["Hardcore Achievements"] = {
+    text = "You are self found! You can enable Solo Self Found mode for Hardcore Achievements within the options panel for double the points and double the glory.",
+    button1 = "Got it!",
+    timeout = 0,
+    whileDead = true,
+    hideOnEscape = true,
+    preferredIndex = 3,
+    OnAccept = function()
+        -- Popup automatically closes
+    end,
+}
 
 -- =========================================================
 -- Setting up the Interface
@@ -1382,9 +1423,37 @@ AchievementPanel.TotalPoints:SetTextColor(0.6, 0.9, 0.6)
 
 -- Preset multiplier label, e.g. "Point Multiplier (Lite +)"
 AchievementPanel.MultiplierText = AchievementPanel:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-AchievementPanel.MultiplierText:SetPoint("TOP", 5, -40)
+AchievementPanel.MultiplierText:SetPoint("TOP", 15, -40)
 AchievementPanel.MultiplierText:SetText("")
 AchievementPanel.MultiplierText:SetTextColor(0.8, 0.8, 0.8)
+
+-- Solo mode checkbox
+AchievementPanel.SoloModeCheckbox = CreateFrame("CheckButton", nil, AchievementPanel, "InterfaceOptionsCheckButtonTemplate")
+AchievementPanel.SoloModeCheckbox:SetPoint("TOPLEFT", AchievementPanel, "TOPLEFT", 70, -50)
+AchievementPanel.SoloModeCheckbox.Text:SetText("SSF")
+AchievementPanel.SoloModeCheckbox:SetScript("OnClick", function(self)
+    if self:IsEnabled() then
+        local isChecked = self:GetChecked()
+        local _, cdb = GetCharDB()
+        if cdb and cdb.settings then
+            cdb.settings.soloAchievements = isChecked
+            -- Refresh all achievement points immediately
+            if _G.HCA_RefreshAllAchievementPoints then
+                _G.HCA_RefreshAllAchievementPoints()
+            end
+        end
+    end
+end)
+AchievementPanel.SoloModeCheckbox:SetScript("OnEnter", function(self)
+    if self.tooltip then
+        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+        GameTooltip:SetText(self.tooltip, nil, nil, nil, nil, true)
+        GameTooltip:Show()
+    end
+end)
+AchievementPanel.SoloModeCheckbox:SetScript("OnLeave", function(self)
+    GameTooltip:Hide()
+end)
 
 -- Scrollable container inside the AchievementPanel
 AchievementPanel.Scroll = CreateFrame("ScrollFrame", "$parentScroll", AchievementPanel, "UIPanelScrollFrameTemplate")
@@ -1485,7 +1554,7 @@ function CreateAchievementRow(parent, achId, title, tooltip, icon, level, points
     -- icon
     row.Icon = row:CreateTexture(nil, "ARTWORK")
     row.Icon:SetSize(32, 32)
-    row.Icon:SetPoint("LEFT", row, "LEFT", -1, 0) -- Moved 2 pixels right to account for border
+    row.Icon:SetPoint("LEFT", row, "LEFT", 1, 0) -- Shifted to account for SSF border
     row.Icon:SetTexture(icon or 136116)
     
     -- Create completion border as a green square outline around the icon
@@ -1508,6 +1577,13 @@ function CreateAchievementRow(parent, achId, title, tooltip, icon, level, points
     row.YellowBorder:SetPoint("CENTER", row.Icon, "CENTER", 0, 0)
     row.YellowBorder:SetColorTexture(1, 0.82, 0, 0.8) -- Goldish yellow square
     row.YellowBorder:Hide()
+    
+    -- Create SSF mode border as a purple/blue glow around the icon
+    row.SSFBorder = row:CreateTexture(nil, "BORDER")
+    row.SSFBorder:SetSize(34, 34) -- Slightly larger than other borders
+    row.SSFBorder:SetPoint("CENTER", row.Icon, "CENTER", 0, 0)
+    row.SSFBorder:SetColorTexture(0.5, 0.3, 0.9, 0.6) -- Purple glow
+    row.SSFBorder:Hide()
 
     -- title
     row.Title = row:CreateFontString(nil, "OVERLAY", "GameFontNormal")
@@ -1561,7 +1637,16 @@ function CreateAchievementRow(parent, achId, title, tooltip, icon, level, points
         if self.Title and self.Title.GetText then
             GameTooltip:SetOwner(row, "ANCHOR_RIGHT")
             local currentTitle = (self.Title and self.Title.GetText and self.Title:GetText()) or (title or "")
-            GameTooltip:SetText(currentTitle, 1, 1, 1)
+            
+            -- Check if SSF mode is enabled and this achievement supports it
+            local isSoloMode = _G.HardcoreAchievements_IsSoloModeEnabled and _G.HardcoreAchievements_IsSoloModeEnabled() or false
+            if isSoloMode and self.allowSoloDouble then
+                -- Show title with "Solo" on the right
+                GameTooltip:AddDoubleLine(currentTitle, "|cFF9D3AFFSolo|r", 1, 1, 1, 0.5, 0.3, 0.9)
+            else
+                GameTooltip:SetText(currentTitle, 1, 1, 1)
+            end
+            
             GameTooltip:AddLine(self.tooltip or tooltip or "", nil, nil, nil, true)
             if self.zone then
                 GameTooltip:AddLine(self.zone, 0.6, 1, 0.86)
@@ -1623,6 +1708,13 @@ function CreateAchievementRow(parent, achId, title, tooltip, icon, level, points
     row.killTracker  = killTracker
     row.questTracker = questTracker
     row.id = achId
+    -- Store solo doubling flag (defaults to true if killTracker exists for backward compatibility)
+    if def and def.allowSoloDouble ~= nil then
+        row.allowSoloDouble = def.allowSoloDouble
+    else
+        row.allowSoloDouble = (killTracker ~= nil)
+    end
+    
     if def and type(def.customSpell) == "function" then
         row.spellTracker = def.customSpell
     end
@@ -1892,6 +1984,38 @@ function HCA_ShowAchievementTab()
     -- Show our AchievementPanel directly (no CharacterFrame_ShowSubFrame)
     AchievementPanel:Show()
     --Tab.squareFrame:Show()
+    
+    -- Sync solo mode checkbox state
+    if AchievementPanel.SoloModeCheckbox then
+        local _, cdb = GetCharDB()
+        local isChecked = (cdb and cdb.settings and cdb.settings.soloAchievements) or false
+        AchievementPanel.SoloModeCheckbox:SetChecked(isChecked)
+        
+        -- Update enable/disable state based on Self-Found status
+        local isSelfFound = _G.IsSelfFound and _G.IsSelfFound() or false
+        if isSelfFound then
+            AchievementPanel.SoloModeCheckbox:Enable()
+            AchievementPanel.SoloModeCheckbox.tooltip = "|cffffffffSolo Self Found|r \nAchievements require solo play (no group members nearby) to complete achievements. You will earn double the achievement points. \n\nThis setting can be toggled on and off at any time."
+        else
+            AchievementPanel.SoloModeCheckbox:Disable()
+            AchievementPanel.SoloModeCheckbox.Text:SetTextColor(0.5, 0.5, 0.5, 1)
+            --AchievementPanel.SoloModeCheckbox.tooltip = "|cffffffffSolo Self Found|r \nAchievements require solo play (no group members nearby) to complete achievements. You will earn double the achievement points. \n\nThis setting can be toggled on and off at any time. |cffff0000(Requires Self-Found buff to enable)|r"
+        end
+        
+        -- Update SSF borders for all achievements
+        -- if AchievementPanel and AchievementPanel.achievements then
+        --     local isSoloMode = isChecked
+        --     for _, row in ipairs(AchievementPanel.achievements) do
+        --         if not row.completed and row.allowSoloDouble and row.SSFBorder then
+        --             if isSoloMode then
+        --                 row.SSFBorder:Show()
+        --             else
+        --                 row.SSFBorder:Hide()
+        --             end
+        --         end
+        --     end
+        -- end
+    end
     
     -- Apply current filter when opening panel
     if ApplyFilter then

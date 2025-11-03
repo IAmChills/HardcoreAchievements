@@ -40,6 +40,17 @@ function HardcoreAchievements_ShouldTakeScreenshot()
     return true
 end
 
+-- Helper function to check if solo achievements mode is enabled
+function HardcoreAchievements_IsSoloModeEnabled()
+    if type(HardcoreAchievements_GetCharDB) == "function" then
+        local _, cdb = HardcoreAchievements_GetCharDB()
+        if cdb and cdb.settings and cdb.settings.soloAchievements then
+            return true
+        end
+    end
+    return false
+end
+
 -- Create Discord frame (will be created on first use)
 local discordFrame = nil
 local DISCORD_LINK = "discord.gg/MMh2Cv8X" -- Replace with actual Discord invite link
@@ -126,12 +137,18 @@ local function CreateOptionsPanel()
     local title = panel:CreateFontString(nil, "ARTWORK", "GameFontNormalLarge")
     title:SetPoint("TOPLEFT", 16, -16)
     title:SetText("Hardcore Achievements")
+    --title:SetFont("Interface\\Addons\\MyAddon\\Fonts\\MyCustomFont.ttf", 20)
+    title:SetTextColor(1, 1, 1, 1)
     
     -- Create subtitle/description
     local subtitle = panel:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
     subtitle:SetPoint("TOPLEFT", title, "BOTTOMLEFT", 0, -8)
     subtitle:SetText("Configure settings for the Hardcore Achievements addon")
     subtitle:SetTextColor(0.7, 0.7, 0.7, 1)
+
+    panel.divider = panel:CreateTexture(nil, "ARTWORK")
+    panel.divider:SetAtlas("Options_HorizontalDivider", true)
+    panel.divider:SetPoint("TOP", 0, -60)
     
     -- =========================================================
     -- Miscellaneous Category
@@ -140,50 +157,84 @@ local function CreateOptionsPanel()
     miscCategoryTitle:SetPoint("TOPLEFT", subtitle, "BOTTOMLEFT", 0, -40)
     miscCategoryTitle:SetText("Miscellaneous")
     
+    -- Helper function to add tooltip to checkboxes
+    local function AddTooltipToCheckbox(cb, tooltipText)
+        cb.tooltip = tooltipText
+        cb:SetScript("OnEnter", function(self)
+            if self.tooltip then
+                GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+                GameTooltip:SetText(self.tooltip, nil, nil, nil, nil, true)
+                GameTooltip:Show()
+            end
+        end)
+        cb:SetScript("OnLeave", function(self)
+            GameTooltip:Hide()
+        end)
+    end
+
     -- Disable Screenshots checkbox
     local disableScreenshotsCB = CreateFrame("CheckButton", nil, panel, "InterfaceOptionsCheckButtonTemplate")
     disableScreenshotsCB:SetPoint("TOPLEFT", miscCategoryTitle, "BOTTOMLEFT", 0, -8)
     disableScreenshotsCB.Text:SetText("Disable Screenshots")
-    disableScreenshotsCB.tooltipText = "Prevent the addon from taking screenshots when achievements are completed."
     disableScreenshotsCB:SetChecked(GetSetting("disableScreenshots", false))
     disableScreenshotsCB:SetScript("OnClick", function(self)
         local isChecked = self:GetChecked()
         SetSetting("disableScreenshots", isChecked)
     end)
+    AddTooltipToCheckbox(disableScreenshotsCB, "Prevent the addon from taking screenshots when achievements are completed.")
+
+    -- Solo Achievements checkbox
+    local soloAchievementsCB = CreateFrame("CheckButton", nil, panel, "InterfaceOptionsCheckButtonTemplate")
+    soloAchievementsCB:SetPoint("TOPLEFT", disableScreenshotsCB, "BOTTOMLEFT", 0, -8)
+    soloAchievementsCB.Text:SetText("Solo Self Found Mode")
+    soloAchievementsCB:SetChecked(GetSetting("soloAchievements", false))
+    
+    -- Check if player is self-found to enable/disable checkbox
+    local isSelfFound = _G.IsSelfFound and _G.IsSelfFound() or false
+    if not isSelfFound then
+        soloAchievementsCB:Disable()
+        soloAchievementsCB.Text:SetTextColor(0.5, 0.5, 0.5, 1) -- Gray out the text
+    end
+    
+    soloAchievementsCB:SetScript("OnClick", function(self)
+        if self:IsEnabled() then
+            local isChecked = self:GetChecked()
+            SetSetting("soloAchievements", isChecked)
+            -- Refresh all achievement points immediately
+            if _G.HCA_RefreshAllAchievementPoints then
+                _G.HCA_RefreshAllAchievementPoints()
+            end
+        end
+    end)
+    
+    local tooltipText = "|cffffffffSolo Self Found|r \nAchievements require solo play (no group members nearby) to complete achievements. You will earn double the achievement points. \n\nThis setting can be toggled on and off at any time."
+    AddTooltipToCheckbox(soloAchievementsCB, tooltipText)
 
     -- =========================================================
     -- User Interface Category
     -- =========================================================
     local uiCategoryTitle = panel:CreateFontString(nil, "ARTWORK", "GameFontNormalLarge")
-    uiCategoryTitle:SetPoint("TOPLEFT", disableScreenshotsCB, "BOTTOMLEFT", 0, -30)
+    uiCategoryTitle:SetPoint("TOPLEFT", soloAchievementsCB, "BOTTOMLEFT", 0, -30)
     uiCategoryTitle:SetText("User Interface")
     
     -- Reset Achievements Tab button
     local resetTabButton = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
     resetTabButton:SetPoint("TOPLEFT", uiCategoryTitle, "BOTTOMLEFT", 0, -8)
-    resetTabButton:SetText("Reset Achievements Tab")
-    resetTabButton:SetWidth(180)
+    resetTabButton:SetText("Reset Achievements Tab Position")
+    resetTabButton:SetWidth(220)
     resetTabButton:SetHeight(25)
     resetTabButton:SetScript("OnClick", function(self)
         if type(_G.ResetTabPosition) == "function" then
             _G.ResetTabPosition()
         end
     end)
-    
-    -- Description for the button
-    local resetTabDesc = panel:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
-    resetTabDesc:SetPoint("TOPLEFT", resetTabButton, "BOTTOMLEFT", 0, -4)
-    resetTabDesc:SetText("Used to force the Achievements tab to be shown on the character screen in case it's hidden")
-    resetTabDesc:SetTextColor(0.7, 0.7, 0.7, 1)
-    resetTabDesc:SetWidth(600)
-    resetTabDesc:SetJustifyH("LEFT")
-    resetTabDesc:SetJustifyV("TOP")
+    AddTooltipToCheckbox(resetTabButton, "Used to reset the position of the Achievements tab in case it's hidden")
     
     -- =========================================================
     -- Support & Contact Category
     -- =========================================================
     local supportCategoryTitle = panel:CreateFontString(nil, "ARTWORK", "GameFontNormalLarge")
-    supportCategoryTitle:SetPoint("TOPLEFT", resetTabDesc, "BOTTOMLEFT", 0, -30)
+    supportCategoryTitle:SetPoint("TOPLEFT", resetTabButton, "BOTTOMLEFT", 0, -30)
     supportCategoryTitle:SetText("Support & Contact")
     
     -- Support text
@@ -209,17 +260,32 @@ local function CreateOptionsPanel()
     -- Store references for future use
     panel.checkboxes = {
         disableScreenshots = disableScreenshotsCB,
+        soloAchievements = soloAchievementsCB,
     }
     panel.buttons = {
         resetAchievementsTab = resetTabButton,
         discord = discordButton,
     }
-    
+
     -- Refresh function to update checkboxes when panel is shown
     panel.refresh = function(self)
         -- Update checkbox state from database
         if disableScreenshotsCB then
             disableScreenshotsCB:SetChecked(GetSetting("disableScreenshots", false))
+        end
+        if soloAchievementsCB then
+            soloAchievementsCB:SetChecked(GetSetting("soloAchievements", false))
+            -- Update enable/disable state based on Self-Found status
+            local isSelfFound = _G.IsSelfFound and _G.IsSelfFound() or false
+            if isSelfFound then
+                soloAchievementsCB:Enable()
+                -- Don't set color when enabling - let template handle default color
+                soloAchievementsCB.tooltip = "|cffffffffSolo Self Found|r \nAchievements require solo play (no group members nearby) to complete achievements. You will earn double the achievement points. \n\nThis setting can be toggled on and off at any time."
+            else
+                soloAchievementsCB:Disable()
+                soloAchievementsCB.Text:SetTextColor(0.5, 0.5, 0.5, 1) -- Gray out the text
+                --soloAchievementsCB.tooltip = "Require solo play (no group members nearby) to complete achievements. Doubles achievement points. |cffff0000(Requires Self-Found buff to enable)|r"
+            end
         end
     end
     
