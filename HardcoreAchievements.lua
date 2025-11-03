@@ -891,33 +891,33 @@ initFrame:SetScript("OnEvent", function(self, event, ...)
         if addonName == ADDON_NAME then
             C_Timer.After(3, function()
                 ApplySelfFoundBonus()
-                addon:ShowWelcomeMessage()
+                --addon:ShowWelcomeMessage()
             end)
         end
     end
 end)
 
--- Function to show welcome message popup on first login
-function addon:ShowWelcomeMessage()
-    local _, cdb = GetCharDB()
-    if not cdb.settings.showWelcomeMessage and IsSelfFound() then
-        StaticPopup_Show("Hardcore Achievements")
-        cdb.settings.showWelcomeMessage = true
-    end
-end
+-- -- Function to show welcome message popup on first login
+-- function addon:ShowWelcomeMessage()
+--     local _, cdb = GetCharDB()
+--     if not cdb.settings.showWelcomeMessage and IsSelfFound() then
+--         StaticPopup_Show("Hardcore Achievements")
+--         cdb.settings.showWelcomeMessage = true
+--     end
+-- end
 
--- Define the welcome message popup
-StaticPopupDialogs["Hardcore Achievements"] = {
-    text = "You are self found! You can enable Solo Self Found mode for Hardcore Achievements within the options panel for double the points and double the glory.",
-    button1 = "Got it!",
-    timeout = 0,
-    whileDead = true,
-    hideOnEscape = true,
-    preferredIndex = 3,
-    OnAccept = function()
-        -- Popup automatically closes
-    end,
-}
+-- -- Define the welcome message popup
+-- StaticPopupDialogs["Hardcore Achievements"] = {
+--     text = "You are self found! You can enable Solo Self Found mode for Hardcore Achievements within the options panel for double the points and double the glory.",
+--     button1 = "Got it!",
+--     timeout = 0,
+--     whileDead = true,
+--     hideOnEscape = true,
+--     preferredIndex = 3,
+--     OnAccept = function()
+--         -- Popup automatically closes
+--     end,
+-- }
 
 -- =========================================================
 -- Setting up the Interface
