@@ -200,7 +200,7 @@ local function SortAchievementRows()
     if not AchievementPanel or not AchievementPanel.achievements then return end
 
     local function isLevelMilestone(row)
-        -- milestone: no kill/quest tracker and id like "Level30"
+        -- milestone: no kill/quest tracker and id like "Reach Level..." sort to the bottom if tied
         return (not row.killTracker) and (not row.questTracker)
             and type(row.id) == "string" and row.id:match("^Level%d+$") ~= nil
     end
@@ -283,7 +283,7 @@ function HCA_MarkRowCompleted(row)
             end
         end
 
-        -- For secret achievements, compute final points from reveal base with multipliers/bonuses
+        -- Note: Secret achievements do NOT get self-found bonus
         if row.isSecretAchievement then
             local base = tonumber(row.revealPointsBase or row.originalPoints) or 0
             local computed = base
@@ -292,16 +292,10 @@ function HCA_MarkRowCompleted(row)
                 local multiplier = GetPresetMultiplier and GetPresetMultiplier(preset) or 1.0
                 computed = base + math.floor((base) * (multiplier - 1) + 0.5)
             end
-            -- Add self-found bonus if applicable
-            local isSelfFound = _G.IsSelfFound and _G.IsSelfFound() or false
-            if isSelfFound then
-                computed = computed + HCA_SELF_FOUND_BONUS
-            end
             finalPoints = computed
         end
 
         -- Points from pointsAtKill already include multiplier and solo doubling if applicable
-        -- We've added self-found bonus above if needed
 
         rec.points = finalPoints
         -- Reflect final points in UI row and text immediately
@@ -328,11 +322,6 @@ function HCA_MarkRowCompleted(row)
     if row.TS then row.TS:SetText(FormatTimestamp(time())) end
     if row.Icon and row.Icon.SetDesaturated then row.Icon:SetDesaturated(false) end
     
-    -- Update icon borders for completion status
-    -- if row.GreenBorder then row.GreenBorder:Show() end
-    -- if row.RedBorder then row.RedBorder:Hide() end
-    -- if row.YellowBorder then row.YellowBorder:Hide() end
-
     -- Reveal secret achievements before persisting/toast
     if row.isSecretAchievement then
         if row.revealTitle and row.Title then row.Title:SetText(row.revealTitle) end
@@ -397,11 +386,6 @@ local function RestoreCompletionsFromDB()
             if row.Points then row.Points:SetTextColor(0.6, 0.9, 0.6) end
             
             if row.Icon and row.Icon.SetDesaturated then row.Icon:SetDesaturated(false) end
-            
-            -- Update icon borders for completion status
-            -- if row.GreenBorder then row.GreenBorder:Show() end
-            -- if row.RedBorder then row.RedBorder:Hide() end
-            -- if row.YellowBorder then row.YellowBorder:Hide() end
 
             if rec.points then
                 row.points = rec.points
@@ -556,6 +540,29 @@ local function HCA_CreateAchToast()
 
     AttachModelOverlayClipped(f, f.bg)
 
+    -- Make the toast clickable
+    f:EnableMouse(true)
+    
+    -- Store achievement data for tooltip display
+    f.achId = nil
+    f.achTitle = nil
+    f.achIcon = nil
+    f.achPoints = nil
+    
+    -- Mouse button handler to show achievement tooltip (OnMouseUp for left button)
+    f:SetScript("OnMouseUp", function(self, button)
+        if button == "LeftButton" and self.achId then
+            -- Generate hyperlink using the same format as chat links
+            if _G.HCA_GetAchievementHyperlink then
+                local link = _G.HCA_GetAchievementHyperlink(self.achId, self.achTitle, self.achIcon, self.achPoints)
+                if link and ItemRefTooltip then
+                    -- Use the same tooltip mechanism as chat links
+                    ItemRefTooltip:SetHyperlink(link)
+                end
+            end
+        end
+    end)
+
     return f
 end
 
@@ -577,10 +584,11 @@ function HCA_AchToast_Show(iconTex, title, pts, achIdOrRow)
 
     -- Check for pointsAtKill and add self-found bonus if applicable
     local finalPoints = pts or 0
+    local achId = nil
+    local row = nil
+    
     if achIdOrRow then
         local _, cdb = GetCharDB()
-        local achId = nil
-        local row = nil
         
         if type(achIdOrRow) == "table" then
             -- It's a row object
@@ -606,6 +614,12 @@ function HCA_AchToast_Show(iconTex, title, pts, achIdOrRow)
     f.icon:SetTexture(tex)
     f.name:SetText(title or "")
     f.points:SetText(finalPoints and tostring(finalPoints) or "")
+
+    -- Store achievement data for click handler
+    f.achId = achId
+    f.achTitle = title
+    f.achIcon = tex
+    f.achPoints = finalPoints
 
     f:Show()
 
@@ -995,8 +1009,7 @@ local Tab = CreateFrame("Button" , "$parentTab"..TabID, CharacterFrame, "Charact
 Tab:SetText(ACHIEVEMENTS)
 PanelTemplates_DeselectTab(Tab)
 
--- === Draggable "curl" behavior for Achievements tab (bottom ↔ right edges only) ===
--- Place this immediately after the lines that create `Tab` and set its text.
+-- Draggable "curl" behavior for Achievements tab (bottom + right edges only)
 -- Tab persistence functions
 function SaveTabPosition()
     local db = EnsureDB()
@@ -1174,7 +1187,7 @@ do
         
         local squareFrame = CreateFrame("Button", nil, UIParent) -- Parent to UIParent instead of Tab; use Button for clicks/drag
         squareFrame:SetSize(SQUARE_SIZE, SQUARE_SIZE)
-        squareFrame:SetHitRectInsets(0, 30, 0, 0) -- shrink hitbox by 15px from right edge
+        squareFrame:SetHitRectInsets(0, 30, 0, 0) -- shrink hitbox by 30px from right edge
         squareFrame:SetFrameStrata("BACKGROUND") -- Move to background strata
         squareFrame:SetFrameLevel(1) -- Low frame level to appear below borders
         squareFrame:Hide()
@@ -1678,36 +1691,8 @@ function CreateAchievementRow(parent, achId, title, tooltip, icon, level, points
     -- icon
     row.Icon = row:CreateTexture(nil, "ARTWORK")
     row.Icon:SetSize(32, 32)
-    row.Icon:SetPoint("LEFT", row, "LEFT", 1, 0) -- Shifted to account for SSF border
+    row.Icon:SetPoint("LEFT", row, "LEFT", 1, 0) -- Shift to account for SSF border
     row.Icon:SetTexture(icon or 136116)
-    
-    -- Create completion border as a green square outline around the icon
-    row.GreenBorder = row:CreateTexture(nil, "BORDER")
-    row.GreenBorder:SetSize(34, 34) -- Slightly larger than icon
-    row.GreenBorder:SetPoint("CENTER", row.Icon, "CENTER", 0, 0)
-    row.GreenBorder:SetColorTexture(0.6, 0.9, 0.6, 0.8) -- Green square
-    row.GreenBorder:Hide()
-    
-    -- Create failed border as a red square outline around the icon
-    row.RedBorder = row:CreateTexture(nil, "BORDER")
-    row.RedBorder:SetSize(34, 34) -- Slightly larger than icon
-    row.RedBorder:SetPoint("CENTER", row.Icon, "CENTER", 0, 0)
-    row.RedBorder:SetColorTexture(0.53, 0.02, 0.03, 0.8) -- Red square
-    row.RedBorder:Hide()
-    
-    -- Create available border as a yellow square outline around the icon
-    row.YellowBorder = row:CreateTexture(nil, "BORDER")
-    row.YellowBorder:SetSize(34, 34) -- Slightly larger than icon
-    row.YellowBorder:SetPoint("CENTER", row.Icon, "CENTER", 0, 0)
-    row.YellowBorder:SetColorTexture(1, 0.82, 0, 0.8) -- Goldish yellow square
-    row.YellowBorder:Hide()
-    
-    -- Create SSF mode border as a purple/blue glow around the icon
-    row.SSFBorder = row:CreateTexture(nil, "BORDER")
-    row.SSFBorder:SetSize(34, 34) -- Slightly larger than other borders
-    row.SSFBorder:SetPoint("CENTER", row.Icon, "CENTER", 0, 0)
-    row.SSFBorder:SetColorTexture(0.5, 0.3, 0.9, 0.6) -- Purple glow
-    row.SSFBorder:Hide()
 
     -- title
     row.Title = row:CreateFontString(nil, "OVERLAY", "GameFontNormal")
@@ -1903,6 +1888,7 @@ do
         AchievementPanel._achEvt:RegisterEvent("UNIT_SPELLCAST_SUCCEEDED")
         AchievementPanel._achEvt:RegisterEvent("CHAT_MSG_TEXT_EMOTE")
         AchievementPanel._achEvt:RegisterEvent("PLAYER_LEVEL_UP")
+        AchievementPanel._achEvt:RegisterEvent("PLAYER_LEVEL_CHANGED")
         AchievementPanel._achEvt:RegisterEvent("CHAT_MSG_LOOT")
         -- Store the player's level before quest turn-in to handle level-ups during turn-in
         local levelBeforeTurnIn = nil
@@ -1992,10 +1978,17 @@ do
             elseif event == "PLAYER_LEVEL_UP" then
                 -- Track level changes to detect level-ups during quest turn-in
                 local newLevel = tonumber(select(1, ...))
-                if levelBeforeTurnIn == nil then
-                    levelBeforeTurnIn = lastLevel
+                local newLevel2 = tonumber(...)
+                local args = {...}
+                local argCount = select('#', ...)
+                local argStrings = {}
+                for i = 1, argCount do
+                    local arg = select(i, ...)
+                    table.insert(argStrings, tostring(arg) .. " (" .. type(arg) .. ")")
                 end
-                lastLevel = newLevel
+                print("PLAYER_LEVEL_UP SELECT 1: " .. tostring(newLevel))
+                print("PLAYER_LEVEL_UP NO SELECT: " .. tostring(newLevel2))
+                print("PLAYER_LEVEL_UP ALL ARGS (" .. argCount .. "): " .. table.concat(argStrings, ", "))
                 -- Check for level-based achievement completions
                 for _, row in ipairs(AchievementPanel.achievements) do
                     if not row.completed then
@@ -2026,6 +2019,11 @@ do
                     end
                 end
                 RefreshOutleveledAll()
+            elseif event == "PLAYER_LEVEL_CHANGED" then
+                local newLevel = tonumber(select(1, ...))
+                local newLevel2 = tonumber(select(2, ...))
+                local newLevel3 = tonumber(...)
+                print("PLAYER_LEVEL_CHANGED: " .. newLevel .. " " .. newLevel2 .. " " .. newLevel3)
             elseif event == "CHAT_MSG_LOOT" then
                 local msg, _, _, _, playerName = ...
                 if playerName == GetUnitName("player") then
@@ -2134,20 +2132,6 @@ function HCA_ShowAchievementTab()
             AchievementPanel.SoloModeCheckbox.Text:SetTextColor(0.5, 0.5, 0.5, 1)
             --AchievementPanel.SoloModeCheckbox.tooltip = "|cffffffffSolo Self Found|r \nToggling this option on will display the total points you will receive if you complete this achievement solo (no party members within 40 yards). |cffff0000(Requires Self-Found buff to enable)|r"
         end
-        
-        -- Update SSF borders for all achievements
-        -- if AchievementPanel and AchievementPanel.achievements then
-        --     local isSoloMode = isChecked
-        --     for _, row in ipairs(AchievementPanel.achievements) do
-        --         if not row.completed and row.allowSoloDouble and row.SSFBorder then
-        --             if isSoloMode then
-        --                 row.SSFBorder:Show()
-        --             else
-        --                 row.SSFBorder:Hide()
-        --             end
-        --         end
-        --     end
-        -- end
     end
     
     -- Apply current filter when opening panel

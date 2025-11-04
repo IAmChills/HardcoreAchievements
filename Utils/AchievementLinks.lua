@@ -51,7 +51,10 @@ end
 local Old_ItemRef_SetHyperlink = ItemRefTooltip and ItemRefTooltip.SetHyperlink
 if Old_ItemRef_SetHyperlink then
 	ItemRefTooltip.SetHyperlink = function(self, link, ...)
-        local prefix, achId, iconStr, pointsStr, sender = string.match(tostring(link or ""), "^(%w+):([^:]+):?([^:]*):?([^:]*):?(.*)$")
+        local linkStr = tostring(link or "")
+        -- Extract hyperlink part (between |H and |h) or use the whole string if no |H wrapper
+        local hyperlinkPart = string.match(linkStr, "^%|H([^|]+)%|h") or linkStr
+        local prefix, achId, iconStr, pointsStr, sender = string.match(hyperlinkPart, "^(%w+):([^:]+):?([^:]*):?([^:]*):?(.*)$")
         if prefix == HCA_LINK_PREFIX and achId then
 			ShowUIPanel(ItemRefTooltip)
 			ItemRefTooltip:SetOwner(UIParent, "ANCHOR_PRESERVE")
@@ -113,7 +116,6 @@ if Old_ItemRef_SetHyperlink then
 					return aa < bb
 				end)
 				local total = #keys
-				local rightPts = (points and points > 0) and string.format("%d pts", points) or ""
 				for i, npcId in ipairs(keys) do
 					local need = rec.requiredKills[npcId]
 					local idNum = tonumber(npcId) or npcId
@@ -121,13 +123,11 @@ if Old_ItemRef_SetHyperlink then
 					local bossName = _G.HCA_GetBossName and _G.HCA_GetBossName(idNum) or ("Boss " .. tostring(idNum))
 					local done = current >= (tonumber(need) or 1)
 					local lr, lg, lb = done and 1 or 0.5, done and 1 or 0.5, done and 1 or 0.5
-					-- Put points on the last boss line, right-aligned
-					local rr, rg, rb = 0.7, 0.9, 0.7
-					ItemRefTooltip:AddDoubleLine(bossName, (i == total) and rightPts or "", lr, lg, lb, rr, rg, rb)
+					ItemRefTooltip:AddLine(bossName, lr, lg, lb)
 				end
 			end
 
-            -- Non-dungeon: Zone (left) and Points (right) on the same line
+            -- Non-dungeon: Zone only (points shown with completion status)
             if not showedDungeonDetails then
                 local zoneText
                 if rec then
@@ -143,12 +143,19 @@ if Old_ItemRef_SetHyperlink then
                         zoneText = tostring(rec.mapID)
                     end
                 end
-                local left = zoneText or "\n"
-                local right = (points and points > 0) and string.format("%d pts", points) or ""
-                if left ~= "" or right ~= "" then
-                    ItemRefTooltip:AddDoubleLine(left, right, 0.7, 0.7, 0.7, 0.7, 0.9, 0.7)
+                if zoneText and zoneText ~= "" then
+                    ItemRefTooltip:AddLine(zoneText, 0.412, 0.678, 0.788)
                 end
             end
+            
+            -- Show completion status at the bottom with points right-aligned
+            ItemRefTooltip:AddLine(" ")
+            local isCompleted = ViewerHasCompletedAchievement(achId)
+            local statusText = isCompleted and "Complete" or "Incomplete"
+            local statusR, statusG, statusB = isCompleted and 0.6 or 0.5, isCompleted and 0.9 or 0.5, isCompleted and 0.6 or 0.5
+            local pointsText = (points and points > 0) and string.format("%d pts", points) or ""
+            ItemRefTooltip:AddDoubleLine(statusText, pointsText, statusR, statusG, statusB, 0.7, 0.9, 0.7)
+            
 			ItemRefTooltip:Show()
 			return
 		end
