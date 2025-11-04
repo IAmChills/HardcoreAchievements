@@ -57,9 +57,18 @@ function M.registerQuestAchievement(cfg)
     end
 
     local function belowMax()
-        local lvl = UnitLevel("player") or 1
+        -- Check stored levels: prioritize levelAtKill (when NPC was killed), then levelAtTurnIn (fallback)
+        local progressTable = HardcoreAchievements_GetProgress and HardcoreAchievements_GetProgress(ACH_ID)
+        local levelToCheck = nil
+        if progressTable then
+            -- Priority: levelAtKill > levelAtTurnIn > current level
+            levelToCheck = progressTable.levelAtKill or progressTable.levelAtTurnIn
+        end
+        if not levelToCheck then
+            levelToCheck = UnitLevel("player") or 1
+        end
         if MAX_LEVEL and MAX_LEVEL > 0 then
-            return lvl <= MAX_LEVEL
+            return levelToCheck <= MAX_LEVEL
         end
         return true -- no level cap
     end
@@ -85,8 +94,19 @@ function M.registerQuestAchievement(cfg)
 
     local function topUpFromServer()
         if REQUIRED_QUEST_ID and not state.quest and serverQuestDone() then
-            -- Only store quest completion if player is not over-leveled
-            if belowMax() then
+            -- Check level before storing quest completion
+            -- Priority: levelAtKill (from NPC kill) > levelAtTurnIn (fallback) > current level
+            local progressTable = HardcoreAchievements_GetProgress and HardcoreAchievements_GetProgress(ACH_ID)
+            local levelToCheck = nil
+            if progressTable then
+                -- Prefer levelAtKill if available, otherwise use levelAtTurnIn
+                levelToCheck = progressTable.levelAtKill or progressTable.levelAtTurnIn
+            end
+            if not levelToCheck then
+                levelToCheck = UnitLevel("player") or 1
+            end
+            -- Only store quest completion if player was not over-leveled at kill/turn-in
+            if not (MAX_LEVEL and MAX_LEVEL > 0 and levelToCheck > MAX_LEVEL) then
                 state.quest = true
                 setProg("quest", true)
                 
@@ -354,6 +374,11 @@ function M.registerQuestAchievement(cfg)
                 -- Save progress after each kill
                 setProg("counts", state.counts)
                 
+                -- Store player's level at time of THIS kill (overwrites previous value)
+                -- This ensures levelAtKill reflects the level when ALL kills are completed
+                local killLevel = UnitLevel("player") or 1
+                setProg("levelAtKill", killLevel)
+                
                 -- Solo points only apply if player is self-found
                 local isSelfFound = _G.IsSelfFound and _G.IsSelfFound() or false
                 local isSoloKill = isSelfFound and (_G.PlayerIsSolo and _G.PlayerIsSolo() or false) or false
@@ -415,6 +440,10 @@ function M.registerQuestAchievement(cfg)
             
             state.killed = true
             setProg("killed", true)
+            
+            -- Store player's level at time of kill (primary source for validation)
+            local killLevel = UnitLevel("player") or 1
+            setProg("levelAtKill", killLevel)
             
             -- Store points at time of kill, doubled if solo, regular if not
             -- Need to find the row and calculate points WITHOUT self-found bonus
