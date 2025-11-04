@@ -83,6 +83,58 @@ local function GetCharDB()
     return db, db.chars[playerGUID]
 end
 
+-- Cleanup function to remove incorrectly completed level bracket achievements
+-- Fixes a bug where players could earn level achievements at the wrong level
+local function CleanupIncorrectLevelAchievements()
+    local _, cdb = GetCharDB()
+    if not cdb or not cdb.achievements then
+        return
+    end
+    
+    local cleanedCount = 0
+    local cleanedAchievements = {}
+    
+    -- Check each completed achievement
+    for achId, achievementData in pairs(cdb.achievements) do
+        -- Only check level bracket achievements (Level10, Level20, Level30, etc.)
+        if achId and type(achId) == "string" and string.match(achId, "^Level%d+$") then
+            -- Extract the required level from the achievement ID (e.g., "Level30" -> 30)
+            local requiredLevel = tonumber(string.match(achId, "Level(%d+)"))
+            
+            if requiredLevel and achievementData.completed and achievementData.level then
+                local completionLevel = achievementData.level
+                
+                -- If the completion level doesn't match the required level, remove it
+                if completionLevel < requiredLevel then
+                    -- Store for logging
+                    table.insert(cleanedAchievements, {
+                        achId = achId,
+                        requiredLevel = requiredLevel,
+                        completionLevel = completionLevel
+                    })
+                    
+                    -- Remove the achievement from database
+                    cdb.achievements[achId] = nil
+                    cleanedCount = cleanedCount + 1
+                end
+            end
+        end
+    end
+    
+    -- Log cleanup if any achievements were removed
+    if cleanedCount > 0 then
+        local message = "|cff69adc9[HardcoreAchievements]|r |cfff0f000Cleaned up " .. cleanedCount .. " incorrectly completed achievement(s):|r"
+        print(message)
+        for _, cleaned in ipairs(cleanedAchievements) do
+            print(string.format("  |cfff0f000- %s (completed at level %d, required level %d)|r", 
+                cleaned.achId, cleaned.completionLevel, cleaned.requiredLevel))
+        end
+        print("|cfff0f000I am chasing a weird bug, thank you for your patience. - |r|cff69adc9Chills|r")
+    end
+    
+    return cleanedCount
+end
+
 local function ClearProgress(achId)
     local _, cdb = GetCharDB()
     if cdb and cdb.progress then cdb.progress[achId] = nil end
@@ -875,6 +927,10 @@ initFrame:SetScript("OnEvent", function(self, event, ...)
             cdb.meta.level     = UnitLevel("player")
             cdb.meta.faction   = UnitFactionGroup("player")
             cdb.meta.lastLogin = time()
+            
+            -- Clean up incorrectly completed level bracket achievements
+            CleanupIncorrectLevelAchievements()
+            
             RestoreCompletionsFromDB()
             CheckPendingCompletions()
             RefreshOutleveledAll()
