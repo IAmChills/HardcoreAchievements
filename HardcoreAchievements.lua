@@ -1887,7 +1887,6 @@ do
         AchievementPanel._achEvt:RegisterEvent("UNIT_SPELLCAST_SENT")
         AchievementPanel._achEvt:RegisterEvent("UNIT_SPELLCAST_SUCCEEDED")
         AchievementPanel._achEvt:RegisterEvent("CHAT_MSG_TEXT_EMOTE")
-        AchievementPanel._achEvt:RegisterEvent("PLAYER_LEVEL_UP")
         AchievementPanel._achEvt:RegisterEvent("PLAYER_LEVEL_CHANGED")
         AchievementPanel._achEvt:RegisterEvent("CHAT_MSG_LOOT")
         AchievementPanel._achEvt:SetScript("OnEvent", function(_, event, ...)
@@ -1964,25 +1963,8 @@ do
                         end
                     end
                 end
-            elseif event == "PLAYER_LEVEL_UP" then
-                -- Track level changes to detect level-ups during quest turn-in
-                local newLevel = tonumber(select(1, ...))
-                local newLevel2 = tonumber(...)
-                local args = {...}
-                local argCount = select('#', ...)
-                local argStrings = {}
-                for i = 1, argCount do
-                    local arg = select(i, ...)
-                    table.insert(argStrings, tostring(arg) .. " (" .. type(arg) .. ")")
-                end
-                print("PLAYER_LEVEL_UP SELECT 1: " .. tostring(newLevel))
-                print("PLAYER_LEVEL_UP NO SELECT: " .. tostring(newLevel2))
-                print("PLAYER_LEVEL_UP ALL ARGS (" .. argCount .. "): " .. table.concat(argStrings, ", "))
             elseif event == "PLAYER_LEVEL_CHANGED" then
                 local newLevel = tonumber(select(2, ...))
-                local newLevel2 = tonumber(select(1, ...))
-                local newLevel3 = tonumber(...)
-                print("PLAYER_LEVEL_CHANGED: " .. newLevel .. " " .. newLevel2 .. " " .. newLevel3)
                 -- Check for level-based achievement completions
                 for _, row in ipairs(AchievementPanel.achievements) do
                     if not row.completed then

@@ -1,7 +1,7 @@
 ﻿## Interface: 11508
 ## Title: HardcoreAchievements
 ## Author: Chills
-## Version: 1.1.8
+## Version: 1.1.9
 ## Notes: Hardcore achievements system
 ## SavedVariables: HardcoreAchievementsDB
 ## IconTexture: Interface\AddOns\HardcoreAchievements\Images\Logo
