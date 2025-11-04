@@ -51,6 +51,17 @@ function HardcoreAchievements_IsSoloModeEnabled()
     return false
 end
 
+-- Helper function to check if award on kill is enabled
+function HardcoreAchievements_IsAwardOnKillEnabled()
+    if type(HardcoreAchievements_GetCharDB) == "function" then
+        local _, cdb = HardcoreAchievements_GetCharDB()
+        if cdb and cdb.settings and cdb.settings.awardOnKill then
+            return true
+        end
+    end
+    return false
+end
+
 -- Create Discord frame (will be created on first use)
 local discordFrame = nil
 local DISCORD_LINK = "discord.gg/MMh2Cv8X" -- Replace with actual Discord invite link
@@ -236,11 +247,22 @@ local function CreateOptionsPanel()
     local tooltipText = "|cffffffffSolo Self Found|r \nToggling this option on will display the total points you will receive if you complete this achievement solo (no party members within 40 yards)."
     AddTooltipToCheckbox(soloAchievementsCB, tooltipText)
 
+    -- Award on Kill checkbox
+    local awardOnKillCB = CreateFrame("CheckButton", nil, panel, "InterfaceOptionsCheckButtonTemplate")
+    awardOnKillCB:SetPoint("TOPLEFT", soloAchievementsCB, "BOTTOMLEFT", 0, -8)
+    awardOnKillCB.Text:SetText("Award achievements on kill rather than quest")
+    awardOnKillCB:SetChecked(GetSetting("awardOnKill", false))
+    awardOnKillCB:SetScript("OnClick", function(self)
+        local isChecked = self:GetChecked()
+        SetSetting("awardOnKill", isChecked)
+    end)
+    AddTooltipToCheckbox(awardOnKillCB, "If enabled, achievements that require an NPC kill will be awarded immediately on kill rather than waiting for quest completion.")
+
     -- =========================================================
     -- User Interface Category
     -- =========================================================
     local uiCategoryTitle = panel:CreateFontString(nil, "ARTWORK", "GameFontNormalLarge")
-    uiCategoryTitle:SetPoint("TOPLEFT", soloAchievementsCB, "BOTTOMLEFT", 0, -30)
+    uiCategoryTitle:SetPoint("TOPLEFT", awardOnKillCB, "BOTTOMLEFT", 0, -30)
     uiCategoryTitle:SetText("|cff69adc9User Interface|r")
     
     -- Reset Achievements Tab button
@@ -288,6 +310,7 @@ local function CreateOptionsPanel()
     panel.checkboxes = {
         disableScreenshots = disableScreenshotsCB,
         soloAchievements = soloAchievementsCB,
+        awardOnKill = awardOnKillCB,
     }
     panel.buttons = {
         resetAchievementsTab = resetTabButton,
@@ -304,6 +327,9 @@ local function CreateOptionsPanel()
             soloAchievementsCB:SetChecked(GetSetting("soloAchievements", false))
             -- Update enable/disable state based on Self-Found status using helper function
             UpdateSoloAchievementsCheckbox()
+        end
+        if awardOnKillCB then
+            awardOnKillCB:SetChecked(GetSetting("awardOnKill", false))
         end
     end
     

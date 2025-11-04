@@ -3,6 +3,7 @@ local Achievements = {
 --{ achId="Test",  title="Boar Test",  level=8, tooltip="Kill |cff0091e6a boar", icon=134400, points=10, requiredQuestId=nil, targetNpcId=3098, faction="Horde", zone="Durotar" },
 --{ achId="Test2", title="Easy Quest Test", level=8, tooltip="Orc starter quest", icon=134400, points=10, requiredQuestId=4641, targetNpcId=nil, faction="Horde", zone="Durotar" },
 --{ achId="Test3", title="Kill + Quest", level=4, tooltip="Kill a boar and complete the orc starter quest", icon=134400, points=10, requiredQuestId=4641, targetNpcId=3098, faction="Horde", zone="Durotar" },
+--{ achId="Test4", title="Kill 4 + Quest", level=4, tooltip="Kill 3 boars and complete the orc starter quest", icon=134400, points=10, requiredQuestId=4641, requiredKills = { [3098] = 3, }, faction="Horde", zone="Durotar" },
 
 -- Alliance
 {
@@ -158,7 +159,12 @@ local Achievements = {
     icon = 236734,
     points = 10,
     requiredQuestId = 4182,
-    targetNpcId = 7044,
+    requiredKills = {
+        [7047] = 15,  -- Black Broodling x15
+        [7040] = 10,  -- Black Dragonspawn x10
+        [7044] = 1,   -- Black Drake x1
+        [7041] = 4,   -- Black Wyrmkin x4
+    },
     faction = FACTION_ALLIANCE,
     zone = "Burning Steppes"
 },
@@ -249,7 +255,7 @@ local Achievements = {
     icon = 236713,
     points = 10,
     requiredQuestId = 247,
-    targetNpcId = 12677, -- Shadumbra
+    targetNpcId = {12676, 12677, 12678}, -- Shadumbra
     faction = FACTION_HORDE,
     zone = "Ashenvale"
 }, {
@@ -811,6 +817,7 @@ for _, def in ipairs(Achievements) do
         achId           = def.achId,
         requiredQuestId = def.requiredQuestId,
         targetNpcId     = def.targetNpcId,
+        requiredKills   = def.requiredKills,
         maxLevel        = def.level,
         faction         = def.faction,
         race            = def.race,
@@ -825,7 +832,7 @@ _G.Achievements = Achievements
 
 for _, def in ipairs(Achievements) do
   if IsEligible(def) then
-    local killFn  = def.customKill or (def.targetNpcId and _G[def.achId .. "_Kill"]) or nil
+    local killFn  = def.customKill or ((def.targetNpcId or def.requiredKills) and _G[def.achId .. "_Kill"]) or nil
     local questFn = (def.requiredQuestId and _G[def.achId .. "_Quest"]) or nil
 
     CreateAchievementRow(

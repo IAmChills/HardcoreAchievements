@@ -609,7 +609,7 @@ function HCA_AchToast_Show(iconTex, title, pts, achIdOrRow)
 
     f:Show()
 
-    print(ACHIEVEMENT_BROADCAST_SELF:format(title))
+    --print(ACHIEVEMENT_BROADCAST_SELF:format(title))
     PlaySoundFile("Interface\\AddOns\\HardcoreAchievements\\Sounds\\AchievementSound1.ogg", "Effects")
 
     C_Timer.After(1, function()
