@@ -57,9 +57,14 @@ function M.registerQuestAchievement(cfg)
     end
 
     local function belowMax()
-        local lvl = UnitLevel("player") or 1
+        -- Check if we have a stored level from quest turn-in (captured before level-up)
+        local progressTable = HardcoreAchievements_GetProgress and HardcoreAchievements_GetProgress(ACH_ID)
+        local levelToCheck = progressTable and progressTable.levelAtTurnIn
+        if not levelToCheck then
+            levelToCheck = UnitLevel("player") or 1
+        end
         if MAX_LEVEL and MAX_LEVEL > 0 then
-            return lvl <= MAX_LEVEL
+            return levelToCheck <= MAX_LEVEL
         end
         return true -- no level cap
     end
@@ -85,8 +90,15 @@ function M.registerQuestAchievement(cfg)
 
     local function topUpFromServer()
         if REQUIRED_QUEST_ID and not state.quest and serverQuestDone() then
-            -- Only store quest completion if player is not over-leveled
-            if belowMax() then
+            -- Check level before storing quest completion
+            -- If we don't have a stored levelAtTurnIn, use current level (for quests completed before addon loaded)
+            local progressTable = HardcoreAchievements_GetProgress and HardcoreAchievements_GetProgress(ACH_ID)
+            local levelToCheck = progressTable and progressTable.levelAtTurnIn
+            if not levelToCheck then
+                levelToCheck = UnitLevel("player") or 1
+            end
+            -- Only store quest completion if player was not over-leveled at turn-in
+            if not (MAX_LEVEL and MAX_LEVEL > 0 and levelToCheck > MAX_LEVEL) then
                 state.quest = true
                 setProg("quest", true)
                 

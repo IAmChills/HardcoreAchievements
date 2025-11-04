@@ -1904,6 +1904,10 @@ do
         AchievementPanel._achEvt:RegisterEvent("CHAT_MSG_TEXT_EMOTE")
         AchievementPanel._achEvt:RegisterEvent("PLAYER_LEVEL_UP")
         AchievementPanel._achEvt:RegisterEvent("CHAT_MSG_LOOT")
+        -- Store the player's level before quest turn-in to handle level-ups during turn-in
+        local levelBeforeTurnIn = nil
+        local lastLevel = UnitLevel("player") or 1
+        AchievementPanel._achEvt:RegisterEvent("QUEST_LOG_UPDATE")
         AchievementPanel._achEvt:SetScript("OnEvent", function(_, event, ...)
             if event == "COMBAT_LOG_EVENT_UNFILTERED" then
                 local _, subevent, _, _, _, _, _, destGUID = CombatLogGetCurrentEventInfo()
@@ -1917,16 +1921,36 @@ do
                     end
                 end
 
+            elseif event == "QUEST_LOG_UPDATE" then
+                -- Capture player level before quest turn-in (QUEST_LOG_UPDATE fires before QUEST_TURNED_IN)
+                -- This helps us catch the level before any level-up happens during turn-in
+                local currentLevel = UnitLevel("player") or 1
+                levelBeforeTurnIn = currentLevel
+                lastLevel = currentLevel
             elseif event == "QUEST_TURNED_IN" then
                 local questID = ...
+                -- Determine the level at turn-in: if player leveled up during turn-in, use the level before
+                local currentLevel = UnitLevel("player") or 1
+                local levelAtTurnIn = currentLevel
+                -- If we have a stored level before turn-in and the level increased, use the stored level
+                if levelBeforeTurnIn and levelBeforeTurnIn < currentLevel then
+                    levelAtTurnIn = levelBeforeTurnIn
+                end
                 for _, row in ipairs(AchievementPanel.achievements) do
                     if not row.completed and type(row.questTracker) == "function" then
+                        -- Store the level at turn-in for this achievement before calling tracker
+                        -- This allows the achievement to validate against the level BEFORE the turn-in
+                        if HardcoreAchievements_SetProgress then
+                            HardcoreAchievements_SetProgress(row.id, "levelAtTurnIn", levelAtTurnIn)
+                        end
                         if row.questTracker(questID) then
                             HCA_MarkRowCompleted(row)
                             HCA_AchToast_Show(row.Icon:GetTexture(), row.Title:GetText(), row.points, row)
                         end
                     end
                 end
+                -- Reset level tracking after processing
+                levelBeforeTurnIn = nil
             elseif event == "UNIT_SPELLCAST_SENT" then
                 -- Classic signature: unit, targetName, castGUID, spellId
                 local unit, targetName, castGUID, spellId = ...
@@ -1966,7 +1990,12 @@ do
                     end
                 end
             elseif event == "PLAYER_LEVEL_UP" then
+                -- Track level changes to detect level-ups during quest turn-in
                 local newLevel = tonumber(select(1, ...))
+                if levelBeforeTurnIn == nil then
+                    levelBeforeTurnIn = lastLevel
+                end
+                lastLevel = newLevel
                 -- Check for level-based achievement completions
                 for _, row in ipairs(AchievementPanel.achievements) do
                     if not row.completed then
