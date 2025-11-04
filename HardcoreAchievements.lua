@@ -540,6 +540,30 @@ local function HCA_CreateAchToast()
 
     AttachModelOverlayClipped(f, f.bg)
 
+    -- Make the toast clickable
+    f:EnableMouse(true)
+    f:RegisterForClicks("LeftButtonUp")
+    
+    -- Store achievement data for tooltip display
+    f.achId = nil
+    f.achTitle = nil
+    f.achIcon = nil
+    f.achPoints = nil
+    
+    -- Click handler to show achievement tooltip
+    f:SetScript("OnClick", function(self, button)
+        if self.achId then
+            -- Generate hyperlink using the same format as chat links
+            if _G.HCA_GetAchievementHyperlink then
+                local link = _G.HCA_GetAchievementHyperlink(self.achId, self.achTitle, self.achIcon, self.achPoints)
+                if link and ItemRefTooltip then
+                    -- Use the same tooltip mechanism as chat links
+                    ItemRefTooltip:SetHyperlink(link)
+                end
+            end
+        end
+    end)
+
     return f
 end
 
@@ -561,10 +585,11 @@ function HCA_AchToast_Show(iconTex, title, pts, achIdOrRow)
 
     -- Check for pointsAtKill and add self-found bonus if applicable
     local finalPoints = pts or 0
+    local achId = nil
+    local row = nil
+    
     if achIdOrRow then
         local _, cdb = GetCharDB()
-        local achId = nil
-        local row = nil
         
         if type(achIdOrRow) == "table" then
             -- It's a row object
@@ -590,6 +615,12 @@ function HCA_AchToast_Show(iconTex, title, pts, achIdOrRow)
     f.icon:SetTexture(tex)
     f.name:SetText(title or "")
     f.points:SetText(finalPoints and tostring(finalPoints) or "")
+
+    -- Store achievement data for click handler
+    f.achId = achId
+    f.achTitle = title
+    f.achIcon = tex
+    f.achPoints = finalPoints
 
     f:Show()
 
