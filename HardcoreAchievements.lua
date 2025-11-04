@@ -1890,10 +1890,6 @@ do
         AchievementPanel._achEvt:RegisterEvent("PLAYER_LEVEL_UP")
         AchievementPanel._achEvt:RegisterEvent("PLAYER_LEVEL_CHANGED")
         AchievementPanel._achEvt:RegisterEvent("CHAT_MSG_LOOT")
-        -- Store the player's level before quest turn-in to handle level-ups during turn-in
-        local levelBeforeTurnIn = nil
-        local lastLevel = UnitLevel("player") or 1
-        AchievementPanel._achEvt:RegisterEvent("QUEST_LOG_UPDATE")
         AchievementPanel._achEvt:SetScript("OnEvent", function(_, event, ...)
             if event == "COMBAT_LOG_EVENT_UNFILTERED" then
                 local _, subevent, _, _, _, _, _, destGUID = CombatLogGetCurrentEventInfo()
@@ -1906,13 +1902,6 @@ do
                         end
                     end
                 end
-
-            elseif event == "QUEST_LOG_UPDATE" then
-                -- Capture player level before quest turn-in (QUEST_LOG_UPDATE fires before QUEST_TURNED_IN)
-                -- This helps us catch the level before any level-up happens during turn-in
-                local currentLevel = UnitLevel("player") or 1
-                levelBeforeTurnIn = currentLevel
-                lastLevel = currentLevel
             elseif event == "QUEST_TURNED_IN" then
                 local questID = ...
                 -- Determine the level at turn-in: if player leveled up during turn-in, use the level before
@@ -1989,6 +1978,11 @@ do
                 print("PLAYER_LEVEL_UP SELECT 1: " .. tostring(newLevel))
                 print("PLAYER_LEVEL_UP NO SELECT: " .. tostring(newLevel2))
                 print("PLAYER_LEVEL_UP ALL ARGS (" .. argCount .. "): " .. table.concat(argStrings, ", "))
+            elseif event == "PLAYER_LEVEL_CHANGED" then
+                local newLevel = tonumber(select(2, ...))
+                local newLevel2 = tonumber(select(1, ...))
+                local newLevel3 = tonumber(...)
+                print("PLAYER_LEVEL_CHANGED: " .. newLevel .. " " .. newLevel2 .. " " .. newLevel3)
                 -- Check for level-based achievement completions
                 for _, row in ipairs(AchievementPanel.achievements) do
                     if not row.completed then
@@ -2019,11 +2013,6 @@ do
                     end
                 end
                 RefreshOutleveledAll()
-            elseif event == "PLAYER_LEVEL_CHANGED" then
-                local newLevel = tonumber(select(1, ...))
-                local newLevel2 = tonumber(select(2, ...))
-                local newLevel3 = tonumber(...)
-                print("PLAYER_LEVEL_CHANGED: " .. newLevel .. " " .. newLevel2 .. " " .. newLevel3)
             elseif event == "CHAT_MSG_LOOT" then
                 local msg, _, _, _, playerName = ...
                 if playerName == GetUnitName("player") then
