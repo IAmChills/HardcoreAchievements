@@ -18,6 +18,7 @@ function M.registerQuestAchievement(cfg)
     local ACH_ID = cfg.achId
     local REQUIRED_QUEST_ID = cfg.requiredQuestId
     local TARGET_NPC_ID = cfg.targetNpcId
+    local REQUIRED_KILLS = cfg.requiredKills -- Support kill counts: { [npcId] = count }
     -- Support multiple target NPC IDs (number or {ids})
     local function isTargetNpcId(npcId)
         if not TARGET_NPC_ID then return false end
@@ -38,7 +39,8 @@ function M.registerQuestAchievement(cfg)
     local state = {
         completed = false,
         killed = false,
-        quest = false
+        quest = false,
+        counts = {} -- Track kill counts when requiredKills is used
     }
 
     local function gate()
@@ -195,6 +197,21 @@ function M.registerQuestAchievement(cfg)
         end
     end
 
+    -- Check if all required kills are satisfied (when requiredKills is used)
+    local function countsSatisfied()
+        if not REQUIRED_KILLS then return true end
+        for npcId, need in pairs(REQUIRED_KILLS) do
+            -- Ensure numeric key for lookup
+            local idNum = tonumber(npcId) or npcId
+            local current = state.counts[idNum] or 0
+            local required = tonumber(need) or 1
+            if current < required then
+                return false
+            end
+        end
+        return true
+    end
+
     local function checkComplete()
         if state.completed then
             return true
@@ -210,16 +227,44 @@ function M.registerQuestAchievement(cfg)
 		
 		local questOk = (not REQUIRED_QUEST_ID) or state.quest or questFromProgress
 		
-		-- If both a quest and an NPC are required, the quest alone should fulfill
-		-- the achievement (NPC kill becomes optional when quest is defined).
-		if REQUIRED_QUEST_ID and TARGET_NPC_ID then
-			-- Quest alone is sufficient for completion
-			if questOk then
+		-- If requiredKills is defined, check kill counts instead of single kill
+		if REQUIRED_KILLS then
+			local killsOk = countsSatisfied()
+			-- Complete if all kills are satisfied OR quest is turned in
+			if killsOk or questOk then
 				state.completed = true
 				setProg("completed", true)
 				return true
 			end
 			return false
+		end
+		
+		-- Check if award on kill is enabled
+		local awardOnKillEnabled = false
+		if type(HardcoreAchievements_IsAwardOnKillEnabled) == "function" then
+			awardOnKillEnabled = HardcoreAchievements_IsAwardOnKillEnabled()
+		end
+		
+		-- If both a quest and an NPC are required, check toggle setting
+		if REQUIRED_QUEST_ID and TARGET_NPC_ID then
+			-- If award on kill is enabled, award on kill completion
+			if awardOnKillEnabled then
+				local killOk = state.killed or killFromProgress
+				if killOk then
+					state.completed = true
+					setProg("completed", true)
+					return true
+				end
+				return false
+			else
+				-- Quest alone is sufficient for completion (default behavior)
+				if questOk then
+					state.completed = true
+					setProg("completed", true)
+					return true
+				end
+				return false
+			end
 		end
 
 		-- Otherwise, require each defined component individually
@@ -238,6 +283,20 @@ function M.registerQuestAchievement(cfg)
             state.killed = not not p.killed
             state.quest = not not p.quest
             state.completed = not not p.completed
+            -- Load kill counts if requiredKills is used
+            if REQUIRED_KILLS then
+                if p.counts then
+                    -- Ensure counts are loaded with numeric keys
+                    state.counts = {}
+                    for k, v in pairs(p.counts) do
+                        local numKey = tonumber(k) or k
+                        state.counts[numKey] = tonumber(v) or v
+                    end
+                else
+                    -- Initialize empty counts if not present
+                    state.counts = {}
+                end
+            end
         end
         topUpFromServer()
         -- Check if we have solo status from previous kills/quests and update UI
@@ -271,12 +330,80 @@ function M.registerQuestAchievement(cfg)
         checkComplete()
     end
 
-    if TARGET_NPC_ID then
+    -- Handle kills: support both TARGET_NPC_ID (single kill) and REQUIRED_KILLS (kill counts)
+    if TARGET_NPC_ID or REQUIRED_KILLS then
         _G[ACH_ID .. "_Kill"] = function(destGUID)
             if state.completed or not belowMax() then
                 return false
             end
             local destId = getNpcIdFromGUID(destGUID)
+            
+            -- If requiredKills is used, track counts for specified NPCs
+            if REQUIRED_KILLS then
+                if not destId then
+                    return false
+                end
+                -- Check if this NPC ID is in requiredKills (handle both string and number keys)
+                local idNum = tonumber(destId)
+                local required = REQUIRED_KILLS[idNum] or REQUIRED_KILLS[destId]
+                if not required then
+                    return false
+                end
+                -- Increment kill count for this NPC (ensure numeric key for consistency)
+                state.counts[idNum] = (state.counts[idNum] or 0) + 1
+                -- Save progress after each kill
+                setProg("counts", state.counts)
+                
+                -- Solo points only apply if player is self-found
+                local isSelfFound = _G.IsSelfFound and _G.IsSelfFound() or false
+                local isSoloKill = isSelfFound and (_G.PlayerIsSolo and _G.PlayerIsSolo() or false) or false
+                
+                -- Store points at time of kill if this is the first kill (for solo tracking)
+                if not state.killed then
+                    state.killed = true
+                    if AchievementPanel and AchievementPanel.achievements then
+                        for _, row in ipairs(AchievementPanel.achievements) do
+                            if row.id == ACH_ID and row.points then
+                                -- Get the original base points (before preview doubling or self-found bonus)
+                                local currentPoints = tonumber(row.points) or 0
+                                local isSelfFound = _G.IsSelfFound and _G.IsSelfFound() or false
+                                local isSoloMode = _G.HardcoreAchievements_IsSoloModeEnabled and _G.HardcoreAchievements_IsSoloModeEnabled() or false
+                                
+                                local basePoints = currentPoints
+                                if isSelfFound and not row.isSecretAchievement then
+                                    basePoints = basePoints - HCA_SELF_FOUND_BONUS
+                                end
+                                if row.originalPoints then
+                                    basePoints = tonumber(row.originalPoints) or basePoints
+                                    if not row.staticPoints then
+                                        local preset = _G.GetPlayerPresetFromSettings and _G.GetPlayerPresetFromSettings() or nil
+                                        local multiplier = _G.GetPresetMultiplier and _G.GetPresetMultiplier(preset) or 1.0
+                                        basePoints = basePoints + math.floor((basePoints) * (multiplier - 1) + 0.5)
+                                    end
+                                elseif isSoloMode and row.allowSoloDouble and not row.staticPoints then
+                                    local progress = HardcoreAchievements_GetProgress and HardcoreAchievements_GetProgress(ACH_ID)
+                                    if not (progress and progress.pointsAtKill) then
+                                        basePoints = math.floor(basePoints / 2 + 0.5)
+                                    end
+                                end
+                                
+                                local pointsToStore = basePoints
+                                if isSoloKill then
+                                    pointsToStore = basePoints * 2
+                                    setProg("soloKill", true)
+                                end
+                                setProg("pointsAtKill", pointsToStore)
+                                break
+                            end
+                        end
+                    end
+                end
+                
+                -- Check if all kills are satisfied
+                return checkComplete()
+            end
+            
+            -- Original single kill logic for TARGET_NPC_ID
             if not isTargetNpcId(destId) then
                 return false
             end
