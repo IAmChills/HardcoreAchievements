@@ -255,7 +255,7 @@ local Achievements = {
     icon = 236713,
     points = 10,
     requiredQuestId = 247,
-    targetNpcId = {12676, 12677, 12678}, -- Shadumbra
+    targetNpcId = {12676, 12677, 12678},
     faction = FACTION_HORDE,
     zone = "Ashenvale"
 }, {
