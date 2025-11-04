@@ -542,7 +542,6 @@ local function HCA_CreateAchToast()
 
     -- Make the toast clickable
     f:EnableMouse(true)
-    f:RegisterForClicks("LeftButtonUp")
     
     -- Store achievement data for tooltip display
     f.achId = nil
@@ -550,9 +549,9 @@ local function HCA_CreateAchToast()
     f.achIcon = nil
     f.achPoints = nil
     
-    -- Click handler to show achievement tooltip
-    f:SetScript("OnClick", function(self, button)
-        if self.achId then
+    -- Mouse button handler to show achievement tooltip (OnMouseUp for left button)
+    f:SetScript("OnMouseUp", function(self, button)
+        if button == "LeftButton" and self.achId then
             -- Generate hyperlink using the same format as chat links
             if _G.HCA_GetAchievementHyperlink then
                 local link = _G.HCA_GetAchievementHyperlink(self.achId, self.achTitle, self.achIcon, self.achPoints)
@@ -1889,6 +1888,7 @@ do
         AchievementPanel._achEvt:RegisterEvent("UNIT_SPELLCAST_SUCCEEDED")
         AchievementPanel._achEvt:RegisterEvent("CHAT_MSG_TEXT_EMOTE")
         AchievementPanel._achEvt:RegisterEvent("PLAYER_LEVEL_UP")
+        AchievementPanel._achEvt:RegisterEvent("PLAYER_LEVEL_CHANGED")
         AchievementPanel._achEvt:RegisterEvent("CHAT_MSG_LOOT")
         AchievementPanel._achEvt:SetScript("OnEvent", function(_, event, ...)
             if event == "COMBAT_LOG_EVENT_UNFILTERED" then
@@ -1953,6 +1953,17 @@ do
                 end
             elseif event == "PLAYER_LEVEL_UP" then
                 local newLevel = tonumber(select(1, ...))
+                local newLevel2 = tonumber(...)
+                local args = {...}
+                local argCount = select('#', ...)
+                local argStrings = {}
+                for i = 1, argCount do
+                    local arg = select(i, ...)
+                    table.insert(argStrings, tostring(arg) .. " (" .. type(arg) .. ")")
+                end
+                print("PLAYER_LEVEL_UP SELECT 1: " .. tostring(newLevel))
+                print("PLAYER_LEVEL_UP NO SELECT: " .. tostring(newLevel2))
+                print("PLAYER_LEVEL_UP ALL ARGS (" .. argCount .. "): " .. table.concat(argStrings, ", "))
                 -- Check for level-based achievement completions
                 for _, row in ipairs(AchievementPanel.achievements) do
                     if not row.completed then
@@ -1983,6 +1994,11 @@ do
                     end
                 end
                 RefreshOutleveledAll()
+            elseif event == "PLAYER_LEVEL_CHANGED" then
+                local newLevel = tonumber(select(1, ...))
+                local newLevel2 = tonumber(select(2, ...))
+                local newLevel3 = tonumber(...)
+                print("PLAYER_LEVEL_CHANGED: " .. newLevel .. " " .. newLevel2 .. " " .. newLevel3)
             elseif event == "CHAT_MSG_LOOT" then
                 local msg, _, _, _, playerName = ...
                 if playerName == GetUnitName("player") then
