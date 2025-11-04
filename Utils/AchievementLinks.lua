@@ -151,8 +151,36 @@ if Old_ItemRef_SetHyperlink then
             -- Show completion status at the bottom with points right-aligned
             ItemRefTooltip:AddLine(" ")
             local isCompleted = ViewerHasCompletedAchievement(achId)
-            local statusText = isCompleted and "Complete" or "Incomplete"
-            local statusR, statusG, statusB = isCompleted and 0.6 or 0.5, isCompleted and 0.9 or 0.5, isCompleted and 0.6 or 0.5
+            local isFailed = false
+            if not isCompleted then
+                -- Look up the row from AchievementPanel to get maxLevel
+                local row = nil
+                if _G.AchievementPanel and _G.AchievementPanel.achievements then
+                    for _, r in ipairs(_G.AchievementPanel.achievements) do
+                        if tostring(r.id) == tostring(achId) or tostring(r.achId) == tostring(achId) then
+                            row = r
+                            break
+                        end
+                    end
+                end
+                if row and row.maxLevel then
+                    local playerLevel = UnitLevel("player") or 1
+                    isFailed = playerLevel > row.maxLevel
+                end
+            end
+            
+            local statusText, statusR, statusG, statusB
+            if isCompleted then
+                statusText = "Complete"
+                statusR, statusG, statusB = 0.6, 0.9, 0.6  -- Light green
+            elseif isFailed then
+                statusText = "Failed"
+                statusR, statusG, statusB = 0.9, 0.2, 0.2  -- Red
+            else
+                statusText = "Incomplete"
+                statusR, statusG, statusB = 0.5, 0.5, 0.5  -- Gray
+            end
+            
             local pointsText = (points and points > 0) and string.format("%d pts", points) or ""
             ItemRefTooltip:AddDoubleLine(statusText, pointsText, statusR, statusG, statusB, 0.7, 0.9, 0.7)
             
