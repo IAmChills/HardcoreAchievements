@@ -244,17 +244,10 @@ function M.registerQuestAchievement(cfg)
 		local progressTable = HardcoreAchievements_GetProgress and HardcoreAchievements_GetProgress(ACH_ID)
 		
 		-- Check if there's an ineligible kill flag - achievement was done when group was ineligible
+		-- The ineligibleKill flag can be cleared by getting a new eligible kill of the same NPC,
+		-- but if it's still set when checking completion, it should block completion
 		if progressTable and progressTable.ineligibleKill then
-			-- Check if group is now eligible - if so, clear the flag and allow completion
-			local isGroupEligible = true
-			if _G.IsGroupEligibleForAchievement then
-				isGroupEligible = _G.IsGroupEligibleForAchievement(MAX_LEVEL, ACH_ID)
-			end
-			if not isGroupEligible then
-				return false -- Group still not eligible, don't complete
-			end
-			-- Group is now eligible, clear the ineligible flag
-			setProg("ineligibleKill", false)
+			return false -- Kill was done when group was ineligible - do not allow completion
 		end
 		
 		local killFromProgress = progressTable and progressTable.killed
@@ -676,20 +669,11 @@ function M.registerQuestAchievement(cfg)
             local progressTable = HardcoreAchievements_GetProgress and HardcoreAchievements_GetProgress(ACH_ID)
             
             -- Don't allow quest completion if there's an ineligible kill flag - kill was done when group was ineligible
+            -- The ineligibleKill flag can be cleared by getting a new eligible kill of the same NPC,
+            -- but if it's still set when quest is turned in, completion should be blocked
             if progressTable and progressTable.ineligibleKill then
-                -- Check if group is now eligible - if so, clear the flag and allow completion
-                local isGroupEligible = true
-                if _G.IsGroupEligibleForAchievement then
-                    isGroupEligible = _G.IsGroupEligibleForAchievement(MAX_LEVEL, ACH_ID)
-                end
-                if not isGroupEligible then
-                    return false -- Group still not eligible, don't complete
-                end
-                -- Group is now eligible, clear the ineligible flag
-                setProg("ineligibleKill", false)
-                if _G.HCA_RefreshAllAchievementPoints then
-                    _G.HCA_RefreshAllAchievementPoints()
-                end
+                -- Kill was done when group was ineligible - do not allow completion
+                return false
             end
             
             -- Check if group is eligible (no overleveled party members in range)
@@ -754,27 +738,9 @@ function M.registerQuestAchievement(cfg)
                     end
                     
                     return false -- Group is not eligible, cannot fulfill achievement
-                else
-                    -- Group is now eligible, clear ineligible status if it was set
-                    if progressTable and progressTable.ineligibleKill then
-                        setProg("ineligibleKill", false)
-                        
-                        -- Immediately update UI to remove "Pending Ineligible" indicator
-                        if _G.HCA_RefreshAllAchievementPoints then
-                            _G.HCA_RefreshAllAchievementPoints()
-                        end
-                    end
                 end
-            else
-                -- Kill is clean, clear ineligible status if it was set
-                if progressTable and progressTable.ineligibleKill then
-                    setProg("ineligibleKill", false)
-                    
-                    -- Immediately update UI to remove "Pending Ineligible" indicator
-                    if _G.HCA_RefreshAllAchievementPoints then
-                        _G.HCA_RefreshAllAchievementPoints()
-                    end
-                end
+                -- Note: We don't clear ineligibleKill here in the quest handler
+                -- The flag can only be cleared by getting a new eligible kill of the same NPC (via the kill handler)
             end
             
             state.quest = true
