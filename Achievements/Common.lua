@@ -252,6 +252,14 @@ function M.registerQuestAchievement(cfg)
 			local killsOk = countsSatisfied()
 			-- Complete if all kills are satisfied OR quest is turned in
 			if killsOk or questOk then
+				-- Check group eligibility before marking complete
+				local isGroupEligible = true
+				if _G.IsGroupEligibleForAchievement then
+					isGroupEligible = _G.IsGroupEligibleForAchievement(MAX_LEVEL, ACH_ID)
+				end
+				if not isGroupEligible then
+					return false -- Group not eligible, don't complete
+				end
 				state.completed = true
 				setProg("completed", true)
 				return true
@@ -271,6 +279,14 @@ function M.registerQuestAchievement(cfg)
 			if awardOnKillEnabled then
 				local killOk = state.killed or killFromProgress
 				if killOk then
+					-- Check group eligibility before marking complete
+					local isGroupEligible = true
+					if _G.IsGroupEligibleForAchievement then
+						isGroupEligible = _G.IsGroupEligibleForAchievement(MAX_LEVEL, ACH_ID)
+					end
+					if not isGroupEligible then
+						return false -- Group not eligible, don't complete
+					end
 					state.completed = true
 					setProg("completed", true)
 					return true
@@ -279,6 +295,27 @@ function M.registerQuestAchievement(cfg)
 			else
 				-- Quest alone is sufficient for completion (default behavior)
 				if questOk then
+					-- Check group eligibility before marking complete (only if kill was not clean)
+					local isCleanKill = false
+					if killFromProgress then
+						local levelAtKill = progressTable and progressTable.levelAtKill
+						if levelAtKill then
+							if MAX_LEVEL and MAX_LEVEL > 0 then
+								isCleanKill = (levelAtKill <= MAX_LEVEL)
+							else
+								isCleanKill = true
+							end
+						end
+					end
+					if not isCleanKill then
+						local isGroupEligible = true
+						if _G.IsGroupEligibleForAchievement then
+							isGroupEligible = _G.IsGroupEligibleForAchievement(MAX_LEVEL, ACH_ID)
+						end
+						if not isGroupEligible then
+							return false -- Group not eligible, don't complete
+						end
+					end
 					state.completed = true
 					setProg("completed", true)
 					return true
@@ -290,6 +327,14 @@ function M.registerQuestAchievement(cfg)
 		-- Otherwise, require each defined component individually
 		local killOk = (not TARGET_NPC_ID) or state.killed or killFromProgress
 		if killOk and questOk then
+			-- Check group eligibility before marking complete
+			local isGroupEligible = true
+			if _G.IsGroupEligibleForAchievement then
+				isGroupEligible = _G.IsGroupEligibleForAchievement(MAX_LEVEL, ACH_ID)
+			end
+			if not isGroupEligible then
+				return false -- Group not eligible, don't complete
+			end
 			state.completed = true
 			setProg("completed", true)
 			return true
@@ -358,7 +403,10 @@ function M.registerQuestAchievement(cfg)
             end
             
             -- Check if group is eligible (no overleveled party members in range)
-            local isGroupEligible = _G.IsGroupEligibleForAchievement and _G.IsGroupEligibleForAchievement(MAX_LEVEL) or true
+            local isGroupEligible = true
+            if _G.IsGroupEligibleForAchievement then
+                isGroupEligible = _G.IsGroupEligibleForAchievement(MAX_LEVEL, ACH_ID)
+            end
             if not isGroupEligible then
                 print("|cff00ff00[HardcoreAchievements]|r Achievement |cffffffff" .. (ACH_ID or "Unknown") .. "|r cannot be fulfilled: An overleveled party member is nearby.")
                 return false -- Group is not eligible, cannot fulfill achievement
@@ -569,7 +617,10 @@ function M.registerQuestAchievement(cfg)
             
             -- Only check group eligibility if kill is not clean
             if not isCleanKill then
-                local isGroupEligible = _G.IsGroupEligibleForAchievement and _G.IsGroupEligibleForAchievement(MAX_LEVEL) or true
+                local isGroupEligible = true
+                if _G.IsGroupEligibleForAchievement then
+                    isGroupEligible = _G.IsGroupEligibleForAchievement(MAX_LEVEL, ACH_ID)
+                end
                 if not isGroupEligible then
                     print("|cff00ff00[HardcoreAchievements]|r Achievement |cffffffff" .. (ACH_ID or "Unknown") .. "|r cannot be fulfilled: An overleveled party member is nearby.")
                     return false -- Group is not eligible, cannot fulfill achievement
@@ -714,7 +765,7 @@ function M.registerQuestAchievement(cfg)
         if topUpFromServer() then
             return checkComplete()
         end
-        return false
+        return checkComplete()
     end
 end
 

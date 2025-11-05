@@ -3,8 +3,9 @@
 -- Returns true if eligible, false otherwise
 -- Parameters:
 --   MAX_LEVEL (number): The maximum level allowed for the achievement
+--   ACH_ID (string, optional): Achievement ID (for future use)
 
-function IsGroupEligibleForAchievement(MAX_LEVEL)
+function IsGroupEligibleForAchievement(MAX_LEVEL, ACH_ID)
     -- If not in a group or raid, player is eligible (solo)
     if not IsInGroup() and not IsInRaid() then
         return true
@@ -46,9 +47,9 @@ function IsGroupEligibleForAchievement(MAX_LEVEL)
         for i = 1, 4 do
             local unit = "party" .. i
             if UnitExists(unit) then
-                -- Check if party member is overleveled AND in range
+                -- Check if party member is overleveled and in range
                 if overLeveled(unit) and UnitInRange(unit) then
-                    return false -- Found an overleveled party member in range
+                    return false -- Found an overleveled party member
                 end
             end
         end
@@ -57,4 +58,3 @@ function IsGroupEligibleForAchievement(MAX_LEVEL)
     -- All checks passed, group is eligible
     return true
 end
-
