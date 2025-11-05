@@ -356,6 +356,14 @@ function M.registerQuestAchievement(cfg)
             if state.completed or not belowMax() then
                 return false
             end
+            
+            -- Check if group is eligible (no overleveled party members in range)
+            local isGroupEligible = _G.IsGroupEligibleForAchievement and _G.IsGroupEligibleForAchievement(MAX_LEVEL) or true
+            if not isGroupEligible then
+                print("|cff00ff00[HardcoreAchievements]|r Achievement |cffffffff" .. (ACH_ID or "Unknown") .. "|r cannot be fulfilled: An overleveled party member is nearby.")
+                return false -- Group is not eligible, cannot fulfill achievement
+            end
+            
             local destId = getNpcIdFromGUID(destGUID)
             
             -- If requiredKills is used, track counts for specified NPCs
@@ -520,6 +528,52 @@ function M.registerQuestAchievement(cfg)
             end
             if questID ~= REQUIRED_QUEST_ID then
                 return false
+            end
+            
+            -- Check if group is eligible (no overleveled party members in range)
+            -- Exception: If NPC kill(s) were required and already fulfilled under level, it's "clean" and achievement can be granted regardless
+            local isCleanKill = false
+            if TARGET_NPC_ID or REQUIRED_KILLS then
+                -- Check if kill(s) were already fulfilled
+                local progressTable = HardcoreAchievements_GetProgress and HardcoreAchievements_GetProgress(ACH_ID)
+                local killFulfilled = false
+                
+                if REQUIRED_KILLS then
+                    -- For required kills, check if all kills are satisfied
+                    killFulfilled = countsSatisfied()
+                else
+                    -- For single kill, check if kill was fulfilled
+                    killFulfilled = state.killed or (progressTable and progressTable.killed)
+                end
+                
+                if killFulfilled then
+                    -- Check if kill(s) were fulfilled under level
+                    local levelAtKill = progressTable and progressTable.levelAtKill
+                    if levelAtKill then
+                        if MAX_LEVEL and MAX_LEVEL > 0 then
+                            isCleanKill = (levelAtKill <= MAX_LEVEL)
+                        else
+                            isCleanKill = true -- No level cap means kill is always clean
+                        end
+                    else
+                        -- No levelAtKill stored, check current level
+                        local currentLevel = UnitLevel("player") or 1
+                        if MAX_LEVEL and MAX_LEVEL > 0 then
+                            isCleanKill = (currentLevel <= MAX_LEVEL)
+                        else
+                            isCleanKill = true
+                        end
+                    end
+                end
+            end
+            
+            -- Only check group eligibility if kill is not clean
+            if not isCleanKill then
+                local isGroupEligible = _G.IsGroupEligibleForAchievement and _G.IsGroupEligibleForAchievement(MAX_LEVEL) or true
+                if not isGroupEligible then
+                    print("|cff00ff00[HardcoreAchievements]|r Achievement |cffffffff" .. (ACH_ID or "Unknown") .. "|r cannot be fulfilled: An overleveled party member is nearby.")
+                    return false -- Group is not eligible, cannot fulfill achievement
+                end
             end
             
             state.quest = true
