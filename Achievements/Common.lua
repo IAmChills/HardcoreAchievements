@@ -170,9 +170,9 @@ function M.registerQuestAchievement(cfg)
                                     -- Set "pending solo" indicator on the achievement row (not yet completed)
                                     if row.Sub and row.maxLevel and row.maxLevel > 0 then
                                         local levelText = LEVEL .. " " .. row.maxLevel
-                                        row.Sub:SetText(levelText .. "\n|cFF9D3AFFPending solo|r")
+                                        row.Sub:SetText(levelText .. "\n|cFFac81d6Pending solo|r")
                                     elseif row.Sub then
-                                        row.Sub:SetText("|cFF9D3AFFPending solo|r")
+                                        row.Sub:SetText("|cFFac81d6Pending solo|r")
                                     end
                                 end
                                 setProg("pointsAtKill", pointsToStore)
@@ -202,9 +202,9 @@ function M.registerQuestAchievement(cfg)
                                     end
                                     if row.Sub and row.maxLevel and row.maxLevel > 0 then
                                         local levelText = LEVEL .. " " .. row.maxLevel
-                                        row.Sub:SetText(levelText .. "\n|cFF9D3AFFPending solo|r")
+                                        row.Sub:SetText(levelText .. "\n|cFFac81d6Pending solo|r")
                                     elseif row.Sub then
-                                        row.Sub:SetText("|cFF9D3AFFPending solo|r")
+                                        row.Sub:SetText("|cFFac81d6Pending solo|r")
                                     end
                                     break
                                 end
@@ -242,6 +242,21 @@ function M.registerQuestAchievement(cfg)
 		
 		-- Check both state and progress table for kill/quest completion
 		local progressTable = HardcoreAchievements_GetProgress and HardcoreAchievements_GetProgress(ACH_ID)
+		
+		-- Check if there's an ineligible kill flag - achievement was done when group was ineligible
+		if progressTable and progressTable.ineligibleKill then
+			-- Check if group is now eligible - if so, clear the flag and allow completion
+			local isGroupEligible = true
+			if _G.IsGroupEligibleForAchievement then
+				isGroupEligible = _G.IsGroupEligibleForAchievement(MAX_LEVEL, ACH_ID)
+			end
+			if not isGroupEligible then
+				return false -- Group still not eligible, don't complete
+			end
+			-- Group is now eligible, clear the ineligible flag
+			setProg("ineligibleKill", false)
+		end
+		
 		local killFromProgress = progressTable and progressTable.killed
 		local questFromProgress = progressTable and progressTable.quest
 		
@@ -382,9 +397,9 @@ function M.registerQuestAchievement(cfg)
                             end
                             if row.Sub and row.maxLevel and row.maxLevel > 0 then
                                 local levelText = LEVEL .. " " .. row.maxLevel
-                                row.Sub:SetText(levelText .. "\n|cFF9D3AFFPending solo|r")
+                                row.Sub:SetText(levelText .. "\n|cFFac81d6Pending solo|r")
                             elseif row.Sub then
-                                row.Sub:SetText("|cFF9D3AFFPending solo|r")
+                                row.Sub:SetText("|cFFac81d6Pending solo|r")
                             end
                         end
                         break
@@ -397,14 +412,20 @@ function M.registerQuestAchievement(cfg)
             if AchievementPanel and AchievementPanel.achievements then
                 for _, row in ipairs(AchievementPanel.achievements) do
                     if row.id == ACH_ID and not row.completed then
-                        -- Only show ineligible pending if there's a kill recorded but not clean
-                        local hasKill = state.killed or (p.killed)
+                        -- Only show Pending ineligible if there's a kill recorded but not clean
+                        -- For REQUIRED_KILLS, check if we have any counts; for TARGET_NPC_ID, check killed flag
+                        local hasKill = false
+                        if REQUIRED_KILLS then
+                            hasKill = state.counts and next(state.counts) ~= nil
+                        else
+                            hasKill = state.killed or (p.killed)
+                        end
                         if hasKill then
                             if row.Sub and row.maxLevel and row.maxLevel > 0 then
                                 local levelText = LEVEL .. " " .. row.maxLevel
-                                row.Sub:SetText(levelText .. "\n|cffff0000Ineligible pending|r")
+                                row.Sub:SetText(levelText .. "\n|cffcf7171Pending Ineligible|r")
                             elseif row.Sub then
-                                row.Sub:SetText("|cffff0000Ineligible pending|r")
+                                row.Sub:SetText("|cffcf7171Pending Ineligible|r")
                             end
                         end
                         break
@@ -422,29 +443,86 @@ function M.registerQuestAchievement(cfg)
                 return false
             end
             
-            -- Check if group is eligible (no overleveled party members in range)
-            local isGroupEligible = true
-            if _G.IsGroupEligibleForAchievement then
-                isGroupEligible = _G.IsGroupEligibleForAchievement(MAX_LEVEL, ACH_ID)
-            end
-            if not isGroupEligible then
-                print("|cff00ff00[HardcoreAchievements]|r Achievement |cffffffff" .. (ACH_ID or "Unknown") .. "|r cannot be fulfilled: An overleveled party member is nearby.")
-                return false -- Group is not eligible, cannot fulfill achievement
-            end
-            
             local destId = getNpcIdFromGUID(destGUID)
+            local progressTable = HardcoreAchievements_GetProgress and HardcoreAchievements_GetProgress(ACH_ID)
+            local killValidated = false
+            local idNum = nil -- For REQUIRED_KILLS
             
-            -- If requiredKills is used, track counts for specified NPCs
+            -- Validate kill first: check if NPC matches
             if REQUIRED_KILLS then
                 if not destId then
                     return false
                 end
                 -- Check if this NPC ID is in requiredKills (handle both string and number keys)
-                local idNum = tonumber(destId)
+                idNum = tonumber(destId)
                 local required = REQUIRED_KILLS[idNum] or REQUIRED_KILLS[destId]
                 if not required then
                     return false
                 end
+                killValidated = true
+            elseif TARGET_NPC_ID then
+                if not isTargetNpcId(destId) then
+                    return false
+                end
+                killValidated = true
+            end
+            
+            if not killValidated then
+                return false
+            end
+            
+            -- Check group eligibility after validating the kill matches
+            local isGroupEligible = true
+            if _G.IsGroupEligibleForAchievement then
+                isGroupEligible = _G.IsGroupEligibleForAchievement(MAX_LEVEL, ACH_ID)
+            end
+            
+            if not isGroupEligible then
+                print("|cff00ff00[HardcoreAchievements]|r Achievement |cffffffff" .. (ACH_ID or "Unknown") .. "|r cannot be fulfilled: An overleveled party member is nearby.")
+                
+                -- Track the kill progress, but mark as ineligible
+                if REQUIRED_KILLS then
+                    state.counts[idNum] = (state.counts[idNum] or 0) + 1
+                    setProg("counts", state.counts)
+                else
+                    state.killed = true
+                    setProg("killed", true)
+                end
+                local killLevel = UnitLevel("player") or 1
+                setProg("levelAtKill", killLevel)
+                setProg("ineligibleKill", true)
+                
+                -- Show "Pending ineligible" indicator on achievement row
+                if AchievementPanel and AchievementPanel.achievements then
+                    for _, row in ipairs(AchievementPanel.achievements) do
+                        if row.id == ACH_ID and not row.completed then
+                            if row.Sub and row.maxLevel and row.maxLevel > 0 then
+                                local levelText = LEVEL .. " " .. row.maxLevel
+                                row.Sub:SetText(levelText .. "\n|cffcf7171Pending Ineligible|r")
+                            elseif row.Sub then
+                                row.Sub:SetText("|cffcf7171Pending Ineligible|r")
+                            end
+                            break
+                        end
+                    end
+                end
+                
+                return false -- Group is not eligible, cannot fulfill achievement
+            end
+            
+            -- Group is eligible: clear ineligible status if it was set
+            if progressTable and progressTable.ineligibleKill then
+                setProg("ineligibleKill", false)
+                
+                -- Immediately update UI to remove "Pending Ineligible" indicator
+                -- Use the refresh function to update all indicators properly
+                if _G.HCA_RefreshAllAchievementPoints then
+                    _G.HCA_RefreshAllAchievementPoints()
+                end
+            end
+            
+            -- Track kill progress normally (eligible kill)
+            if REQUIRED_KILLS then
                 -- Increment kill count for this NPC (ensure numeric key for consistency)
                 state.counts[idNum] = (state.counts[idNum] or 0) + 1
                 -- Save progress after each kill
@@ -502,86 +580,83 @@ function M.registerQuestAchievement(cfg)
                 
                 -- Check if all kills are satisfied
                 return checkComplete()
-            end
-            
-            -- Original single kill logic for TARGET_NPC_ID
-            if not isTargetNpcId(destId) then
-                return false
-            end
-            -- Solo points only apply if player is self-found
-            -- Always require PlayerIsSolo check regardless of toggle state
-            -- This validates the kill was actually solo
-            local isSelfFound = _G.IsSelfFound and _G.IsSelfFound() or false
-            local isSoloKill = isSelfFound and (_G.PlayerIsSolo and _G.PlayerIsSolo() or false) or false
-            
-            state.killed = true
-            setProg("killed", true)
-            
-            -- Store player's level at time of kill (primary source for validation)
-            local killLevel = UnitLevel("player") or 1
-            setProg("levelAtKill", killLevel)
-            
-            -- Store points at time of kill, doubled if solo, regular if not
-            -- Need to find the row and calculate points WITHOUT self-found bonus
-            -- Self-found bonus will be added at completion time
-            if AchievementPanel and AchievementPanel.achievements then
-                for _, row in ipairs(AchievementPanel.achievements) do
-                    if row.id == ACH_ID and row.points then
-                        -- Get the original base points (before preview doubling or self-found bonus)
-                        -- Check if row.points has been doubled by preview toggle
-                        local currentPoints = tonumber(row.points) or 0
-                        local isSelfFound = _G.IsSelfFound and _G.IsSelfFound() or false
-                        local isSoloMode = _G.HardcoreAchievements_IsSoloModeEnabled and _G.HardcoreAchievements_IsSoloModeEnabled() or false
-                        
-                        -- Detect if points have been doubled by preview toggle
-                        local basePoints = currentPoints
-                        if isSelfFound and not row.isSecretAchievement then
-                            basePoints = basePoints - HCA_SELF_FOUND_BONUS
-                        end
-                        -- If solo mode toggle is on and row.allowSoloDouble, the points might be doubled
-                        -- Use originalPoints if available, otherwise divide by 2 if doubled
-                        if row.originalPoints then
-                            -- Use stored original points
-                            basePoints = tonumber(row.originalPoints) or basePoints
-                            -- Apply multiplier if not static
-                            if not row.staticPoints then
-                                local preset = _G.GetPlayerPresetFromSettings and _G.GetPlayerPresetFromSettings() or nil
-                                local multiplier = _G.GetPresetMultiplier and _G.GetPresetMultiplier(preset) or 1.0
-                                basePoints = basePoints + math.floor((basePoints) * (multiplier - 1) + 0.5)
-                            end
-                        elseif isSoloMode and row.allowSoloDouble and not row.staticPoints then
-                            -- Points might have been doubled by preview, divide by 2 to get base
-                            local progress = HardcoreAchievements_GetProgress and HardcoreAchievements_GetProgress(ACH_ID)
-                            if not (progress and progress.pointsAtKill) then
-                                basePoints = math.floor(basePoints / 2 + 0.5)
-                            end
-                        end
-                        
-                        local pointsToStore = basePoints
-                        -- If solo kill, store doubled points; otherwise store regular points
-                        if isSoloKill then
-                            pointsToStore = basePoints * 2
-                            -- Update points display to show doubled value (including self-found bonus for display)
-                            local displayPoints = pointsToStore
+            else
+                -- TARGET_NPC_ID: track kill normally (eligible kill)
+                -- Solo points only apply if player is self-found
+                -- Always require PlayerIsSolo check regardless of toggle state
+                -- This validates the kill was actually solo
+                local isSelfFound = _G.IsSelfFound and _G.IsSelfFound() or false
+                local isSoloKill = isSelfFound and (_G.PlayerIsSolo and _G.PlayerIsSolo() or false) or false
+                
+                state.killed = true
+                setProg("killed", true)
+                
+                -- Store player's level at time of kill (primary source for validation)
+                local killLevel = UnitLevel("player") or 1
+                setProg("levelAtKill", killLevel)
+                
+                -- Store points at time of kill, doubled if solo, regular if not
+                -- Need to find the row and calculate points WITHOUT self-found bonus
+                -- Self-found bonus will be added at completion time
+                if AchievementPanel and AchievementPanel.achievements then
+                    for _, row in ipairs(AchievementPanel.achievements) do
+                        if row.id == ACH_ID and row.points then
+                            -- Get the original base points (before preview doubling or self-found bonus)
+                            -- Check if row.points has been doubled by preview toggle
+                            local currentPoints = tonumber(row.points) or 0
+                            local isSelfFound = _G.IsSelfFound and _G.IsSelfFound() or false
+                            local isSoloMode = _G.HardcoreAchievements_IsSoloModeEnabled and _G.HardcoreAchievements_IsSoloModeEnabled() or false
+                            
+                            -- Detect if points have been doubled by preview toggle
+                            local basePoints = currentPoints
                             if isSelfFound and not row.isSecretAchievement then
-                                displayPoints = displayPoints + HCA_SELF_FOUND_BONUS
+                                basePoints = basePoints - HCA_SELF_FOUND_BONUS
                             end
-                            row.points = displayPoints
-                            if row.Points then
-                                row.Points:SetText(tostring(displayPoints) .. " pts")
+                            -- If solo mode toggle is on and row.allowSoloDouble, the points might be doubled
+                            -- Use originalPoints if available, otherwise divide by 2 if doubled
+                            if row.originalPoints then
+                                -- Use stored original points
+                                basePoints = tonumber(row.originalPoints) or basePoints
+                                -- Apply multiplier if not static
+                                if not row.staticPoints then
+                                    local preset = _G.GetPlayerPresetFromSettings and _G.GetPlayerPresetFromSettings() or nil
+                                    local multiplier = _G.GetPresetMultiplier and _G.GetPresetMultiplier(preset) or 1.0
+                                    basePoints = basePoints + math.floor((basePoints) * (multiplier - 1) + 0.5)
+                                end
+                            elseif isSoloMode and row.allowSoloDouble and not row.staticPoints then
+                                -- Points might have been doubled by preview, divide by 2 to get base
+                                local progress = HardcoreAchievements_GetProgress and HardcoreAchievements_GetProgress(ACH_ID)
+                                if not (progress and progress.pointsAtKill) then
+                                    basePoints = math.floor(basePoints / 2 + 0.5)
+                                end
                             end
-                            -- Set "pending solo" indicator on the achievement row (not yet completed)
-                            if row.Sub and row.maxLevel and row.maxLevel > 0 then
-                                local levelText = LEVEL .. " " .. row.maxLevel
-                                row.Sub:SetText(levelText .. "\n|cFF9D3AFFPending solo|r")
-                            elseif row.Sub then
-                                row.Sub:SetText("|cFF9D3AFFPending solo|r")
+                            
+                            local pointsToStore = basePoints
+                            -- If solo kill, store doubled points; otherwise store regular points
+                            if isSoloKill then
+                                pointsToStore = basePoints * 2
+                                -- Update points display to show doubled value (including self-found bonus for display)
+                                local displayPoints = pointsToStore
+                                if isSelfFound and not row.isSecretAchievement then
+                                    displayPoints = displayPoints + HCA_SELF_FOUND_BONUS
+                                end
+                                row.points = displayPoints
+                                if row.Points then
+                                    row.Points:SetText(tostring(displayPoints) .. " pts")
+                                end
+                                -- Set "pending solo" indicator on the achievement row (not yet completed)
+                                if row.Sub and row.maxLevel and row.maxLevel > 0 then
+                                    local levelText = LEVEL .. " " .. row.maxLevel
+                                    row.Sub:SetText(levelText .. "\n|cFFac81d6Pending solo|r")
+                                elseif row.Sub then
+                                    row.Sub:SetText("|cFFac81d6Pending solo|r")
+                                end
                             end
+                            setProg("pointsAtKill", pointsToStore)
+                            -- Also store solo status for later reference
+                            setProg("soloKill", isSoloKill)
+                            break
                         end
-                        setProg("pointsAtKill", pointsToStore)
-                        -- Also store solo status for later reference
-                        setProg("soloKill", isSoloKill)
-                        break
                     end
                 end
             end
@@ -598,12 +673,30 @@ function M.registerQuestAchievement(cfg)
                 return false
             end
             
+            local progressTable = HardcoreAchievements_GetProgress and HardcoreAchievements_GetProgress(ACH_ID)
+            
+            -- Don't allow quest completion if there's an ineligible kill flag - kill was done when group was ineligible
+            if progressTable and progressTable.ineligibleKill then
+                -- Check if group is now eligible - if so, clear the flag and allow completion
+                local isGroupEligible = true
+                if _G.IsGroupEligibleForAchievement then
+                    isGroupEligible = _G.IsGroupEligibleForAchievement(MAX_LEVEL, ACH_ID)
+                end
+                if not isGroupEligible then
+                    return false -- Group still not eligible, don't complete
+                end
+                -- Group is now eligible, clear the ineligible flag
+                setProg("ineligibleKill", false)
+                if _G.HCA_RefreshAllAchievementPoints then
+                    _G.HCA_RefreshAllAchievementPoints()
+                end
+            end
+            
             -- Check if group is eligible (no overleveled party members in range)
             -- Exception: If NPC kill(s) were required and already fulfilled under level, it's "clean" and achievement can be granted regardless
             local isCleanKill = false
             if TARGET_NPC_ID or REQUIRED_KILLS then
                 -- Check if kill(s) were already fulfilled
-                local progressTable = HardcoreAchievements_GetProgress and HardcoreAchievements_GetProgress(ACH_ID)
                 local killFulfilled = false
                 
                 if REQUIRED_KILLS then
@@ -642,18 +735,18 @@ function M.registerQuestAchievement(cfg)
                     isGroupEligible = _G.IsGroupEligibleForAchievement(MAX_LEVEL)
                 end
                 if not isGroupEligible then
-                    -- Kill exists but is not clean due to overleveled party members - mark as ineligible pending
+                    -- Kill exists but is not clean due to overleveled party members - mark as Pending ineligible
                     setProg("ineligibleKill", true)
                     
-                    -- Show "Ineligible pending" indicator on achievement row
+                    -- Show "Pending ineligible" indicator on achievement row
                     if AchievementPanel and AchievementPanel.achievements then
                         for _, row in ipairs(AchievementPanel.achievements) do
                             if row.id == ACH_ID and not row.completed then
                                 if row.Sub and row.maxLevel and row.maxLevel > 0 then
                                     local levelText = LEVEL .. " " .. row.maxLevel
-                                    row.Sub:SetText(levelText .. "\n|cffff0000Ineligible pending|r")
+                                    row.Sub:SetText(levelText .. "\n|cffcf7171Pending Ineligible|r")
                                 elseif row.Sub then
-                                    row.Sub:SetText("|cffff0000Ineligible pending|r")
+                                    row.Sub:SetText("|cffcf7171Pending Ineligible|r")
                                 end
                                 break
                             end
@@ -665,12 +758,22 @@ function M.registerQuestAchievement(cfg)
                     -- Group is now eligible, clear ineligible status if it was set
                     if progressTable and progressTable.ineligibleKill then
                         setProg("ineligibleKill", false)
+                        
+                        -- Immediately update UI to remove "Pending Ineligible" indicator
+                        if _G.HCA_RefreshAllAchievementPoints then
+                            _G.HCA_RefreshAllAchievementPoints()
+                        end
                     end
                 end
             else
                 -- Kill is clean, clear ineligible status if it was set
                 if progressTable and progressTable.ineligibleKill then
                     setProg("ineligibleKill", false)
+                    
+                    -- Immediately update UI to remove "Pending Ineligible" indicator
+                    if _G.HCA_RefreshAllAchievementPoints then
+                        _G.HCA_RefreshAllAchievementPoints()
+                    end
                 end
             end
             
@@ -737,9 +840,9 @@ function M.registerQuestAchievement(cfg)
                                 -- Set "pending solo" indicator on the achievement row (not yet completed)
                                 if row.Sub and row.maxLevel and row.maxLevel > 0 then
                                     local levelText = LEVEL .. " " .. row.maxLevel
-                                    row.Sub:SetText(levelText .. "\n|cFF9D3AFFPending solo|r")
+                                    row.Sub:SetText(levelText .. "\n|cFFac81d6Pending solo|r")
                                 elseif row.Sub then
-                                    row.Sub:SetText("|cFF9D3AFFPending solo|r")
+                                    row.Sub:SetText("|cFFac81d6Pending solo|r")
                                 end
                             end
                             setProg("pointsAtKill", pointsToStore)
@@ -777,9 +880,9 @@ function M.registerQuestAchievement(cfg)
                                 end
                                 if row.Sub and row.maxLevel and row.maxLevel > 0 then
                                     local levelText = LEVEL .. " " .. row.maxLevel
-                                    row.Sub:SetText(levelText .. "\n|cFF9D3AFFPending solo|r")
+                                    row.Sub:SetText(levelText .. "\n|cFFac81d6Pending solo|r")
                                 elseif row.Sub then
-                                    row.Sub:SetText("|cFF9D3AFFPending solo|r")
+                                    row.Sub:SetText("|cFFac81d6Pending solo|r")
                                 end
                                 break
                             end

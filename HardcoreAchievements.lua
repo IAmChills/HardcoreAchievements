@@ -313,7 +313,7 @@ function HCA_MarkRowCompleted(row)
     local isSelfFound = _G.IsSelfFound and _G.IsSelfFound() or false
     if row.Sub then
         if wasSolo and isSelfFound then
-            row.Sub:SetText(AUCTION_TIME_LEFT0 .. "\n|cFF9D3AFFSolo|r")
+            row.Sub:SetText(AUCTION_TIME_LEFT0 .. "\n|cFFac81d6Solo|r")
         else
             row.Sub:SetText(AUCTION_TIME_LEFT0)
         end
@@ -377,7 +377,7 @@ local function RestoreCompletionsFromDB()
             local isSelfFound = _G.IsSelfFound and _G.IsSelfFound() or false
             if row.Sub then
                 if rec.wasSolo and isSelfFound then
-                    row.Sub:SetText(AUCTION_TIME_LEFT0 .. "\n|cFF9D3AFFSolo|r")
+                    row.Sub:SetText(AUCTION_TIME_LEFT0 .. "\n|cFFac81d6Solo|r")
                 else
                     row.Sub:SetText(AUCTION_TIME_LEFT0)
                 end
@@ -1751,7 +1751,7 @@ function CreateAchievementRow(parent, achId, title, tooltip, icon, level, points
             local isSoloMode = _G.HardcoreAchievements_IsSoloModeEnabled and _G.HardcoreAchievements_IsSoloModeEnabled() or false
             if isSoloMode and self.allowSoloDouble then
                 -- Show title with "Solo" on the right
-                GameTooltip:AddDoubleLine(currentTitle, "|cFF9D3AFFSolo|r", 1, 1, 1, 0.5, 0.3, 0.9)
+                GameTooltip:AddDoubleLine(currentTitle, "|cFFac81d6Solo|r", 1, 1, 1, 0.5, 0.3, 0.9)
             else
                 GameTooltip:SetText(currentTitle, 1, 1, 1)
             end
@@ -1904,6 +1904,14 @@ end
 do
     if not AchievementPanel._achEvt then
         AchievementPanel._achEvt = CreateFrame("Frame")
+        -- Track recently processed kills to prevent duplicate processing
+        local recentKills = {}
+        local function clearRecentKill(destGUID)
+            C_Timer.After(1, function()
+                recentKills[destGUID] = nil
+            end)
+        end
+        
         AchievementPanel._achEvt:RegisterEvent("COMBAT_LOG_EVENT_UNFILTERED")
         AchievementPanel._achEvt:RegisterEvent("QUEST_TURNED_IN")
         AchievementPanel._achEvt:RegisterEvent("UNIT_SPELLCAST_SENT")
@@ -1915,6 +1923,15 @@ do
             if event == "COMBAT_LOG_EVENT_UNFILTERED" then
                 local _, subevent, _, _, _, _, _, destGUID = CombatLogGetCurrentEventInfo()
                 if subevent ~= "PARTY_KILL" and subevent ~= "UNIT_DIED" then return end
+                if not destGUID then return end
+                
+                -- Deduplicate: skip if we've already processed this kill recently
+                if recentKills[destGUID] then
+                    return
+                end
+                recentKills[destGUID] = true
+                clearRecentKill(destGUID)
+                
                 for _, row in ipairs(AchievementPanel.achievements) do
                     if not row.completed and type(row.killTracker) == "function" then
                         if row.killTracker(destGUID) then

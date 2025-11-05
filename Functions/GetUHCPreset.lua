@@ -153,13 +153,14 @@ function HCA_RefreshAllAchievementPoints()
                 row.Points:SetText(tostring(finalPoints) .. " pts")
             end
             
-            -- Update Sub text - check if we have stored solo status from previous kills/quests
+            -- Update Sub text - check if we have stored solo status or ineligible status from previous kills/quests
             -- Only update Sub text for incomplete achievements to preserve completed achievement solo indicators
             if not row.completed and row.Sub and row.maxLevel and row.maxLevel > 0 then
                 local levelText = LEVEL .. " " .. row.maxLevel
-                -- Check progress for solo status
+                -- Check progress for solo status and ineligible status
                 local progress = HardcoreAchievements_GetProgress and HardcoreAchievements_GetProgress(row.id)
                 local hasSoloStatus = progress and (progress.soloKill or progress.soloQuest)
+                local hasIneligibleKill = progress and progress.ineligibleKill
                 
                 -- If we have stored pointsAtKill (solo kill/quest), use those points
                 -- pointsAtKill doesn't include self-found bonus, so add it if applicable
@@ -175,9 +176,12 @@ function HCA_RefreshAllAchievementPoints()
                     end
                 end
                 
+                -- Pending ineligible takes precedence - show if kill is flagged as ineligible
+                if hasIneligibleKill then
+                    row.Sub:SetText(levelText .. "\n|cffcf7171Pending Ineligible|r")
                 -- Solo indicators only show if player is self-found
-                if hasSoloStatus and isSelfFound then
-                    row.Sub:SetText(levelText .. "\n|cFF9D3AFFPending solo|r")
+                elseif hasSoloStatus and isSelfFound then
+                    row.Sub:SetText(levelText .. "\n|cFFac81d6Pending solo|r")
                 else
                     row.Sub:SetText(levelText)
                 end

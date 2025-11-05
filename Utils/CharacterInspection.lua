@@ -479,7 +479,7 @@ function CharacterInspection.CreateInspectionAchievementRow(parent, achId, title
         -- Check if achievement was completed solo and show indicator
         if row.Sub then
             if achievementData.wasSolo then
-                row.Sub:SetText(AUCTION_TIME_LEFT0 .. "\n|cFF9D3AFFSolo|r")
+                row.Sub:SetText(AUCTION_TIME_LEFT0 .. "\n|cFFac81d6Solo|r")
             else
                 row.Sub:SetText(AUCTION_TIME_LEFT0)
             end

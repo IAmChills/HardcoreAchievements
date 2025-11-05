@@ -155,42 +155,42 @@ local function CreateEmbedIcon(parent)
     local isSelfFound = _G.IsSelfFound and _G.IsSelfFound() or false
     if self.completed and wasSolo and isSelfFound then
       -- Completed solo achievement
-      GameTooltip:AddDoubleLine(self.title or "", "|cFF9D3AFFSolo|r", 1, 1, 1, 0.5, 0.3, 0.9)
+      GameTooltip:AddDoubleLine(self.title or "", "|cFFac81d6Solo|r", 1, 1, 1, 0.5, 0.3, 0.9)
     elseif not self.completed and hasIneligibleStatus then
-      -- Ineligible pending (kill recorded but not clean due to overleveled party members)
-      GameTooltip:AddDoubleLine(self.title or "", "|cffff0000Ineligible pending|r", 1, 1, 1, 1, 0, 0)
+      -- Pending ineligible (kill recorded but not clean due to overleveled party members)
+      GameTooltip:AddDoubleLine(self.title or "", "|cffcf7171Pending Ineligible|r", 1, 1, 1, 1, 0, 0)
     elseif not self.completed and hasSoloStatus and isSelfFound then
       -- Pending solo (not yet completed but has solo status)
-      GameTooltip:AddDoubleLine(self.title or "", "|cFF9D3AFFPending solo|r", 1, 1, 1, 0.5, 0.3, 0.9)
+      GameTooltip:AddDoubleLine(self.title or "", "|cFFac81d6Pending solo|r", 1, 1, 1, 0.5, 0.3, 0.9)
     elseif isSoloMode and self.allowSoloDouble and not hasSoloStatus and isSelfFound then
       -- Solo mode preview (toggle on, no actual solo status yet)
-      GameTooltip:AddDoubleLine(self.title or "", "|cFF9D3AFFSolo|r", 1, 1, 1, 0.5, 0.3, 0.9)
+      GameTooltip:AddDoubleLine(self.title or "", "|cFFac81d6Solo|r", 1, 1, 1, 0.5, 0.3, 0.9)
     else
       GameTooltip:SetText(self.title or "", 1, 1, 1)
     end
     
     -- Level (left) and Points (right) on one line
-    -- Show "pending solo" or "ineligible pending" indicator if applicable
+    -- Show "pending solo" or "Pending ineligible" indicator if applicable
     -- Solo indicators only show if player is self-found
     local leftText = (self.maxLevel and self.maxLevel > 0) and (LEVEL .. " " .. self.maxLevel) or " "
     if not self.completed and hasIneligibleStatus then
-      -- Add "ineligible pending" to level text (takes priority over solo)
+      -- Add "Pending ineligible" to level text (takes priority over solo)
       if leftText ~= " " then
-        leftText = leftText .. "\n|cffff0000Ineligible pending|r"
+        leftText = leftText .. "\n|cffcf7171Pending Ineligible|r"
       else
-        leftText = "|cffff0000Ineligible pending|r"
+        leftText = "|cffcf7171Pending Ineligible|r"
       end
     elseif not self.completed and hasSoloStatus and isSelfFound then
       -- Add "pending solo" to level text
       if leftText ~= " " then
-        leftText = leftText .. "\n|cFF9D3AFFPending solo|r"
+        leftText = leftText .. "\n|cFFac81d6Pending solo|r"
       else
-        leftText = "|cFF9D3AFFPending solo|r"
+        leftText = "|cFFac81d6Pending solo|r"
       end
     end
     local rightText = (type(self.points) == "number" and self.points > 0) and (tostring(self.points) .. " pts") or " "
     if leftText ~= " " or rightText ~= " " then
-      -- Use AddLine for level text if it contains pending solo or ineligible pending (multi-line)
+      -- Use AddLine for level text if it contains pending solo or Pending ineligible (multi-line)
       if (not self.completed and hasIneligibleStatus) or (not self.completed and hasSoloStatus and isSelfFound and (self.maxLevel and self.maxLevel > 0)) then
         GameTooltip:AddLine(leftText, 1, 1, 1)
         GameTooltip:AddDoubleLine(" ", rightText, 1, 1, 1, 0.6, 0.9, 0.6)
