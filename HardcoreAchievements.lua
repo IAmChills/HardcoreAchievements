@@ -1756,7 +1756,29 @@ function CreateAchievementRow(parent, achId, title, tooltip, icon, level, points
                 GameTooltip:SetText(currentTitle, 1, 1, 1)
             end
             
-            GameTooltip:AddLine(self.tooltip or tooltip or "", nil, nil, nil, true)
+            local tooltipText = self.tooltip or tooltip or ""
+            
+            -- Check if this is a catalog achievement (not secret) and SSF is not checked
+            -- If so, append "(including all party members)" to the tooltip
+            local isCatalogAchievement = false
+            local currentAchId = self.achId or achId
+            if _G.Achievements and currentAchId then
+                for _, achievementDef in ipairs(_G.Achievements) do
+                    if achievementDef.achId == currentAchId then
+                        isCatalogAchievement = true
+                        break
+                    end
+                end
+            end
+            
+            local isSecret = def and def.secret
+            local isSoloModeChecked = _G.HardcoreAchievements_IsSoloModeEnabled and _G.HardcoreAchievements_IsSoloModeEnabled() or false
+            
+            if isCatalogAchievement and not isSecret and not isSoloModeChecked then
+                tooltipText = tooltipText .. " (including all party members)"
+            end
+            
+            GameTooltip:AddLine(tooltipText, nil, nil, nil, true)
             if self.zone then
                 GameTooltip:AddLine(self.zone, 0.6, 1, 0.86)
             end
