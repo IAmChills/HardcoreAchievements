@@ -392,6 +392,26 @@ function M.registerQuestAchievement(cfg)
                 end
             end
         end
+        -- Check if we have ineligible kill status and restore indicator
+        if p and p.ineligibleKill and not state.completed then
+            if AchievementPanel and AchievementPanel.achievements then
+                for _, row in ipairs(AchievementPanel.achievements) do
+                    if row.id == ACH_ID and not row.completed then
+                        -- Only show ineligible pending if there's a kill recorded but not clean
+                        local hasKill = state.killed or (p.killed)
+                        if hasKill then
+                            if row.Sub and row.maxLevel and row.maxLevel > 0 then
+                                local levelText = LEVEL .. " " .. row.maxLevel
+                                row.Sub:SetText(levelText .. "\n|cffff0000Ineligible pending|r")
+                            elseif row.Sub then
+                                row.Sub:SetText("|cffff0000Ineligible pending|r")
+                            end
+                        end
+                        break
+                    end
+                end
+            end
+        end
         checkComplete()
     end
 
@@ -619,11 +639,38 @@ function M.registerQuestAchievement(cfg)
             if not isCleanKill then
                 local isGroupEligible = true
                 if _G.IsGroupEligibleForAchievement then
-                    isGroupEligible = _G.IsGroupEligibleForAchievement(MAX_LEVEL, ACH_ID)
+                    isGroupEligible = _G.IsGroupEligibleForAchievement(MAX_LEVEL)
                 end
                 if not isGroupEligible then
-                    print("|cff00ff00[HardcoreAchievements]|r Achievement |cffffffff" .. (ACH_ID or "Unknown") .. "|r cannot be fulfilled: An overleveled party member is nearby.")
+                    -- Kill exists but is not clean due to overleveled party members - mark as ineligible pending
+                    setProg("ineligibleKill", true)
+                    
+                    -- Show "Ineligible pending" indicator on achievement row
+                    if AchievementPanel and AchievementPanel.achievements then
+                        for _, row in ipairs(AchievementPanel.achievements) do
+                            if row.id == ACH_ID and not row.completed then
+                                if row.Sub and row.maxLevel and row.maxLevel > 0 then
+                                    local levelText = LEVEL .. " " .. row.maxLevel
+                                    row.Sub:SetText(levelText .. "\n|cffff0000Ineligible pending|r")
+                                elseif row.Sub then
+                                    row.Sub:SetText("|cffff0000Ineligible pending|r")
+                                end
+                                break
+                            end
+                        end
+                    end
+                    
                     return false -- Group is not eligible, cannot fulfill achievement
+                else
+                    -- Group is now eligible, clear ineligible status if it was set
+                    if progressTable and progressTable.ineligibleKill then
+                        setProg("ineligibleKill", false)
+                    end
+                end
+            else
+                -- Kill is clean, clear ineligible status if it was set
+                if progressTable and progressTable.ineligibleKill then
+                    setProg("ineligibleKill", false)
                 end
             end
             

@@ -138,6 +138,7 @@ local function CreateEmbedIcon(parent)
     
     -- Check for actual solo status (completed or pending)
     local hasSoloStatus = progress and (progress.soloKill or progress.soloQuest)
+    local hasIneligibleStatus = progress and progress.ineligibleKill
     local wasSolo = false
     if self.completed then
       -- Check completed achievements for wasSolo flag
@@ -155,6 +156,9 @@ local function CreateEmbedIcon(parent)
     if self.completed and wasSolo and isSelfFound then
       -- Completed solo achievement
       GameTooltip:AddDoubleLine(self.title or "", "|cFF9D3AFFSolo|r", 1, 1, 1, 0.5, 0.3, 0.9)
+    elseif not self.completed and hasIneligibleStatus then
+      -- Ineligible pending (kill recorded but not clean due to overleveled party members)
+      GameTooltip:AddDoubleLine(self.title or "", "|cffff0000Ineligible pending|r", 1, 1, 1, 1, 0, 0)
     elseif not self.completed and hasSoloStatus and isSelfFound then
       -- Pending solo (not yet completed but has solo status)
       GameTooltip:AddDoubleLine(self.title or "", "|cFF9D3AFFPending solo|r", 1, 1, 1, 0.5, 0.3, 0.9)
@@ -166,10 +170,17 @@ local function CreateEmbedIcon(parent)
     end
     
     -- Level (left) and Points (right) on one line
-    -- Show "pending solo" indicator if applicable
+    -- Show "pending solo" or "ineligible pending" indicator if applicable
     -- Solo indicators only show if player is self-found
     local leftText = (self.maxLevel and self.maxLevel > 0) and (LEVEL .. " " .. self.maxLevel) or " "
-    if not self.completed and hasSoloStatus and isSelfFound then
+    if not self.completed and hasIneligibleStatus then
+      -- Add "ineligible pending" to level text (takes priority over solo)
+      if leftText ~= " " then
+        leftText = leftText .. "\n|cffff0000Ineligible pending|r"
+      else
+        leftText = "|cffff0000Ineligible pending|r"
+      end
+    elseif not self.completed and hasSoloStatus and isSelfFound then
       -- Add "pending solo" to level text
       if leftText ~= " " then
         leftText = leftText .. "\n|cFF9D3AFFPending solo|r"
@@ -179,8 +190,8 @@ local function CreateEmbedIcon(parent)
     end
     local rightText = (type(self.points) == "number" and self.points > 0) and (tostring(self.points) .. " pts") or " "
     if leftText ~= " " or rightText ~= " " then
-      -- Use AddLine for level text if it contains pending solo (multi-line)
-      if not self.completed and hasSoloStatus and isSelfFound and (self.maxLevel and self.maxLevel > 0) then
+      -- Use AddLine for level text if it contains pending solo or ineligible pending (multi-line)
+      if (not self.completed and hasIneligibleStatus) or (not self.completed and hasSoloStatus and isSelfFound and (self.maxLevel and self.maxLevel > 0)) then
         GameTooltip:AddLine(leftText, 1, 1, 1)
         GameTooltip:AddDoubleLine(" ", rightText, 1, 1, 1, 0.6, 0.9, 0.6)
       else
