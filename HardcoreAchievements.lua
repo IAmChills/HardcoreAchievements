@@ -744,7 +744,12 @@ local function SetProgress(achId, key, value)
     local p = cdb.progress[achId] or {}
     p[key] = value
     p.updatedAt = time()
-    p.levelAt = UnitLevel("player") or 1
+    -- Only set levelAt for progress-related keys (kills, quests, counts, etc.)
+    -- Don't set it for metadata-only keys like levelAtTurnIn, levelAtKill, etc.
+    local shouldSetLevelAt = key == "killed" or key == "quest" or key == "counts" or key == "eligibleCounts" or key == "ineligibleKill" or key == "soloKill" or key == "soloQuest" or key == "pointsAtKill"
+    if shouldSetLevelAt then
+        p.levelAt = UnitLevel("player") or 1
+    end
     cdb.progress[achId] = p
 
     C_Timer.After(0, function()
@@ -1575,8 +1580,8 @@ AchievementPanel.SoloModeCheckbox:SetScript("OnClick", function(self)
         if cdb and cdb.settings then
             cdb.settings.soloAchievements = isChecked
             -- Refresh all achievement points immediately
-            if _G.HCA_RefreshAllAchievementPoints then
-                _G.HCA_RefreshAllAchievementPoints()
+            if RefreshAllAchievementPoints then
+                RefreshAllAchievementPoints()
             end
         end
     end
@@ -1775,7 +1780,7 @@ function CreateAchievementRow(parent, achId, title, tooltip, icon, level, points
             local isSoloModeChecked = _G.HardcoreAchievements_IsSoloModeEnabled and _G.HardcoreAchievements_IsSoloModeEnabled() or false
             
             if isCatalogAchievement and not isSecret and not isSoloModeChecked then
-                tooltipText = tooltipText .. " (including all party members)"
+                tooltipText = tooltipText .. "|cffFFD700 (including all party members)|r"
             end
             
             GameTooltip:AddLine(tooltipText, nil, nil, nil, true)
@@ -1951,12 +1956,21 @@ do
                 end
                 for _, row in ipairs(AchievementPanel.achievements) do
                     if not row.completed and type(row.questTracker) == "function" then
-                        -- Store the level at turn-in for this achievement before calling tracker
-                        -- This allows the achievement to validate against the level BEFORE the turn-in
-                        if HardcoreAchievements_SetProgress then
+                        -- Only set levelAtTurnIn if the quest tracker actually matches the quest
+                        -- Check if this achievement's quest matches before setting levelAtTurnIn
+                        local shouldSetLevelAtTurnIn = false
+                        if row.questTracker then
+                            -- Store the level at turn-in for this achievement before calling tracker
+                            -- This allows the achievement to validate against the level BEFORE the turn-in
+                            -- But only set it after we verify the quest matches (by calling tracker first with a test)
+                            -- Actually, we'll set it after the tracker confirms it matches
+                            shouldSetLevelAtTurnIn = true
+                        end
+                        local questMatched = row.questTracker(questID)
+                        if questMatched and shouldSetLevelAtTurnIn and HardcoreAchievements_SetProgress then
                             HardcoreAchievements_SetProgress(row.id, "levelAtTurnIn", levelAtTurnIn)
                         end
-                        if row.questTracker(questID) then
+                        if questMatched then
                             HCA_MarkRowCompleted(row)
                             HCA_AchToast_Show(row.Icon:GetTexture(), row.Title:GetText(), row.points, row)
                         end

@@ -40,7 +40,8 @@ function M.registerQuestAchievement(cfg)
         completed = false,
         killed = false,
         quest = false,
-        counts = {} -- Track kill counts when requiredKills is used
+        counts = {}, -- Track kill counts when requiredKills is used (total kills, including ineligible)
+        eligibleCounts = {} -- Track only eligible kill counts for requiredKills achievements
     }
 
     local function gate()
@@ -168,11 +169,14 @@ function M.registerQuestAchievement(cfg)
                                         row.Points:SetText(tostring(displayPoints) .. " pts")
                                     end
                                     -- Set "pending solo" indicator on the achievement row (not yet completed)
-                                    if row.Sub and row.maxLevel and row.maxLevel > 0 then
-                                        local levelText = LEVEL .. " " .. row.maxLevel
-                                        row.Sub:SetText(levelText .. "\n|cFFac81d6Pending solo|r")
-                                    elseif row.Sub then
-                                        row.Sub:SetText("|cFFac81d6Pending solo|r")
+                                    if _G.HCA_SetStatusTextOnRow then
+                                        _G.HCA_SetStatusTextOnRow(row, {
+                                            completed = false,
+                                            hasSoloStatus = true,
+                                            requiresBoth = false,
+                                            isSelfFound = isSelfFound,
+                                            maxLevel = row.maxLevel
+                                        })
                                     end
                                 end
                                 setProg("pointsAtKill", pointsToStore)
@@ -200,11 +204,14 @@ function M.registerQuestAchievement(cfg)
                                             row.Points:SetText(tostring(row.points) .. " pts")
                                         end
                                     end
-                                    if row.Sub and row.maxLevel and row.maxLevel > 0 then
-                                        local levelText = LEVEL .. " " .. row.maxLevel
-                                        row.Sub:SetText(levelText .. "\n|cFFac81d6Pending solo|r")
-                                    elseif row.Sub then
-                                        row.Sub:SetText("|cFFac81d6Pending solo|r")
+                                    if _G.HCA_SetStatusTextOnRow then
+                                        _G.HCA_SetStatusTextOnRow(row, {
+                                            completed = false,
+                                            hasSoloStatus = true,
+                                            requiresBoth = false,
+                                            isSelfFound = isSelfFound,
+                                            maxLevel = row.maxLevel
+                                        })
                                     end
                                     break
                                 end
@@ -218,12 +225,25 @@ function M.registerQuestAchievement(cfg)
     end
 
     -- Check if all required kills are satisfied (when requiredKills is used)
+    -- Use eligibleCounts to only count eligible kills toward fulfillment
     local function countsSatisfied()
         if not REQUIRED_KILLS then return true end
+        
+        -- Always reload eligibleCounts from progress table to ensure we have latest saved data
+        local p = HardcoreAchievements_GetProgress and HardcoreAchievements_GetProgress(ACH_ID)
+        state.eligibleCounts = {}
+        if p and p.eligibleCounts then
+            for k, v in pairs(p.eligibleCounts) do
+                local numKey = tonumber(k) or k
+                state.eligibleCounts[numKey] = tonumber(v) or v
+            end
+        end
+        
         for npcId, need in pairs(REQUIRED_KILLS) do
             -- Ensure numeric key for lookup
             local idNum = tonumber(npcId) or npcId
-            local current = state.counts[idNum] or 0
+            -- Check eligible counts (should always be loaded from progress table above)
+            local current = state.eligibleCounts[idNum] or 0
             local required = tonumber(need) or 1
             if current < required then
                 return false
@@ -258,8 +278,8 @@ function M.registerQuestAchievement(cfg)
 		-- If requiredKills is defined, check kill counts instead of single kill
 		if REQUIRED_KILLS then
 			local killsOk = countsSatisfied()
-			-- Complete if all kills are satisfied OR quest is turned in
-			if killsOk or questOk then
+			-- Complete if all kills are satisfied OR (if quest is required) quest is turned in
+			if killsOk or (REQUIRED_QUEST_ID and questOk) then
 				-- Check group eligibility before marking complete
 				local isGroupEligible = true
 				if _G.IsGroupEligibleForAchievement then
@@ -369,6 +389,17 @@ function M.registerQuestAchievement(cfg)
                     -- Initialize empty counts if not present
                     state.counts = {}
                 end
+                -- Load eligible counts separately
+                if p.eligibleCounts then
+                    state.eligibleCounts = {}
+                    for k, v in pairs(p.eligibleCounts) do
+                        local numKey = tonumber(k) or k
+                        state.eligibleCounts[numKey] = tonumber(v) or v
+                    end
+                else
+                    -- Initialize empty eligible counts if not present
+                    state.eligibleCounts = {}
+                end
             end
         end
         topUpFromServer()
@@ -388,11 +419,28 @@ function M.registerQuestAchievement(cfg)
                                     row.Points:SetText(tostring(row.points) .. " pts")
                                 end
                             end
-                            if row.Sub and row.maxLevel and row.maxLevel > 0 then
-                                local levelText = LEVEL .. " " .. row.maxLevel
-                                row.Sub:SetText(levelText .. "\n|cFFac81d6Pending solo|r")
-                            elseif row.Sub then
-                                row.Sub:SetText("|cFFac81d6Pending solo|r")
+                            -- Check if kills are satisfied but quest is pending
+                            local killsSatisfied = false
+                            if REQUIRED_QUEST_ID and (TARGET_NPC_ID or REQUIRED_KILLS) then
+                                local hasKill = false
+                                if REQUIRED_KILLS then
+                                    hasKill = countsSatisfied()
+                                else
+                                    hasKill = state.killed or (p and p.killed)
+                                end
+                                local questNotTurnedIn = not state.quest and not (p and p.quest)
+                                killsSatisfied = hasKill and questNotTurnedIn
+                            end
+                            
+                            if _G.HCA_SetStatusTextOnRow then
+                                _G.HCA_SetStatusTextOnRow(row, {
+                                    completed = false,
+                                    hasSoloStatus = true,
+                                    requiresBoth = REQUIRED_QUEST_ID and (TARGET_NPC_ID or REQUIRED_KILLS),
+                                    killsSatisfied = killsSatisfied,
+                                    isSelfFound = isSelfFound,
+                                    maxLevel = row.maxLevel
+                                })
                             end
                         end
                         break
@@ -414,11 +462,17 @@ function M.registerQuestAchievement(cfg)
                             hasKill = state.killed or (p.killed)
                         end
                         if hasKill then
-                            if row.Sub and row.maxLevel and row.maxLevel > 0 then
-                                local levelText = LEVEL .. " " .. row.maxLevel
-                                row.Sub:SetText(levelText .. "\n|cffcf7171Pending Ineligible|r")
-                            elseif row.Sub then
-                                row.Sub:SetText("|cffcf7171Pending Ineligible|r")
+                            -- Use helper function to set status text
+                            local requiresBoth = REQUIRED_QUEST_ID and (TARGET_NPC_ID or REQUIRED_KILLS)
+                            local isSelfFound = _G.IsSelfFound and _G.IsSelfFound() or false
+                            if _G.HCA_SetStatusTextOnRow then
+                                _G.HCA_SetStatusTextOnRow(row, {
+                                    completed = false,
+                                    hasIneligibleKill = true,
+                                    requiresBoth = requiresBoth,
+                                    isSelfFound = isSelfFound,
+                                    maxLevel = row.maxLevel
+                                })
                             end
                         end
                         break
@@ -471,12 +525,37 @@ function M.registerQuestAchievement(cfg)
             end
             
             if not isGroupEligible then
+                -- Check if achievement requirements are already satisfied - if so, don't process this kill
+                local alreadySatisfied = false
+                if REQUIRED_KILLS then
+                    alreadySatisfied = countsSatisfied()
+                elseif TARGET_NPC_ID then
+                    alreadySatisfied = state.killed or (progressTable and progressTable.killed) or state.completed
+                end
+                
+                -- If already satisfied (completed or fulfilled), don't process ineligible kill
+                if alreadySatisfied or state.completed then
+                    return false
+                end
+                
                 print("|cff00ff00[HardcoreAchievements]|r Achievement |cffffffff" .. (ACH_ID or "Unknown") .. "|r cannot be fulfilled: An overleveled party member is nearby.")
                 
-                -- Track the kill progress, but mark as ineligible
+                -- Track the kill progress, but mark as ineligible (don't increment eligible counts)
                 if REQUIRED_KILLS then
+                    -- Always reload eligibleCounts from progress table to ensure we have latest saved data
+                    local p = HardcoreAchievements_GetProgress and HardcoreAchievements_GetProgress(ACH_ID)
+                    state.eligibleCounts = {}
+                    if p and p.eligibleCounts then
+                        for k, v in pairs(p.eligibleCounts) do
+                            local numKey = tonumber(k) or k
+                            state.eligibleCounts[numKey] = tonumber(v) or v
+                        end
+                    end
+                    
                     state.counts[idNum] = (state.counts[idNum] or 0) + 1
                     setProg("counts", state.counts)
+                    -- Don't increment eligibleCounts for ineligible kills, but always save existing eligibleCounts to preserve it
+                    setProg("eligibleCounts", state.eligibleCounts)
                 else
                     state.killed = true
                     setProg("killed", true)
@@ -485,15 +564,21 @@ function M.registerQuestAchievement(cfg)
                 setProg("levelAtKill", killLevel)
                 setProg("ineligibleKill", true)
                 
-                -- Show "Pending ineligible" indicator on achievement row
+                -- Show "Pending ineligible" or "Ineligible Kill" indicator on achievement row
                 if AchievementPanel and AchievementPanel.achievements then
                     for _, row in ipairs(AchievementPanel.achievements) do
                         if row.id == ACH_ID and not row.completed then
-                            if row.Sub and row.maxLevel and row.maxLevel > 0 then
-                                local levelText = LEVEL .. " " .. row.maxLevel
-                                row.Sub:SetText(levelText .. "\n|cffcf7171Pending Ineligible|r")
-                            elseif row.Sub then
-                                row.Sub:SetText("|cffcf7171Pending Ineligible|r")
+                            -- Use helper function to set status text
+                            local requiresBoth = REQUIRED_QUEST_ID and (TARGET_NPC_ID or REQUIRED_KILLS)
+                            local isSelfFound = _G.IsSelfFound and _G.IsSelfFound() or false
+                            if _G.HCA_SetStatusTextOnRow then
+                                _G.HCA_SetStatusTextOnRow(row, {
+                                    completed = false,
+                                    hasIneligibleKill = true,
+                                    requiresBoth = requiresBoth,
+                                    isSelfFound = isSelfFound,
+                                    maxLevel = row.maxLevel
+                                })
                             end
                             break
                         end
@@ -509,17 +594,29 @@ function M.registerQuestAchievement(cfg)
                 
                 -- Immediately update UI to remove "Pending Ineligible" indicator
                 -- Use the refresh function to update all indicators properly
-                if _G.HCA_RefreshAllAchievementPoints then
-                    _G.HCA_RefreshAllAchievementPoints()
+                if RefreshAllAchievementPoints then
+                    RefreshAllAchievementPoints()
                 end
             end
             
             -- Track kill progress normally (eligible kill)
             if REQUIRED_KILLS then
-                -- Increment kill count for this NPC (ensure numeric key for consistency)
+                -- Always reload eligibleCounts from progress table to ensure we have latest saved data
+                local p = HardcoreAchievements_GetProgress and HardcoreAchievements_GetProgress(ACH_ID)
+                state.eligibleCounts = {}
+                if p and p.eligibleCounts then
+                    for k, v in pairs(p.eligibleCounts) do
+                        local numKey = tonumber(k) or k
+                        state.eligibleCounts[numKey] = tonumber(v) or v
+                    end
+                end
+                
+                -- Increment both total counts and eligible counts for this NPC (ensure numeric key for consistency)
                 state.counts[idNum] = (state.counts[idNum] or 0) + 1
+                state.eligibleCounts[idNum] = (state.eligibleCounts[idNum] or 0) + 1
                 -- Save progress after each kill
                 setProg("counts", state.counts)
+                setProg("eligibleCounts", state.eligibleCounts)
                 
                 -- Store player's level at time of THIS kill (overwrites previous value)
                 -- This ensures levelAtKill reflects the level when ALL kills are completed
@@ -637,12 +734,29 @@ function M.registerQuestAchievement(cfg)
                                 if row.Points then
                                     row.Points:SetText(tostring(displayPoints) .. " pts")
                                 end
+                                -- Check if kills are satisfied but quest is pending
+                                local killsSatisfied = false
+                                if REQUIRED_QUEST_ID and (TARGET_NPC_ID or REQUIRED_KILLS) then
+                                    local hasKill = false
+                                    if REQUIRED_KILLS then
+                                        hasKill = countsSatisfied()
+                                    else
+                                        hasKill = state.killed or false
+                                    end
+                                    local questNotTurnedIn = not state.quest
+                                    killsSatisfied = hasKill and questNotTurnedIn
+                                end
+                                
                                 -- Set "pending solo" indicator on the achievement row (not yet completed)
-                                if row.Sub and row.maxLevel and row.maxLevel > 0 then
-                                    local levelText = LEVEL .. " " .. row.maxLevel
-                                    row.Sub:SetText(levelText .. "\n|cFFac81d6Pending solo|r")
-                                elseif row.Sub then
-                                    row.Sub:SetText("|cFFac81d6Pending solo|r")
+                                if _G.HCA_SetStatusTextOnRow then
+                                    _G.HCA_SetStatusTextOnRow(row, {
+                                        completed = false,
+                                        hasSoloStatus = true,
+                                        requiresBoth = REQUIRED_QUEST_ID and (TARGET_NPC_ID or REQUIRED_KILLS),
+                                        killsSatisfied = killsSatisfied,
+                                        isSelfFound = isSelfFound,
+                                        maxLevel = row.maxLevel
+                                    })
                                 end
                             end
                             setProg("pointsAtKill", pointsToStore)
@@ -653,6 +767,41 @@ function M.registerQuestAchievement(cfg)
                     end
                 end
             end
+            
+            -- After kills are completed, check if quest is pending and update status
+            if not state.completed and REQUIRED_QUEST_ID and (TARGET_NPC_ID or REQUIRED_KILLS) then
+                local killsOk = false
+                if REQUIRED_KILLS then
+                    killsOk = countsSatisfied()
+                else
+                    killsOk = state.killed or false
+                end
+                local questNotTurnedIn = not state.quest
+                if killsOk and questNotTurnedIn then
+                    -- Update UI to show "Pending Turn-in"
+                    if AchievementPanel and AchievementPanel.achievements then
+                        for _, row in ipairs(AchievementPanel.achievements) do
+                            if row.id == ACH_ID and not row.completed then
+                                local isSelfFound = _G.IsSelfFound and _G.IsSelfFound() or false
+                                local progress = HardcoreAchievements_GetProgress and HardcoreAchievements_GetProgress(ACH_ID)
+                                local hasSoloStatus = progress and (progress.soloKill or progress.soloQuest)
+                                if _G.HCA_SetStatusTextOnRow then
+                                    _G.HCA_SetStatusTextOnRow(row, {
+                                        completed = false,
+                                        hasSoloStatus = hasSoloStatus,
+                                        requiresBoth = true,
+                                        killsSatisfied = true,
+                                        isSelfFound = isSelfFound,
+                                        maxLevel = row.maxLevel
+                                    })
+                                end
+                                break
+                            end
+                        end
+                    end
+                end
+            end
+            
             return checkComplete()
         end
     end
@@ -722,15 +871,20 @@ function M.registerQuestAchievement(cfg)
                     -- Kill exists but is not clean due to overleveled party members - mark as Pending ineligible
                     setProg("ineligibleKill", true)
                     
-                    -- Show "Pending ineligible" indicator on achievement row
+                    -- Show "Pending Turn-in (ineligible kill)" indicator on achievement row (quest handler always means both kill and quest required)
                     if AchievementPanel and AchievementPanel.achievements then
                         for _, row in ipairs(AchievementPanel.achievements) do
                             if row.id == ACH_ID and not row.completed then
-                                if row.Sub and row.maxLevel and row.maxLevel > 0 then
-                                    local levelText = LEVEL .. " " .. row.maxLevel
-                                    row.Sub:SetText(levelText .. "\n|cffcf7171Pending Ineligible|r")
-                                elseif row.Sub then
-                                    row.Sub:SetText("|cffcf7171Pending Ineligible|r")
+                                -- Use helper function to set status text (quest handler always means both kill and quest required)
+                                local isSelfFound = _G.IsSelfFound and _G.IsSelfFound() or false
+                                if _G.HCA_SetStatusTextOnRow then
+                                    _G.HCA_SetStatusTextOnRow(row, {
+                                        completed = false,
+                                        hasIneligibleKill = true,
+                                        requiresBoth = true, -- Quest handler always means both required
+                                        isSelfFound = isSelfFound,
+                                        maxLevel = row.maxLevel
+                                    })
                                 end
                                 break
                             end
@@ -803,12 +957,29 @@ function M.registerQuestAchievement(cfg)
                                 if row.Points then
                                     row.Points:SetText(tostring(displayPoints) .. " pts")
                                 end
+                                -- Check if kills are satisfied but quest is pending
+                                local killsSatisfied = false
+                                if REQUIRED_QUEST_ID and (TARGET_NPC_ID or REQUIRED_KILLS) then
+                                    local hasKill = false
+                                    if REQUIRED_KILLS then
+                                        hasKill = countsSatisfied()
+                                    else
+                                        hasKill = state.killed or false
+                                    end
+                                    local questNotTurnedIn = not state.quest
+                                    killsSatisfied = hasKill and questNotTurnedIn
+                                end
+                                
                                 -- Set "pending solo" indicator on the achievement row (not yet completed)
-                                if row.Sub and row.maxLevel and row.maxLevel > 0 then
-                                    local levelText = LEVEL .. " " .. row.maxLevel
-                                    row.Sub:SetText(levelText .. "\n|cFFac81d6Pending solo|r")
-                                elseif row.Sub then
-                                    row.Sub:SetText("|cFFac81d6Pending solo|r")
+                                if _G.HCA_SetStatusTextOnRow then
+                                    _G.HCA_SetStatusTextOnRow(row, {
+                                        completed = false,
+                                        hasSoloStatus = true,
+                                        requiresBoth = REQUIRED_QUEST_ID and (TARGET_NPC_ID or REQUIRED_KILLS),
+                                        killsSatisfied = killsSatisfied,
+                                        isSelfFound = isSelfFound,
+                                        maxLevel = row.maxLevel
+                                    })
                                 end
                             end
                             setProg("pointsAtKill", pointsToStore)
@@ -844,11 +1015,42 @@ function M.registerQuestAchievement(cfg)
                                         row.Points:SetText(tostring(storedPoints) .. " pts")
                                     end
                                 end
-                                if row.Sub and row.maxLevel and row.maxLevel > 0 then
-                                    local levelText = LEVEL .. " " .. row.maxLevel
-                                    row.Sub:SetText(levelText .. "\n|cFFac81d6Pending solo|r")
-                                elseif row.Sub then
-                                    row.Sub:SetText("|cFFac81d6Pending solo|r")
+                                -- Check if kills are satisfied but quest is pending
+                                local killsSatisfied = false
+                                if REQUIRED_QUEST_ID and (TARGET_NPC_ID or REQUIRED_KILLS) then
+                                    local hasKill = false
+                                    local progressTable = HardcoreAchievements_GetProgress and HardcoreAchievements_GetProgress(ACH_ID)
+                                    if REQUIRED_KILLS then
+                                        -- Need to check eligibleCounts from progress table
+                                        if progressTable and progressTable.eligibleCounts then
+                                            local allSatisfied = true
+                                            for npcId, requiredCount in pairs(REQUIRED_KILLS) do
+                                                local idNum = tonumber(npcId) or npcId
+                                                local current = progressTable.eligibleCounts[idNum] or progressTable.eligibleCounts[tostring(idNum)] or 0
+                                                local required = tonumber(requiredCount) or 1
+                                                if current < required then
+                                                    allSatisfied = false
+                                                    break
+                                                end
+                                            end
+                                            hasKill = allSatisfied
+                                        end
+                                    else
+                                        hasKill = (progressTable and progressTable.killed) or false
+                                    end
+                                    local questNotTurnedIn = not (progressTable and progressTable.quest)
+                                    killsSatisfied = hasKill and questNotTurnedIn
+                                end
+                                
+                                if _G.HCA_SetStatusTextOnRow then
+                                    _G.HCA_SetStatusTextOnRow(row, {
+                                        completed = false,
+                                        hasSoloStatus = true,
+                                        requiresBoth = REQUIRED_QUEST_ID and (TARGET_NPC_ID or REQUIRED_KILLS),
+                                        killsSatisfied = killsSatisfied,
+                                        isSelfFound = isSelfFound,
+                                        maxLevel = row.maxLevel
+                                    })
                                 end
                                 break
                             end

@@ -7,4 +7,3 @@ Arc Challenges
 New Achievements
 - Professions
 - Black Quiraji Mount?
-- 1 Print message on not fulfilled due to group eligibility

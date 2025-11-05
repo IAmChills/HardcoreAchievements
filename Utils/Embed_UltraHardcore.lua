@@ -157,8 +157,30 @@ local function CreateEmbedIcon(parent)
       -- Completed solo achievement
       GameTooltip:AddDoubleLine(self.title or "", "|cFFac81d6Solo|r", 1, 1, 1, 0.5, 0.3, 0.9)
     elseif not self.completed and hasIneligibleStatus then
-      -- Pending ineligible (kill recorded but not clean due to overleveled party members)
-      GameTooltip:AddDoubleLine(self.title or "", "|cffcf7171Pending Ineligible|r", 1, 1, 1, 1, 0, 0)
+      -- Determine message using helper function
+      local requiresBoth = false
+      if self.achId and _G.Achievements then
+        for _, def in ipairs(_G.Achievements) do
+          if def.achId == self.achId then
+            requiresBoth = (def.targetNpcId or def.requiredKills) and def.requiredQuestId
+            break
+          end
+        end
+      end
+      local message = nil
+      if _G.HCA_GetStatusText then
+        message = _G.HCA_GetStatusText({
+          completed = false,
+          hasIneligibleKill = true,
+          requiresBoth = requiresBoth,
+          isSelfFound = isSelfFound
+        })
+      end
+      if message then
+        GameTooltip:AddDoubleLine(self.title or "", message, 1, 1, 1, 1, 0, 0)
+      else
+        GameTooltip:SetText(self.title or "", 1, 1, 1)
+      end
     elseif not self.completed and hasSoloStatus and isSelfFound then
       -- Pending solo (not yet completed but has solo status)
       GameTooltip:AddDoubleLine(self.title or "", "|cFFac81d6Pending solo|r", 1, 1, 1, 0.5, 0.3, 0.9)
@@ -174,11 +196,32 @@ local function CreateEmbedIcon(parent)
     -- Solo indicators only show if player is self-found
     local leftText = (self.maxLevel and self.maxLevel > 0) and (LEVEL .. " " .. self.maxLevel) or " "
     if not self.completed and hasIneligibleStatus then
-      -- Add "Pending ineligible" to level text (takes priority over solo)
-      if leftText ~= " " then
-        leftText = leftText .. "\n|cffcf7171Pending Ineligible|r"
-      else
-        leftText = "|cffcf7171Pending Ineligible|r"
+      -- Determine message using helper function
+      local requiresBoth = false
+      if self.achId and _G.Achievements then
+        for _, def in ipairs(_G.Achievements) do
+          if def.achId == self.achId then
+            requiresBoth = (def.targetNpcId or def.requiredKills) and def.requiredQuestId
+            break
+          end
+        end
+      end
+      local message = nil
+      if _G.HCA_GetStatusText then
+        message = _G.HCA_GetStatusText({
+          completed = false,
+          hasIneligibleKill = true,
+          requiresBoth = requiresBoth,
+          isSelfFound = isSelfFound
+        })
+      end
+      if message then
+        -- Add message to level text (takes priority over solo)
+        if leftText ~= " " then
+          leftText = leftText .. "\n" .. message
+        else
+          leftText = message
+        end
       end
     elseif not self.completed and hasSoloStatus and isSelfFound then
       -- Add "pending solo" to level text
@@ -607,8 +650,8 @@ local function BuildEmbedIfNeeded()
           if cdb and cdb.settings then
             cdb.settings.soloAchievements = isChecked
             -- Refresh all achievement points immediately
-            if _G.HCA_RefreshAllAchievementPoints then
-              _G.HCA_RefreshAllAchievementPoints()
+            if RefreshAllAchievementPoints then
+              RefreshAllAchievementPoints()
             end
           end
         end

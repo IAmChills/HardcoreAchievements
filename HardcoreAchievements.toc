@@ -20,6 +20,8 @@ Libs\LibDBIcon-1.0\LibDBIcon-1.0.lua
 Functions\GetUHCPreset.lua
 Functions\PlayerIsSolo.lua
 Functions\IsGroupEligibleForAchievement.lua
+Functions\GetStatusText.lua
+Functions\RefreshAllAchievementPoints.lua
 
 HardcoreAchievements.lua
 

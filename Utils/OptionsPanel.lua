@@ -238,8 +238,8 @@ local function CreateOptionsPanel()
             local isChecked = self:GetChecked()
             SetSetting("soloAchievements", isChecked)
             -- Refresh all achievement points immediately
-            if _G.HCA_RefreshAllAchievementPoints then
-                _G.HCA_RefreshAllAchievementPoints()
+            if RefreshAllAchievementPoints then
+                RefreshAllAchievementPoints()
             end
         end
     end)
