@@ -369,7 +369,7 @@ function CharacterInspection.DisplayAchievementData(data)
     
     -- Update total points
     if inspectionAchievementPanel.TotalPoints then
-        inspectionAchievementPanel.TotalPoints:SetText(tostring(data.totalPoints or 0) .. " pts")
+        inspectionAchievementPanel.TotalPoints:SetText(tostring(data.totalPoints or 0))
     end
     
     -- Create achievement rows based on our local achievement definitions
@@ -437,7 +437,7 @@ function CharacterInspection.CreateInspectionAchievementRow(parent, achId, title
     row.Points:SetWidth(100)
     row.Points:SetJustifyH("RIGHT")
     row.Points:SetJustifyV("TOP")
-    row.Points:SetText(tostring(points or 0) .. " pts")
+    row.Points:SetText(tostring(points or 0))
     row.Points:SetTextColor(1, 1, 1)
     
     -- Timestamp
@@ -506,14 +506,14 @@ function CharacterInspection.CreateInspectionAchievementRow(parent, achId, title
         
         -- Update points if different
         if achievementData.points then
-            row.Points:SetText(tostring(achievementData.points) .. " pts")
+            row.Points:SetText(tostring(achievementData.points))
         end
     else
         row.completed = false
         -- Check if outleveled
         local playerLevel = UnitLevel("player")
         if level and playerLevel > level then
-            if row.Title and row.Title.SetTextColor then row.Title:SetTextColor(0.9, 0.2, 0.2) end
+            if row.Title and row.Title.SetTextColor then row.Title:SetTextColor(0.957, 0.263, 0.212) end
             if row.Icon and row.Icon.SetDesaturated then row.Icon:SetDesaturated(true) end
         end
     end

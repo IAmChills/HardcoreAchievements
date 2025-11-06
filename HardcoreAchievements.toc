@@ -22,6 +22,7 @@ Functions\PlayerIsSolo.lua
 Functions\IsGroupEligibleForAchievement.lua
 Functions\GetStatusText.lua
 Functions\RefreshAllAchievementPoints.lua
+Functions\ShowAchievementTooltip.lua
 
 HardcoreAchievements.lua
 

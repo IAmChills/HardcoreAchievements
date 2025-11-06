@@ -41,39 +41,22 @@ end
 local function ReadRowData(src)
   if not src then return end
   
-  -- Use the helper function to extract all display data from the row
-  -- This ensures we get the same formatted data as the character panel
-  local data = _G.HCA_ExtractRowDisplayData and _G.HCA_ExtractRowDisplayData(src)
-  if not data then
-    -- Fallback if helper not available
-    local title = ""
-    if src.Title and src.Title.GetText then
-      title = src.Title:GetText() or ""
-    elseif type(src.id) == "string" then
-      title = src.id
-    end
-    data = {
-      id = src.id or title,
-      title = title,
-      iconTex = (src.Icon and src.Icon.GetTexture and src.Icon:GetTexture()) or nil,
-      tooltip = src.tooltip or title,
-      statusText = nil,
-      points = tonumber(src.points) or 0,
-      maxLevel = tonumber(src.maxLevel) or nil,
-      completed = not not src.completed,
-      zone = src.zone,
-      requiredKills = src.requiredKills,
-      allowSoloDouble = not not src.allowSoloDouble,
-      showSoloIndicator = false,
-      isSecretAchievement = not not src.isSecretAchievement,
-    }
+  -- Extract only the data we need directly from the source row
+  local iconTex = nil
+  if src.Icon and src.Icon.GetTexture then
+    iconTex = src.Icon:GetTexture()
   end
   
-  -- Add additional fields needed for filtering
-  data.outleveled = IsRowOutleveled(src)
-  data.hiddenUntilComplete = not not src.hiddenUntilComplete
-  
-  return data
+  return {
+    id = src.id or src.achId,
+    achId = src.achId or src.id,
+    iconTex = iconTex,
+    completed = not not src.completed,
+    maxLevel = tonumber(src.maxLevel) or nil,
+    requiredKills = src.requiredKills,
+    outleveled = IsRowOutleveled(src),
+    hiddenUntilComplete = not not src.hiddenUntilComplete,
+  }
 end
 
 -- ---------- Icon Factory ----------
@@ -131,91 +114,10 @@ local function CreateEmbedIcon(parent)
   icon.SSFBorder:Hide()
 
   icon:SetScript("OnEnter", function(self)
-    GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-    
-    -- Show title with solo indicator if applicable (from extracted data)
-    if self.showSoloIndicator then
-      GameTooltip:AddDoubleLine(self.title or "", "|cFFac81d6Solo|r", 1, 1, 1, 0.5, 0.3, 0.9)
-    else
-      GameTooltip:SetText(self.title or "", 1, 1, 1)
+    -- Use centralized tooltip function with source row directly
+    if _G.HCA_ShowAchievementTooltip and self.sourceRow then
+      _G.HCA_ShowAchievementTooltip(self, self.sourceRow)
     end
-    
-    -- Use status text from the row (already formatted with level + status)
-    -- This ensures we match exactly what's shown on the character panel
-    local leftText = self.statusText or ((self.maxLevel and self.maxLevel > 0) and (LEVEL .. " " .. self.maxLevel) or " ")
-    local rightText = (type(self.points) == "number" and self.points > 0) and (tostring(self.points) .. " pts") or " "
-    
-    if leftText ~= " " or rightText ~= " " then
-      -- Check if status text contains newlines (multi-line status)
-      local hasNewline = leftText:find("\n")
-      if hasNewline then
-        GameTooltip:AddLine(leftText, 1, 1, 1)
-        GameTooltip:AddDoubleLine(" ", rightText, 1, 1, 1, 0.6, 0.9, 0.6)
-      else
-        GameTooltip:AddDoubleLine(leftText, rightText, 1, 1, 1, 0.6, 0.9, 0.6)
-      end
-    end
-
-    -- Check if this is a dungeon achievement (has requiredMapId/mapID)
-    -- Only dungeon achievements should show "Required Bosses:" section
-    local requiredKills = self.requiredKills or {}
-    local isDungeonAchievement = false
-    if self.achId and _G.HCA_AchievementDefs then
-      local achDef = _G.HCA_AchievementDefs[tostring(self.achId)]
-      if achDef and achDef.mapID then
-        isDungeonAchievement = true
-      end
-    end
-    
-    if isDungeonAchievement and next(requiredKills) ~= nil then
-      -- Build dynamic tooltip with boss completion status
-      if self.tooltip and self.tooltip ~= "" then
-        -- Default yellow (match in-game color)
-        GameTooltip:AddLine(self.tooltip, nil, nil, nil, true)
-      end
-      -- Zone in gray under the description
-      if self.zone and tostring(self.zone) ~= "" then
-        GameTooltip:AddLine(tostring(self.zone), 0.6, 1, 0.86)
-      end
-      
-      GameTooltip:AddLine("\nRequired Bosses:", 0, 1, 0) -- Green header
-      
-      -- Get progress from database
-      local progress = _G.HardcoreAchievements_GetProgress and _G.HardcoreAchievements_GetProgress(self.achId)
-      local counts = progress and progress.counts or {}
-      
-      for npcId, need in pairs(requiredKills) do
-        local idNum = tonumber(npcId) or npcId
-        local current = (counts[idNum] or counts[tostring(idNum)] or 0)
-        local bossName = HCA_GetBossName(idNum)
-        local done = current >= (tonumber(need) or 1)
-        
-        if done then
-          GameTooltip:AddLine(bossName, 1, 1, 1) -- White for completed
-        else
-          GameTooltip:AddLine(bossName, 0.5, 0.5, 0.5) -- Gray for not completed
-        end
-      end
-    else
-      -- Standard tooltip (already includes party members text if applicable)
-      if self.tooltip and self.tooltip ~= "" then
-        -- Default yellow (match in-game color)
-        GameTooltip:AddLine(self.tooltip, nil, nil, nil, true)
-      end
-      -- Zone in gray under the description
-      if self.zone and tostring(self.zone) ~= "" then
-        GameTooltip:AddLine(tostring(self.zone), 0.6, 1, 0.86)
-      end
-    end
-    
-    if self.completed then
-      GameTooltip:AddLine("Completed", 0.6, 0.9, 0.6)
-    end
-    
-    -- Hint for linking the achievement in chat
-    GameTooltip:AddLine("\nShift + Left Click to link in chat", 0.5, 0.5, 0.5)
-
-    GameTooltip:Show()
   end)
   
   -- Shift + Left Click to link achievement bracket into chat (matches CreateAchievementRow behavior)
@@ -324,7 +226,7 @@ local function UpdateTotalPointsText()
     totalPoints = _G.HCA_GetTotalPoints()
   end
   
-  UHCA.TotalPointsText:SetText(totalPoints .. " pts")
+  UHCA.TotalPointsText:SetText(totalPoints)
   UHCA.TotalPointsText:SetTextColor(0.6, 0.9, 0.6)
 end
 
@@ -378,16 +280,11 @@ function EMBED:Rebuild()
 
         icon.id        = data.id
         icon.achId     = data.achId or data.id  -- Store achId for tooltip lookup
-        icon.title     = data.title
-        icon.tooltip   = data.tooltip
-        icon.points    = data.points
-        icon.maxLevel  = data.maxLevel
         icon.completed = data.completed
         icon.requiredKills = data.requiredKills  -- Store requiredKills for dungeon achievements
-        icon.zone      = data.zone
-        icon.allowSoloDouble = data.allowSoloDouble
-        icon.statusText = data.statusText  -- Store status text (level + status formatted)
-        icon.showSoloIndicator = data.showSoloIndicator  -- Store solo indicator flag
+        
+        -- Store reference to source row for tooltip function (it can extract data directly from row)
+        icon.sourceRow = srow
 
         if data.iconTex then
           icon.Icon:SetTexture(data.iconTex)

@@ -166,7 +166,7 @@ function M.registerQuestAchievement(cfg)
                                     end
                                     row.points = displayPoints
                                     if row.Points then
-                                        row.Points:SetText(tostring(displayPoints) .. " pts")
+                                        row.Points:SetText(tostring(displayPoints))
                                     end
                                     -- Set "pending solo" indicator on the achievement row (not yet completed)
                                     if _G.HCA_SetStatusTextOnRow then
@@ -201,7 +201,7 @@ function M.registerQuestAchievement(cfg)
                                     if progressTable and progressTable.pointsAtKill then
                                         row.points = tonumber(progressTable.pointsAtKill) or row.points
                                         if row.Points then
-                                            row.Points:SetText(tostring(row.points) .. " pts")
+                                            row.Points:SetText(tostring(row.points))
                                         end
                                     end
                                     if _G.HCA_SetStatusTextOnRow then
@@ -416,7 +416,7 @@ function M.registerQuestAchievement(cfg)
                             if p.pointsAtKill then
                                 row.points = tonumber(p.pointsAtKill) or row.points
                                 if row.Points then
-                                    row.Points:SetText(tostring(row.points) .. " pts")
+                                    row.Points:SetText(tostring(row.points))
                                 end
                             end
                             -- Check if kills are satisfied but quest is pending
@@ -732,7 +732,7 @@ function M.registerQuestAchievement(cfg)
                                 end
                                 row.points = displayPoints
                                 if row.Points then
-                                    row.Points:SetText(tostring(displayPoints) .. " pts")
+                                    row.Points:SetText(tostring(displayPoints))
                                 end
                                 -- Check if kills are satisfied but quest is pending
                                 local killsSatisfied = false
@@ -955,7 +955,7 @@ function M.registerQuestAchievement(cfg)
                                 end
                                 row.points = displayPoints
                                 if row.Points then
-                                    row.Points:SetText(tostring(displayPoints) .. " pts")
+                                    row.Points:SetText(tostring(displayPoints))
                                 end
                                 -- Check if kills are satisfied but quest is pending
                                 local killsSatisfied = false
@@ -1012,7 +1012,7 @@ function M.registerQuestAchievement(cfg)
                                     end
                                     row.points = storedPoints
                                     if row.Points then
-                                        row.Points:SetText(tostring(storedPoints) .. " pts")
+                                        row.Points:SetText(tostring(storedPoints))
                                     end
                                 end
                                 -- Check if kills are satisfied but quest is pending

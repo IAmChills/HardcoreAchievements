@@ -10,7 +10,9 @@ function RefreshAllAchievementPoints()
     local isSoloMode = _G.HardcoreAchievements_IsSoloModeEnabled and _G.HardcoreAchievements_IsSoloModeEnabled() or false
     
     for _, row in ipairs(AchievementPanel.achievements) do
-        if row.id and not row.completed then
+        -- Check both row.id and row.achId (dungeon achievements use achId)
+        local rowId = row.id or row.achId
+        if rowId and not row.completed then
             -- Start from original points
             local originalPoints = row.originalPoints or row.points or 0
             local staticPoints = row.staticPoints or false
@@ -24,7 +26,7 @@ function RefreshAllAchievementPoints()
                 -- Visual preview: if solo mode toggle is on and no stored points, show doubled points
                 -- This is just a preview - actual points are determined at kill/quest time
                 -- Solo preview only applies if player is self-found
-                local progress = HardcoreAchievements_GetProgress and HardcoreAchievements_GetProgress(row.id)
+                local progress = HardcoreAchievements_GetProgress and HardcoreAchievements_GetProgress(rowId)
                 if isSoloMode and row.allowSoloDouble and isSelfFound and not (progress and progress.pointsAtKill) then
                     finalPoints = finalPoints * 2
                 end
@@ -37,15 +39,15 @@ function RefreshAllAchievementPoints()
             
             row.points = finalPoints
             if row.Points then
-                row.Points:SetText(tostring(finalPoints) .. " pts")
+                row.Points:SetText(tostring(finalPoints))
             end
             
-            -- Update Sub text - check if we have stored solo status or ineligible status from previous kills/quests
-            -- Only update Sub text for incomplete achievements to preserve completed achievement solo indicators
-            if not row.completed and row.Sub and row.maxLevel and row.maxLevel > 0 then
-                local levelText = LEVEL .. " " .. row.maxLevel
-                -- Check progress for solo status and ineligible status
-                local progress = HardcoreAchievements_GetProgress and HardcoreAchievements_GetProgress(row.id)
+                -- Update Sub text - check if we have stored solo status or ineligible status from previous kills/quests
+                -- Only update Sub text for incomplete achievements to preserve completed achievement solo indicators
+                if not row.completed and row.Sub and row.maxLevel and row.maxLevel > 0 then
+                    local levelText = LEVEL .. " " .. row.maxLevel
+                    -- Check progress for solo status and ineligible status
+                    local progress = HardcoreAchievements_GetProgress and HardcoreAchievements_GetProgress(rowId)
                 local hasSoloStatus = progress and (progress.soloKill or progress.soloQuest)
                 local hasIneligibleKill = progress and progress.ineligibleKill
                 
@@ -59,7 +61,7 @@ function RefreshAllAchievementPoints()
                     end
                     row.points = finalPoints
                     if row.Points then
-                        row.Points:SetText(tostring(finalPoints) .. " pts")
+                        row.Points:SetText(tostring(finalPoints))
                     end
                 end
                 
@@ -72,8 +74,8 @@ function RefreshAllAchievementPoints()
                         local getCharDB = _G.GetCharDB or _G.HardcoreAchievements_GetCharDB
                         if getCharDB then
                             local _, cdb = getCharDB()
-                            if cdb and cdb.achievements and row.id then
-                                local achRec = cdb.achievements[row.id]
+                            if cdb and cdb.achievements and rowId then
+                                local achRec = cdb.achievements[rowId]
                                 wasSolo = achRec and achRec.wasSolo or false
                             end
                         end
@@ -93,7 +95,7 @@ function RefreshAllAchievementPoints()
                                 local achDef = nil
                                 if _G.Achievements then
                                     for _, def in ipairs(_G.Achievements) do
-                                        if def.achId == row.id then
+                                        if def.achId == rowId then
                                             achDef = def
                                             break
                                         end

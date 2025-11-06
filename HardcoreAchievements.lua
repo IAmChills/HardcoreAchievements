@@ -140,22 +140,67 @@ local function ClearProgress(achId)
     if cdb and cdb.progress then cdb.progress[achId] = nil end
 end
 
--- Format timestamp into readable date/time string
+-- =========================================================
+-- Row Border Color Helper
+-- =========================================================
+
+local function IsRowOutleveled(row)
+    if not row or row.completed then return false end
+    if not row.maxLevel then return false end
+    local lvl = UnitLevel("player") or 1
+    return lvl > row.maxLevel
+end
+
+-- Function to update row border color based on state
+local function UpdateRowBorderColor(row)
+    if not row or not row.Border then return end
+    
+    if row.completed then
+        -- Completed: green tint (full saturation for visibility)
+        row.Border:SetVertexColor(0.6, 0.9, 0.6)
+    elseif IsRowOutleveled(row) then
+        -- Failed/Outleveled: red tint (full saturation for visibility)
+        row.Border:SetVertexColor(0.957, 0.263, 0.212)
+    else
+        -- Default/Incomplete: neutral gray
+        row.Border:SetVertexColor(0.8, 0.8, 0.8)
+    end
+end
+
+-- Function to position border relative to row
+local function PositionRowBorder(row)
+    if not row or not row.Border or not row:IsShown() then 
+        if row and row.Border then row.Border:Hide() end
+        return 
+    end
+    
+    row.Border:ClearAllPoints()
+    row.Border:SetPoint("TOPLEFT", row, "TOPLEFT", -4, 0)
+    row.Border:SetSize(295, 43)
+    row.Border:Show()
+end
+
+-- Format timestamp into readable date/time string (locale-aware format)
 local function FormatTimestamp(timestamp)
     if not timestamp then return "" end
     
     local dateInfo = date("*t", timestamp)
-    local monthNames = {FULLDATE_MONTH_JANUARY, FULLDATE_MONTH_FEBRUARY, FULLDATE_MONTH_MARCH,
-                        FULLDATE_MONTH_APRIL, FULLDATE_MONTH_MAY, FULLDATE_MONTH_JUNE, 
-                        FULLDATE_MONTH_JULY, FULLDATE_MONTH_AUGUST, FULLDATE_MONTH_SEPTEMBER,
-                        FULLDATE_MONTH_OCTOBER, FULLDATE_MONTH_NOVEMBER, FULLDATE_MONTH_DECEMBER}
+    local locale = GetLocale()
     
-    return string.format("%s %d, %d %02d:%02d", 
-        monthNames[dateInfo.month], 
-        dateInfo.day, 
-        dateInfo.year, 
-        dateInfo.hour, 
-        dateInfo.min)
+    -- US locale uses mm/dd/yy, most others use dd/mm/yy
+    if locale == "enUS" then
+        -- US format: mm/dd/yy
+        return string.format("%02d/%02d/%02d", 
+            dateInfo.month, 
+            dateInfo.day, 
+            dateInfo.year % 100)
+    else
+        -- European/International format: dd/mm/yy
+        return string.format("%02d/%02d/%02d", 
+            dateInfo.day, 
+            dateInfo.month, 
+            dateInfo.year % 100)
+    end
 end
 
 -- Export function for embedded UI to get total points
@@ -191,7 +236,7 @@ end
 function HCA_UpdateTotalPoints()
     local total = HCA_GetTotalPoints()
     if AchievementPanel and AchievementPanel.TotalPoints then
-        AchievementPanel.TotalPoints:SetText(tostring(total) .. " pts")
+        AchievementPanel.TotalPoints:SetText(tostring(total))
     end
 end
 
@@ -206,6 +251,14 @@ local function SortAchievementRows()
     end
 
     table.sort(AchievementPanel.achievements, function(a, b)
+        -- First, separate failed vs non-failed: non-failed come first
+        local aFailed = IsRowOutleveled(a)
+        local bFailed = IsRowOutleveled(b)
+        if aFailed ~= bFailed then
+            return not aFailed  -- non-failed achievements first
+        end
+        
+        -- Within the same group (both failed or both non-failed), sort by level
         -- Treat uncapped (nil) maxLevel as very large so they sort to the bottom
         local la = (a.maxLevel ~= nil) and a.maxLevel or 9999
         local lb = (b.maxLevel ~= nil) and b.maxLevel or 9999
@@ -231,8 +284,14 @@ local function SortAchievementRows()
             else
                 row:SetPoint("TOPLEFT", AchievementPanel.Content, "TOPLEFT", 0, 0)
             end
+            
+            -- Position border relative to row
+            PositionRowBorder(row)
+            
             prev = row
             totalHeight = totalHeight + (row:GetHeight() + 2)
+        elseif row.Border then
+            row.Border:Hide()
         end
     end
 
@@ -240,12 +299,158 @@ local function SortAchievementRows()
     AchievementPanel.Scroll:UpdateScrollChildRect()
 end
 
+-- Function to update points display and checkmark based on state
+local function UpdatePointsDisplay(row)
+    if not row or not row.PointsFrame then return end
+    
+    if row.completed then
+        -- Completed: hide points text (make transparent), show green checkmark
+        if row.Points then
+            row.Points:SetAlpha(0) -- Transparent but still exists for calculations
+        end
+        if row.PointsFrame.Checkmark then
+            row.PointsFrame.Checkmark:SetTexture("Interface\\AddOns\\HardcoreAchievements\\Images\\ReadyCheck-Ready.blp")
+            row.PointsFrame.Checkmark:Show()
+        end
+        -- Hide icon overlay for completed achievements (they show green checkmark in points circle)
+        if row.IconOverlay then
+            row.IconOverlay:Hide()
+        end
+        -- Subtitle (level) text: white when completed
+        if row.Sub then
+            row.Sub:SetTextColor(1, 1, 1) -- White
+        end
+        -- Title: yellow (default GameFontNormal color) when completed
+        if row.Title then
+            row.Title:SetTextColor(1, 0.82, 0) -- Yellow (default GameFontNormal)
+        end
+    elseif IsRowOutleveled(row) then
+        -- Failed: hide points text (make transparent), show red X checkmark
+        if row.Points then
+            row.Points:SetAlpha(0) -- Transparent but still exists for calculations
+        end
+        if row.PointsFrame.Checkmark then
+            row.PointsFrame.Checkmark:SetTexture("Interface\\AddOns\\HardcoreAchievements\\Images\\ReadyCheck-NotReady.blp")
+            row.PointsFrame.Checkmark:Show()
+        end
+        -- Show red X overlay on icon
+        if row.IconOverlay then
+            row.IconOverlay:SetTexture("Interface\\AddOns\\HardcoreAchievements\\Images\\ReadyCheck-NotReady.blp")
+            row.IconOverlay:Show()
+        end
+        -- Subtitle (level) text: gray when failed
+        if row.Sub then
+            row.Sub:SetTextColor(0.5, 0.5, 0.5) -- Gray
+        end
+        -- Title: red when failed
+        if row.Title then
+            row.Title:SetTextColor(0.957, 0.263, 0.212) -- Red
+        end
+    else
+        -- Incomplete: show points text, hide checkmark
+        if row.Points then
+            row.Points:SetAlpha(1) -- Visible
+        end
+        if row.PointsFrame.Checkmark then
+            row.PointsFrame.Checkmark:Hide()
+        end
+        -- Hide icon overlay for incomplete achievements
+        if row.IconOverlay then
+            row.IconOverlay:Hide()
+        end
+        -- Subtitle (level) text: gray when incomplete/available
+        if row.Sub then
+            row.Sub:SetTextColor(0.5, 0.5, 0.5) -- Gray
+        end
+        -- Title: white when available/incomplete
+        if row.Title then
+            row.Title:SetTextColor(1, 1, 1) -- White
+        end
+    end
+end
+
+-- Function to apply outleveled style (icon and points frame desaturation)
+local function ApplyOutleveledStyle(row)
+    if not row then return end
+    
+    -- Desaturate icon
+    if row.Icon and row.Icon.SetDesaturated then
+        -- Failed achievements: NOT desaturated (keep color)
+        if IsRowOutleveled(row) then
+            row.Icon:SetDesaturated(false)
+        -- Completed achievements: NOT desaturated (keep color)
+        elseif row.completed then
+            row.Icon:SetDesaturated(false)
+        -- Available but not yet complete achievements: desaturated
+        else
+            row.Icon:SetDesaturated(true)
+        end
+    end
+    
+    -- Style IconFrame overlay
+    if row.IconFrame then
+        if row.completed then
+            -- Completed: gold tint, not desaturated
+            if row.IconFrame.SetDesaturated then
+                row.IconFrame:SetDesaturated(false)
+            end
+            if row.IconFrame.SetVertexColor then
+                -- Gold tint (similar to WoW achievement gold color)
+                row.IconFrame:SetVertexColor(1.0, 0.82, 0.0) -- Gold color
+            end
+        else
+            -- Available or failed: desaturated
+            if row.IconFrame.SetDesaturated then
+                row.IconFrame:SetDesaturated(true)
+            end
+            if row.IconFrame.SetVertexColor then
+                row.IconFrame:SetVertexColor(1.0, 1.0, 1.0) -- White for desaturated
+            end
+        end
+    end
+    
+    -- Desaturate/tint PointsFrame texture
+    if row.PointsFrame and row.PointsFrame.Texture then
+        -- Failed achievements: desaturated with subtle red tint
+        if IsRowOutleveled(row) then
+            if row.PointsFrame.Texture.SetDesaturated then
+                row.PointsFrame.Texture:SetDesaturated(false) -- Desaturated
+            end
+            if row.PointsFrame.Texture.SetVertexColor then
+                -- Subtle red tint (desaturated textures can still be tinted)
+                row.PointsFrame.Texture:SetVertexColor(0.75, 0.55, 0.55) -- Very subtle red tint
+            end
+        -- Completed achievements: NOT desaturated (keep color, no tint)
+        elseif row.completed then
+            if row.PointsFrame.Texture.SetDesaturated then
+                row.PointsFrame.Texture:SetDesaturated(false)
+            end
+            if row.PointsFrame.Texture.SetVertexColor then
+                row.PointsFrame.Texture:SetVertexColor(1, 1, 1) -- White (no tint)
+            end
+        -- Available but not yet complete achievements: desaturated with darker tint
+        else
+            if row.PointsFrame.Texture.SetDesaturated then
+                row.PointsFrame.Texture:SetDesaturated(true)
+            end
+            if row.PointsFrame.Texture.SetVertexColor then
+                row.PointsFrame.Texture:SetVertexColor(0.5, 0.5, 0.5) -- Darker tint for available achievements
+            end
+        end
+    end
+    
+    -- Update border color and points display when outleveled style is applied
+    -- Title color will be set by UpdatePointsDisplay
+    UpdateRowBorderColor(row)
+    UpdatePointsDisplay(row)
+end
+
 -- Small utility: mark a UI row as completed visually + persist in DB
 function HCA_MarkRowCompleted(row)
     if row.completed then return end
     row.completed = true
 
-    if row.Title and row.Title.SetTextColor then row.Title:SetTextColor(0.6, 0.9, 0.6) end
+    -- Title color will be set by UpdatePointsDisplay
     
     local _, cdb = GetCharDB()
     local wasSolo = false
@@ -301,7 +506,7 @@ function HCA_MarkRowCompleted(row)
         -- Reflect final points in UI row and text immediately
         row.points = finalPoints
         if row.Points then
-            row.Points:SetText(tostring(finalPoints) .. " pts")
+            row.Points:SetText(tostring(finalPoints))
         end
 
         ClearProgress(id)
@@ -313,18 +518,28 @@ function HCA_MarkRowCompleted(row)
     local isSelfFound = _G.IsSelfFound and _G.IsSelfFound() or false
     if row.Sub then
         if wasSolo and isSelfFound then
-            row.Sub:SetText(AUCTION_TIME_LEFT0 .. "\n|cFFac81d6Solo|r")
+            local isSoloMode = _G.HardcoreAchievements_IsSoloModeEnabled and _G.HardcoreAchievements_IsSoloModeEnabled() or false
+            local soloText = isSoloMode and "Solo bonus" or "Solo"
+            row.Sub:SetText(AUCTION_TIME_LEFT0 .. "\n|cFFac81d6" .. soloText .. "|r")
         else
             row.Sub:SetText(AUCTION_TIME_LEFT0)
         end
     end
     if row.Points then row.Points:SetTextColor(0.6, 0.9, 0.6) end
     if row.TS then row.TS:SetText(FormatTimestamp(time())) end
-    if row.Icon and row.Icon.SetDesaturated then row.Icon:SetDesaturated(false) end
+    
+    -- Update border color and points display when completed
+    UpdateRowBorderColor(row)
+    UpdatePointsDisplay(row)
+    -- Update icon desaturation (completed achievements should not be desaturated)
+    ApplyOutleveledStyle(row)
     
     -- Reveal secret achievements before persisting/toast
     if row.isSecretAchievement then
-        if row.revealTitle and row.Title then row.Title:SetText(row.revealTitle) end
+        if row.revealTitle and row.Title then 
+            row.Title:SetText(row.revealTitle)
+            if row.TitleShadow then row.TitleShadow:SetText(row.revealTitle) end
+        end
         if row.revealIcon and row.Icon then row.Icon:SetTexture(row.revealIcon) end
         if row.revealTooltip then row.tooltip = row.revealTooltip end
         row.staticPoints = row.revealStaticPoints or false
@@ -371,32 +586,41 @@ local function RestoreCompletionsFromDB()
         local rec = id and cdb.achievements and cdb.achievements[id]
         if rec and rec.completed then
             row.completed = true
-            if row.Title and row.Title.SetTextColor then row.Title:SetTextColor(0.6, 0.9, 0.6) end
+            -- Title color will be set by UpdatePointsDisplay
             -- Check if achievement was completed solo and show indicator
             -- Solo indicators only show if player is self-found
             local isSelfFound = _G.IsSelfFound and _G.IsSelfFound() or false
             if row.Sub then
                 if rec.wasSolo and isSelfFound then
-                    row.Sub:SetText(AUCTION_TIME_LEFT0 .. "\n|cFFac81d6Solo|r")
+                    local isSoloMode = _G.HardcoreAchievements_IsSoloModeEnabled and _G.HardcoreAchievements_IsSoloModeEnabled() or false
+                    local soloText = isSoloMode and "Solo bonus" or "Solo"
+                    row.Sub:SetText(AUCTION_TIME_LEFT0 .. "\n|cFFac81d6" .. soloText .. "|r")
                 else
                     row.Sub:SetText(AUCTION_TIME_LEFT0)
                 end
             end
             if row.TS then row.TS:SetText(FormatTimestamp(rec.completedAt)) end
-            if row.Points then row.Points:SetTextColor(0.6, 0.9, 0.6) end
+            if row.Points then row.Points:SetTextColor(1, 1, 1) end
             
-            if row.Icon and row.Icon.SetDesaturated then row.Icon:SetDesaturated(false) end
+            -- Update border color and points display when loaded as completed
+            UpdateRowBorderColor(row)
+            UpdatePointsDisplay(row)
+            -- Update icon desaturation (completed achievements should not be desaturated)
+            ApplyOutleveledStyle(row)
 
             if rec.points then
                 row.points = rec.points
                 if row.Points then
-                    row.Points:SetText(tostring(rec.points) .. " pts")
+                    row.Points:SetText(tostring(rec.points))
                 end
             end
 
             -- Apply secret reveal visuals on load
             if row.isSecretAchievement then
-                if row.revealTitle and row.Title then row.Title:SetText(row.revealTitle) end
+                if row.revealTitle and row.Title then 
+                    row.Title:SetText(row.revealTitle)
+                    if row.TitleShadow then row.TitleShadow:SetText(row.revealTitle) end
+                end
                 if row.revealIcon and row.Icon then row.Icon:SetTexture(row.revealIcon) end
                 if row.revealTooltip then row.tooltip = row.revealTooltip end
                 row.staticPoints = row.revealStaticPoints or false
@@ -710,21 +934,6 @@ end
 -- =========================================================
 -- Outleveled (missed) indicator
 -- =========================================================
-
-local function IsRowOutleveled(row)
-    if not row or row.completed then return false end
-    if not row.maxLevel then return false end
-    local lvl = UnitLevel("player") or 1
-    return lvl > row.maxLevel
-end
-
-local function ApplyOutleveledStyle(row)
-    if IsRowOutleveled(row) and row.Title and row.Title.SetTextColor then
-        row.Title:SetTextColor(0.9, 0.2, 0.2)
-        row.Icon:SetDesaturated(true)
-
-    end
-end
 
 local function RefreshOutleveledAll()
     if not AchievementPanel or not AchievementPanel.achievements then return end
@@ -1491,6 +1700,7 @@ AchievementPanel = CreateFrame("Frame", "Achievements", CharacterFrame)
 AchievementPanel:Hide()
 AchievementPanel:EnableMouse(true)
 AchievementPanel:SetAllPoints(CharacterFrame)
+AchievementPanel:SetClipsChildren(true) -- Clip borders to stay within panel
 
 -- Filter dropdown
 local filterDropdown = CreateFrame("Frame", nil, AchievementPanel, "UIDropDownMenuTemplate")
@@ -1608,6 +1818,14 @@ end)
 AchievementPanel.Scroll = CreateFrame("ScrollFrame", "$parentScroll", AchievementPanel, "UIPanelScrollFrameTemplate")
 AchievementPanel.Scroll:SetPoint("TOPLEFT", 30, -80)      -- adjust to taste
 AchievementPanel.Scroll:SetPoint("BOTTOMRIGHT", -65, 90)  -- leaves room for the scrollbar
+AchievementPanel.Scroll:SetClipsChildren(false) -- Allow borders to extend into padding space
+
+-- Clipping frame for borders: allows horizontal extension but clips top/bottom
+-- Extends left/right to allow padding space, but clips top/bottom to prevent overflow
+AchievementPanel.BorderClip = CreateFrame("Frame", nil, AchievementPanel)
+AchievementPanel.BorderClip:SetPoint("TOPLEFT", AchievementPanel.Scroll, "TOPLEFT", -10, 2)  -- Allow left padding, clip top
+AchievementPanel.BorderClip:SetPoint("BOTTOMRIGHT", AchievementPanel.Scroll, "BOTTOMRIGHT", 10, -2)  -- Allow right padding, clip bottom
+AchievementPanel.BorderClip:SetClipsChildren(true) -- Clip borders to this frame's boundaries
 
 -- The content frame that actually holds rows
 AchievementPanel.Content = CreateFrame("Frame", nil, AchievementPanel.Scroll)
@@ -1691,7 +1909,8 @@ function CreateAchievementRow(parent, achId, title, tooltip, icon, level, points
 
     local index = (#AchievementPanel.achievements) + 1
     local row = CreateFrame("Frame", nil, rowParent)
-    row:SetSize(300, 36)
+    row:SetSize(310, 42)
+    row:SetClipsChildren(false) -- Allow IconFrame to extend beyond row bounds if needed
 
     -- stack under title or previous row
     if index == 1 then
@@ -1705,11 +1924,34 @@ function CreateAchievementRow(parent, achId, title, tooltip, icon, level, points
     row.Icon:SetSize(32, 32)
     row.Icon:SetPoint("LEFT", row, "LEFT", 1, 0) -- Shift to account for SSF border
     row.Icon:SetTexture(icon or 136116)
+    
+    -- Icon overlay (for failed state - red X)
+    row.IconOverlay = row:CreateTexture(nil, "OVERLAY")
+    row.IconOverlay:SetSize(20, 20) -- Same size as points checkmark
+    row.IconOverlay:SetPoint("CENTER", row.Icon, "CENTER", 0, 0)
+    row.IconOverlay:Hide() -- Hidden by default
+
+    -- IconFrame overlay (gold for completed, desaturated for available/failed)-- IconFrame overlay (gold for completed, desaturated for available/failed)
+    -- Create as child of row but ensure it's on top layer
+    row.IconFrame = row:CreateTexture(nil, "OVERLAY", nil, 7) -- Higher sublayer to ensure it's on top
+    row.IconFrame:SetSize(33, 33) -- Same size as icon
+    row.IconFrame:SetPoint("CENTER", row.Icon, "CENTER", 0, 0)
+    row.IconFrame:SetTexture("Interface\\AddOns\\HardcoreAchievements\\Images\\IconFrame.blp")
+    row.IconFrame:SetDrawLayer("OVERLAY", 1) -- Draw above icon (which is on ARTWORK layer)
+    row.IconFrame:Show()
 
     -- title
     row.Title = row:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     row.Title:SetPoint("LEFT", row.Icon, "RIGHT", 8, 10) -- Title stays anchored to icon
     row.Title:SetText(title or ("Achievement %d"):format(index))
+    row.Title:SetTextColor(1, 1, 1) -- Default white (will be updated by UpdatePointsDisplay)
+    
+    -- title drop shadow
+    row.TitleShadow = row:CreateFontString(nil, "BACKGROUND", "GameFontNormal")
+    row.TitleShadow:SetPoint("LEFT", row.Icon, "RIGHT", 9, 9) -- Slightly offset right and down
+    row.TitleShadow:SetText(title or ("Achievement %d"):format(index))
+    row.TitleShadow:SetTextColor(0, 0, 0, 0.5) -- Black with 50% opacity for shadow
+    row.TitleShadow:SetDrawLayer("BACKGROUND", 0) -- Behind the main title
 
     -- subtitle / progress
     row.Sub = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
@@ -1718,6 +1960,7 @@ function CreateAchievementRow(parent, achId, title, tooltip, icon, level, points
     row.Sub:SetJustifyH("LEFT")
     row.Sub:SetJustifyV("TOP")
     row.Sub:SetWordWrap(true)
+    row.Sub:SetTextColor(0.5, 0.5, 0.5) -- Default gray (will be updated by UpdatePointsDisplay)
     do
         local capNum = tonumber(level)
         if capNum and capNum > 0 then
@@ -1727,23 +1970,44 @@ function CreateAchievementRow(parent, achId, title, tooltip, icon, level, points
         end
     end
 
-    -- points
-    row.Points = row:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    row.Points:SetPoint("RIGHT", row, "RIGHT", -15, 10)
-    row.Points:SetWidth(100)
-    row.Points:SetJustifyH("RIGHT")
-    row.Points:SetJustifyV("TOP")
-    row.Points:SetText(points or 0 .. " pts")
+    -- Circular frame for points
+    row.PointsFrame = CreateFrame("Frame", nil, row)
+    row.PointsFrame:SetSize(48, 48) -- Circular frame size (increased by 4px)
+    row.PointsFrame:SetPoint("RIGHT", row, "RIGHT", -15, 0) -- Centered vertically, positioned on right
+    
+    -- Circular frame texture
+    row.PointsFrame.Texture = row.PointsFrame:CreateTexture(nil, "BACKGROUND")
+    row.PointsFrame.Texture:SetTexture("Interface\\AddOns\\HardcoreAchievements\\Images\\WowUI_Circular_Frame.blp")
+    row.PointsFrame.Texture:SetAllPoints(row.PointsFrame)
+    
+    -- Points text (number only, no "pts")
+    row.Points = row.PointsFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    row.Points:SetPoint("CENTER", row.PointsFrame, "CENTER", 0, 0)
+    row.Points:SetText(tostring(points or 0))
     row.Points:SetTextColor(1, 1, 1)
+    
+    -- Checkmark texture (for completed/failed states)
+    row.PointsFrame.Checkmark = row.PointsFrame:CreateTexture(nil, "OVERLAY")
+    row.PointsFrame.Checkmark:SetSize(16, 16) -- Reduced by 50% from 32x32
+    row.PointsFrame.Checkmark:SetPoint("CENTER", row.PointsFrame, "CENTER", 0, 0)
+    row.PointsFrame.Checkmark:Hide() -- Hidden by default
 
     -- timestamp
     row.TS = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    row.TS:SetPoint("RIGHT", row.Points, "RIGHT", 0, -15)
+    row.TS:SetPoint("RIGHT", row.PointsFrame, "LEFT", -5, 0)
     row.TS:SetJustifyH("RIGHT")
     row.TS:SetJustifyV("TOP")
     row.TS:SetText("")
-    row.TS:SetTextColor(0.5, 0.5, 0.5)
+    row.TS:SetTextColor(1, 1, 1)
 
+    -- border texture (child of BorderClip frame so it's clipped to Scroll bounds)
+    row.Border = AchievementPanel.BorderClip:CreateTexture(nil, "BACKGROUND")
+    row.Border:SetTexture("Interface\\AddOns\\HardcoreAchievements\\Images\\RowBorder.blp")
+    row.Border:SetSize(256, 32) -- Border texture size
+    row.Border:SetAlpha(0.5) -- 50% opacity as requested
+    -- Border will be positioned in SortAchievementRows function
+    row.Border:Hide() -- Hide initially, will be shown when positioned
+    
     -- highlight/tooltip
     row:EnableMouse(true)
     row.highlight = row:CreateTexture(nil, "BACKGROUND")
@@ -1756,47 +2020,10 @@ function CreateAchievementRow(parent, achId, title, tooltip, icon, level, points
         self.highlight:Show()
 
         if self.Title and self.Title.GetText then
-            GameTooltip:SetOwner(row, "ANCHOR_RIGHT")
-            local currentTitle = (self.Title and self.Title.GetText and self.Title:GetText()) or (title or "")
-            
-            -- Check if SSF mode is enabled and this achievement supports it
-            local isSoloMode = _G.HardcoreAchievements_IsSoloModeEnabled and _G.HardcoreAchievements_IsSoloModeEnabled() or false
-            if isSoloMode and self.allowSoloDouble then
-                -- Show title with "Solo" on the right
-                GameTooltip:AddDoubleLine(currentTitle, "|cFFac81d6Solo|r", 1, 1, 1, 0.5, 0.3, 0.9)
-            else
-                GameTooltip:SetText(currentTitle, 1, 1, 1)
+            -- Use centralized tooltip function
+            if _G.HCA_ShowAchievementTooltip then
+                _G.HCA_ShowAchievementTooltip(row, self)
             end
-            
-            local tooltipText = self.tooltip or tooltip or ""
-            
-            -- Check if this is a catalog achievement (not secret) and SSF is not checked
-            -- If so, append "(including all party members)" to the tooltip
-            local isCatalogAchievement = false
-            local currentAchId = self.achId or achId
-            if _G.Achievements and currentAchId then
-                for _, achievementDef in ipairs(_G.Achievements) do
-                    if achievementDef.achId == currentAchId then
-                        isCatalogAchievement = true
-                        break
-                    end
-                end
-            end
-            
-            local isSecret = def and def.secret
-            local isSoloModeChecked = _G.HardcoreAchievements_IsSoloModeEnabled and _G.HardcoreAchievements_IsSoloModeEnabled() or false
-            
-            if isCatalogAchievement and not isSecret and not isSoloModeChecked and not IsLevelMilestone(row.achId) then
-                tooltipText = tooltipText .. "|cffFFD700 (including all party members)|r"
-            end
-            
-            GameTooltip:AddLine(tooltipText, nil, nil, nil, true)
-            if self.zone then
-                GameTooltip:AddLine(self.zone, 0.6, 1, 0.86)
-            end
-			-- Hint for linking the achievement in chat
-			GameTooltip:AddLine("\nShift + Left Click to link in chat", 0.5, 0.5, 0.5)
-            GameTooltip:Show()
         end
     end)
 
@@ -1804,6 +2031,13 @@ function CreateAchievementRow(parent, achId, title, tooltip, icon, level, points
         self.highlight:Hide()
         GameTooltip:Hide()
     end)
+    
+    -- Store reference to row data for centralized tooltip function
+    row._achId = achId
+    row._title = title
+    row._tooltip = tooltip
+    row._zone = zone
+    row._def = def
 
     row:SetScript("OnMouseUp", function(self, button)
         if button == "LeftButton" and IsShiftKeyDown() and row.achId then
@@ -1838,10 +2072,11 @@ function CreateAchievementRow(parent, achId, title, tooltip, icon, level, points
     row.tooltip = tooltip  -- Store the tooltip for later access
     row.zone = zone  -- Store the zone for later access
     row.achId = achId
+    -- Set initial border color and points display
+    UpdateRowBorderColor(row)
+    UpdatePointsDisplay(row)
+    -- Apply icon desaturation based on state
     ApplyOutleveledStyle(row)
-    if row.Icon and IsRowOutleveled(row) and row.Icon.SetDesaturated then
-        row.Icon:SetDesaturated(true)
-    end
 
     -- store trackers
     row.killTracker  = killTracker
@@ -1889,11 +2124,14 @@ function CreateAchievementRow(parent, achId, title, tooltip, icon, level, points
         row.secretPoints = tonumber(def.secretPoints) or 0
 
         -- Apply secret placeholder visuals initially
-        if row.Title then row.Title:SetText(row.secretTitle) end
+        if row.Title then 
+            row.Title:SetText(row.secretTitle)
+            if row.TitleShadow then row.TitleShadow:SetText(row.secretTitle) end
+        end
         row.tooltip = row.secretTooltip
         if row.Icon then row.Icon:SetTexture(row.secretIcon) end
         row.points = row.secretPoints
-        if row.Points then row.Points:SetText(tostring(row.secretPoints) .. " pts") end
+        if row.Points then row.Points:SetText(tostring(row.secretPoints)) end
         -- Prevent multipliers from inflating placeholder points
         row.staticPoints = true
     end
