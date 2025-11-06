@@ -538,7 +538,7 @@ function M.registerQuestAchievement(cfg)
                     return false
                 end
                 
-                print("|cff00ff00[HardcoreAchievements]|r Achievement |cffffffff" .. (ACH_ID or "Unknown") .. "|r cannot be fulfilled: An overleveled party member is nearby.")
+                print("|cff69adc9[HardcoreAchievements]|r Achievement |cffffffff" .. (ACH_ID or "Unknown") .. "|r cannot be fulfilled: An ineligible party member is nearby.")
                 
                 -- Track the kill progress, but mark as ineligible (don't increment eligible counts)
                 if REQUIRED_KILLS then

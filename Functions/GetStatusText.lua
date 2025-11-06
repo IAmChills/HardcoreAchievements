@@ -87,9 +87,86 @@ local function SetStatusTextOnRow(row, params)
     end
 end
 
+-- Helper function to extract all display data from an achievement row
+-- This centralizes the logic so both the character panel and embed file use the same data
+local function ExtractRowDisplayData(row)
+    if not row then return nil end
+    
+    -- Extract basic data
+    local title = ""
+    if row.Title and row.Title.GetText then
+        title = row.Title:GetText() or ""
+    elseif type(row.id) == "string" then
+        title = row.id
+    end
+    
+    local iconTex = nil
+    if row.Icon and row.Icon.GetTexture then
+        iconTex = row.Icon:GetTexture()
+    end
+    
+    local points = tonumber(row.points) or 0
+    local maxLevel = tonumber(row.maxLevel) or nil
+    local completed = not not row.completed
+    
+    -- Extract status text from Sub field (this already has level + status formatted)
+    local statusText = nil
+    if row.Sub and row.Sub.GetText then
+        local subText = row.Sub:GetText() or ""
+        if subText ~= "" then
+            statusText = subText
+        end
+    end
+    
+    -- Build tooltip text with party members appended (same logic as CreateAchievementRow)
+    local tooltipText = row.tooltip or title
+    local isCatalogAchievement = false
+    local currentAchId = row.achId or row.id
+    if _G.Achievements and currentAchId then
+        for _, achievementDef in ipairs(_G.Achievements) do
+            if achievementDef.achId == currentAchId then
+                isCatalogAchievement = true
+                break
+            end
+        end
+    end
+    
+    local isSecret = row.isSecretAchievement
+    local isSoloModeChecked = _G.HardcoreAchievements_IsSoloModeEnabled and _G.HardcoreAchievements_IsSoloModeEnabled() or false
+    local isLevelMilestone = _G.IsLevelMilestone and _G.IsLevelMilestone(currentAchId) or false
+    
+    if isCatalogAchievement and not isSecret and not isSoloModeChecked and not isLevelMilestone then
+        tooltipText = tooltipText .. "|cffFFD700 (including all party members)|r"
+    end
+    
+    -- Determine if title should show solo indicator (for tooltip display)
+    local showSoloIndicator = false
+    if isSoloModeChecked and row.allowSoloDouble then
+        showSoloIndicator = true
+    end
+    
+    return {
+        id = row.id or currentAchId or title,
+        achId = currentAchId,
+        title = title,
+        iconTex = iconTex,
+        tooltip = tooltipText,
+        statusText = statusText,
+        points = points,
+        maxLevel = maxLevel,
+        completed = completed,
+        zone = row.zone,
+        requiredKills = row.requiredKills,
+        allowSoloDouble = not not row.allowSoloDouble,
+        showSoloIndicator = showSoloIndicator,
+        isSecretAchievement = isSecret,
+    }
+end
+
 -- Export globally
 _G.HCA_GetStatusText = GetStatusText
 _G.HCA_SetStatusTextOnRow = SetStatusTextOnRow
+_G.HCA_ExtractRowDisplayData = ExtractRowDisplayData
 
 return GetStatusText
 

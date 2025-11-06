@@ -554,7 +554,7 @@ local function HCA_CreateAchToast()
         if button == "LeftButton" and self.achId then
             -- Generate hyperlink using the same format as chat links
             if _G.HCA_GetAchievementHyperlink then
-                local link = _G.HCA_GetAchievementHyperlink(self.achId, self.achTitle, self.achIcon, self.achPoints)
+                local link = _G.HCA_GetAchievementHyperlink(self.achId, self.achTitle, self.achIcon)
                 if link and ItemRefTooltip then
                     -- Use the same tooltip mechanism as chat links
                     ItemRefTooltip:SetHyperlink(link)
@@ -669,6 +669,13 @@ end
 
 -- Export IsSelfFound globally
 _G.IsSelfFound = IsSelfFound
+
+-- Check if an achievement ID is a level milestone achievement (Level10, Level20, etc.)
+function IsLevelMilestone(achId)
+    if not achId or type(achId) ~= "string" then return false end
+    return string.match(achId, "^Level%d+$") ~= nil
+end
+_G.IsLevelMilestone = IsLevelMilestone
 
 local function ApplySelfFoundBonus()
     if not IsSelfFound() then return end
@@ -1779,7 +1786,7 @@ function CreateAchievementRow(parent, achId, title, tooltip, icon, level, points
             local isSecret = def and def.secret
             local isSoloModeChecked = _G.HardcoreAchievements_IsSoloModeEnabled and _G.HardcoreAchievements_IsSoloModeEnabled() or false
             
-            if isCatalogAchievement and not isSecret and not isSoloModeChecked then
+            if isCatalogAchievement and not isSecret and not isSoloModeChecked and not IsLevelMilestone(row.achId) then
                 tooltipText = tooltipText .. "|cffFFD700 (including all party members)|r"
             end
             
@@ -1800,13 +1807,9 @@ function CreateAchievementRow(parent, achId, title, tooltip, icon, level, points
 
     row:SetScript("OnMouseUp", function(self, button)
         if button == "LeftButton" and IsShiftKeyDown() and row.achId then
-            local titleText = row.Title and row.Title:GetText() or tostring(row.achId)
-            -- Sanitize title for bracket placeholder to avoid nested [] issues
             local iconTexture = row.Icon and row.Icon:GetTexture() or ""
-            local pts = tonumber(row.points) or 0
-            -- Send bracketed placeholder using commas (no pipes) to avoid chat escape codes
-            -- Compact bracket tag without title to avoid special characters breaking chat parsing
-            local bracket = string.format("[HCA:(%s,%s,%s)]", tostring(row.achId), tostring(iconTexture), tostring(pts))
+            -- Use centralized function to generate bracket format
+            local bracket = _G.HCA_GetAchievementBracket and _G.HCA_GetAchievementBracket(row.achId, iconTexture) or string.format("[HCA:(%s,%s)]", tostring(row.achId), tostring(iconTexture))
 
             local editBox = ChatEdit_GetActiveWindow()
             -- If no chat edit box is currently active/visible, do nothing
