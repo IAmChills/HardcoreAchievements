@@ -1979,6 +1979,7 @@ function CreateAchievementRow(parent, achId, title, tooltip, icon, level, points
     row.PointsFrame.Texture = row.PointsFrame:CreateTexture(nil, "BACKGROUND")
     row.PointsFrame.Texture:SetTexture("Interface\\AddOns\\HardcoreAchievements\\Images\\WowUI_Circular_Frame.blp")
     row.PointsFrame.Texture:SetAllPoints(row.PointsFrame)
+    row.PointsFrame.Texture:SetAlpha(0)
     
     -- Points text (number only, no "pts")
     row.Points = row.PointsFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
