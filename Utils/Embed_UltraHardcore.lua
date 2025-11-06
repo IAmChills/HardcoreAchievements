@@ -40,37 +40,40 @@ end
 
 local function ReadRowData(src)
   if not src then return end
-  local title = ""
-  if src.Title and src.Title.GetText then
-    title = src.Title:GetText() or ""
-  elseif type(src.id) == "string" then
-    title = src.id
+  
+  -- Use the helper function to extract all display data from the row
+  -- This ensures we get the same formatted data as the character panel
+  local data = _G.HCA_ExtractRowDisplayData and _G.HCA_ExtractRowDisplayData(src)
+  if not data then
+    -- Fallback if helper not available
+    local title = ""
+    if src.Title and src.Title.GetText then
+      title = src.Title:GetText() or ""
+    elseif type(src.id) == "string" then
+      title = src.id
+    end
+    data = {
+      id = src.id or title,
+      title = title,
+      iconTex = (src.Icon and src.Icon.GetTexture and src.Icon:GetTexture()) or nil,
+      tooltip = src.tooltip or title,
+      statusText = nil,
+      points = tonumber(src.points) or 0,
+      maxLevel = tonumber(src.maxLevel) or nil,
+      completed = not not src.completed,
+      zone = src.zone,
+      requiredKills = src.requiredKills,
+      allowSoloDouble = not not src.allowSoloDouble,
+      showSoloIndicator = false,
+      isSecretAchievement = not not src.isSecretAchievement,
+    }
   end
-  local iconTex
-  if src.Icon and src.Icon.GetTexture then
-    iconTex = src.Icon:GetTexture()
-  end
   
-  -- Get the tooltip from the row object (now stored in CreateAchievementRow)
-  local tooltip = src.tooltip or title
+  -- Add additional fields needed for filtering
+  data.outleveled = IsRowOutleveled(src)
+  data.hiddenUntilComplete = not not src.hiddenUntilComplete
   
-  -- Get calculated points (now stored directly in row.points)
-  local calculatedPoints = tonumber(src.points) or 0
-  
-  return {
-    id        = src.id or title,
-    title     = title,
-    iconTex   = iconTex,
-    tooltip   = tooltip,
-    points    = calculatedPoints,
-    maxLevel  = tonumber(src.maxLevel) or nil,
-    completed = not not src.completed,
-    outleveled = IsRowOutleveled(src),
-    requiredKills = src.requiredKills,  -- Store requiredKills for dungeon achievements
-    zone = src.zone,
-    hiddenUntilComplete = not not src.hiddenUntilComplete,
-    allowSoloDouble = not not src.allowSoloDouble,
-  }
+  return data
 end
 
 -- ---------- Icon Factory ----------
@@ -130,57 +133,22 @@ local function CreateEmbedIcon(parent)
   icon:SetScript("OnEnter", function(self)
     GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
     
-    -- Get progress to check for solo status
-    local progress = nil
-    if self.achId then
-      progress = _G.HardcoreAchievements_GetProgress and _G.HardcoreAchievements_GetProgress(self.achId) or nil
-    end
-    
-    -- Check for actual solo status (completed or pending)
-    local hasSoloStatus = progress and (progress.soloKill or progress.soloQuest)
-    local wasSolo = false
-    if self.completed then
-      -- Check completed achievements for wasSolo flag
-      local _, cdb = _G.GetCharDB and _G.GetCharDB() or nil
-      if cdb and cdb.achievements and self.achId then
-        local achRec = cdb.achievements[self.achId]
-        wasSolo = achRec and achRec.wasSolo or false
-      end
-    end
-    
-    -- Show title with solo indicator if applicable
-    -- Solo indicators only show if player is self-found
-    local isSoloMode = _G.HardcoreAchievements_IsSoloModeEnabled and _G.HardcoreAchievements_IsSoloModeEnabled() or false
-    local isSelfFound = _G.IsSelfFound and _G.IsSelfFound() or false
-    if self.completed and wasSolo and isSelfFound then
-      -- Completed solo achievement
-      GameTooltip:AddDoubleLine(self.title or "", "|cFF9D3AFFSolo|r", 1, 1, 1, 0.5, 0.3, 0.9)
-    elseif not self.completed and hasSoloStatus and isSelfFound then
-      -- Pending solo (not yet completed but has solo status)
-      GameTooltip:AddDoubleLine(self.title or "", "|cFF9D3AFFPending solo|r", 1, 1, 1, 0.5, 0.3, 0.9)
-    elseif isSoloMode and self.allowSoloDouble and not hasSoloStatus and isSelfFound then
-      -- Solo mode preview (toggle on, no actual solo status yet)
-      GameTooltip:AddDoubleLine(self.title or "", "|cFF9D3AFFSolo|r", 1, 1, 1, 0.5, 0.3, 0.9)
+    -- Show title with solo indicator if applicable (from extracted data)
+    if self.showSoloIndicator then
+      GameTooltip:AddDoubleLine(self.title or "", "|cFFac81d6Solo|r", 1, 1, 1, 0.5, 0.3, 0.9)
     else
       GameTooltip:SetText(self.title or "", 1, 1, 1)
     end
     
-    -- Level (left) and Points (right) on one line
-    -- Show "pending solo" indicator if applicable
-    -- Solo indicators only show if player is self-found
-    local leftText = (self.maxLevel and self.maxLevel > 0) and (LEVEL .. " " .. self.maxLevel) or " "
-    if not self.completed and hasSoloStatus and isSelfFound then
-      -- Add "pending solo" to level text
-      if leftText ~= " " then
-        leftText = leftText .. "\n|cFF9D3AFFPending solo|r"
-      else
-        leftText = "|cFF9D3AFFPending solo|r"
-      end
-    end
+    -- Use status text from the row (already formatted with level + status)
+    -- This ensures we match exactly what's shown on the character panel
+    local leftText = self.statusText or ((self.maxLevel and self.maxLevel > 0) and (LEVEL .. " " .. self.maxLevel) or " ")
     local rightText = (type(self.points) == "number" and self.points > 0) and (tostring(self.points) .. " pts") or " "
+    
     if leftText ~= " " or rightText ~= " " then
-      -- Use AddLine for level text if it contains pending solo (multi-line)
-      if not self.completed and hasSoloStatus and isSelfFound and (self.maxLevel and self.maxLevel > 0) then
+      -- Check if status text contains newlines (multi-line status)
+      local hasNewline = leftText:find("\n")
+      if hasNewline then
         GameTooltip:AddLine(leftText, 1, 1, 1)
         GameTooltip:AddDoubleLine(" ", rightText, 1, 1, 1, 0.6, 0.9, 0.6)
       else
@@ -188,11 +156,18 @@ local function CreateEmbedIcon(parent)
       end
     end
 
-    -- Check if this is a dungeon achievement with requiredKills
+    -- Check if this is a dungeon achievement (has requiredMapId/mapID)
+    -- Only dungeon achievements should show "Required Bosses:" section
     local requiredKills = self.requiredKills or {}
-    local isDungeonAchievement = next(requiredKills) ~= nil
+    local isDungeonAchievement = false
+    if self.achId and _G.HCA_AchievementDefs then
+      local achDef = _G.HCA_AchievementDefs[tostring(self.achId)]
+      if achDef and achDef.mapID then
+        isDungeonAchievement = true
+      end
+    end
     
-    if isDungeonAchievement then
+    if isDungeonAchievement and next(requiredKills) ~= nil then
       -- Build dynamic tooltip with boss completion status
       if self.tooltip and self.tooltip ~= "" then
         -- Default yellow (match in-game color)
@@ -222,7 +197,7 @@ local function CreateEmbedIcon(parent)
         end
       end
     else
-      -- Standard tooltip
+      -- Standard tooltip (already includes party members text if applicable)
       if self.tooltip and self.tooltip ~= "" then
         -- Default yellow (match in-game color)
         GameTooltip:AddLine(self.tooltip, nil, nil, nil, true)
@@ -232,8 +207,6 @@ local function CreateEmbedIcon(parent)
         GameTooltip:AddLine(tostring(self.zone), 0.6, 1, 0.86)
       end
     end
-    
-    -- Points shown via AddDoubleLine with level above
     
     if self.completed then
       GameTooltip:AddLine("Completed", 0.6, 0.9, 0.6)
@@ -248,10 +221,9 @@ local function CreateEmbedIcon(parent)
   -- Shift + Left Click to link achievement bracket into chat (matches CreateAchievementRow behavior)
   icon:SetScript("OnMouseUp", function(self, button)
     if button == "LeftButton" and IsShiftKeyDown() and self.achId then
-      local achId = tostring(self.achId)
       local iconTexture = self.Icon and self.Icon.GetTexture and self.Icon:GetTexture() or ""
-      local pts = tonumber(self.points) or 0
-      local bracket = string.format("[HCA:(%s,%s,%s)]", achId, tostring(iconTexture), tostring(pts))
+      -- Use centralized function to generate bracket format
+      local bracket = _G.HCA_GetAchievementBracket and _G.HCA_GetAchievementBracket(self.achId, iconTexture) or string.format("[HCA:(%s,%s)]", tostring(self.achId), tostring(iconTexture))
 
       local editBox = ChatEdit_GetActiveWindow()
       if not editBox or not editBox:IsVisible() then
@@ -405,7 +377,7 @@ function EMBED:Rebuild()
         end
 
         icon.id        = data.id
-        icon.achId     = data.id  -- Store achId for tooltip lookup
+        icon.achId     = data.achId or data.id  -- Store achId for tooltip lookup
         icon.title     = data.title
         icon.tooltip   = data.tooltip
         icon.points    = data.points
@@ -414,6 +386,8 @@ function EMBED:Rebuild()
         icon.requiredKills = data.requiredKills  -- Store requiredKills for dungeon achievements
         icon.zone      = data.zone
         icon.allowSoloDouble = data.allowSoloDouble
+        icon.statusText = data.statusText  -- Store status text (level + status formatted)
+        icon.showSoloIndicator = data.showSoloIndicator  -- Store solo indicator flag
 
         if data.iconTex then
           icon.Icon:SetTexture(data.iconTex)
@@ -596,8 +570,8 @@ local function BuildEmbedIfNeeded()
           if cdb and cdb.settings then
             cdb.settings.soloAchievements = isChecked
             -- Refresh all achievement points immediately
-            if _G.HCA_RefreshAllAchievementPoints then
-              _G.HCA_RefreshAllAchievementPoints()
+            if RefreshAllAchievementPoints then
+              RefreshAllAchievementPoints()
             end
           end
         end

@@ -1,7 +1,7 @@
 ﻿## Interface: 11508
 ## Title: HardcoreAchievements
 ## Author: Chills
-## Version: 1.1.8
+## Version: 1.1.10
 ## Notes: Hardcore achievements system
 ## SavedVariables: HardcoreAchievementsDB
 ## IconTexture: Interface\AddOns\HardcoreAchievements\Images\Logo
@@ -19,6 +19,9 @@ Libs\LibDBIcon-1.0\LibDBIcon-1.0.lua
 
 Functions\GetUHCPreset.lua
 Functions\PlayerIsSolo.lua
+Functions\IsGroupEligibleForAchievement.lua
+Functions\GetStatusText.lua
+Functions\RefreshAllAchievementPoints.lua
 
 HardcoreAchievements.lua
 

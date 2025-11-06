@@ -37,14 +37,21 @@ local function ViewerHasCompletedAchievement(achId)
     return false
 end
 
+-- Public: build a bracket format string for chat (used before chat filter converts to hyperlink)
+-- Format: [HCA:(achId,icon)] - points are looked up locally on receiver's end
+function HCA_GetAchievementBracket(achId, icon)
+    local iconField = icon and tostring(icon) or ""
+    return string.format("[HCA:(%s,%s)]", tostring(achId), iconField)
+end
+
 -- Public: build a hyperlink string for an achievement id and title
-function HCA_GetAchievementHyperlink(achId, title, icon, points)
+function HCA_GetAchievementHyperlink(achId, title, icon)
     local sender = UnitGUID("player") or ""
     local display = string.format("[%s]", tostring(title or achId))
     local iconField = icon and tostring(icon) or ""
-    local pointsField = points and tostring(points) or ""
-    -- Format: |Hhcaach:achId:icon:points:sender|h[Title]|h
-    return string.format("|H%s:%s:%s:%s:%s|h%s|h", HCA_LINK_PREFIX, tostring(achId), iconField, pointsField, tostring(sender), display)
+    -- Format: |Hhcaach:achId:icon:sender|h[Title]|h
+    -- Points are looked up locally on the receiver's end
+    return string.format("|H%s:%s:%s:%s|h%s|h", HCA_LINK_PREFIX, tostring(achId), iconField, tostring(sender), display)
 end
 
 -- Tooltip rendering for our custom link
@@ -54,9 +61,11 @@ if Old_ItemRef_SetHyperlink then
         local linkStr = tostring(link or "")
         -- Extract hyperlink part (between |H and |h) or use the whole string if no |H wrapper
         local hyperlinkPart = string.match(linkStr, "^%|H([^|]+)%|h") or linkStr
-        local prefix, achId, iconStr, pointsStr, sender = string.match(hyperlinkPart, "^(%w+):([^:]+):?([^:]*):?([^:]*):?(.*)$")
+        -- Parse link format: hcaach:achId:icon:sender
+        -- Points are always looked up locally, never from the link
+        local prefix, achId, iconStr, sender = string.match(hyperlinkPart, "^(%w+):([^:]+):?([^:]*):?(.*)$")
         if prefix == HCA_LINK_PREFIX and achId then
-			ShowUIPanel(ItemRefTooltip)
+            ShowUIPanel(ItemRefTooltip)
 			ItemRefTooltip:SetOwner(UIParent, "ANCHOR_PRESERVE")
 			ItemRefTooltip:ClearLines()
 
@@ -67,15 +76,15 @@ if Old_ItemRef_SetHyperlink then
             local points = 0
 
             -- Per-viewer secrecy: if secret and viewer hasn't completed, show secret placeholders
-            do
-                local isSecret = rec and rec.secret
-                local viewerCompleted = ViewerHasCompletedAchievement(achId)
-                if isSecret and not viewerCompleted then
-                    title = (rec and rec.secretTitle) or "Secret"
-                    tooltip = (rec and rec.secretTooltip) or "Hidden"
-                    icon = (rec and rec.secretIcon) or icon
-                    points = (rec and tonumber(rec.secretPoints)) or 0
-                end
+            local isSecret = rec and rec.secret
+            local viewerCompleted = ViewerHasCompletedAchievement(achId)
+            local usingSecretPoints = false
+            if isSecret and not viewerCompleted then
+                title = (rec and rec.secretTitle) or "Secret"
+                tooltip = (rec and rec.secretTooltip) or "Hidden"
+                icon = (rec and rec.secretIcon) or icon
+                points = (rec and tonumber(rec.secretPoints)) or 0
+                usingSecretPoints = true
             end
 
             if iconStr and iconStr ~= "" then
@@ -85,10 +94,28 @@ if Old_ItemRef_SetHyperlink then
                 icon = rec.icon
             end
 
-            if pointsStr and pointsStr ~= "" then
-                points = tonumber(pointsStr) or 0
-            elseif rec and rec.points then
-                points = tonumber(rec.points) or 0
+            -- Always use local points, ignore sender's points from the link
+            -- Only set points if we're not using secret points (which were already set above)
+            if not usingSecretPoints then
+                -- First try to get points from the achievement row (calculated with multipliers)
+                local rowPoints = nil
+                if _G.AchievementPanel and _G.AchievementPanel.achievements then
+                    for _, row in ipairs(_G.AchievementPanel.achievements) do
+                        if tostring(row.id) == tostring(achId) or tostring(row.achId) == tostring(achId) then
+                            rowPoints = row.points
+                            break
+                        end
+                    end
+                end
+                
+                if rowPoints then
+                    points = tonumber(rowPoints) or 0
+                elseif rec and rec.points then
+                    -- Fallback to base points if row not found
+                    points = tonumber(rec.points) or 0
+                else
+                    points = 0
+                end
             end
 
 			-- Title line with icon texture escape (valid in tooltips)
@@ -99,8 +126,9 @@ if Old_ItemRef_SetHyperlink then
 			end
 
 			-- Special handling for dungeon-style achievements: points under description, then list required bosses
+			-- Only show boss list for actual dungeon achievements (those with mapID)
 			local showedDungeonDetails = false
-			if rec and rec.requiredKills and next(rec.requiredKills) ~= nil then
+			if rec and rec.requiredKills and next(rec.requiredKills) ~= nil and rec.mapID then
 				showedDungeonDetails = true
 				ItemRefTooltip:AddLine(" ")
 				ItemRefTooltip:AddLine("Required Bosses:", 0, 1, 0)
@@ -217,10 +245,9 @@ local function ChatFilter_HCA(chatFrame, _, msg, ...)
     local function ViewerHasCompleted(id)
         return ViewerHasCompletedAchievement(id)
     end
-    -- Extended form with icon and points: [HCA: Title (id,icon,points)]
-    msg = msg:gsub("%[HCA:%s*(.-)%s*%(([^,%)]+)%s*,%s*([^,%)]+)%s*,%s*([^%)]*)%)%]", function(title, id, iconStr, pointsStr)
+    -- Extended form with icon: [HCA: Title (id,icon)]
+    msg = msg:gsub("%[HCA:%s*(.-)%s*%(([^,%)]+)%s*,%s*([^%)]+)%)%]", function(title, id, iconStr)
         local icon = (iconStr and iconStr ~= "") and iconStr or nil
-        local pts = (pointsStr and pointsStr ~= "") and tonumber(pointsStr) or nil
         local rec = GetAchievementById(id)
         local displayTitle
         if rec and rec.secret and not ViewerHasCompleted(id) then
@@ -228,14 +255,13 @@ local function ChatFilter_HCA(chatFrame, _, msg, ...)
         else
             displayTitle = (rec and rec.title) or title
         end
-        local link = HCA_GetAchievementHyperlink(id, displayTitle, icon, pts)
+        local link = HCA_GetAchievementHyperlink(id, displayTitle, icon)
         changed = true
         return link
     end)
-    -- Compact form without title: [HCA:(id,icon,points)]
-    msg = msg:gsub("%[HCA:%s*%(([^,%)]+)%s*,%s*([^,%)]+)%s*,%s*([^%)]*)%)%]", function(id, iconStr, pointsStr)
+    -- Compact form without title: [HCA:(id,icon)]
+    msg = msg:gsub("%[HCA:%s*%(([^,%)]+)%s*,%s*([^%)]+)%)%]", function(id, iconStr)
         local icon = (iconStr and iconStr ~= "") and iconStr or nil
-        local pts = (pointsStr and pointsStr ~= "") and tonumber(pointsStr) or nil
         local rec = GetAchievementById(id)
         local displayTitle
         if rec and rec.secret and not ViewerHasCompleted(id) then
@@ -243,7 +269,7 @@ local function ChatFilter_HCA(chatFrame, _, msg, ...)
         else
             displayTitle = (rec and rec.title) or tostring(id)
         end
-        local link = HCA_GetAchievementHyperlink(id, displayTitle, icon, pts)
+        local link = HCA_GetAchievementHyperlink(id, displayTitle, icon)
         changed = true
         return link
     end)

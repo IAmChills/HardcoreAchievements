@@ -313,7 +313,7 @@ function HCA_MarkRowCompleted(row)
     local isSelfFound = _G.IsSelfFound and _G.IsSelfFound() or false
     if row.Sub then
         if wasSolo and isSelfFound then
-            row.Sub:SetText(AUCTION_TIME_LEFT0 .. "\n|cFF9D3AFFSolo|r")
+            row.Sub:SetText(AUCTION_TIME_LEFT0 .. "\n|cFFac81d6Solo|r")
         else
             row.Sub:SetText(AUCTION_TIME_LEFT0)
         end
@@ -377,7 +377,7 @@ local function RestoreCompletionsFromDB()
             local isSelfFound = _G.IsSelfFound and _G.IsSelfFound() or false
             if row.Sub then
                 if rec.wasSolo and isSelfFound then
-                    row.Sub:SetText(AUCTION_TIME_LEFT0 .. "\n|cFF9D3AFFSolo|r")
+                    row.Sub:SetText(AUCTION_TIME_LEFT0 .. "\n|cFFac81d6Solo|r")
                 else
                     row.Sub:SetText(AUCTION_TIME_LEFT0)
                 end
@@ -554,7 +554,7 @@ local function HCA_CreateAchToast()
         if button == "LeftButton" and self.achId then
             -- Generate hyperlink using the same format as chat links
             if _G.HCA_GetAchievementHyperlink then
-                local link = _G.HCA_GetAchievementHyperlink(self.achId, self.achTitle, self.achIcon, self.achPoints)
+                local link = _G.HCA_GetAchievementHyperlink(self.achId, self.achTitle, self.achIcon)
                 if link and ItemRefTooltip then
                     -- Use the same tooltip mechanism as chat links
                     ItemRefTooltip:SetHyperlink(link)
@@ -670,6 +670,13 @@ end
 -- Export IsSelfFound globally
 _G.IsSelfFound = IsSelfFound
 
+-- Check if an achievement ID is a level milestone achievement (Level10, Level20, etc.)
+function IsLevelMilestone(achId)
+    if not achId or type(achId) ~= "string" then return false end
+    return string.match(achId, "^Level%d+$") ~= nil
+end
+_G.IsLevelMilestone = IsLevelMilestone
+
 local function ApplySelfFoundBonus()
     if not IsSelfFound() then return end
     if not HardcoreAchievementsDB or not HardcoreAchievementsDB.chars then return end
@@ -744,7 +751,12 @@ local function SetProgress(achId, key, value)
     local p = cdb.progress[achId] or {}
     p[key] = value
     p.updatedAt = time()
-    p.levelAt = UnitLevel("player") or 1
+    -- Only set levelAt for progress-related keys (kills, quests, counts, etc.)
+    -- Don't set it for metadata-only keys like levelAtTurnIn, levelAtKill, etc.
+    local shouldSetLevelAt = key == "killed" or key == "quest" or key == "counts" or key == "eligibleCounts" or key == "ineligibleKill" or key == "soloKill" or key == "soloQuest" or key == "pointsAtKill"
+    if shouldSetLevelAt then
+        p.levelAt = UnitLevel("player") or 1
+    end
     cdb.progress[achId] = p
 
     C_Timer.After(0, function()
@@ -1575,8 +1587,8 @@ AchievementPanel.SoloModeCheckbox:SetScript("OnClick", function(self)
         if cdb and cdb.settings then
             cdb.settings.soloAchievements = isChecked
             -- Refresh all achievement points immediately
-            if _G.HCA_RefreshAllAchievementPoints then
-                _G.HCA_RefreshAllAchievementPoints()
+            if RefreshAllAchievementPoints then
+                RefreshAllAchievementPoints()
             end
         end
     end
@@ -1751,12 +1763,34 @@ function CreateAchievementRow(parent, achId, title, tooltip, icon, level, points
             local isSoloMode = _G.HardcoreAchievements_IsSoloModeEnabled and _G.HardcoreAchievements_IsSoloModeEnabled() or false
             if isSoloMode and self.allowSoloDouble then
                 -- Show title with "Solo" on the right
-                GameTooltip:AddDoubleLine(currentTitle, "|cFF9D3AFFSolo|r", 1, 1, 1, 0.5, 0.3, 0.9)
+                GameTooltip:AddDoubleLine(currentTitle, "|cFFac81d6Solo|r", 1, 1, 1, 0.5, 0.3, 0.9)
             else
                 GameTooltip:SetText(currentTitle, 1, 1, 1)
             end
             
-            GameTooltip:AddLine(self.tooltip or tooltip or "", nil, nil, nil, true)
+            local tooltipText = self.tooltip or tooltip or ""
+            
+            -- Check if this is a catalog achievement (not secret) and SSF is not checked
+            -- If so, append "(including all party members)" to the tooltip
+            local isCatalogAchievement = false
+            local currentAchId = self.achId or achId
+            if _G.Achievements and currentAchId then
+                for _, achievementDef in ipairs(_G.Achievements) do
+                    if achievementDef.achId == currentAchId then
+                        isCatalogAchievement = true
+                        break
+                    end
+                end
+            end
+            
+            local isSecret = def and def.secret
+            local isSoloModeChecked = _G.HardcoreAchievements_IsSoloModeEnabled and _G.HardcoreAchievements_IsSoloModeEnabled() or false
+            
+            if isCatalogAchievement and not isSecret and not isSoloModeChecked and not IsLevelMilestone(row.achId) then
+                tooltipText = tooltipText .. "|cffFFD700 (including all party members)|r"
+            end
+            
+            GameTooltip:AddLine(tooltipText, nil, nil, nil, true)
             if self.zone then
                 GameTooltip:AddLine(self.zone, 0.6, 1, 0.86)
             end
@@ -1773,13 +1807,9 @@ function CreateAchievementRow(parent, achId, title, tooltip, icon, level, points
 
     row:SetScript("OnMouseUp", function(self, button)
         if button == "LeftButton" and IsShiftKeyDown() and row.achId then
-            local titleText = row.Title and row.Title:GetText() or tostring(row.achId)
-            -- Sanitize title for bracket placeholder to avoid nested [] issues
             local iconTexture = row.Icon and row.Icon:GetTexture() or ""
-            local pts = tonumber(row.points) or 0
-            -- Send bracketed placeholder using commas (no pipes) to avoid chat escape codes
-            -- Compact bracket tag without title to avoid special characters breaking chat parsing
-            local bracket = string.format("[HCA:(%s,%s,%s)]", tostring(row.achId), tostring(iconTexture), tostring(pts))
+            -- Use centralized function to generate bracket format
+            local bracket = _G.HCA_GetAchievementBracket and _G.HCA_GetAchievementBracket(row.achId, iconTexture) or string.format("[HCA:(%s,%s)]", tostring(row.achId), tostring(iconTexture))
 
             local editBox = ChatEdit_GetActiveWindow()
             -- If no chat edit box is currently active/visible, do nothing
@@ -1882,18 +1912,34 @@ end
 do
     if not AchievementPanel._achEvt then
         AchievementPanel._achEvt = CreateFrame("Frame")
+        -- Track recently processed kills to prevent duplicate processing
+        local recentKills = {}
+        local function clearRecentKill(destGUID)
+            C_Timer.After(1, function()
+                recentKills[destGUID] = nil
+            end)
+        end
+        
         AchievementPanel._achEvt:RegisterEvent("COMBAT_LOG_EVENT_UNFILTERED")
         AchievementPanel._achEvt:RegisterEvent("QUEST_TURNED_IN")
         AchievementPanel._achEvt:RegisterEvent("UNIT_SPELLCAST_SENT")
         AchievementPanel._achEvt:RegisterEvent("UNIT_SPELLCAST_SUCCEEDED")
         AchievementPanel._achEvt:RegisterEvent("CHAT_MSG_TEXT_EMOTE")
-        AchievementPanel._achEvt:RegisterEvent("PLAYER_LEVEL_UP")
         AchievementPanel._achEvt:RegisterEvent("PLAYER_LEVEL_CHANGED")
         AchievementPanel._achEvt:RegisterEvent("CHAT_MSG_LOOT")
         AchievementPanel._achEvt:SetScript("OnEvent", function(_, event, ...)
             if event == "COMBAT_LOG_EVENT_UNFILTERED" then
                 local _, subevent, _, _, _, _, _, destGUID = CombatLogGetCurrentEventInfo()
                 if subevent ~= "PARTY_KILL" and subevent ~= "UNIT_DIED" then return end
+                if not destGUID then return end
+                
+                -- Deduplicate: skip if we've already processed this kill recently
+                if recentKills[destGUID] then
+                    return
+                end
+                recentKills[destGUID] = true
+                clearRecentKill(destGUID)
+                
                 for _, row in ipairs(AchievementPanel.achievements) do
                     if not row.completed and type(row.killTracker) == "function" then
                         if row.killTracker(destGUID) then
@@ -1913,12 +1959,21 @@ do
                 end
                 for _, row in ipairs(AchievementPanel.achievements) do
                     if not row.completed and type(row.questTracker) == "function" then
-                        -- Store the level at turn-in for this achievement before calling tracker
-                        -- This allows the achievement to validate against the level BEFORE the turn-in
-                        if HardcoreAchievements_SetProgress then
+                        -- Only set levelAtTurnIn if the quest tracker actually matches the quest
+                        -- Check if this achievement's quest matches before setting levelAtTurnIn
+                        local shouldSetLevelAtTurnIn = false
+                        if row.questTracker then
+                            -- Store the level at turn-in for this achievement before calling tracker
+                            -- This allows the achievement to validate against the level BEFORE the turn-in
+                            -- But only set it after we verify the quest matches (by calling tracker first with a test)
+                            -- Actually, we'll set it after the tracker confirms it matches
+                            shouldSetLevelAtTurnIn = true
+                        end
+                        local questMatched = row.questTracker(questID)
+                        if questMatched and shouldSetLevelAtTurnIn and HardcoreAchievements_SetProgress then
                             HardcoreAchievements_SetProgress(row.id, "levelAtTurnIn", levelAtTurnIn)
                         end
-                        if row.questTracker(questID) then
+                        if questMatched then
                             HCA_MarkRowCompleted(row)
                             HCA_AchToast_Show(row.Icon:GetTexture(), row.Title:GetText(), row.points, row)
                         end
@@ -1964,25 +2019,8 @@ do
                         end
                     end
                 end
-            elseif event == "PLAYER_LEVEL_UP" then
-                -- Track level changes to detect level-ups during quest turn-in
-                local newLevel = tonumber(select(1, ...))
-                local newLevel2 = tonumber(...)
-                local args = {...}
-                local argCount = select('#', ...)
-                local argStrings = {}
-                for i = 1, argCount do
-                    local arg = select(i, ...)
-                    table.insert(argStrings, tostring(arg) .. " (" .. type(arg) .. ")")
-                end
-                print("PLAYER_LEVEL_UP SELECT 1: " .. tostring(newLevel))
-                print("PLAYER_LEVEL_UP NO SELECT: " .. tostring(newLevel2))
-                print("PLAYER_LEVEL_UP ALL ARGS (" .. argCount .. "): " .. table.concat(argStrings, ", "))
             elseif event == "PLAYER_LEVEL_CHANGED" then
                 local newLevel = tonumber(select(2, ...))
-                local newLevel2 = tonumber(select(1, ...))
-                local newLevel3 = tonumber(...)
-                print("PLAYER_LEVEL_CHANGED: " .. newLevel .. " " .. newLevel2 .. " " .. newLevel3)
                 -- Check for level-based achievement completions
                 for _, row in ipairs(AchievementPanel.achievements) do
                     if not row.completed then

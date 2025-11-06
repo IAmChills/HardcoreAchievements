@@ -606,7 +606,7 @@ local Achievements = {
 -- Rogue
 {
     achId = "Gallywix",
-    title = "Get Gallywix or Die Tryin |cffFFF46[Rogue]|r",
+    title = "Get Gallywix or Die Tryin |cfffff468[Rogue]|r",
     level = 23,
     tooltip = "Complete |cff0091e6Mission: Possible But Not Probable|r before level 24",
     icon = 236281,

@@ -38,15 +38,6 @@ local function ValidatePayload(payload)
     return true, "Valid"
 end
 
-local function CreatePayloadHash(payload)
-    local hashString = payload.version .. payload.timestamp .. payload.achievementId .. payload.targetCharacter .. ADMIN_SIGNATURE
-    local hash = 0
-    for i = 1, #hashString do
-        hash = hash + string.byte(hashString, i) * i
-    end
-    return hash % 1000000 -- Simple hash for validation
-end
-
 local function FindAchievementRow(achievementId)
     if not AchievementPanel or not AchievementPanel.achievements then return nil end
     
