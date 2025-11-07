@@ -261,8 +261,8 @@ local function CreateOptionsPanel()
     -- Modern Rows checkbox (for embed display)
     local modernRowsCB = CreateFrame("CheckButton", nil, panel, "InterfaceOptionsCheckButtonTemplate")
     modernRowsCB:SetPoint("TOPLEFT", awardOnKillCB, "BOTTOMLEFT", 0, -8)
-    modernRowsCB.Text:SetText("Modern Rows (Embed Display)")
-    modernRowsCB:SetChecked(GetSetting("modernRows", false))
+    modernRowsCB.Text:SetText("Use Modern Rows (UltraHardcore Display)")
+    modernRowsCB:SetChecked(GetSetting("modernRows", true))
     modernRowsCB:SetScript("OnClick", function(self)
         local isChecked = self:GetChecked()
         SetSetting("modernRows", isChecked)
@@ -271,13 +271,13 @@ local function CreateOptionsPanel()
             EMBED:Rebuild()
         end
     end)
-    AddTooltipToCheckbox(modernRowsCB, "If enabled, the embedded achievements frame will display achievements as modern rows (similar to the character panel). If disabled, it will use the classic grid layout.")
+    AddTooltipToCheckbox(modernRowsCB, "If enabled, the Ultra Hardcore achievements frame will display achievements as modern rows (similar to the character panel). If disabled, it will use the classic grid layout.")
 
     -- =========================================================
     -- User Interface Category
     -- =========================================================
     local uiCategoryTitle = panel:CreateFontString(nil, "ARTWORK", "GameFontNormalLarge")
-    uiCategoryTitle:SetPoint("TOPLEFT", awardOnKillCB, "BOTTOMLEFT", 0, -30)
+    uiCategoryTitle:SetPoint("TOPLEFT", modernRowsCB, "BOTTOMLEFT", 0, -30)
     uiCategoryTitle:SetText("|cff69adc9User Interface|r")
     
     -- Reset Achievements Tab button

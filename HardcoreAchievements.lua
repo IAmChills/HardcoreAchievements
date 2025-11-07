@@ -258,14 +258,21 @@ local function SortAchievementRows()
     end
 
     table.sort(AchievementPanel.achievements, function(a, b)
-        -- First, separate failed vs non-failed: non-failed come first
+        -- First, separate into three groups: completed, available, failed
+        local aCompleted = a.completed or false
+        local bCompleted = b.completed or false
         local aFailed = IsRowOutleveled(a)
         local bFailed = IsRowOutleveled(b)
-        if aFailed ~= bFailed then
-            return not aFailed  -- non-failed achievements first
+        
+        -- Determine group priority: completed (1), available (2), failed (3)
+        local aGroup = aCompleted and 1 or (aFailed and 3 or 2)
+        local bGroup = bCompleted and 1 or (bFailed and 3 or 2)
+        
+        if aGroup ~= bGroup then
+            return aGroup < bGroup  -- completed first, then available, then failed
         end
         
-        -- Within the same group (both failed or both non-failed), sort by level
+        -- Within the same group, sort by level
         -- Treat uncapped (nil) maxLevel as very large so they sort to the bottom
         local la = (a.maxLevel ~= nil) and a.maxLevel or 9999
         local lb = (b.maxLevel ~= nil) and b.maxLevel or 9999
@@ -518,12 +525,12 @@ function HCA_MarkRowCompleted(row)
     
     -- Set Sub text with "Solo" indicator if achievement was completed solo
     -- Solo indicators only show if player is self-found
+    -- Completed achievements always show "Solo", never "Solo bonus"
     local isSelfFound = _G.IsSelfFound and _G.IsSelfFound() or false
     if row.Sub then
         if wasSolo and isSelfFound then
-            local isSoloMode = _G.HardcoreAchievements_IsSoloModeEnabled and _G.HardcoreAchievements_IsSoloModeEnabled() or false
-            local soloText = isSoloMode and "Solo bonus" or "Solo"
-            row.Sub:SetText(AUCTION_TIME_LEFT0 .. "\n|cFFac81d6" .. soloText .. "|r")
+            -- Completed achievements always show "Solo", not "Solo bonus"
+            row.Sub:SetText(AUCTION_TIME_LEFT0 .. "\n|cFFac81d6Solo|r")
         else
             row.Sub:SetText(AUCTION_TIME_LEFT0)
         end
@@ -592,12 +599,12 @@ local function RestoreCompletionsFromDB()
             -- Title color will be set by UpdatePointsDisplay
             -- Check if achievement was completed solo and show indicator
             -- Solo indicators only show if player is self-found
+            -- Completed achievements always show "Solo", never "Solo bonus"
             local isSelfFound = _G.IsSelfFound and _G.IsSelfFound() or false
             if row.Sub then
                 if rec.wasSolo and isSelfFound then
-                    local isSoloMode = _G.HardcoreAchievements_IsSoloModeEnabled and _G.HardcoreAchievements_IsSoloModeEnabled() or false
-                    local soloText = isSoloMode and "Solo bonus" or "Solo"
-                    row.Sub:SetText(AUCTION_TIME_LEFT0 .. "\n|cFFac81d6" .. soloText .. "|r")
+                    -- Completed achievements always show "Solo", not "Solo bonus"
+                    row.Sub:SetText(AUCTION_TIME_LEFT0 .. "\n|cFFac81d6Solo|r")
                 else
                     row.Sub:SetText(AUCTION_TIME_LEFT0)
                 end

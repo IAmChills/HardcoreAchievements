@@ -32,6 +32,100 @@ local function IsRowOutleveled(row)
   return lvl > row.maxLevel
 end
 
+-- Helper function to update status text using the same logic as main panel
+local function UpdateStatusTextEmbed(row)
+    if not row or not row.Sub or not _G.HCA_SetStatusTextOnRow then return end
+    
+    local rowId = row.achId or row.id
+    if not rowId then return end
+    
+    -- Get progress data
+    local progress = nil
+    if _G.HardcoreAchievements_GetProgress then
+        progress = _G.HardcoreAchievements_GetProgress(rowId)
+    end
+    
+    local hasSoloStatus = progress and (progress.soloKill or progress.soloQuest)
+    local hasIneligibleKill = progress and progress.ineligibleKill
+    
+    -- Check if achievement requires both kill and quest
+    local requiresBoth = (row.killTracker ~= nil) and (row.questTracker ~= nil)
+    
+    -- Check if kills are satisfied but quest is pending
+    local killsSatisfied = false
+    if requiresBoth and progress then
+        local hasKill = false
+        if progress.killed then
+            hasKill = true
+        elseif progress.counts and next(progress.counts) ~= nil then
+            if progress.eligibleCounts then
+                -- Find the achievement definition to check requiredKills
+                local achDef = nil
+                if _G.Achievements then
+                    for _, def in ipairs(_G.Achievements) do
+                        if def.achId == rowId then
+                            achDef = def
+                            break
+                        end
+                    end
+                end
+                
+                if achDef and achDef.requiredKills then
+                    local allSatisfied = true
+                    for npcId, requiredCount in pairs(achDef.requiredKills) do
+                        local idNum = tonumber(npcId) or npcId
+                        local current = progress.eligibleCounts[idNum] or progress.eligibleCounts[tostring(idNum)] or 0
+                        local required = tonumber(requiredCount) or 1
+                        if current < required then
+                            allSatisfied = false
+                            break
+                        end
+                    end
+                    hasKill = allSatisfied
+                else
+                    hasKill = progress.killed or false
+                end
+            elseif progress.killed then
+                hasKill = true
+            end
+        end
+        
+        local questNotTurnedIn = not progress.quest
+        killsSatisfied = hasKill and questNotTurnedIn
+    end
+    
+    -- Get self-found and solo mode status
+    local isSelfFound = _G.IsSelfFound and _G.IsSelfFound() or false
+    local isSoloMode = _G.HardcoreAchievements_IsSoloModeEnabled and _G.HardcoreAchievements_IsSoloModeEnabled() or false
+    
+    -- Check if achievement was completed solo
+    local wasSolo = false
+    if row.completed then
+        local getCharDB = _G.GetCharDB or _G.HardcoreAchievements_GetCharDB
+        if getCharDB then
+            local _, cdb = getCharDB()
+            if cdb and cdb.achievements and rowId then
+                local achRec = cdb.achievements[rowId]
+                wasSolo = achRec and achRec.wasSolo or false
+            end
+        end
+    end
+    
+    -- Use the centralized status text function
+    _G.HCA_SetStatusTextOnRow(row, {
+        completed = row.completed or false,
+        hasSoloStatus = hasSoloStatus,
+        hasIneligibleKill = hasIneligibleKill,
+        requiresBoth = requiresBoth,
+        killsSatisfied = killsSatisfied,
+        isSelfFound = isSelfFound,
+        isSoloMode = isSoloMode,
+        wasSolo = wasSolo,
+        allowSoloDouble = row.allowSoloDouble,
+        maxLevel = row.maxLevel
+    })
+end
+
 -- Helper functions for modern rows (similar to character panel)
 local function UpdateRowBorderColorEmbed(row)
     if not row or not row.Border then return end
@@ -508,11 +602,7 @@ local function CreateEmbedModernRow(parent, srow)
     row.Sub:SetJustifyV("TOP")
     row.Sub:SetWordWrap(true)
     row.Sub:SetTextColor(0.5, 0.5, 0.5)
-    if level and level > 0 then
-        row.Sub:SetText(LEVEL .. " " .. level)
-    else
-        row.Sub:SetText("")
-    end
+    -- Status text will be set by UpdateStatusTextEmbed
     
     -- Circular frame for points (increased size)
     row.PointsFrame = CreateFrame("Frame", nil, row)
@@ -568,7 +658,7 @@ local function CreateEmbedModernRow(parent, srow)
     row:SetScript("OnEnter", function(self)
         self.highlight:Show()
         if _G.HCA_ShowAchievementTooltip then
-            _G.HCA_ShowAchievementTooltip(srow, self)
+            _G.HCA_ShowAchievementTooltip(self, srow)
         end
     end)
     
@@ -597,11 +687,18 @@ local function CreateEmbedModernRow(parent, srow)
     row.allowSoloDouble = (def and def.allowSoloDouble ~= nil) and def.allowSoloDouble or (srow.allowSoloDouble ~= nil and srow.allowSoloDouble)
     row.isSecretAchievement = (def and def.isSecretAchievement) or (srow.isSecretAchievement)
     
+    -- Store trackers from source row
+    row.killTracker = srow.killTracker
+    row.questTracker = srow.questTracker
+    
     -- Apply styling
     UpdateRowBorderColorEmbed(row)
     UpdatePointsDisplayEmbed(row)
     ApplyOutleveledStyleEmbed(row)
     PositionRowBorderEmbed(row)
+    
+    -- Update status text using centralized logic
+    UpdateStatusTextEmbed(row)
     
     return row
 end
@@ -623,13 +720,6 @@ local function UpdateEmbedModernRow(row, srow)
         if row.TitleShadow then row.TitleShadow:SetText(StripColorCodes(title)) end
     end
     if row.Points then row.Points:SetText(tostring(points)) end
-    if row.Sub then
-        if level and level > 0 then
-            row.Sub:SetText(LEVEL .. " " .. level)
-        else
-            row.Sub:SetText("")
-        end
-    end
     
     -- Update stored data
     row.achId = achId
@@ -639,6 +729,11 @@ local function UpdateEmbedModernRow(row, srow)
     row.maxLevel = level > 0 and level or nil
     row.sourceRow = srow
     row._def = def
+    
+    -- Store trackers from source row
+    row.killTracker = srow.killTracker
+    row.questTracker = srow.questTracker
+    row.allowSoloDouble = (def and def.allowSoloDouble ~= nil) and def.allowSoloDouble or (srow.allowSoloDouble ~= nil and srow.allowSoloDouble)
     
     -- Update timestamp if completed
     if row.completed and type(HardcoreAchievements_GetCharDB) == "function" then
@@ -656,6 +751,9 @@ local function UpdateEmbedModernRow(row, srow)
     UpdatePointsDisplayEmbed(row)
     ApplyOutleveledStyleEmbed(row)
     PositionRowBorderEmbed(row)
+    
+    -- Update status text using centralized logic
+    UpdateStatusTextEmbed(row)
 end
 
 -- Layout modern rows vertically
@@ -741,10 +839,18 @@ function EMBED:BuildModernRows(srcRows)
   
   -- Sort rows (failed to bottom, maintaining level order)
   table.sort(visibleRows, function(a, b)
+    -- First, separate into three groups: completed, available, failed
+    local aCompleted = a.completed or false
+    local bCompleted = b.completed or false
     local aFailed = IsRowOutleveled(a)
     local bFailed = IsRowOutleveled(b)
-    if aFailed ~= bFailed then
-      return not aFailed  -- non-failed achievements first
+    
+    -- Determine group priority: completed (1), available (2), failed (3)
+    local aGroup = aCompleted and 1 or (aFailed and 3 or 2)
+    local bGroup = bCompleted and 1 or (bFailed and 3 or 2)
+    
+    if aGroup ~= bGroup then
+      return aGroup < bGroup  -- completed first, then available, then failed
     end
     
     -- Within same group, sort by level
@@ -911,6 +1017,15 @@ function EMBED:Rebuild()
   UpdateMultiplierText()
   UpdateTotalPointsText()
   
+  -- Update status text for all visible rows after rebuild
+  if useModernRows and self.rows then
+    for _, row in ipairs(self.rows) do
+      if row:IsShown() then
+        UpdateStatusTextEmbed(row)
+      end
+    end
+  end
+  
   -- Sync solo mode checkbox state (for both modes)
   if UHCA and UHCA.SoloModeCheckbox then
     if type(HardcoreAchievements_GetCharDB) == "function" then
@@ -1058,7 +1173,7 @@ local function BuildEmbedIfNeeded()
   -- Solo mode checkbox
   if not UHCA.SoloModeCheckbox then
     UHCA.SoloModeCheckbox = CreateFrame("CheckButton", nil, UHCA, "InterfaceOptionsCheckButtonTemplate")
-    UHCA.SoloModeCheckbox:SetPoint("BOTTOMLEFT", UHCA, "BOTTOMLEFT", -10, -43)
+    UHCA.SoloModeCheckbox:SetPoint("TOPLEFT", UHCA, "TOPLEFT", -10, -30)
     UHCA.SoloModeCheckbox.Text:SetText("SSF")
     UHCA.SoloModeCheckbox.Text:SetTextColor(1, 1, 1, 1)
     UHCA.SoloModeCheckbox:SetScript("OnClick", function(self)
@@ -1072,6 +1187,14 @@ local function BuildEmbedIfNeeded()
             if RefreshAllAchievementPoints then
               RefreshAllAchievementPoints()
             end
+            -- Update status text for all embed rows after solo mode toggle
+            if EMBED and EMBED.rows then
+              for _, row in ipairs(EMBED.rows) do
+                if row:IsShown() then
+                  UpdateStatusTextEmbed(row)
+                end
+              end
+            end
           end
         end
       end
@@ -1084,6 +1207,50 @@ local function BuildEmbedIfNeeded()
       end
     end)
     UHCA.SoloModeCheckbox:SetScript("OnLeave", function(self)
+      GameTooltip:Hide()
+    end)
+  end
+
+  -- Settings button (cogwheel icon) in bottom left of frame
+  if not UHCA.SettingsButton then
+    UHCA.SettingsButton = CreateFrame("Button", nil, UHCA)
+    UHCA.SettingsButton:SetSize(16, 16)
+    UHCA.SettingsButton:SetPoint("BOTTOMLEFT", UHCA, "BOTTOMLEFT", -10, -43)
+    
+    -- Create cogwheel icon texture (using a simple circular button style)
+    UHCA.SettingsButton.Icon = UHCA.SettingsButton:CreateTexture(nil, "ARTWORK")
+    UHCA.SettingsButton.Icon:SetAllPoints(UHCA.SettingsButton)
+    -- Use a simple circular icon - try using the minimap button background or a simple texture
+    UHCA.SettingsButton.Icon:SetTexture("Interface\\GossipFrame\\BinderGossipIcon")
+    UHCA.SettingsButton:SetHighlightTexture("Interface\\Buttons\\UI-Common-MouseHilight", "ADD")
+    
+    -- Click handler to open Options panel
+    UHCA.SettingsButton:SetScript("OnClick", function(self)
+      -- Try to open via Settings API first
+      if Settings and Settings.OpenToCategory then
+        -- Get the addon reference
+        local addon = _G.HardcoreAchievementsAddon
+        if addon and addon.settingsCategory then
+          Settings.OpenToCategory(addon.settingsCategory:GetID())
+        elseif _G._HardcoreAchievementsOptionsCategory then
+          Settings.OpenToCategory(_G._HardcoreAchievementsOptionsCategory:GetID())
+        end
+      else
+        -- Fallback: try to show Interface Options and navigate to addon
+        if InterfaceOptionsFrame then
+          InterfaceOptionsFrame_OpenToCategory("Hardcore Achievements")
+        end
+      end
+    end)
+    
+    -- Tooltip
+    UHCA.SettingsButton:SetScript("OnEnter", function(self)
+      GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+      GameTooltip:SetText("Open Options", nil, nil, nil, nil, true)
+      GameTooltip:Show()
+    end)
+    
+    UHCA.SettingsButton:SetScript("OnLeave", function(self)
       GameTooltip:Hide()
     end)
   end
