@@ -1435,78 +1435,131 @@ local function HookTabManager()
   EMBED._tmHooked = true
 end
 
+local function IsUltraHardcoreAddonName(name)
+  if type(name) ~= "string" then
+    return false
+  end
+  local normalized = name:lower():gsub("[^%w]", "")
+  return normalized:find("ultrahardcore", 1, true) ~= nil
+end
+
+local function FindLoadedUltraHardcoreAddon()
+  if GetNumAddOns and GetAddOnInfo then
+    for i = 1, GetNumAddOns() do
+      local candidate = GetAddOnInfo(i)
+      if IsUltraHardcoreAddonName(candidate) then
+        local loaded = false
+        if C_AddOns and C_AddOns.IsAddOnLoaded then
+          loaded = C_AddOns.IsAddOnLoaded(candidate)
+        elseif IsAddOnLoaded then
+          loaded = IsAddOnLoaded(candidate)
+        end
+        if loaded then
+          return candidate
+        end
+      end
+    end
+  end
+
+  if C_AddOns and C_AddOns.IsAddOnLoaded and C_AddOns.IsAddOnLoaded("UltraHardcore") then
+    return "UltraHardcore"
+  end
+  if IsAddOnLoaded and IsAddOnLoaded("UltraHardcore") then
+    return "UltraHardcore"
+  end
+end
+
+local function HandleUltraHardcoreMissing()
+  if EMBED._uhcMissingHandled then return end
+  EMBED._uhcMissingHandled = true
+
+  print("|cff00ff00[HardcoreAchievements]|r UltraHardcore addon not detected")
+
+  if type(HardcoreAchievements_GetCharDB) == "function" then
+    local _, cdb = HardcoreAchievements_GetCharDB()
+    if cdb then
+      cdb.settings = cdb.settings or {}
+      cdb.settings.showCustomTab = true
+
+      if type(_G.HardcoreAchievements_LoadTabPosition) == "function" then
+        _G.HardcoreAchievements_LoadTabPosition()
+      end
+
+      local tab = _G["CharacterFrameTab" .. (CharacterFrame.numTabs + 1)]
+      if tab and tab:GetText() and tab:GetText():find(ACHIEVEMENTS) then
+        tab:Show()
+        tab:EnableMouse(true)
+        tab:SetScript("OnClick", function(self)
+          if HCA_ShowAchievementTab then
+            HCA_ShowAchievementTab()
+          end
+        end)
+
+        local point = tab:GetPoint()
+        if not point then
+          tab:SetPoint("RIGHT", _G["CharacterFrameTab" .. CharacterFrame.numTabs], "RIGHT", 43, 0)
+        end
+
+        if not tab:IsShown() then
+          tab:Show()
+        end
+      end
+    end
+  end
+end
+
+local function HandleUltraHardcoreDetected(addonName)
+  if EMBED._uhcDetected then return end
+  EMBED._uhcDetected = true
+
+  print(string.format("|cff00ff00[HardcoreAchievements]|r %s addon detected", addonName or "UltraHardcore"))
+
+  HookTabManager()
+  HookSourceSignals()
+
+  C_Timer.After(0.5, function()
+    if BuildEmbedIfNeeded() then
+      C_Timer.After(0, function()
+        if EMBED.Rebuild then EMBED:Rebuild() else ApplyFilter() end
+      end)
+    end
+  end)
+
+  C_Timer.After(2.0, function()
+    if not UHCA and tabContents and tabContents[3] then
+      if BuildEmbedIfNeeded() then
+        C_Timer.After(0, function()
+          if EMBED.Rebuild then EMBED:Rebuild() else ApplyFilter() end
+        end)
+      end
+    end
+  end)
+end
+
 local f = CreateFrame("Frame")
 f:RegisterEvent("PLAYER_LOGIN")
 f:RegisterEvent("ADDON_LOADED")
 f:RegisterEvent("PLAYER_ENTERING_WORLD")
 f:SetScript("OnEvent", function(self, event, addonName)
-  -- Wait for UltraHardcore addon to be loaded
-  if event == "ADDON_LOADED" and addonName == "UltraHardcore" then
-    HookTabManager()
-    HookSourceSignals()
-    
-    -- Don't try to access player data here - playerGUID may not be set yet
-    
-    -- Try modern integration approach first
-    C_Timer.After(0.5, function()
-      if BuildEmbedIfNeeded() then
-        C_Timer.After(0, function() 
-          if EMBED.Rebuild then EMBED:Rebuild() else ApplyFilter() end
-        end)
-        --print("|cff00ff00[HardcoreAchievements]|r Successfully integrated with UltraHardcore")
-      end
-    end)
-    
-    -- Fallback method for old versions - try after 2 seconds
-    C_Timer.After(2.0, function()
-      if not UHCA and tabContents and tabContents[3] then
-        if BuildEmbedIfNeeded() then
-          C_Timer.After(0, function() 
-            if EMBED.Rebuild then EMBED:Rebuild() else ApplyFilter() end
-          end)
-          --print("|cff00ff00[HardcoreAchievements]|r Successfully integrated with UltraHardcore (fallback)")
+  if event == "ADDON_LOADED" then
+    if IsUltraHardcoreAddonName(addonName) then
+      HandleUltraHardcoreDetected(addonName)
+    elseif addonName == ADDON_NAME then
+      C_Timer.After(0, function()
+        if EMBED._uhcDetected then return end
+        local loadedName = FindLoadedUltraHardcoreAddon()
+        if loadedName then
+          HandleUltraHardcoreDetected(loadedName)
         end
-      end
-    end)
-  else
-    -- UltraHardcore is not loaded, so set showCustomTab to true
-    if type(HardcoreAchievements_GetCharDB) == "function" then
-      local _, cdb = HardcoreAchievements_GetCharDB()
-      if cdb then
-        cdb.settings = cdb.settings or {}
-        cdb.settings.showCustomTab = true
-        
-        -- Load tab position to apply the setting and show the tab
-        if type(_G.HardcoreAchievements_LoadTabPosition) == "function" then
-          _G.HardcoreAchievements_LoadTabPosition()
-        end
-        
-        -- Ensure the tab is visible if it exists (even if LoadTabPosition had no saved data)
-        local tab = _G["CharacterFrameTab" .. (CharacterFrame.numTabs + 1)]
-        if tab and tab:GetText() and tab:GetText():find(ACHIEVEMENTS) then
-          tab:Show()
-          -- Make sure the tab is enabled and has the click handler
-          tab:EnableMouse(true)
-          tab:SetScript("OnClick", function(self)
-            if HCA_ShowAchievementTab then
-              HCA_ShowAchievementTab()
-            end
-          end)
-          
-          -- If LoadTabPosition had no saved data, ensure the tab is at default position and visible
-          -- Check if tab is positioned (has points set), if not, it needs default positioning
-          local point, relativeTo, relativePoint = tab:GetPoint()
-          if not point then
-            -- Tab has no position, set it to default position
-            tab:SetPoint("RIGHT", _G["CharacterFrameTab" .. CharacterFrame.numTabs], "RIGHT", 43, 0)
-          end
-          
-          -- Ensure tab is not hidden
-          if not tab:IsShown() then
-            tab:Show()
-          end
-        end
-      end
+      end)
+    end
+  elseif event == "PLAYER_LOGIN" or event == "PLAYER_ENTERING_WORLD" then
+    if EMBED._uhcDetected then return end
+    local loadedName = FindLoadedUltraHardcoreAddon()
+    if loadedName then
+      HandleUltraHardcoreDetected(loadedName)
+    else
+      HandleUltraHardcoreMissing()
     end
   end
 end)
