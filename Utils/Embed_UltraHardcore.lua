@@ -6,6 +6,13 @@ local ICON_PADDING = 12
 local GRID_COLS = 7  -- Number of columns in the grid
 local currentFilter = "all"  -- Current filter state
 
+-- Helper function to strip color codes from text (for shadow text)
+local function StripColorCodes(text)
+    if not text or type(text) ~= "string" then return text end
+    -- Remove |cAARRGGBB color start codes and |r color end codes
+    return text:gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", "")
+end
+
 -- Helper function to check if modern rows is enabled
 local function IsModernRowsEnabled()
     if type(HardcoreAchievements_GetCharDB) == "function" then
@@ -46,9 +53,10 @@ local function PositionRowBorderEmbed(row)
     
     -- Get row width for full-width border
     local rowWidth = row:GetWidth() or 310
+    local rowHeight = row:GetHeight() or 54
     row.Border:ClearAllPoints()
     row.Border:SetPoint("TOPLEFT", row, "TOPLEFT", -4, 0)
-    row.Border:SetSize(rowWidth + 8, 49) -- Full width + padding, height matches row
+    row.Border:SetSize(rowWidth + 8, rowHeight + 1) -- Full width + padding, height matches row
     row.Border:Show()
 end
 
@@ -99,15 +107,22 @@ local function ApplyOutleveledStyleEmbed(row)
         end
     end
     
-    -- Style IconFrame overlay
-    if row.IconFrame then
-        if row.completed then
-            if row.IconFrame.SetDesaturated then row.IconFrame:SetDesaturated(false) end
-            if row.IconFrame.SetVertexColor then row.IconFrame:SetVertexColor(1.0, 0.82, 0.0) end
-        else
-            if row.IconFrame.SetDesaturated then row.IconFrame:SetDesaturated(true) end
-            if row.IconFrame.SetVertexColor then row.IconFrame:SetVertexColor(1.0, 1.0, 1.0) end
-        end
+    -- Show/hide appropriate IconFrame based on state
+    if row.completed then
+        -- Completed: show gold frame
+        if row.IconFrameGold then row.IconFrameGold:Show() end
+        if row.IconFrameDisabled then row.IconFrameDisabled:Hide() end
+        if row.IconFrame then row.IconFrame:Hide() end
+    elseif IsRowOutleveled(row) then
+        -- Failed: show disabled frame
+        if row.IconFrameGold then row.IconFrameGold:Hide() end
+        if row.IconFrameDisabled then row.IconFrameDisabled:Show() end
+        if row.IconFrame then row.IconFrame:Hide() end
+    else
+        -- Available: show silver frame
+        if row.IconFrameGold then row.IconFrameGold:Hide() end
+        if row.IconFrameDisabled then row.IconFrameDisabled:Hide() end
+        if row.IconFrame then row.IconFrame:Show() end
     end
     
     -- Desaturate/tint PointsFrame texture
@@ -420,9 +435,9 @@ local function CreateEmbedModernRow(parent, srow)
     if not parent or not srow then return nil end
     
     local row = CreateFrame("Frame", nil, parent)
-    -- Get container width and set row to full width, slightly taller
-    local containerWidth = parent:GetWidth() or 310
-    row:SetSize(containerWidth, 48) -- Increased height from 42 to 48, full width
+    -- Get container width and set row to full width minus 5px for scrollbar spacing, taller
+    local containerWidth = (parent:GetWidth() or 310) - 5
+    row:SetSize(containerWidth, 54) -- Increased height from 48 to 54, full width minus 5px
     row:SetClipsChildren(false)
     
     -- Extract data from source row
@@ -438,14 +453,31 @@ local function CreateEmbedModernRow(parent, srow)
     -- icon
     row.Icon = row:CreateTexture(nil, "ARTWORK")
     row.Icon:SetSize(40, 40) -- Increased from 32x32 to 40x40
-    row.Icon:SetPoint("LEFT", row, "LEFT", 1, 0)
+    row.Icon:SetPoint("LEFT", row, "LEFT", 4, 0) -- Moved 4px right (from 1 to 5) for equal padding
     row.Icon:SetTexture(iconTex)
     
-    -- IconFrame overlay
+    -- IconFrame overlays (gold for completed, disabled for failed, silver for available)
+    -- Gold frame (completed)
+    row.IconFrameGold = row:CreateTexture(nil, "OVERLAY", nil, 7)
+    row.IconFrameGold:SetSize(41, 41)
+    row.IconFrameGold:SetPoint("CENTER", row.Icon, "CENTER", 0, 0)
+    row.IconFrameGold:SetTexture("Interface\\AddOns\\HardcoreAchievements\\Images\\frame-gold.blp")
+    row.IconFrameGold:SetDrawLayer("OVERLAY", 1)
+    row.IconFrameGold:Hide()
+    
+    -- Disabled frame (failed)
+    row.IconFrameDisabled = row:CreateTexture(nil, "OVERLAY", nil, 7)
+    row.IconFrameDisabled:SetSize(41, 41)
+    row.IconFrameDisabled:SetPoint("CENTER", row.Icon, "CENTER", 0, 0)
+    row.IconFrameDisabled:SetTexture("Interface\\AddOns\\HardcoreAchievements\\Images\\frame-disabled.blp")
+    row.IconFrameDisabled:SetDrawLayer("OVERLAY", 1)
+    row.IconFrameDisabled:Hide()
+    
+    -- Silver frame (available) - default
     row.IconFrame = row:CreateTexture(nil, "OVERLAY", nil, 7)
-    row.IconFrame:SetSize(41, 41) -- Increased from 33x33 to 41x41 to match icon
+    row.IconFrame:SetSize(41, 41)
     row.IconFrame:SetPoint("CENTER", row.Icon, "CENTER", 0, 0)
-    row.IconFrame:SetTexture("Interface\\AddOns\\HardcoreAchievements\\Images\\IconFrame.blp")
+    row.IconFrame:SetTexture("Interface\\AddOns\\HardcoreAchievements\\Images\\frame-silver.blp")
     row.IconFrame:SetDrawLayer("OVERLAY", 1)
     row.IconFrame:Show()
     
@@ -461,10 +493,10 @@ local function CreateEmbedModernRow(parent, srow)
     row.Title:SetText(title)
     row.Title:SetTextColor(1, 1, 1)
     
-    -- title drop shadow
+    -- title drop shadow (strip color codes so shadow is always black)
     row.TitleShadow = row:CreateFontString(nil, "BACKGROUND", "GameFontNormal")
     row.TitleShadow:SetPoint("LEFT", row.Icon, "RIGHT", 9, 9)
-    row.TitleShadow:SetText(title)
+    row.TitleShadow:SetText(StripColorCodes(title))
     row.TitleShadow:SetTextColor(0, 0, 0, 0.5)
     row.TitleShadow:SetDrawLayer("BACKGROUND", 0)
     
@@ -482,9 +514,9 @@ local function CreateEmbedModernRow(parent, srow)
         row.Sub:SetText("")
     end
     
-    -- Circular frame for points
+    -- Circular frame for points (increased size)
     row.PointsFrame = CreateFrame("Frame", nil, row)
-    row.PointsFrame:SetSize(48, 48)
+    row.PointsFrame:SetSize(56, 56) -- Increased from 48x48 to 56x56
     row.PointsFrame:SetPoint("RIGHT", row, "RIGHT", -15, 0)
     
     row.PointsFrame.Texture = row.PointsFrame:CreateTexture(nil, "BACKGROUND")
@@ -497,7 +529,7 @@ local function CreateEmbedModernRow(parent, srow)
     row.Points:SetTextColor(1, 1, 1)
     
     row.PointsFrame.Checkmark = row.PointsFrame:CreateTexture(nil, "OVERLAY")
-    row.PointsFrame.Checkmark:SetSize(16, 16)
+    row.PointsFrame.Checkmark:SetSize(20, 20) -- Increased from 16x16 to 20x20 to match scale
     row.PointsFrame.Checkmark:SetPoint("CENTER", row.PointsFrame, "CENTER", 0, 0)
     row.PointsFrame.Checkmark:Hide()
     
@@ -519,7 +551,7 @@ local function CreateEmbedModernRow(parent, srow)
     end
     
     row.Border = UHCA.BorderClip:CreateTexture(nil, "BACKGROUND")
-    row.Border:SetTexture("Interface\\AddOns\\HardcoreAchievements\\Images\\RowBorder.blp")
+    row.Border:SetTexture("Interface\\AddOns\\HardcoreAchievements\\Images\\row-border.blp")
     row.Border:SetSize(256, 32)
     row.Border:SetAlpha(0.5)
     row.Border:Hide()
@@ -527,7 +559,9 @@ local function CreateEmbedModernRow(parent, srow)
     -- highlight/tooltip
     row:EnableMouse(true)
     row.highlight = row:CreateTexture(nil, "BACKGROUND")
-    row.highlight:SetAllPoints(row)
+    -- Set highlight to match border positioning (extends 4px left to match border, 2px right)
+    row.highlight:SetPoint("TOPLEFT", row, "TOPLEFT", 0, 0)
+    row.highlight:SetPoint("BOTTOMRIGHT", row, "BOTTOMRIGHT", 2, 0)
     row.highlight:SetColorTexture(1, 1, 1, 0.10)
     row.highlight:Hide()
     
@@ -586,7 +620,7 @@ local function UpdateEmbedModernRow(row, srow)
     if row.Icon then row.Icon:SetTexture(iconTex) end
     if row.Title then 
         row.Title:SetText(title)
-        if row.TitleShadow then row.TitleShadow:SetText(title) end
+        if row.TitleShadow then row.TitleShadow:SetText(StripColorCodes(title)) end
     end
     if row.Points then row.Points:SetText(tostring(points)) end
     if row.Sub then
@@ -628,28 +662,34 @@ end
 local function LayoutModernRows(container, rows)
     if not container or not rows then return end
     
-    -- Get container width for full-width rows
-    local containerWidth = container:GetWidth() or 310
+    -- Get container width for full-width rows (minus 5px for scrollbar spacing)
+    local containerWidth = (container:GetWidth() or 310) - 5
     
     local visibleRows = {}
     for i, row in ipairs(rows) do
         if row:IsShown() then
             table.insert(visibleRows, row)
+        else
+            -- Hide border for hidden rows
+            if row.Border then
+                row.Border:Hide()
+            end
         end
     end
     
     local totalHeight = 0
+    local rowSpacing = 6 -- Increased spacing between rows
     for i, row in ipairs(visibleRows) do
-        -- Set row to full width
+        -- Set row to full width minus 5px for scrollbar spacing
         row:SetWidth(containerWidth)
         
         if i == 1 then
             row:SetPoint("TOPLEFT", container, "TOPLEFT", 0, 0)
         else
-            row:SetPoint("TOPLEFT", visibleRows[i-1], "BOTTOMLEFT", 0, -2)
+            row:SetPoint("TOPLEFT", visibleRows[i-1], "BOTTOMLEFT", 0, -rowSpacing)
         end
         PositionRowBorderEmbed(row)
-        totalHeight = totalHeight + (row:GetHeight() + 2)
+        totalHeight = totalHeight + (row:GetHeight() + rowSpacing)
     end
     
     container:SetHeight(math.max(totalHeight + 16, 1))
@@ -665,9 +705,12 @@ function EMBED:BuildModernRows(srcRows)
   
   self.rows = self.rows or {}
   
-  -- First, hide all existing rows
+  -- First, hide all existing rows and their borders
   for i = 1, #self.rows do
     self.rows[i]:Hide()
+    if self.rows[i].Border then
+      self.rows[i].Border:Hide()
+    end
   end
   
   local visibleRows = {}
@@ -727,13 +770,24 @@ function EMBED:BuildModernRows(srcRows)
     end
     
     -- Position row
+    local rowSpacing = 6 -- Increased spacing between rows
     if i == 1 then
       row:SetPoint("TOPLEFT", self.Content, "TOPLEFT", 0, 0)
     else
-      row:SetPoint("TOPLEFT", self.rows[i-1], "BOTTOMLEFT", 0, -2)
+      row:SetPoint("TOPLEFT", self.rows[i-1], "BOTTOMLEFT", 0, -rowSpacing)
     end
     
     row:Show()
+  end
+  
+  -- Hide any remaining rows that weren't used and their borders
+  for i = #visibleRows + 1, #self.rows do
+    if self.rows[i] then
+      self.rows[i]:Hide()
+      if self.rows[i].Border then
+        self.rows[i].Border:Hide()
+      end
+    end
   end
   
   -- Layout rows (calculate total height)
@@ -820,7 +874,12 @@ local function UpdateTotalPointsText()
     totalPoints = _G.HCA_GetTotalPoints()
   end
   
-  UHCA.TotalPointsText:SetText(totalPoints)
+  -- Update the number text and its shadow
+  local pointsStr = tostring(totalPoints)
+  UHCA.TotalPointsText:SetText(pointsStr)
+  if UHCA.TotalPointsTextShadow then
+    UHCA.TotalPointsTextShadow:SetText(pointsStr)
+  end
   UHCA.TotalPointsText:SetTextColor(0.6, 0.9, 0.6)
 end
 
@@ -932,7 +991,8 @@ local function BuildEmbedIfNeeded()
   -- Only create Scroll and Content if they don't already exist
   if not UHCA.Scroll then
     UHCA.Scroll = CreateFrame("ScrollFrame", nil, UHCA, "UIPanelScrollFrameTemplate")
-    UHCA.Scroll:SetPoint("TOPLEFT", UHCA, "TOPLEFT", -4, -60)
+    -- Adjust top position to account for points background and multiplier text (tightened headspace)
+    UHCA.Scroll:SetPoint("TOPLEFT", UHCA, "TOPLEFT", -4, -80)
     UHCA.Scroll:SetPoint("BOTTOMRIGHT", UHCA, "BOTTOMRIGHT", -8, -15)
     
     -- Hide the scroll bar but keep it functional
@@ -948,18 +1008,51 @@ local function BuildEmbedIfNeeded()
   end
 
   -- Only create UI elements if they don't exist
-  if not UHCA.MultiplierText then
-    -- Add multiplier text (like in standalone mode)
-    UHCA.MultiplierText = UHCA:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    UHCA.MultiplierText:SetPoint("TOP", UHCA, "TOP", 0, -35)
-    UHCA.MultiplierText:SetText("") -- Will be set by UpdateMultiplierText
+  -- Points background texture (centered horizontally at top)
+  if not UHCA.PointsBackground then
+    UHCA.PointsBackground = UHCA:CreateTexture(nil, "BACKGROUND")
+    UHCA.PointsBackground:SetTexture("Interface\\AddOns\\HardcoreAchievements\\Images\\points-bg.blp")
+    -- Size adjusted: wider and shorter
+    local bgWidth = 300  -- Increased width
+    local bgHeight = 30  -- Reduced height
+    UHCA.PointsBackground:SetSize(bgWidth, bgHeight)
+    UHCA.PointsBackground:SetPoint("TOP", UHCA, "TOP", 0, -30) -- Brought down a bit
+    UHCA.PointsBackground:SetDesaturated(true)
+    UHCA.PointsBackground:SetAlpha(0.7)
+    UHCA.PointsBackground:SetVertexColor(0.6, 0.9, 0.6, 1) -- Green tint matching points text color
   end
 
+  -- Points number text (centered over background, with drop shadow)
   if not UHCA.TotalPointsText then
-    -- Add total points text in top left corner
     UHCA.TotalPointsText = UHCA:CreateFontString(nil, "OVERLAY", "GameFontHighlightLarge")
-    UHCA.TotalPointsText:SetPoint("TOPLEFT", UHCA, "TOPLEFT", 5, -35)
-    UHCA.TotalPointsText:SetText("0 pts") -- Will be updated by UpdateTotalPointsText
+    UHCA.TotalPointsText:SetPoint("CENTER", UHCA.PointsBackground, "CENTER", 0, 0)
+    UHCA.TotalPointsText:SetText("0") -- Will be updated by UpdateTotalPointsText
+    UHCA.TotalPointsText:SetTextColor(0.6, 0.9, 0.6)
+  end
+
+  -- Points number drop shadow
+  if not UHCA.TotalPointsTextShadow then
+    UHCA.TotalPointsTextShadow = UHCA:CreateFontString(nil, "BACKGROUND", "GameFontHighlightLarge")
+    UHCA.TotalPointsTextShadow:SetPoint("CENTER", UHCA.PointsBackground, "CENTER", 1, -1)
+    UHCA.TotalPointsTextShadow:SetText("0")
+    UHCA.TotalPointsTextShadow:SetTextColor(0, 0, 0, 0.5)
+    UHCA.TotalPointsTextShadow:SetDrawLayer("BACKGROUND", 0)
+  end
+
+  -- " pts" text (smaller, positioned after the number)
+  if not UHCA.PointsLabelText then
+    UHCA.PointsLabelText = UHCA:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    -- Position it to the right of the points number
+    UHCA.PointsLabelText:SetPoint("LEFT", UHCA.TotalPointsText, "RIGHT", 2, 0)
+    UHCA.PointsLabelText:SetText(" pts")
+    UHCA.PointsLabelText:SetTextColor(0.6, 0.9, 0.6)
+  end
+
+  -- Multiplier text (below the points background)
+  if not UHCA.MultiplierText then
+    UHCA.MultiplierText = UHCA:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    UHCA.MultiplierText:SetPoint("TOP", UHCA.PointsBackground, "BOTTOM", 0, -5) -- Positioned below with spacing
+    UHCA.MultiplierText:SetText("") -- Will be set by UpdateMultiplierText
   end
 
   -- Solo mode checkbox
@@ -999,7 +1092,7 @@ local function BuildEmbedIfNeeded()
   local filterDropdown = UHCA.FilterDropdown
   if not filterDropdown then
     filterDropdown = CreateFrame("Frame", nil, UHCA, "UIDropDownMenuTemplate")
-    filterDropdown:SetPoint("TOPRIGHT", UHCA, "TOPRIGHT", 30, -25)
+    filterDropdown:SetPoint("TOPRIGHT", UHCA, "TOPRIGHT", 30, -35) -- Moved down 10px (from -25 to -35)
     UIDropDownMenu_SetWidth(filterDropdown, 110)
     UIDropDownMenu_SetText(filterDropdown, "All")
     UHCA.FilterDropdown = filterDropdown

@@ -144,6 +144,13 @@ end
 -- Row Border Color Helper
 -- =========================================================
 
+-- Helper function to strip color codes from text (for shadow text)
+local function StripColorCodes(text)
+    if not text or type(text) ~= "string" then return text end
+    -- Remove |cAARRGGBB color start codes and |r color end codes
+    return text:gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", "")
+end
+
 local function IsRowOutleveled(row)
     if not row or row.completed then return false end
     if not row.maxLevel then return false end
@@ -387,26 +394,22 @@ local function ApplyOutleveledStyle(row)
         end
     end
     
-    -- Style IconFrame overlay
-    if row.IconFrame then
-        if row.completed then
-            -- Completed: gold tint, not desaturated
-            if row.IconFrame.SetDesaturated then
-                row.IconFrame:SetDesaturated(false)
-            end
-            if row.IconFrame.SetVertexColor then
-                -- Gold tint (similar to WoW achievement gold color)
-                row.IconFrame:SetVertexColor(1.0, 0.82, 0.0) -- Gold color
-            end
-        else
-            -- Available or failed: desaturated
-            if row.IconFrame.SetDesaturated then
-                row.IconFrame:SetDesaturated(true)
-            end
-            if row.IconFrame.SetVertexColor then
-                row.IconFrame:SetVertexColor(1.0, 1.0, 1.0) -- White for desaturated
-            end
-        end
+    -- Show/hide appropriate IconFrame based on state
+    if row.completed then
+        -- Completed: show gold frame
+        if row.IconFrameGold then row.IconFrameGold:Show() end
+        if row.IconFrameDisabled then row.IconFrameDisabled:Hide() end
+        if row.IconFrame then row.IconFrame:Hide() end
+    elseif IsRowOutleveled(row) then
+        -- Failed: show disabled frame
+        if row.IconFrameGold then row.IconFrameGold:Hide() end
+        if row.IconFrameDisabled then row.IconFrameDisabled:Show() end
+        if row.IconFrame then row.IconFrame:Hide() end
+    else
+        -- Available: show silver frame
+        if row.IconFrameGold then row.IconFrameGold:Hide() end
+        if row.IconFrameDisabled then row.IconFrameDisabled:Hide() end
+        if row.IconFrame then row.IconFrame:Show() end
     end
     
     -- Desaturate/tint PointsFrame texture
@@ -538,7 +541,7 @@ function HCA_MarkRowCompleted(row)
     if row.isSecretAchievement then
         if row.revealTitle and row.Title then 
             row.Title:SetText(row.revealTitle)
-            if row.TitleShadow then row.TitleShadow:SetText(row.revealTitle) end
+            if row.TitleShadow then row.TitleShadow:SetText(StripColorCodes(row.revealTitle)) end
         end
         if row.revealIcon and row.Icon then row.Icon:SetTexture(row.revealIcon) end
         if row.revealTooltip then row.tooltip = row.revealTooltip end
@@ -1776,9 +1779,16 @@ end)
 --AchievementPanel.Text:SetTextColor(1, 1, 0)
 
 AchievementPanel.TotalPoints = AchievementPanel:CreateFontString(nil, "OVERLAY", "GameFontHighlightLarge")
-AchievementPanel.TotalPoints:SetPoint("TOPRIGHT", AchievementPanel, "TOPRIGHT", -50, -55)
-AchievementPanel.TotalPoints:SetText("0 pts")
+AchievementPanel.TotalPoints:SetPoint("TOPRIGHT", AchievementPanel, "TOPRIGHT", -65, -55)
+AchievementPanel.TotalPoints:SetText("0")
 AchievementPanel.TotalPoints:SetTextColor(0.6, 0.9, 0.6)
+
+-- " pts" text (smaller, positioned after the number)
+AchievementPanel.PointsLabelText = AchievementPanel:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+-- Position it to the right of the points number
+AchievementPanel.PointsLabelText:SetPoint("LEFT", AchievementPanel.TotalPoints, "RIGHT", 2, 0)
+AchievementPanel.PointsLabelText:SetText(" pts")
+AchievementPanel.PointsLabelText:SetTextColor(0.6, 0.9, 0.6)
 
 -- Preset multiplier label, e.g. "Point Multiplier (Lite +)"
 AchievementPanel.MultiplierText = AchievementPanel:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
@@ -1931,13 +1941,29 @@ function CreateAchievementRow(parent, achId, title, tooltip, icon, level, points
     row.IconOverlay:SetPoint("CENTER", row.Icon, "CENTER", 0, 0)
     row.IconOverlay:Hide() -- Hidden by default
 
-    -- IconFrame overlay (gold for completed, desaturated for available/failed)-- IconFrame overlay (gold for completed, desaturated for available/failed)
-    -- Create as child of row but ensure it's on top layer
-    row.IconFrame = row:CreateTexture(nil, "OVERLAY", nil, 7) -- Higher sublayer to ensure it's on top
-    row.IconFrame:SetSize(33, 33) -- Same size as icon
+    -- IconFrame overlays (gold for completed, disabled for failed, silver for available)
+    -- Gold frame (completed)
+    row.IconFrameGold = row:CreateTexture(nil, "OVERLAY", nil, 7)
+    row.IconFrameGold:SetSize(33, 33)
+    row.IconFrameGold:SetPoint("CENTER", row.Icon, "CENTER", 0, 0)
+    row.IconFrameGold:SetTexture("Interface\\AddOns\\HardcoreAchievements\\Images\\frame-gold.blp")
+    row.IconFrameGold:SetDrawLayer("OVERLAY", 1)
+    row.IconFrameGold:Hide()
+    
+    -- Disabled frame (failed)
+    row.IconFrameDisabled = row:CreateTexture(nil, "OVERLAY", nil, 7)
+    row.IconFrameDisabled:SetSize(33, 33)
+    row.IconFrameDisabled:SetPoint("CENTER", row.Icon, "CENTER", 0, 0)
+    row.IconFrameDisabled:SetTexture("Interface\\AddOns\\HardcoreAchievements\\Images\\frame-disabled.blp")
+    row.IconFrameDisabled:SetDrawLayer("OVERLAY", 1)
+    row.IconFrameDisabled:Hide()
+    
+    -- Silver frame (available) - default
+    row.IconFrame = row:CreateTexture(nil, "OVERLAY", nil, 7)
+    row.IconFrame:SetSize(33, 33)
     row.IconFrame:SetPoint("CENTER", row.Icon, "CENTER", 0, 0)
-    row.IconFrame:SetTexture("Interface\\AddOns\\HardcoreAchievements\\Images\\IconFrame.blp")
-    row.IconFrame:SetDrawLayer("OVERLAY", 1) -- Draw above icon (which is on ARTWORK layer)
+    row.IconFrame:SetTexture("Interface\\AddOns\\HardcoreAchievements\\Images\\frame-silver.blp")
+    row.IconFrame:SetDrawLayer("OVERLAY", 1)
     row.IconFrame:Show()
 
     -- title
@@ -1946,10 +1972,10 @@ function CreateAchievementRow(parent, achId, title, tooltip, icon, level, points
     row.Title:SetText(title or ("Achievement %d"):format(index))
     row.Title:SetTextColor(1, 1, 1) -- Default white (will be updated by UpdatePointsDisplay)
     
-    -- title drop shadow
+    -- title drop shadow (strip color codes so shadow is always black)
     row.TitleShadow = row:CreateFontString(nil, "BACKGROUND", "GameFontNormal")
     row.TitleShadow:SetPoint("LEFT", row.Icon, "RIGHT", 9, 9) -- Slightly offset right and down
-    row.TitleShadow:SetText(title or ("Achievement %d"):format(index))
+    row.TitleShadow:SetText(StripColorCodes(title or ("Achievement %d"):format(index)))
     row.TitleShadow:SetTextColor(0, 0, 0, 0.5) -- Black with 50% opacity for shadow
     row.TitleShadow:SetDrawLayer("BACKGROUND", 0) -- Behind the main title
 
@@ -2003,7 +2029,7 @@ function CreateAchievementRow(parent, achId, title, tooltip, icon, level, points
 
     -- border texture (child of BorderClip frame so it's clipped to Scroll bounds)
     row.Border = AchievementPanel.BorderClip:CreateTexture(nil, "BACKGROUND")
-    row.Border:SetTexture("Interface\\AddOns\\HardcoreAchievements\\Images\\RowBorder.blp")
+    row.Border:SetTexture("Interface\\AddOns\\HardcoreAchievements\\Images\\row-border.blp")
     row.Border:SetSize(256, 32) -- Border texture size
     row.Border:SetAlpha(0.5) -- 50% opacity as requested
     -- Border will be positioned in SortAchievementRows function
@@ -2127,7 +2153,7 @@ function CreateAchievementRow(parent, achId, title, tooltip, icon, level, points
         -- Apply secret placeholder visuals initially
         if row.Title then 
             row.Title:SetText(row.secretTitle)
-            if row.TitleShadow then row.TitleShadow:SetText(row.secretTitle) end
+            if row.TitleShadow then row.TitleShadow:SetText(StripColorCodes(row.secretTitle)) end
         end
         row.tooltip = row.secretTooltip
         if row.Icon then row.Icon:SetTexture(row.secretIcon) end
