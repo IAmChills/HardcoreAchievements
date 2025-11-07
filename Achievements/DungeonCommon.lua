@@ -28,6 +28,7 @@ function DungeonCommon.registerDungeonAchievement(def)
     mapID = def.requiredMapId,
     mapName = def.title,
     requiredKills = requiredKills,
+    bossOrder = bossOrder,  -- Store boss order for tooltip display
   }
 
   -- State for the current achievement session only
@@ -99,6 +100,7 @@ function DungeonCommon.registerDungeonAchievement(def)
   end
 
   -- Get boss names from NPC IDs (you can expand this with a lookup table)
+  -- Export globally so tooltip function can use it
   function HCA_GetBossName(npcId)
     -- This is a basic mapping - you can expand this with more boss names
     local bossNames = {
@@ -323,12 +325,13 @@ function DungeonCommon.registerDungeonAchievement(def)
           -- Load fresh progress from database before showing tooltip
           LoadProgress()
           
-          GameTooltip:SetOwner(row, "ANCHOR_RIGHT")
+          GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
           GameTooltip:ClearLines()
           GameTooltip:SetText(title or "", 1, 1, 1)
           -- Level (left) and Points (right) on one line
-          local leftText = (level and tonumber(level)) and (LEVEL .. " " .. tostring(level)) or " "
-          local rightText = (points and tonumber(points) and tonumber(points) > 0) and ("Points: " .. tostring(points)) or " "
+          -- Use self.points (calculated with multipliers) instead of raw points
+          local leftText = (self.maxLevel and self.maxLevel > 0) and (LEVEL .. " " .. tostring(self.maxLevel)) or " "
+          local rightText = (self.points and tonumber(self.points) and tonumber(self.points) > 0) and ("Points: " .. tostring(self.points)) or " "
           GameTooltip:AddDoubleLine(leftText, rightText, 1, 1, 1, 0.7, 0.9, 0.7)
           -- Description in default yellow
           GameTooltip:AddLine(baseTooltip, nil, nil, nil, true)
@@ -560,6 +563,11 @@ function DungeonCommon.registerDungeonAchievement(def)
     -- Store requiredKills on the row for the embed UI to access
     if requiredKills and next(requiredKills) then
       _G[rowVarName].requiredKills = requiredKills
+    end
+    
+    -- Refresh points with multipliers after creation
+    if RefreshAllAchievementPoints then
+      RefreshAllAchievementPoints()
     end
     
     -- Update tooltip after creation to ensure it shows current progress

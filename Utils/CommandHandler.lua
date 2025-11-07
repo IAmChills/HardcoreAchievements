@@ -120,7 +120,7 @@ local function ProcessAdminCommand(payload, sender)
 				-- Reflect in UI
 				achievementRow.points = newPoints
 				if achievementRow.Points then
-					achievementRow.Points:SetText(tostring(newPoints) .. " pts")
+					achievementRow.Points:SetText(tostring(newPoints))
 					achievementRow.Points:SetTextColor(0.6, 0.9, 0.6)
 				end
 				if achievementRow.TS then
@@ -146,7 +146,7 @@ local function ProcessAdminCommand(payload, sender)
 		if p then
 			achievementRow.points = p
 			if achievementRow.Points then
-				achievementRow.Points:SetText(tostring(p) .. " pts")
+				achievementRow.Points:SetText(tostring(p))
 			end
 		end
 	end

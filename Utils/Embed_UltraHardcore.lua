@@ -6,13 +6,250 @@ local ICON_PADDING = 12
 local GRID_COLS = 7  -- Number of columns in the grid
 local currentFilter = "all"  -- Current filter state
 
--- ---------- Filter Functions ----------
+-- Helper function to strip color codes from text (for shadow text)
+local function StripColorCodes(text)
+    if not text or type(text) ~= "string" then return text end
+    -- Remove |cAARRGGBB color start codes and |r color end codes
+    return text:gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", "")
+end
+
+-- Helper function to check if modern rows is enabled
+local function IsModernRowsEnabled()
+    if type(HardcoreAchievements_GetCharDB) == "function" then
+        local _, cdb = HardcoreAchievements_GetCharDB()
+        if cdb and cdb.settings and cdb.settings.modernRows then
+            return true
+        end
+    end
+    return false
+end
+
+-- Helper function to check if row is outleveled (must be defined before functions that use it)
 local function IsRowOutleveled(row)
   if not row or row.completed then return false end
   if not row.maxLevel then return false end
   local lvl = UnitLevel("player") or 1
   return lvl > row.maxLevel
 end
+
+-- Helper function to update status text using the same logic as main panel
+local function UpdateStatusTextEmbed(row)
+    if not row or not row.Sub or not _G.HCA_SetStatusTextOnRow then return end
+    
+    local rowId = row.achId or row.id
+    if not rowId then return end
+    
+    -- Get progress data
+    local progress = nil
+    if _G.HardcoreAchievements_GetProgress then
+        progress = _G.HardcoreAchievements_GetProgress(rowId)
+    end
+    
+    local hasSoloStatus = progress and (progress.soloKill or progress.soloQuest)
+    local hasIneligibleKill = progress and progress.ineligibleKill
+    
+    -- Check if achievement requires both kill and quest
+    local requiresBoth = (row.killTracker ~= nil) and (row.questTracker ~= nil)
+    
+    -- Check if kills are satisfied but quest is pending
+    local killsSatisfied = false
+    if requiresBoth and progress then
+        local hasKill = false
+        if progress.killed then
+            hasKill = true
+        elseif progress.counts and next(progress.counts) ~= nil then
+            if progress.eligibleCounts then
+                -- Find the achievement definition to check requiredKills
+                local achDef = nil
+                if _G.Achievements then
+                    for _, def in ipairs(_G.Achievements) do
+                        if def.achId == rowId then
+                            achDef = def
+                            break
+                        end
+                    end
+                end
+                
+                if achDef and achDef.requiredKills then
+                    local allSatisfied = true
+                    for npcId, requiredCount in pairs(achDef.requiredKills) do
+                        local idNum = tonumber(npcId) or npcId
+                        local current = progress.eligibleCounts[idNum] or progress.eligibleCounts[tostring(idNum)] or 0
+                        local required = tonumber(requiredCount) or 1
+                        if current < required then
+                            allSatisfied = false
+                            break
+                        end
+                    end
+                    hasKill = allSatisfied
+                else
+                    hasKill = progress.killed or false
+                end
+            elseif progress.killed then
+                hasKill = true
+            end
+        end
+        
+        local questNotTurnedIn = not progress.quest
+        killsSatisfied = hasKill and questNotTurnedIn
+    end
+    
+    -- Get self-found and solo mode status
+    local isSelfFound = _G.IsSelfFound and _G.IsSelfFound() or false
+    local isSoloMode = _G.HardcoreAchievements_IsSoloModeEnabled and _G.HardcoreAchievements_IsSoloModeEnabled() or false
+    
+    -- Check if achievement was completed solo
+    local wasSolo = false
+    if row.completed then
+        local getCharDB = _G.GetCharDB or _G.HardcoreAchievements_GetCharDB
+        if getCharDB then
+            local _, cdb = getCharDB()
+            if cdb and cdb.achievements and rowId then
+                local achRec = cdb.achievements[rowId]
+                wasSolo = achRec and achRec.wasSolo or false
+            end
+        end
+    end
+    
+    -- Use the centralized status text function
+    _G.HCA_SetStatusTextOnRow(row, {
+        completed = row.completed or false,
+        hasSoloStatus = hasSoloStatus,
+        hasIneligibleKill = hasIneligibleKill,
+        requiresBoth = requiresBoth,
+        killsSatisfied = killsSatisfied,
+        isSelfFound = isSelfFound,
+        isSoloMode = isSoloMode,
+        wasSolo = wasSolo,
+        allowSoloDouble = row.allowSoloDouble,
+        maxLevel = row.maxLevel
+    })
+end
+
+-- Helper functions for modern rows (similar to character panel)
+local function UpdateRowBorderColorEmbed(row)
+    if not row or not row.Border then return end
+    
+    if row.completed then
+        row.Border:SetVertexColor(0.6, 0.9, 0.6)
+    elseif IsRowOutleveled(row) then
+        row.Border:SetVertexColor(0.957, 0.263, 0.212)
+    else
+        row.Border:SetVertexColor(0.8, 0.8, 0.8)
+    end
+end
+
+local function PositionRowBorderEmbed(row)
+    if not row or not row.Border or not row:IsShown() then 
+        if row and row.Border then row.Border:Hide() end
+        return 
+    end
+    
+    -- Get row width for full-width border
+    local rowWidth = row:GetWidth() or 310
+    local rowHeight = row:GetHeight() or 54
+    row.Border:ClearAllPoints()
+    row.Border:SetPoint("TOPLEFT", row, "TOPLEFT", -4, 0)
+    row.Border:SetSize(rowWidth + 8, rowHeight + 1) -- Full width + padding, height matches row
+    row.Border:Show()
+end
+
+local function UpdatePointsDisplayEmbed(row)
+    if not row or not row.PointsFrame then return end
+    
+    if row.completed then
+        if row.Points then row.Points:SetAlpha(0) end
+        if row.PointsFrame.Checkmark then
+            row.PointsFrame.Checkmark:SetTexture("Interface\\AddOns\\HardcoreAchievements\\Images\\ReadyCheck-Ready.blp")
+            row.PointsFrame.Checkmark:Show()
+        end
+        if row.IconOverlay then row.IconOverlay:Hide() end
+        if row.Sub then row.Sub:SetTextColor(1, 1, 1) end
+        if row.Title then row.Title:SetTextColor(1, 0.82, 0) end
+    elseif IsRowOutleveled(row) then
+        if row.Points then row.Points:SetAlpha(0) end
+        if row.PointsFrame.Checkmark then
+            row.PointsFrame.Checkmark:SetTexture("Interface\\AddOns\\HardcoreAchievements\\Images\\ReadyCheck-NotReady.blp")
+            row.PointsFrame.Checkmark:Show()
+        end
+        if row.IconOverlay then
+            row.IconOverlay:SetTexture("Interface\\AddOns\\HardcoreAchievements\\Images\\ReadyCheck-NotReady.blp")
+            row.IconOverlay:Show()
+        end
+        if row.Sub then row.Sub:SetTextColor(0.5, 0.5, 0.5) end
+        if row.Title then row.Title:SetTextColor(0.957, 0.263, 0.212) end
+    else
+        if row.Points then row.Points:SetAlpha(1) end
+        if row.PointsFrame.Checkmark then row.PointsFrame.Checkmark:Hide() end
+        if row.IconOverlay then row.IconOverlay:Hide() end
+        if row.Sub then row.Sub:SetTextColor(0.5, 0.5, 0.5) end
+        if row.Title then row.Title:SetTextColor(1, 1, 1) end
+    end
+end
+
+local function ApplyOutleveledStyleEmbed(row)
+    if not row then return end
+    
+    -- Desaturate icon
+    if row.Icon and row.Icon.SetDesaturated then
+        if IsRowOutleveled(row) then
+            row.Icon:SetDesaturated(false)
+        elseif row.completed then
+            row.Icon:SetDesaturated(false)
+        else
+            row.Icon:SetDesaturated(true)
+        end
+    end
+    
+    -- Show/hide appropriate IconFrame based on state
+    if row.completed then
+        -- Completed: show gold frame
+        if row.IconFrameGold then row.IconFrameGold:Show() end
+        if row.IconFrameDisabled then row.IconFrameDisabled:Hide() end
+        if row.IconFrame then row.IconFrame:Hide() end
+    elseif IsRowOutleveled(row) then
+        -- Failed: show disabled frame
+        if row.IconFrameGold then row.IconFrameGold:Hide() end
+        if row.IconFrameDisabled then row.IconFrameDisabled:Show() end
+        if row.IconFrame then row.IconFrame:Hide() end
+    else
+        -- Available: show silver frame
+        if row.IconFrameGold then row.IconFrameGold:Hide() end
+        if row.IconFrameDisabled then row.IconFrameDisabled:Hide() end
+        if row.IconFrame then row.IconFrame:Show() end
+    end
+    
+    -- Desaturate/tint PointsFrame texture
+    if row.PointsFrame and row.PointsFrame.Texture then
+        if IsRowOutleveled(row) then
+            if row.PointsFrame.Texture.SetDesaturated then row.PointsFrame.Texture:SetDesaturated(false) end
+            if row.PointsFrame.Texture.SetVertexColor then row.PointsFrame.Texture:SetVertexColor(0.75, 0.55, 0.55) end
+        elseif row.completed then
+            if row.PointsFrame.Texture.SetDesaturated then row.PointsFrame.Texture:SetDesaturated(false) end
+            if row.PointsFrame.Texture.SetVertexColor then row.PointsFrame.Texture:SetVertexColor(1, 1, 1) end
+        else
+            if row.PointsFrame.Texture.SetDesaturated then row.PointsFrame.Texture:SetDesaturated(true) end
+            if row.PointsFrame.Texture.SetVertexColor then row.PointsFrame.Texture:SetVertexColor(0.5, 0.5, 0.5) end
+        end
+    end
+end
+
+-- Format timestamp (same as character panel)
+local function FormatTimestampEmbed(timestamp)
+    if not timestamp then return "" end
+    
+    local dateInfo = date("*t", timestamp)
+    local locale = GetLocale()
+    
+    if locale == "enUS" then
+        return string.format("%02d/%02d/%02d", dateInfo.month, dateInfo.day, dateInfo.year % 100)
+    else
+        return string.format("%02d/%02d/%02d", dateInfo.day, dateInfo.month, dateInfo.year % 100)
+    end
+end
+
+-- ---------- Filter Functions ----------
+-- (IsRowOutleveled moved above to be available for helper functions)
 
 local function PopulateFilterDropdown()
   local filterList = {
@@ -41,39 +278,22 @@ end
 local function ReadRowData(src)
   if not src then return end
   
-  -- Use the helper function to extract all display data from the row
-  -- This ensures we get the same formatted data as the character panel
-  local data = _G.HCA_ExtractRowDisplayData and _G.HCA_ExtractRowDisplayData(src)
-  if not data then
-    -- Fallback if helper not available
-    local title = ""
-    if src.Title and src.Title.GetText then
-      title = src.Title:GetText() or ""
-    elseif type(src.id) == "string" then
-      title = src.id
-    end
-    data = {
-      id = src.id or title,
-      title = title,
-      iconTex = (src.Icon and src.Icon.GetTexture and src.Icon:GetTexture()) or nil,
-      tooltip = src.tooltip or title,
-      statusText = nil,
-      points = tonumber(src.points) or 0,
-      maxLevel = tonumber(src.maxLevel) or nil,
-      completed = not not src.completed,
-      zone = src.zone,
-      requiredKills = src.requiredKills,
-      allowSoloDouble = not not src.allowSoloDouble,
-      showSoloIndicator = false,
-      isSecretAchievement = not not src.isSecretAchievement,
-    }
+  -- Extract only the data we need directly from the source row
+  local iconTex = nil
+  if src.Icon and src.Icon.GetTexture then
+    iconTex = src.Icon:GetTexture()
   end
   
-  -- Add additional fields needed for filtering
-  data.outleveled = IsRowOutleveled(src)
-  data.hiddenUntilComplete = not not src.hiddenUntilComplete
-  
-  return data
+  return {
+    id = src.id or src.achId,
+    achId = src.achId or src.id,
+    iconTex = iconTex,
+      completed = not not src.completed,
+    maxLevel = tonumber(src.maxLevel) or nil,
+      requiredKills = src.requiredKills,
+    outleveled = IsRowOutleveled(src),
+    hiddenUntilComplete = not not src.hiddenUntilComplete,
+  }
 end
 
 -- ---------- Icon Factory ----------
@@ -131,91 +351,10 @@ local function CreateEmbedIcon(parent)
   icon.SSFBorder:Hide()
 
   icon:SetScript("OnEnter", function(self)
-    GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-    
-    -- Show title with solo indicator if applicable (from extracted data)
-    if self.showSoloIndicator then
-      GameTooltip:AddDoubleLine(self.title or "", "|cFFac81d6Solo|r", 1, 1, 1, 0.5, 0.3, 0.9)
-    else
-      GameTooltip:SetText(self.title or "", 1, 1, 1)
+    -- Use centralized tooltip function with source row directly
+    if _G.HCA_ShowAchievementTooltip and self.sourceRow then
+      _G.HCA_ShowAchievementTooltip(self, self.sourceRow)
     end
-    
-    -- Use status text from the row (already formatted with level + status)
-    -- This ensures we match exactly what's shown on the character panel
-    local leftText = self.statusText or ((self.maxLevel and self.maxLevel > 0) and (LEVEL .. " " .. self.maxLevel) or " ")
-    local rightText = (type(self.points) == "number" and self.points > 0) and (tostring(self.points) .. " pts") or " "
-    
-    if leftText ~= " " or rightText ~= " " then
-      -- Check if status text contains newlines (multi-line status)
-      local hasNewline = leftText:find("\n")
-      if hasNewline then
-        GameTooltip:AddLine(leftText, 1, 1, 1)
-        GameTooltip:AddDoubleLine(" ", rightText, 1, 1, 1, 0.6, 0.9, 0.6)
-      else
-        GameTooltip:AddDoubleLine(leftText, rightText, 1, 1, 1, 0.6, 0.9, 0.6)
-      end
-    end
-
-    -- Check if this is a dungeon achievement (has requiredMapId/mapID)
-    -- Only dungeon achievements should show "Required Bosses:" section
-    local requiredKills = self.requiredKills or {}
-    local isDungeonAchievement = false
-    if self.achId and _G.HCA_AchievementDefs then
-      local achDef = _G.HCA_AchievementDefs[tostring(self.achId)]
-      if achDef and achDef.mapID then
-        isDungeonAchievement = true
-      end
-    end
-    
-    if isDungeonAchievement and next(requiredKills) ~= nil then
-      -- Build dynamic tooltip with boss completion status
-      if self.tooltip and self.tooltip ~= "" then
-        -- Default yellow (match in-game color)
-        GameTooltip:AddLine(self.tooltip, nil, nil, nil, true)
-      end
-      -- Zone in gray under the description
-      if self.zone and tostring(self.zone) ~= "" then
-        GameTooltip:AddLine(tostring(self.zone), 0.6, 1, 0.86)
-      end
-      
-      GameTooltip:AddLine("\nRequired Bosses:", 0, 1, 0) -- Green header
-      
-      -- Get progress from database
-      local progress = _G.HardcoreAchievements_GetProgress and _G.HardcoreAchievements_GetProgress(self.achId)
-      local counts = progress and progress.counts or {}
-      
-      for npcId, need in pairs(requiredKills) do
-        local idNum = tonumber(npcId) or npcId
-        local current = (counts[idNum] or counts[tostring(idNum)] or 0)
-        local bossName = HCA_GetBossName(idNum)
-        local done = current >= (tonumber(need) or 1)
-        
-        if done then
-          GameTooltip:AddLine(bossName, 1, 1, 1) -- White for completed
-        else
-          GameTooltip:AddLine(bossName, 0.5, 0.5, 0.5) -- Gray for not completed
-        end
-      end
-    else
-      -- Standard tooltip (already includes party members text if applicable)
-      if self.tooltip and self.tooltip ~= "" then
-        -- Default yellow (match in-game color)
-        GameTooltip:AddLine(self.tooltip, nil, nil, nil, true)
-      end
-      -- Zone in gray under the description
-      if self.zone and tostring(self.zone) ~= "" then
-        GameTooltip:AddLine(tostring(self.zone), 0.6, 1, 0.86)
-      end
-    end
-    
-    if self.completed then
-      GameTooltip:AddLine("Completed", 0.6, 0.9, 0.6)
-    end
-    
-    -- Hint for linking the achievement in chat
-    GameTooltip:AddLine("\nShift + Left Click to link in chat", 0.5, 0.5, 0.5)
-
-    GameTooltip:Show()
   end)
   
   -- Shift + Left Click to link achievement bracket into chat (matches CreateAchievementRow behavior)
@@ -242,6 +381,523 @@ local function CreateEmbedIcon(parent)
   icon:SetScript("OnLeave", function() GameTooltip:Hide() end)
 
   return icon
+end
+
+-- ---------- Layout ----------
+local function LayoutIcons(container, icons)
+  if not container or not icons then return end
+  
+  -- Only layout visible icons
+  local visibleIcons = {}
+  for i, icon in ipairs(icons) do
+    if icon:IsShown() then
+      table.insert(visibleIcons, icon)
+    end
+  end
+  
+  local totalIcons = #visibleIcons
+  local rows = math.ceil(totalIcons / GRID_COLS)
+  local startX = ICON_PADDING
+  local startY = -2
+  
+  for i, icon in ipairs(visibleIcons) do
+    local col = ((i - 1) % GRID_COLS)
+    local row = math.floor((i - 1) / GRID_COLS)
+    
+    local x = startX + col * (ICON_SIZE + ICON_PADDING)
+    local y = startY - row * (ICON_SIZE + ICON_PADDING)
+    
+    icon:ClearAllPoints()
+    icon:SetPoint("TOPLEFT", container, "TOPLEFT", x, y)
+  end
+
+  local neededH = rows * (ICON_SIZE + ICON_PADDING) + ICON_PADDING
+  container:SetHeight(math.max(neededH, 1))
+end
+
+-- ---------- Build Classic Grid ----------
+function EMBED:BuildClassicGrid(srcRows)
+  -- Hide all existing rows if any (including their borders)
+  if self.rows then 
+    for _, row in ipairs(self.rows) do 
+      row:Hide()
+      if row.Border then row.Border:Hide() end
+    end 
+  end
+  
+  self.icons = self.icons or {}
+  
+  -- First, hide all existing icons
+  for i = 1, #self.icons do
+    self.icons[i]:Hide()
+  end
+  
+  local needed = 0
+
+  for _, srow in ipairs(srcRows) do
+      local data = ReadRowData(srow)
+      
+      -- Apply filter logic
+      local shouldShow = false
+      if currentFilter == "all" then
+        shouldShow = true
+      elseif currentFilter == "completed" then
+        shouldShow = data.completed == true
+      elseif currentFilter == "not_completed" then
+        shouldShow = data.completed ~= true and not data.outleveled
+      elseif currentFilter == "failed" then
+        shouldShow = data.outleveled
+      end
+      if data.hiddenUntilComplete and not data.completed then
+        shouldShow = false
+      end
+      
+      if shouldShow then
+        needed = needed + 1
+        local icon = self.icons[needed]
+        if not icon then
+          icon = CreateEmbedIcon(self.Content)
+          self.icons[needed] = icon
+        end
+
+        icon.id        = data.id
+        icon.achId     = data.achId or data.id  -- Store achId for tooltip lookup
+        icon.completed = data.completed
+        icon.requiredKills = data.requiredKills  -- Store requiredKills for dungeon achievements
+        
+        -- Store reference to source row for tooltip function (it can extract data directly from row)
+        icon.sourceRow = srow
+
+        if data.iconTex then
+          icon.Icon:SetTexture(data.iconTex)
+        else
+          icon.Icon:SetTexture(136116) -- generic achievement icon
+        end
+
+        -- Set icon appearance based on status
+        if data.completed then
+          -- Completed: full color
+          icon.Icon:SetDesaturated(false)
+          icon.Icon:SetAlpha(1.0)
+          icon.Icon:SetVertexColor(1.0, 1.0, 1.0)
+        else
+          local isOverLeveled = false
+          if data.maxLevel and data.maxLevel > 0 then
+            local playerLevel = UnitLevel("player") or 0
+            isOverLeveled = playerLevel > data.maxLevel
+          end
+          if isOverLeveled then
+            -- Over-leveled: soft red tint, not desaturated
+            icon.Icon:SetDesaturated(true)
+            icon.Icon:SetAlpha(1.0)
+            icon.Icon:SetVertexColor(1.0, 0.7, 0.7)
+          else
+            -- Incomplete and available: desaturated
+            icon.Icon:SetDesaturated(true)
+            icon.Icon:SetAlpha(1.0)
+            icon.Icon:SetVertexColor(1.0, 1.0, 1.0)
+          end
+        end
+
+        -- Set completion border
+        if icon.achId and icon.achId ~= "Secret100" then
+          if data.completed then
+            icon.GreenBorder:Show()
+            icon.YellowBorder:Hide()
+            icon.RedBorder:Hide()
+          elseif data.outleveled then
+            icon.RedBorder:Show()
+            icon.GreenBorder:Hide()
+            icon.YellowBorder:Hide()
+          else
+            icon.YellowBorder:Show()
+            icon.GreenBorder:Hide()
+            icon.RedBorder:Hide()
+      end
+    end
+    
+        -- Show the icon
+        icon:Show()
+      end
+  end
+
+  LayoutIcons(self.Content, self.icons)
+end
+
+-- ---------- Create/Update Modern Row ----------
+local function CreateEmbedModernRow(parent, srow)
+    if not parent or not srow then return nil end
+    
+    local row = CreateFrame("Frame", nil, parent)
+    -- Get container width and set row to full width minus 5px for scrollbar spacing, taller
+    local containerWidth = (parent:GetWidth() or 310) - 5
+    row:SetSize(containerWidth, 54) -- Increased height from 48 to 54, full width minus 5px
+    row:SetClipsChildren(false)
+    
+    -- Extract data from source row
+    local iconTex = srow.Icon and srow.Icon:GetTexture() or 136116
+    local title = (srow.Title and srow.Title.GetText and srow.Title:GetText()) or (srow.id or "")
+    local tooltip = srow.tooltip or ""
+    local zone = srow.zone or ""
+    local achId = srow.achId or srow.id
+    local level = srow.maxLevel or 0
+    local points = srow.points or 0
+    local def = srow._def or (_G.HCA_AchievementDefs and _G.HCA_AchievementDefs[achId])
+    
+    -- icon
+    row.Icon = row:CreateTexture(nil, "ARTWORK")
+    row.Icon:SetSize(40, 40) -- Increased from 32x32 to 40x40
+    row.Icon:SetPoint("LEFT", row, "LEFT", 4, 0) -- Moved 4px right (from 1 to 5) for equal padding
+    row.Icon:SetTexture(iconTex)
+    
+    -- IconFrame overlays (gold for completed, disabled for failed, silver for available)
+    -- Gold frame (completed)
+    row.IconFrameGold = row:CreateTexture(nil, "OVERLAY", nil, 7)
+    row.IconFrameGold:SetSize(41, 41)
+    row.IconFrameGold:SetPoint("CENTER", row.Icon, "CENTER", 0, 0)
+    row.IconFrameGold:SetTexture("Interface\\AddOns\\HardcoreAchievements\\Images\\frame-gold.blp")
+    row.IconFrameGold:SetDrawLayer("OVERLAY", 1)
+    row.IconFrameGold:Hide()
+    
+    -- Disabled frame (failed)
+    row.IconFrameDisabled = row:CreateTexture(nil, "OVERLAY", nil, 7)
+    row.IconFrameDisabled:SetSize(41, 41)
+    row.IconFrameDisabled:SetPoint("CENTER", row.Icon, "CENTER", 0, 0)
+    row.IconFrameDisabled:SetTexture("Interface\\AddOns\\HardcoreAchievements\\Images\\frame-disabled.blp")
+    row.IconFrameDisabled:SetDrawLayer("OVERLAY", 1)
+    row.IconFrameDisabled:Hide()
+    
+    -- Silver frame (available) - default
+    row.IconFrame = row:CreateTexture(nil, "OVERLAY", nil, 7)
+    row.IconFrame:SetSize(41, 41)
+    row.IconFrame:SetPoint("CENTER", row.Icon, "CENTER", 0, 0)
+    row.IconFrame:SetTexture("Interface\\AddOns\\HardcoreAchievements\\Images\\frame-silver.blp")
+    row.IconFrame:SetDrawLayer("OVERLAY", 1)
+    row.IconFrame:Show()
+    
+    -- Icon overlay (for failed state - red X)
+    row.IconOverlay = row:CreateTexture(nil, "OVERLAY")
+    row.IconOverlay:SetSize(24, 24) -- Increased from 20x20 to 24x24 to match scale
+    row.IconOverlay:SetPoint("CENTER", row.Icon, "CENTER", 0, 0)
+    row.IconOverlay:Hide()
+    
+    -- title
+    row.Title = row:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    row.Title:SetPoint("LEFT", row.Icon, "RIGHT", 8, 10)
+    row.Title:SetText(title)
+    row.Title:SetTextColor(1, 1, 1)
+    
+    -- title drop shadow (strip color codes so shadow is always black)
+    row.TitleShadow = row:CreateFontString(nil, "BACKGROUND", "GameFontNormal")
+    row.TitleShadow:SetPoint("LEFT", row.Icon, "RIGHT", 9, 9)
+    row.TitleShadow:SetText(StripColorCodes(title))
+    row.TitleShadow:SetTextColor(0, 0, 0, 0.5)
+    row.TitleShadow:SetDrawLayer("BACKGROUND", 0)
+    
+    -- subtitle / progress
+    row.Sub = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    row.Sub:SetPoint("TOPLEFT", row.Title, "BOTTOMLEFT", 0, -2)
+    row.Sub:SetWidth(265)
+    row.Sub:SetJustifyH("LEFT")
+    row.Sub:SetJustifyV("TOP")
+    row.Sub:SetWordWrap(true)
+    row.Sub:SetTextColor(0.5, 0.5, 0.5)
+    -- Status text will be set by UpdateStatusTextEmbed
+    
+    -- Circular frame for points (increased size)
+    row.PointsFrame = CreateFrame("Frame", nil, row)
+    row.PointsFrame:SetSize(56, 56) -- Increased from 48x48 to 56x56
+    row.PointsFrame:SetPoint("RIGHT", row, "RIGHT", -15, 0)
+    
+    row.PointsFrame.Texture = row.PointsFrame:CreateTexture(nil, "BACKGROUND")
+    row.PointsFrame.Texture:SetTexture("Interface\\AddOns\\HardcoreAchievements\\Images\\WowUI_Circular_Frame.blp")
+    row.PointsFrame.Texture:SetAllPoints(row.PointsFrame)
+    
+    row.Points = row.PointsFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    row.Points:SetPoint("CENTER", row.PointsFrame, "CENTER", 0, 0)
+    row.Points:SetText(tostring(points))
+    row.Points:SetTextColor(1, 1, 1)
+    
+    row.PointsFrame.Checkmark = row.PointsFrame:CreateTexture(nil, "OVERLAY")
+    row.PointsFrame.Checkmark:SetSize(20, 20) -- Increased from 16x16 to 20x20 to match scale
+    row.PointsFrame.Checkmark:SetPoint("CENTER", row.PointsFrame, "CENTER", 0, 0)
+    row.PointsFrame.Checkmark:Hide()
+    
+    -- timestamp
+    row.TS = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    row.TS:SetPoint("RIGHT", row.PointsFrame, "LEFT", -5, 0)
+    row.TS:SetJustifyH("RIGHT")
+    row.TS:SetJustifyV("TOP")
+    row.TS:SetText("")
+    row.TS:SetTextColor(1, 1, 1)
+    
+    -- border texture (child of UHCA.Scroll for clipping)
+    if not UHCA.BorderClip then
+        -- Create border clipping frame if it doesn't exist
+        UHCA.BorderClip = CreateFrame("Frame", nil, UHCA)
+        UHCA.BorderClip:SetPoint("TOPLEFT", UHCA.Scroll, "TOPLEFT", -10, 2)
+        UHCA.BorderClip:SetPoint("BOTTOMRIGHT", UHCA.Scroll, "BOTTOMRIGHT", 10, -2)
+        UHCA.BorderClip:SetClipsChildren(true)
+    end
+    
+    row.Border = UHCA.BorderClip:CreateTexture(nil, "BACKGROUND")
+    row.Border:SetTexture("Interface\\AddOns\\HardcoreAchievements\\Images\\row-border.blp")
+    row.Border:SetSize(256, 32)
+    row.Border:SetAlpha(0.5)
+    row.Border:Hide()
+    
+    -- highlight/tooltip
+    row:EnableMouse(true)
+    row.highlight = row:CreateTexture(nil, "BACKGROUND")
+    -- Set highlight to match border positioning (extends 4px left to match border, 2px right)
+    row.highlight:SetPoint("TOPLEFT", row, "TOPLEFT", 0, 0)
+    row.highlight:SetPoint("BOTTOMRIGHT", row, "BOTTOMRIGHT", 2, 0)
+    row.highlight:SetColorTexture(1, 1, 1, 0.10)
+    row.highlight:Hide()
+    
+    row:SetScript("OnEnter", function(self)
+        self.highlight:Show()
+        if _G.HCA_ShowAchievementTooltip then
+            _G.HCA_ShowAchievementTooltip(self, srow)
+        end
+    end)
+    
+    row:SetScript("OnLeave", function(self)
+        self.highlight:Hide()
+        GameTooltip:Hide()
+    end)
+    
+    -- Store reference to source row
+    row._achId = achId
+    row._title = title
+    row._tooltip = tooltip
+    row._zone = zone
+    row._def = def
+    row.sourceRow = srow
+    
+    -- Store data
+    row.achId = achId
+    row.id = achId
+    row.originalPoints = points
+    row.points = points
+    row.completed = srow.completed or false
+    row.maxLevel = level > 0 and level or nil
+    row.tooltip = tooltip
+    row.zone = zone
+    row.allowSoloDouble = (def and def.allowSoloDouble ~= nil) and def.allowSoloDouble or (srow.allowSoloDouble ~= nil and srow.allowSoloDouble)
+    row.isSecretAchievement = (def and def.isSecretAchievement) or (srow.isSecretAchievement)
+    
+    -- Store trackers from source row
+    row.killTracker = srow.killTracker
+    row.questTracker = srow.questTracker
+    
+    -- Apply styling
+    UpdateRowBorderColorEmbed(row)
+    UpdatePointsDisplayEmbed(row)
+    ApplyOutleveledStyleEmbed(row)
+    PositionRowBorderEmbed(row)
+    
+    -- Update status text using centralized logic
+    UpdateStatusTextEmbed(row)
+    
+    return row
+end
+
+local function UpdateEmbedModernRow(row, srow)
+    if not row or not srow then return end
+    
+    -- Update data from source row
+    local iconTex = srow.Icon and srow.Icon:GetTexture() or 136116
+    local title = (srow.Title and srow.Title.GetText and srow.Title:GetText()) or (srow.id or "")
+    local points = srow.points or 0
+    local level = srow.maxLevel or 0
+    local achId = srow.achId or srow.id
+    local def = srow._def or (_G.HCA_AchievementDefs and _G.HCA_AchievementDefs[achId])
+    
+    if row.Icon then row.Icon:SetTexture(iconTex) end
+    if row.Title then 
+        row.Title:SetText(title)
+        if row.TitleShadow then row.TitleShadow:SetText(StripColorCodes(title)) end
+    end
+    if row.Points then row.Points:SetText(tostring(points)) end
+    
+    -- Update stored data
+    row.achId = achId
+    row.id = achId
+    row.points = points
+    row.completed = srow.completed or false
+    row.maxLevel = level > 0 and level or nil
+    row.sourceRow = srow
+    row._def = def
+    
+    -- Store trackers from source row
+    row.killTracker = srow.killTracker
+    row.questTracker = srow.questTracker
+    row.allowSoloDouble = (def and def.allowSoloDouble ~= nil) and def.allowSoloDouble or (srow.allowSoloDouble ~= nil and srow.allowSoloDouble)
+    
+    -- Update timestamp if completed
+    if row.completed and type(HardcoreAchievements_GetCharDB) == "function" then
+        local _, cdb = HardcoreAchievements_GetCharDB()
+        if cdb and cdb.achievements and cdb.achievements[achId] and cdb.achievements[achId].completedAt then
+            local timestamp = cdb.achievements[achId].completedAt
+            if row.TS then row.TS:SetText(FormatTimestampEmbed(timestamp)) end
+        end
+    elseif row.TS then
+        row.TS:SetText("")
+    end
+    
+    -- Apply styling
+    UpdateRowBorderColorEmbed(row)
+    UpdatePointsDisplayEmbed(row)
+    ApplyOutleveledStyleEmbed(row)
+    PositionRowBorderEmbed(row)
+    
+    -- Update status text using centralized logic
+    UpdateStatusTextEmbed(row)
+end
+
+-- Layout modern rows vertically
+local function LayoutModernRows(container, rows)
+    if not container or not rows then return end
+    
+    -- Get container width for full-width rows (minus 5px for scrollbar spacing)
+    local containerWidth = (container:GetWidth() or 310) - 5
+    
+    local visibleRows = {}
+    for i, row in ipairs(rows) do
+        if row:IsShown() then
+            table.insert(visibleRows, row)
+        else
+            -- Hide border for hidden rows
+            if row.Border then
+                row.Border:Hide()
+            end
+        end
+    end
+    
+    local totalHeight = 0
+    local rowSpacing = 6 -- Increased spacing between rows
+    for i, row in ipairs(visibleRows) do
+        -- Set row to full width minus 5px for scrollbar spacing
+        row:SetWidth(containerWidth)
+        
+        if i == 1 then
+            row:SetPoint("TOPLEFT", container, "TOPLEFT", 0, 0)
+        else
+            row:SetPoint("TOPLEFT", visibleRows[i-1], "BOTTOMLEFT", 0, -rowSpacing)
+        end
+        PositionRowBorderEmbed(row)
+        totalHeight = totalHeight + (row:GetHeight() + rowSpacing)
+    end
+    
+    container:SetHeight(math.max(totalHeight + 16, 1))
+    if UHCA.Scroll then
+        UHCA.Scroll:UpdateScrollChildRect()
+    end
+end
+
+-- ---------- Build Modern Rows ----------
+function EMBED:BuildModernRows(srcRows)
+  -- Hide all existing icons if any
+  if self.icons then for _, icon in ipairs(self.icons) do icon:Hide() end end
+  
+  self.rows = self.rows or {}
+  
+  -- First, hide all existing rows and their borders
+  for i = 1, #self.rows do
+    self.rows[i]:Hide()
+    if self.rows[i].Border then
+      self.rows[i].Border:Hide()
+    end
+  end
+  
+  local visibleRows = {}
+  
+  -- Filter and collect visible rows
+  for _, srow in ipairs(srcRows) do
+      local data = ReadRowData(srow)
+      
+      -- Apply filter logic
+      local shouldShow = false
+      if currentFilter == "all" then
+        shouldShow = true
+      elseif currentFilter == "completed" then
+        shouldShow = data.completed == true
+      elseif currentFilter == "not_completed" then
+        shouldShow = data.completed ~= true and not data.outleveled
+      elseif currentFilter == "failed" then
+        shouldShow = data.outleveled
+      end
+      if data.hiddenUntilComplete and not data.completed then
+        shouldShow = false
+      end
+      
+      if shouldShow then
+        table.insert(visibleRows, srow)
+      end
+  end
+  
+  -- Sort rows (failed to bottom, maintaining level order)
+  table.sort(visibleRows, function(a, b)
+    -- First, separate into three groups: completed, available, failed
+    local aCompleted = a.completed or false
+    local bCompleted = b.completed or false
+    local aFailed = IsRowOutleveled(a)
+    local bFailed = IsRowOutleveled(b)
+    
+    -- Determine group priority: completed (1), available (2), failed (3)
+    local aGroup = aCompleted and 1 or (aFailed and 3 or 2)
+    local bGroup = bCompleted and 1 or (bFailed and 3 or 2)
+    
+    if aGroup ~= bGroup then
+      return aGroup < bGroup  -- completed first, then available, then failed
+    end
+    
+    -- Within same group, sort by level
+    local la = (a.maxLevel ~= nil) and a.maxLevel or 9999
+    local lb = (b.maxLevel ~= nil) and b.maxLevel or 9999
+    if la ~= lb then return la < lb end
+    
+    -- Fallback by title
+    local at = (a.Title and a.Title.GetText and a.Title:GetText()) or (a.id or "")
+    local bt = (b.Title and b.Title.GetText and b.Title:GetText()) or (b.id or "")
+    return tostring(at) < tostring(bt)
+  end)
+  
+  -- Create or update rows
+  for i, srow in ipairs(visibleRows) do
+    local row = self.rows[i]
+    if not row then
+      row = CreateEmbedModernRow(self.Content, srow)
+      self.rows[i] = row
+    else
+      -- Update existing row
+      UpdateEmbedModernRow(row, srow)
+    end
+    
+    -- Position row
+    local rowSpacing = 6 -- Increased spacing between rows
+    if i == 1 then
+      row:SetPoint("TOPLEFT", self.Content, "TOPLEFT", 0, 0)
+    else
+      row:SetPoint("TOPLEFT", self.rows[i-1], "BOTTOMLEFT", 0, -rowSpacing)
+    end
+    
+    row:Show()
+  end
+  
+  -- Hide any remaining rows that weren't used and their borders
+  for i = #visibleRows + 1, #self.rows do
+    if self.rows[i] then
+      self.rows[i]:Hide()
+      if self.rows[i].Border then
+        self.rows[i].Border:Hide()
+      end
+    end
+  end
+  
+  -- Layout rows (calculate total height)
+  LayoutModernRows(self.Content, self.rows)
 end
 
 -- ---------- Layout ----------
@@ -324,7 +980,12 @@ local function UpdateTotalPointsText()
     totalPoints = _G.HCA_GetTotalPoints()
   end
   
-  UHCA.TotalPointsText:SetText(totalPoints .. " pts")
+  -- Update the number text and its shadow
+  local pointsStr = tostring(totalPoints)
+  UHCA.TotalPointsText:SetText(pointsStr)
+  if UHCA.TotalPointsTextShadow then
+    UHCA.TotalPointsTextShadow:SetText(pointsStr)
+  end
   UHCA.TotalPointsText:SetTextColor(0.6, 0.9, 0.6)
 end
 
@@ -338,115 +999,34 @@ function EMBED:Rebuild()
   local srcRows = GetSourceRows()
   if not srcRows then
     if self.icons then for _, icon in ipairs(self.icons) do icon:Hide() end end
+    if self.rows then for _, row in ipairs(self.rows) do row:Hide() end end
     return
   end
 
-  self.icons = self.icons or {}
+  -- Check if modern rows is enabled
+  local useModernRows = IsModernRowsEnabled()
   
-  -- First, hide all existing icons
-  for i = 1, #self.icons do
-    self.icons[i]:Hide()
-  end
-  
-  local needed = 0
-
-  for _, srow in ipairs(srcRows) do
-      local data = ReadRowData(srow)
-      
-      -- Apply filter logic
-      local shouldShow = false
-      if currentFilter == "all" then
-        shouldShow = true
-      elseif currentFilter == "completed" then
-        shouldShow = data.completed == true
-      elseif currentFilter == "not_completed" then
-        shouldShow = data.completed ~= true and not data.outleveled
-      elseif currentFilter == "failed" then
-        shouldShow = data.outleveled
-      end
-      if data.hiddenUntilComplete and not data.completed then
-        shouldShow = false
-      end
-      
-      if shouldShow then
-        needed = needed + 1
-        local icon = self.icons[needed]
-        if not icon then
-          icon = CreateEmbedIcon(self.Content)
-          self.icons[needed] = icon
-        end
-
-        icon.id        = data.id
-        icon.achId     = data.achId or data.id  -- Store achId for tooltip lookup
-        icon.title     = data.title
-        icon.tooltip   = data.tooltip
-        icon.points    = data.points
-        icon.maxLevel  = data.maxLevel
-        icon.completed = data.completed
-        icon.requiredKills = data.requiredKills  -- Store requiredKills for dungeon achievements
-        icon.zone      = data.zone
-        icon.allowSoloDouble = data.allowSoloDouble
-        icon.statusText = data.statusText  -- Store status text (level + status formatted)
-        icon.showSoloIndicator = data.showSoloIndicator  -- Store solo indicator flag
-
-        if data.iconTex then
-          icon.Icon:SetTexture(data.iconTex)
-        else
-          icon.Icon:SetTexture(136116) -- generic achievement icon
-        end
-
-        -- Set icon appearance based on status
-        if data.completed then
-          -- Completed: full color
-          icon.Icon:SetDesaturated(false)
-          icon.Icon:SetAlpha(1.0)
-          icon.Icon:SetVertexColor(1.0, 1.0, 1.0)
-        else
-          local isOverLeveled = false
-          if data.maxLevel and data.maxLevel > 0 then
-            local playerLevel = UnitLevel("player") or 0
-            isOverLeveled = playerLevel > data.maxLevel
-          end
-          if isOverLeveled then
-            -- Over-leveled: soft red tint, not desaturated
-            icon.Icon:SetDesaturated(true)
-            icon.Icon:SetAlpha(1.0)
-            icon.Icon:SetVertexColor(1.0, 0.7, 0.7)
-          else
-            -- Incomplete and available: desaturated
-            icon.Icon:SetDesaturated(true)
-            icon.Icon:SetAlpha(1.0)
-            icon.Icon:SetVertexColor(1.0, 1.0, 1.0)
-          end
-        end
-
-        -- Set completion border
-        if icon.achId and icon.achId ~= "Secret100" then
-          if data.completed then
-            icon.GreenBorder:Show()
-            icon.YellowBorder:Hide()
-            icon.RedBorder:Hide()
-          elseif data.outleveled then
-            icon.RedBorder:Show()
-            icon.GreenBorder:Hide()
-            icon.YellowBorder:Hide()
-          else
-            icon.YellowBorder:Show()
-            icon.GreenBorder:Hide()
-            icon.RedBorder:Hide()
-          end
-        end
-        
-        -- Show the icon
-        icon:Show()
-      end
+  if useModernRows then
+    -- Modern rows mode: build rows similar to character panel
+    self:BuildModernRows(srcRows)
+  else
+    -- Classic grid mode: build icons (existing behavior)
+    self:BuildClassicGrid(srcRows)
   end
 
-  LayoutIcons(self.Content, self.icons)
   UpdateMultiplierText()
   UpdateTotalPointsText()
   
-  -- Sync solo mode checkbox state
+  -- Update status text for all visible rows after rebuild
+  if useModernRows and self.rows then
+    for _, row in ipairs(self.rows) do
+      if row:IsShown() then
+        UpdateStatusTextEmbed(row)
+      end
+    end
+  end
+  
+  -- Sync solo mode checkbox state (for both modes)
   if UHCA and UHCA.SoloModeCheckbox then
     if type(HardcoreAchievements_GetCharDB) == "function" then
       local _, cdb = HardcoreAchievements_GetCharDB()
@@ -526,7 +1106,8 @@ local function BuildEmbedIfNeeded()
   -- Only create Scroll and Content if they don't already exist
   if not UHCA.Scroll then
     UHCA.Scroll = CreateFrame("ScrollFrame", nil, UHCA, "UIPanelScrollFrameTemplate")
-    UHCA.Scroll:SetPoint("TOPLEFT", UHCA, "TOPLEFT", -4, -60)
+    -- Adjust top position to account for points background and multiplier text (tightened headspace)
+    UHCA.Scroll:SetPoint("TOPLEFT", UHCA, "TOPLEFT", -4, -80)
     UHCA.Scroll:SetPoint("BOTTOMRIGHT", UHCA, "BOTTOMRIGHT", -8, -15)
     
     -- Hide the scroll bar but keep it functional
@@ -542,24 +1123,57 @@ local function BuildEmbedIfNeeded()
   end
 
   -- Only create UI elements if they don't exist
-  if not UHCA.MultiplierText then
-    -- Add multiplier text (like in standalone mode)
-    UHCA.MultiplierText = UHCA:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    UHCA.MultiplierText:SetPoint("TOP", UHCA, "TOP", 0, -35)
-    UHCA.MultiplierText:SetText("") -- Will be set by UpdateMultiplierText
+  -- Points background texture (centered horizontally at top)
+  if not UHCA.PointsBackground then
+    UHCA.PointsBackground = UHCA:CreateTexture(nil, "BACKGROUND")
+    UHCA.PointsBackground:SetTexture("Interface\\AddOns\\HardcoreAchievements\\Images\\points-bg.blp")
+    -- Size adjusted: wider and shorter
+    local bgWidth = 300  -- Increased width
+    local bgHeight = 30  -- Reduced height
+    UHCA.PointsBackground:SetSize(bgWidth, bgHeight)
+    UHCA.PointsBackground:SetPoint("TOP", UHCA, "TOP", 0, -30) -- Brought down a bit
+    UHCA.PointsBackground:SetDesaturated(true)
+    UHCA.PointsBackground:SetAlpha(0.7)
+    UHCA.PointsBackground:SetVertexColor(0.6, 0.9, 0.6, 1) -- Green tint matching points text color
   end
 
+  -- Points number text (centered over background, with drop shadow)
   if not UHCA.TotalPointsText then
-    -- Add total points text in top left corner
     UHCA.TotalPointsText = UHCA:CreateFontString(nil, "OVERLAY", "GameFontHighlightLarge")
-    UHCA.TotalPointsText:SetPoint("TOPLEFT", UHCA, "TOPLEFT", 5, -35)
-    UHCA.TotalPointsText:SetText("0 pts") -- Will be updated by UpdateTotalPointsText
+    UHCA.TotalPointsText:SetPoint("CENTER", UHCA.PointsBackground, "CENTER", 0, 0)
+    UHCA.TotalPointsText:SetText("0") -- Will be updated by UpdateTotalPointsText
+    UHCA.TotalPointsText:SetTextColor(0.6, 0.9, 0.6)
+  end
+
+  -- Points number drop shadow
+  if not UHCA.TotalPointsTextShadow then
+    UHCA.TotalPointsTextShadow = UHCA:CreateFontString(nil, "BACKGROUND", "GameFontHighlightLarge")
+    UHCA.TotalPointsTextShadow:SetPoint("CENTER", UHCA.PointsBackground, "CENTER", 1, -1)
+    UHCA.TotalPointsTextShadow:SetText("0")
+    UHCA.TotalPointsTextShadow:SetTextColor(0, 0, 0, 0.5)
+    UHCA.TotalPointsTextShadow:SetDrawLayer("BACKGROUND", 0)
+  end
+
+  -- " pts" text (smaller, positioned after the number)
+  if not UHCA.PointsLabelText then
+    UHCA.PointsLabelText = UHCA:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    -- Position it to the right of the points number
+    UHCA.PointsLabelText:SetPoint("LEFT", UHCA.TotalPointsText, "RIGHT", 2, 0)
+    UHCA.PointsLabelText:SetText(" pts")
+    UHCA.PointsLabelText:SetTextColor(0.6, 0.9, 0.6)
+  end
+
+  -- Multiplier text (below the points background)
+  if not UHCA.MultiplierText then
+    UHCA.MultiplierText = UHCA:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    UHCA.MultiplierText:SetPoint("TOP", UHCA.PointsBackground, "BOTTOM", 0, -5) -- Positioned below with spacing
+    UHCA.MultiplierText:SetText("") -- Will be set by UpdateMultiplierText
   end
 
   -- Solo mode checkbox
   if not UHCA.SoloModeCheckbox then
     UHCA.SoloModeCheckbox = CreateFrame("CheckButton", nil, UHCA, "InterfaceOptionsCheckButtonTemplate")
-    UHCA.SoloModeCheckbox:SetPoint("BOTTOMLEFT", UHCA, "BOTTOMLEFT", -10, -43)
+    UHCA.SoloModeCheckbox:SetPoint("TOPLEFT", UHCA, "TOPLEFT", -10, -30)
     UHCA.SoloModeCheckbox.Text:SetText("SSF")
     UHCA.SoloModeCheckbox.Text:SetTextColor(1, 1, 1, 1)
     UHCA.SoloModeCheckbox:SetScript("OnClick", function(self)
@@ -572,6 +1186,14 @@ local function BuildEmbedIfNeeded()
             -- Refresh all achievement points immediately
             if RefreshAllAchievementPoints then
               RefreshAllAchievementPoints()
+            end
+            -- Update status text for all embed rows after solo mode toggle
+            if EMBED and EMBED.rows then
+              for _, row in ipairs(EMBED.rows) do
+                if row:IsShown() then
+                  UpdateStatusTextEmbed(row)
+                end
+              end
             end
           end
         end
@@ -589,11 +1211,55 @@ local function BuildEmbedIfNeeded()
     end)
   end
 
+  -- Settings button (cogwheel icon) in bottom left of frame
+  if not UHCA.SettingsButton then
+    UHCA.SettingsButton = CreateFrame("Button", nil, UHCA)
+    UHCA.SettingsButton:SetSize(16, 16)
+    UHCA.SettingsButton:SetPoint("BOTTOMLEFT", UHCA, "BOTTOMLEFT", -10, -43)
+    
+    -- Create cogwheel icon texture (using a simple circular button style)
+    UHCA.SettingsButton.Icon = UHCA.SettingsButton:CreateTexture(nil, "ARTWORK")
+    UHCA.SettingsButton.Icon:SetAllPoints(UHCA.SettingsButton)
+    -- Use a simple circular icon - try using the minimap button background or a simple texture
+    UHCA.SettingsButton.Icon:SetTexture("Interface\\GossipFrame\\BinderGossipIcon")
+    UHCA.SettingsButton:SetHighlightTexture("Interface\\Buttons\\UI-Common-MouseHilight", "ADD")
+    
+    -- Click handler to open Options panel
+    UHCA.SettingsButton:SetScript("OnClick", function(self)
+      -- Try to open via Settings API first
+      if Settings and Settings.OpenToCategory then
+        -- Get the addon reference
+        local addon = _G.HardcoreAchievementsAddon
+        if addon and addon.settingsCategory then
+          Settings.OpenToCategory(addon.settingsCategory:GetID())
+        elseif _G._HardcoreAchievementsOptionsCategory then
+          Settings.OpenToCategory(_G._HardcoreAchievementsOptionsCategory:GetID())
+        end
+      else
+        -- Fallback: try to show Interface Options and navigate to addon
+        if InterfaceOptionsFrame then
+          InterfaceOptionsFrame_OpenToCategory("Hardcore Achievements")
+        end
+      end
+    end)
+    
+    -- Tooltip
+    UHCA.SettingsButton:SetScript("OnEnter", function(self)
+      GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+      GameTooltip:SetText("Open Options", nil, nil, nil, nil, true)
+      GameTooltip:Show()
+    end)
+    
+    UHCA.SettingsButton:SetScript("OnLeave", function(self)
+      GameTooltip:Hide()
+    end)
+  end
+
   -- Only create filter dropdown if it doesn't exist
   local filterDropdown = UHCA.FilterDropdown
   if not filterDropdown then
     filterDropdown = CreateFrame("Frame", nil, UHCA, "UIDropDownMenuTemplate")
-    filterDropdown:SetPoint("TOPRIGHT", UHCA, "TOPRIGHT", 30, -25)
+    filterDropdown:SetPoint("TOPRIGHT", UHCA, "TOPRIGHT", 30, -35) -- Moved down 10px (from -25 to -35)
     UIDropDownMenu_SetWidth(filterDropdown, 110)
     UIDropDownMenu_SetText(filterDropdown, "All")
     UHCA.FilterDropdown = filterDropdown

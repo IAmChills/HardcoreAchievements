@@ -258,11 +258,26 @@ local function CreateOptionsPanel()
     end)
     AddTooltipToCheckbox(awardOnKillCB, "If enabled, achievements that require an NPC kill will be awarded immediately on kill rather than waiting for quest completion.")
 
+    -- Modern Rows checkbox (for embed display)
+    local modernRowsCB = CreateFrame("CheckButton", nil, panel, "InterfaceOptionsCheckButtonTemplate")
+    modernRowsCB:SetPoint("TOPLEFT", awardOnKillCB, "BOTTOMLEFT", 0, -8)
+    modernRowsCB.Text:SetText("Use Modern Rows (UltraHardcore Display)")
+    modernRowsCB:SetChecked(GetSetting("modernRows", true))
+    modernRowsCB:SetScript("OnClick", function(self)
+        local isChecked = self:GetChecked()
+        SetSetting("modernRows", isChecked)
+        -- Refresh embed display when setting changes
+        if EMBED and EMBED.Rebuild then
+            EMBED:Rebuild()
+        end
+    end)
+    AddTooltipToCheckbox(modernRowsCB, "If enabled, the Ultra Hardcore achievements frame will display achievements as modern rows (similar to the character panel). If disabled, it will use the classic grid layout.")
+
     -- =========================================================
     -- User Interface Category
     -- =========================================================
     local uiCategoryTitle = panel:CreateFontString(nil, "ARTWORK", "GameFontNormalLarge")
-    uiCategoryTitle:SetPoint("TOPLEFT", awardOnKillCB, "BOTTOMLEFT", 0, -30)
+    uiCategoryTitle:SetPoint("TOPLEFT", modernRowsCB, "BOTTOMLEFT", 0, -30)
     uiCategoryTitle:SetText("|cff69adc9User Interface|r")
     
     -- Reset Achievements Tab button
@@ -311,6 +326,7 @@ local function CreateOptionsPanel()
         disableScreenshots = disableScreenshotsCB,
         soloAchievements = soloAchievementsCB,
         awardOnKill = awardOnKillCB,
+        modernRows = modernRowsCB,
     }
     panel.buttons = {
         resetAchievementsTab = resetTabButton,
@@ -330,6 +346,9 @@ local function CreateOptionsPanel()
         end
         if awardOnKillCB then
             awardOnKillCB:SetChecked(GetSetting("awardOnKill", false))
+        end
+        if modernRowsCB then
+            modernRowsCB:SetChecked(GetSetting("modernRows", false))
         end
     end
     
