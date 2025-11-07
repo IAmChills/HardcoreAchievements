@@ -1473,7 +1473,7 @@ local function HandleUltraHardcoreMissing()
   if EMBED._uhcMissingHandled then return end
   EMBED._uhcMissingHandled = true
 
-  print("|cff00ff00[HardcoreAchievements]|r UltraHardcore addon not detected")
+  --print("|cff00ff00[HardcoreAchievements]|r UltraHardcore addon not detected")
 
   if type(HardcoreAchievements_GetCharDB) == "function" then
     local _, cdb = HardcoreAchievements_GetCharDB()
@@ -1512,7 +1512,7 @@ local function HandleUltraHardcoreDetected(addonName)
   if EMBED._uhcDetected then return end
   EMBED._uhcDetected = true
 
-  print(string.format("|cff00ff00[HardcoreAchievements]|r %s addon detected", addonName or "UltraHardcore"))
+  --print(string.format("|cff00ff00[HardcoreAchievements]|r %s addon detected", addonName or "UltraHardcore"))
 
   HookTabManager()
   HookSourceSignals()

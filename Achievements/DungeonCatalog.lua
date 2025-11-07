@@ -88,12 +88,12 @@ local Dungeons = {
       [3887] = 1,  -- Baron Silverlaine
       [4278] = 1,  -- Commander Springvale
       [4279] = 1,  -- Odo the Blindwatcher
-      [3872] = 1,  -- Deathsworn Captain
+      --[3872] = 1,  -- Deathsworn Captain (rare)
       [4274] = 1,  -- Fenrus the Devourer
       [3927] = 1,  -- Wolf Master Nandos
       [4275] = 1,  -- Archmage Arugal
     },
-    bossOrder = {3914, 3886, 3887, 4278, 4279, 3872, 4274, 3927, 4275}
+    bossOrder = {3914, 3886, 3887, 4278, 4279, 4274, 3927, 4275}
   },
 
   -- Blackfathom Deeps (Both, Level 20-30)
@@ -161,10 +161,10 @@ local Dungeons = {
       [7079] = 1,  -- Viscous Fallout
       [6235] = 1,  -- Electrocutioner 6000
       [6229] = 1,  -- Crowd Pummeler 9-60
-      [6228] = 1,  -- Dark Iron Ambassador
+      --[6228] = 1,  -- Dark Iron Ambassador
       [7800] = 1,  -- Mekgineer Thermaplugg
     },
-    bossOrder = {7361, 7079, 6235, 6229, 6228, 7800}
+    bossOrder = {7361, 7079, 6235, 6229, 7800}
   },
 
   -- Razorfen Kraul (Both, Level 25-35)
@@ -231,11 +231,11 @@ local Dungeons = {
       [7355] = 1,  -- Tuten'kash
       [7356] = 1,  -- Plaguemaw the Rotting
       [7357] = 1,  -- Mordresh Fire Eye
-      [7354] = 1,  -- Ragglesnout
+      --[7354] = 1,  -- Ragglesnout (rare)
       [8567] = 1,  -- Glutton
       [7358] = 1,  -- Amnennar the Coldbringer
     },
-    bossOrder = {7355, 7356, 7357, 7354, 8567, 7358}
+    bossOrder = {7355, 7356, 7357, 8567, 7358}
   },
 
   -- Uldaman (Both, Level 35-45)
@@ -252,7 +252,7 @@ local Dungeons = {
     requiredMapId = 70,
     requiredKills = {
       [6910] = 1,  -- Revelosh
-      [6906] = 1,  -- Baelog
+      --[6906] = 1,  -- Baelog (horde only)
       [7228] = 1,  -- Ironaya
       [7023] = 1,  -- Obsidian Sentinel
       [7206] = 1,  -- Ancient Stone Keeper
@@ -260,7 +260,7 @@ local Dungeons = {
       [4854] = 1,  -- Grimlok
       [2748] = 1,  -- Archaedas
     },
-    bossOrder = {6910, 6906, 7228, 7023, 7206, 7291, 4854, 2748}
+    bossOrder = {6910, 7228, 7023, 7206, 7291, 4854, 2748}
   },
 
   -- Zul'Farrak (Both, Level 44-54)
@@ -418,10 +418,10 @@ local Dungeons = {
     requiredMapId = 329,
     requiredKills = {
       [11058] = 1, -- Ezra Grimm
-      [10393] = 1, -- Skul
-      [10558] = 1, -- Hearthsinger Forresten
+      --[10393] = 1, -- Skul (rare)
+      --[10558] = 1, -- Hearthsinger Forresten (rare)
       [10516] = 1, -- The Unforgiven
-      [11143] = 1, -- Postmaster Malown
+      --[11143] = 1, -- Postmaster Malown (summoned)
       [10808] = 1, -- Timmy the Cruel
       [11032] = 1, -- Malor the Zealous
       [10997] = 1, -- Cannon Master Willey
@@ -429,7 +429,7 @@ local Dungeons = {
       [10811] = 1, -- Archivist Galford
       [10813] = 1, -- Balnazzar
       [10435] = 1, -- Magistrate Barthilas
-      [10809] = 1, -- Stonespine
+      --[10809] = 1, -- Stonespine (rare)
       [10437] = 1, -- Nerub'enkan
       [11121] = 1, -- Black Guard Swordsmith
       [10438] = 1, -- Maleki the Pallid
@@ -437,7 +437,7 @@ local Dungeons = {
       [10439] = 1, -- Ramstein the Gorger
       [10440] = 1, -- Baron Rivendare
     },
-    bossOrder = {11058, 10393, 10558, 10516, 11143, 10808, 11032, 10997, 11120, 10811, 10813, 10435, 10809, 10437, 11121, 10438, 10436, 10439, 10440}
+    bossOrder = {11058, 10516, 10808, 11032, 10997, 11120, 10811, 10813, 10435, 10437, 11121, 10438, 10436, 10439, 10440}
   },
 
   -- Dire Maul (Both, Level 58-60)
@@ -467,12 +467,12 @@ local Dungeons = {
       [11501] = 1, -- King Gordok
       [11489] = 1, -- Tendris Warpwood
       [11487] = 1, -- Magister Kalendris
-      [11467] = 1, -- Tsu'zee
+      --[11467] = 1, -- Tsu'zee (rare)
       [11488] = 1, -- Illyanna Ravenoak
       [11496] = 1, -- Immol'thar
       [11486] = 1, -- Prince Tortheldrin
     },
-    bossOrder = {14354, 14327, 13280, 11490, 11492, 14326, 14322, 14321, 14323, 14325, 14324, 11501, 11489, 11487, 11467, 11488, 11496, 11486}
+    bossOrder = {14354, 14327, 13280, 11490, 11492, 14326, 14322, 14321, 14323, 14325, 14324, 11501, 11489, 11487, 11488, 11496, 11486}
   },
 
   -- Scholomance (Both, Level 58-60)
@@ -488,7 +488,7 @@ local Dungeons = {
     zone = "Scholomance",
     requiredMapId = 1007,
     requiredKills = {
-      [10506] = 1, -- Kirtonos the Herald
+      --[10506] = 1, -- Kirtonos the Herald (summoned)
       [10503] = 1, -- Jandice Barov
       [11622] = 1, -- Rattlegore
       [10433] = 1, -- Marduk Blackpool
@@ -502,7 +502,7 @@ local Dungeons = {
       [10502] = 1, -- Lady Illucia Barov
       [1853] = 1,  -- Darkmaster Gandling
     },
-    bossOrder = {10506, 10503, 11622, 10433, 10432, 10508, 10505, 11261, 10901, 10507, 10504, 10502, 1853}
+    bossOrder = {10503, 11622, 10433, 10432, 10508, 10505, 11261, 10901, 10507, 10504, 10502, 1853}
   }
 }
 
