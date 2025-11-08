@@ -10,7 +10,6 @@ function DungeonCommon.registerDungeonAchievement(def)
   local points = def.points
   local requiredQuestId = def.requiredQuestId
   local staticPoints = def.staticPoints or false
-  local zone = def.zone
   local requiredMapId = def.requiredMapId
   local requiredKills = def.requiredKills or {}
   local bossOrder = def.bossOrder  -- Optional ordering for tooltip display
@@ -24,7 +23,6 @@ function DungeonCommon.registerDungeonAchievement(def)
     tooltip = tooltip,
     icon = icon,
     points = points,
-    zone = def.zone,
     mapID = def.requiredMapId,
     mapName = def.title,
     requiredKills = requiredKills,
@@ -335,10 +333,6 @@ function DungeonCommon.registerDungeonAchievement(def)
           GameTooltip:AddDoubleLine(leftText, rightText, 1, 1, 1, 0.7, 0.9, 0.7)
           -- Description in default yellow
           GameTooltip:AddLine(baseTooltip, nil, nil, nil, true)
-          -- Zone in gray under the description
-          if zone and tostring(zone) ~= "" then
-            GameTooltip:AddLine(tostring(zone), 0.5, 0.5, 0.5)
-          end
           
           if next(requiredKills) ~= nil then
             GameTooltip:AddLine("\nRequired Bosses:", 0, 1, 0) -- Green header
@@ -556,7 +550,7 @@ function DungeonCommon.registerDungeonAchievement(def)
       KillTracker,  -- Use the local function directly
       requiredQuestId,
       staticPoints,
-      zone,
+      nil,
       dungeonDef  -- Pass def with allowSoloDouble forced to false for dungeons
     )
     

@@ -53,7 +53,7 @@ local function GetStatusText(params)
         end
     end
     
-    if not completed and hasSoloStatus and isSelfFound then
+    if not completed and requiresBoth and hasSoloStatus and isSelfFound then
         return "|cFFac81d6Pending Turn-in (solo)|r"
     end
     

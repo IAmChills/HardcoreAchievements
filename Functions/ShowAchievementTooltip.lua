@@ -99,7 +99,16 @@ function HCA_ShowAchievementTooltip(frame, data)
     end
     
     if zone then
-        GameTooltip:AddLine(zone, 0.6, 1, 0.86)
+        local isDungeonAchievement = false
+        if achId and _G.HCA_AchievementDefs then
+            local achDef = _G.HCA_AchievementDefs[tostring(achId)]
+            if achDef and achDef.mapID then
+                isDungeonAchievement = true
+            end
+        end
+        if not isDungeonAchievement then
+            GameTooltip:AddLine(zone, 0.6, 1, 0.86)
+        end
     end
     
     -- Check if this is a dungeon achievement (has requiredKills) and show boss requirements
