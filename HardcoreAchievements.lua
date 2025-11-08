@@ -1100,10 +1100,12 @@ local minimapDataObject = LDB:NewDataObject("HardcoreAchievements", {
                 local isShown = CharacterFrame and CharacterFrame:IsShown() and 
                                (AchievementPanel and AchievementPanel:IsShown() or (Tab and Tab.squareFrame and Tab.squareFrame:IsShown()))
                 if isShown then
-                    ToggleCharacter("PaperDollFrame")
-                    ToggleCharacter("PaperDollFrame")
+                    --ToggleCharacter("PaperDollFrame")
+                    --ToggleCharacter("PaperDollFrame")
+                    CharacterFrame:Hide()
                 elseif not CharacterFrame:IsShown() then
-                        ToggleCharacter("PaperDollFrame")
+                        --ToggleCharacter("PaperDollFrame")
+                        CharacterFrame:Show()
                     if HCA_ShowAchievementTab then
                         HCA_ShowAchievementTab()
                     end
@@ -1240,6 +1242,13 @@ initFrame:SetScript("OnEvent", function(self, event, ...)
         
         -- Load saved tab position
         LoadTabPosition()
+        
+        if UISpecialFrames then
+            local frameName = AchievementPanel and AchievementPanel:GetName()
+            if frameName and not tContains(UISpecialFrames, frameName) then
+                table.insert(UISpecialFrames, frameName)
+            end
+        end
         
         -- Refresh options panel to sync checkbox states
         if _HardcoreAchievementsOptionsPanel and _HardcoreAchievementsOptionsPanel.refresh then
@@ -1759,11 +1768,128 @@ do
 end
 -- === end draggable curl behavior ===
  
-AchievementPanel = CreateFrame("Frame", "Achievements", CharacterFrame)
+AchievementPanel = CreateFrame("Frame", "HardcoreAchievementsFrame", CharacterFrame)
 AchievementPanel:Hide()
 AchievementPanel:EnableMouse(true)
 AchievementPanel:SetAllPoints(CharacterFrame)
 AchievementPanel:SetClipsChildren(true) -- Clip borders to stay within panel
+
+local pendingCharacterFrameClose = false
+local combatCloseWatcher = CreateFrame("Frame")
+local characterFrameHiddenForCombat = false
+local previousCharFrameAlpha = nil
+local previousCharFrameMouse = nil
+
+local function HideCharacterFrameContentsForCombat()
+    if CharacterFrame then
+        if not characterFrameHiddenForCombat then
+            previousCharFrameAlpha = CharacterFrame:GetAlpha()
+            previousCharFrameMouse = CharacterFrame:IsMouseEnabled()
+            CharacterFrame:SetAlpha(0)
+            CharacterFrame:EnableMouse(false)
+            characterFrameHiddenForCombat = true
+
+            if CharacterFrame.numTabs then
+                for i = 1, CharacterFrame.numTabs do
+                    local tab = _G["CharacterFrameTab"..i]
+                    if tab and tab:IsShown() then
+                        tab._hc_prevAlpha = tab:GetAlpha()
+                        tab._hc_prevMouse = tab:IsMouseEnabled()
+                        tab:SetAlpha(0)
+                        tab:EnableMouse(false)
+                    end
+                end
+            end
+        end
+    end
+
+    if _G["PaperDollFrame"]    then _G["PaperDollFrame"]:Hide()    end
+    if _G["PetPaperDollFrame"] then _G["PetPaperDollFrame"]:Hide() end
+    if _G["HonorFrame"]        then _G["HonorFrame"]:Hide()        end
+    if _G["SkillFrame"]        then _G["SkillFrame"]:Hide()        end
+    if _G["ReputationFrame"]   then _G["ReputationFrame"]:Hide()   end
+    if _G["TokenFrame"]        then _G["TokenFrame"]:Hide()        end
+    if type(_G.CSC_HideStatsPanel) == "function" then
+        _G.CSC_HideStatsPanel()
+    end
+end
+
+local function RestoreCharacterFrameAfterCombat()
+    if CharacterFrame and characterFrameHiddenForCombat then
+        CharacterFrame:SetAlpha(previousCharFrameAlpha or 1)
+        if previousCharFrameMouse ~= nil then
+            CharacterFrame:EnableMouse(previousCharFrameMouse)
+        else
+            CharacterFrame:EnableMouse(true)
+        end
+
+        if CharacterFrame.numTabs then
+            for i = 1, CharacterFrame.numTabs do
+                local tab = _G["CharacterFrameTab"..i]
+                if tab then
+                    tab:SetAlpha(tab._hc_prevAlpha or 1)
+                    if tab._hc_prevMouse ~= nil then
+                        tab:EnableMouse(tab._hc_prevMouse)
+                    else
+                        tab:EnableMouse(true)
+                    end
+                    tab._hc_prevAlpha = nil
+                    tab._hc_prevMouse = nil
+                end
+            end
+        end
+
+        previousCharFrameAlpha = nil
+        previousCharFrameMouse = nil
+        characterFrameHiddenForCombat = false
+    end
+end
+
+if CharacterFrame and not CharacterFrame._hc_restoreHooked then
+    CharacterFrame:HookScript("OnShow", RestoreCharacterFrameAfterCombat)
+    CharacterFrame._hc_restoreHooked = true
+end
+
+combatCloseWatcher:SetScript("OnEvent", function(self, event)
+    if event == "PLAYER_REGEN_ENABLED" and pendingCharacterFrameClose then
+        pendingCharacterFrameClose = false
+        self:UnregisterEvent("PLAYER_REGEN_ENABLED")
+        RestoreCharacterFrameAfterCombat()
+        if CharacterFrame and CharacterFrame:IsShown() then
+            HideUIPanel(CharacterFrame)
+        end
+    end
+end)
+
+AchievementPanel:HookScript("OnShow", function()
+    if pendingCharacterFrameClose then
+        pendingCharacterFrameClose = false
+        combatCloseWatcher:UnregisterEvent("PLAYER_REGEN_ENABLED")
+    end
+    RestoreCharacterFrameAfterCombat()
+end)
+
+AchievementPanel:HookScript("OnHide", function(self)
+    if self._suppressOnHide then
+        self._suppressOnHide = nil
+        return
+    end
+    
+    if InCombatLockdown and InCombatLockdown() then
+        HideCharacterFrameContentsForCombat()
+        pendingCharacterFrameClose = true
+        combatCloseWatcher:RegisterEvent("PLAYER_REGEN_ENABLED")
+    elseif CharacterFrame and CharacterFrame:IsShown() then
+        HideUIPanel(CharacterFrame)
+    end
+    
+    if Tab then
+        PanelTemplates_DeselectTab(Tab)
+        if Tab.squareFrame and Tab.squareFrame:IsShown() and Tab.squareFrame.highlight then
+            Tab.squareFrame.highlight:Hide()
+        end
+    end
+end)
 
 -- Filter dropdown
 local filterDropdown = CreateFrame("Frame", nil, AchievementPanel, "UIDropDownMenuTemplate")
@@ -2533,7 +2659,8 @@ hooksecurefunc("PanelTemplates_DeselectTab", function(tab)
 end)
 
 hooksecurefunc("CharacterFrame_ShowSubFrame", function(frameName)
-    if AchievementPanel and AchievementPanel:IsShown() and frameName ~= "Achievements" then
+    if AchievementPanel and AchievementPanel:IsShown() and frameName ~= "HardcoreAchievementsFrame" then
+        AchievementPanel._suppressOnHide = true
         AchievementPanel:Hide()
         -- AchievementPanel.PortraitCover:Hide()
         PanelTemplates_DeselectTab(Tab)

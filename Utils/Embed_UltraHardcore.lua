@@ -615,7 +615,7 @@ local function CreateEmbedModernRow(parent, srow)
     -- IconFrame overlays (gold for completed, disabled for failed, silver for available)
     -- Gold frame (completed)
     row.IconFrameGold = row:CreateTexture(nil, "OVERLAY", nil, 7)
-    row.IconFrameGold:SetSize(41, 41)
+    row.IconFrameGold:SetSize(42, 42)
     row.IconFrameGold:SetPoint("CENTER", row.Icon, "CENTER", 0, 0)
     row.IconFrameGold:SetTexture("Interface\\AddOns\\HardcoreAchievements\\Images\\frame_gold.blp")
     row.IconFrameGold:SetDrawLayer("OVERLAY", 1)
@@ -623,7 +623,7 @@ local function CreateEmbedModernRow(parent, srow)
     
     -- Silver frame (available/disabled) - default
     row.IconFrame = row:CreateTexture(nil, "OVERLAY", nil, 7)
-    row.IconFrame:SetSize(41, 41)
+    row.IconFrame:SetSize(42, 42)
     row.IconFrame:SetPoint("CENTER", row.Icon, "CENTER", 0, 0)
     row.IconFrame:SetTexture("Interface\\AddOns\\HardcoreAchievements\\Images\\frame_silver.blp")
     row.IconFrame:SetDrawLayer("OVERLAY", 1)
@@ -1263,7 +1263,7 @@ local function BuildEmbedIfNeeded()
   -- Points number text (centered over background, with drop shadow)
   if not UHCA.TotalPointsText then
     UHCA.TotalPointsText = UHCA:CreateFontString(nil, "OVERLAY", "GameFontHighlightLarge")
-    UHCA.TotalPointsText:SetPoint("CENTER", UHCA.PointsBackground, "CENTER", 0, 0)
+    UHCA.TotalPointsText:SetPoint("CENTER", UHCA.PointsBackground, "CENTER", 0, -1)
     UHCA.TotalPointsText:SetText("0") -- Will be updated by UpdateTotalPointsText
     UHCA.TotalPointsText:SetTextColor(0.6, 0.9, 0.6)
   end
