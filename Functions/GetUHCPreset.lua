@@ -14,7 +14,11 @@ local settingsCheckboxOptions = {
     { id = 16, name = "Show Incoming Damage Effect", dbSettingsValueName = "showIncomingDamageEffect" },
     { id = 17, name = "Breath Indicator", dbSettingsValueName = "hideBreathIndicator" },
     { id = 18, name = "Show Incoming Healing Effect", dbSettingsValueName = "showHealingIndicator" },
-    { id = 19, name = "First Person Camera", dbSettingsValueName = "setFirstPersonCamera"}
+    { id = 19, name = "First Person Camera", dbSettingsValueName = "setFirstPersonCamera"},
+    --{ id = 20, name = "Reject buffs from others", dbSettingsValueName = "rejectBuffsFromOthers"},
+    { id = 21, name = "Route Planner", dbSettingsValueName = "routePlanner"},
+    { id = 22, name = "Hide Quest UI", dbSettingsValueName = "completelyRemovePlayerFrame"},
+    { id = 23, name = "Hide Action Bars when not resting", dbSettingsValueName = "completelyRemoveTargetFrame"},
 }
 
 local presets = {
@@ -32,7 +36,7 @@ local presets = {
         hideGroupHealth = true,
         hideMinimap = true,
     },
-    { -- Ultra
+    { -- Extreme
         hidePlayerFrame = true,
         showTunnelVision = true,
         hideTargetFrame = true,
@@ -44,6 +48,8 @@ local presets = {
         petsDiePermanently = true,
         hideActionBars = true,
         tunnelVisionMaxStrata = true,
+        --rejectBuffsFromOthers = true,
+        routePlanner = true,
     },
     { -- Experimental
         hidePlayerFrame = true,
@@ -62,6 +68,10 @@ local presets = {
         showIncomingDamageEffect = true,
         showHealingIndicator = true,
         setFirstPersonCamera = true,
+        --rejectBuffsFromOthers = true,
+        routePlanner = true,
+        completelyRemovePlayerFrame = true,
+        completelyRemoveTargetFrame = true,
     }
 }
 
@@ -88,8 +98,8 @@ function GetPresetMultiplier(preset)
       liteplus        = 1.30,
       recommended     = 1.50,
       recommendedplus = 1.60,
-      ultra           = 1.70,
-      ultraplus       = 1.80,
+      extreme         = 1.70,
+      extremeplus     = 1.80,
       experimental    = 2.00,
       custom          = 1.00,
     }
@@ -203,8 +213,8 @@ function GetPlayerPresetFromSettings()
     -- Tier sets (cumulative)
     local L = trueKeys(presets[1])            -- Lite
     local R = trueKeys(presets[2])            -- Recommended (includes Lite)
-    local U = trueKeys(presets[3])            -- Ultra (includes Recommended)
-    local E = trueKeys(presets[4])            -- Experimental (includes Ultra)
+    local U = trueKeys(presets[3])            -- Extreme (includes Recommended)
+    local E = trueKeys(presets[4])            -- Experimental (includes Extreme)
 
     -- Exclusive deltas (new options introduced at each tier)
     local R_only = {}; for k in pairs(R) do if not L[k] then R_only[k] = true end end
@@ -222,7 +232,7 @@ function GetPlayerPresetFromSettings()
     if hasAll(player, E) then
         return "Experimental"
     elseif hasAll(player, U) then
-        return hasAny(player, E_only) and "Ultra +" or "Ultra"
+        return hasAny(player, E_only) and "Extreme +" or "Extreme"
     elseif hasAll(player, R) then
         return hasAny(player, U_only) and "Recommended +" or "Recommended"
     elseif hasAll(player, L) then

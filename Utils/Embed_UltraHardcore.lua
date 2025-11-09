@@ -17,12 +17,48 @@ end
 local function IsModernRowsEnabled()
     if type(HardcoreAchievements_GetCharDB) == "function" then
         local _, cdb = HardcoreAchievements_GetCharDB()
-        if cdb and cdb.settings and cdb.settings.modernRows then
-            return true
+        if cdb then
+            cdb.settings = cdb.settings or {}
+            if cdb.settings.modernRows == nil then
+                cdb.settings.modernRows = true
+                return true
+            end
+            return cdb.settings.modernRows == true
         end
     end
     return false
 end
+
+local function UpdateLayoutCheckboxes(useModernRows)
+    if UHCA and UHCA.LayoutListCheckbox then
+        UHCA.LayoutListCheckbox:SetChecked(useModernRows)
+    end
+    if UHCA and UHCA.LayoutGridCheckbox then
+        UHCA.LayoutGridCheckbox:SetChecked(not useModernRows)
+    end
+end
+
+local function SetModernRowsEnabled(enabled)
+    if type(HardcoreAchievements_GetCharDB) == "function" then
+        local _, cdb = HardcoreAchievements_GetCharDB()
+        if cdb then
+            cdb.settings = cdb.settings or {}
+            cdb.settings.modernRows = enabled and true or false
+        end
+    end
+
+    UpdateLayoutCheckboxes(enabled)
+
+    if _G._HardcoreAchievementsOptionsPanel and _G._HardcoreAchievementsOptionsPanel.modernRows then
+        _G._HardcoreAchievementsOptionsPanel.modernRows:SetChecked(enabled)
+    end
+
+    if EMBED and EMBED.Rebuild then
+        EMBED:Rebuild()
+    end
+end
+
+_G.HCA_SetModernRowsEnabled = SetModernRowsEnabled
 
 -- Helper function to check if row is outleveled (must be defined before functions that use it)
 local function IsRowOutleveled(row)
@@ -47,13 +83,14 @@ local function UpdateStatusTextEmbed(row)
     
     local hasSoloStatus = progress and (progress.soloKill or progress.soloQuest)
     local hasIneligibleKill = progress and progress.ineligibleKill
+    local isOutleveled = IsRowOutleveled(row)
     
     -- Check if achievement requires both kill and quest
     local requiresBoth = (row.killTracker ~= nil) and (row.questTracker ~= nil)
     
     -- Check if kills are satisfied but quest is pending
     local killsSatisfied = false
-    if requiresBoth and progress then
+    if requiresBoth and progress and not isOutleveled then
         local hasKill = false
         if progress.killed then
             hasKill = true
@@ -122,8 +159,14 @@ local function UpdateStatusTextEmbed(row)
         isSoloMode = isSoloMode,
         wasSolo = wasSolo,
         allowSoloDouble = row.allowSoloDouble,
-        maxLevel = row.maxLevel
+        maxLevel = row.maxLevel,
+        isOutleveled = isOutleveled
     })
+
+    if isOutleveled and progress then
+        progress.soloKill = nil
+        progress.soloQuest = nil
+    end
 end
 
 -- Helper functions for modern rows (similar to character panel)
@@ -132,26 +175,46 @@ local function UpdateRowBorderColorEmbed(row)
     
     if row.completed then
         row.Border:SetVertexColor(0.6, 0.9, 0.6)
+        if row.Background then
+            row.Background:SetVertexColor(0.1, 1.0, 0.1)
+            row.Background:SetAlpha(1)
+        end
     elseif IsRowOutleveled(row) then
         row.Border:SetVertexColor(0.957, 0.263, 0.212)
+        if row.Background then
+            row.Background:SetVertexColor(1.0, 0.1, 0.1)
+            row.Background:SetAlpha(1)
+        end
     else
         row.Border:SetVertexColor(0.8, 0.8, 0.8)
+        if row.Background then
+            row.Background:SetVertexColor(1, 1, 1)
+            row.Background:SetAlpha(1)
+        end
     end
 end
 
 local function PositionRowBorderEmbed(row)
     if not row or not row.Border or not row:IsShown() then 
         if row and row.Border then row.Border:Hide() end
+        if row and row.Background then row.Background:Hide() end
         return 
     end
     
     -- Get row width for full-width border
     local rowWidth = row:GetWidth() or 310
-    local rowHeight = row:GetHeight() or 54
+    local rowHeight = row:GetHeight() or 64
     row.Border:ClearAllPoints()
     row.Border:SetPoint("TOPLEFT", row, "TOPLEFT", -4, 0)
-    row.Border:SetSize(rowWidth + 8, rowHeight + 1) -- Full width + padding, height matches row
+    row.Border:SetSize(rowWidth + 8, rowHeight + 4) -- Full width + padding, slight extra height
     row.Border:Show()
+    
+    if row.Background then
+        row.Background:ClearAllPoints()
+        row.Background:SetPoint("TOPLEFT", row, "TOPLEFT", -4, 0)
+        row.Background:SetSize(rowWidth + 8, rowHeight + 4)
+        row.Background:Show()
+    end
 end
 
 local function UpdatePointsDisplayEmbed(row)
@@ -163,6 +226,9 @@ local function UpdatePointsDisplayEmbed(row)
             row.PointsFrame.Checkmark:SetTexture("Interface\\AddOns\\HardcoreAchievements\\Images\\ReadyCheck-Ready.blp")
             row.PointsFrame.Checkmark:Show()
         end
+        if row.PointsFrame.Texture then
+            row.PointsFrame.Texture:SetTexture("Interface\\AddOns\\HardcoreAchievements\\Images\\ring_gold.blp")
+        end
         if row.IconOverlay then row.IconOverlay:Hide() end
         if row.Sub then row.Sub:SetTextColor(1, 1, 1) end
         if row.Title then row.Title:SetTextColor(1, 0.82, 0) end
@@ -171,6 +237,9 @@ local function UpdatePointsDisplayEmbed(row)
         if row.PointsFrame.Checkmark then
             row.PointsFrame.Checkmark:SetTexture("Interface\\AddOns\\HardcoreAchievements\\Images\\ReadyCheck-NotReady.blp")
             row.PointsFrame.Checkmark:Show()
+        end
+        if row.PointsFrame.Texture then
+            row.PointsFrame.Texture:SetTexture("Interface\\AddOns\\HardcoreAchievements\\Images\\ring_failed.blp")
         end
         if row.IconOverlay then
             row.IconOverlay:SetTexture("Interface\\AddOns\\HardcoreAchievements\\Images\\ReadyCheck-NotReady.blp")
@@ -181,6 +250,9 @@ local function UpdatePointsDisplayEmbed(row)
     else
         if row.Points then row.Points:SetAlpha(1) end
         if row.PointsFrame.Checkmark then row.PointsFrame.Checkmark:Hide() end
+        if row.PointsFrame.Texture then
+            row.PointsFrame.Texture:SetTexture("Interface\\AddOns\\HardcoreAchievements\\Images\\ring_disabled.blp")
+        end
         if row.IconOverlay then row.IconOverlay:Hide() end
         if row.Sub then row.Sub:SetTextColor(0.5, 0.5, 0.5) end
         if row.Title then row.Title:SetTextColor(1, 1, 1) end
@@ -201,37 +273,25 @@ local function ApplyOutleveledStyleEmbed(row)
         end
     end
     
+    if IsRowOutleveled(row) and row.Sub then
+        if row.maxLevel then
+            row.Sub:SetText((LEVEL or "Level") .. " " .. row.maxLevel)
+        else
+            row.Sub:SetText(AUCTION_TIME_LEFT0 or "")
+        end
+    end
+    
     -- Show/hide appropriate IconFrame based on state
     if row.completed then
         -- Completed: show gold frame
         if row.IconFrameGold then row.IconFrameGold:Show() end
-        if row.IconFrameDisabled then row.IconFrameDisabled:Hide() end
-        if row.IconFrame then row.IconFrame:Hide() end
-    elseif IsRowOutleveled(row) then
-        -- Failed: show disabled frame
-        if row.IconFrameGold then row.IconFrameGold:Hide() end
-        if row.IconFrameDisabled then row.IconFrameDisabled:Show() end
         if row.IconFrame then row.IconFrame:Hide() end
     else
-        -- Available: show silver frame
+        -- Available/failed: show silver frame
         if row.IconFrameGold then row.IconFrameGold:Hide() end
-        if row.IconFrameDisabled then row.IconFrameDisabled:Hide() end
         if row.IconFrame then row.IconFrame:Show() end
     end
     
-    -- Desaturate/tint PointsFrame texture
-    if row.PointsFrame and row.PointsFrame.Texture then
-        if IsRowOutleveled(row) then
-            if row.PointsFrame.Texture.SetDesaturated then row.PointsFrame.Texture:SetDesaturated(false) end
-            if row.PointsFrame.Texture.SetVertexColor then row.PointsFrame.Texture:SetVertexColor(0.75, 0.55, 0.55) end
-        elseif row.completed then
-            if row.PointsFrame.Texture.SetDesaturated then row.PointsFrame.Texture:SetDesaturated(false) end
-            if row.PointsFrame.Texture.SetVertexColor then row.PointsFrame.Texture:SetVertexColor(1, 1, 1) end
-        else
-            if row.PointsFrame.Texture.SetDesaturated then row.PointsFrame.Texture:SetDesaturated(true) end
-            if row.PointsFrame.Texture.SetVertexColor then row.PointsFrame.Texture:SetVertexColor(0.5, 0.5, 0.5) end
-        end
-    end
 end
 
 -- Format timestamp (same as character panel)
@@ -422,6 +482,7 @@ function EMBED:BuildClassicGrid(srcRows)
     for _, row in ipairs(self.rows) do 
       row:Hide()
       if row.Border then row.Border:Hide() end
+      if row.Background then row.Background:Hide() end
     end 
   end
   
@@ -531,7 +592,7 @@ local function CreateEmbedModernRow(parent, srow)
     local row = CreateFrame("Frame", nil, parent)
     -- Get container width and set row to full width minus 5px for scrollbar spacing, taller
     local containerWidth = (parent:GetWidth() or 310) - 5
-    row:SetSize(containerWidth, 54) -- Increased height from 48 to 54, full width minus 5px
+    row:SetSize(containerWidth, 64) -- Increased height for additional padding
     row:SetClipsChildren(false)
     
     -- Extract data from source row
@@ -546,32 +607,25 @@ local function CreateEmbedModernRow(parent, srow)
     
     -- icon
     row.Icon = row:CreateTexture(nil, "ARTWORK")
-    row.Icon:SetSize(40, 40) -- Increased from 32x32 to 40x40
-    row.Icon:SetPoint("LEFT", row, "LEFT", 4, 0) -- Moved 4px right (from 1 to 5) for equal padding
+    row.Icon:SetSize(39, 39)
+    row.Icon:SetPoint("LEFT", row, "LEFT", 10, -2)
     row.Icon:SetTexture(iconTex)
+    row.Icon:SetTexCoord(0.025, 0.975, 0.025, 0.975)
     
     -- IconFrame overlays (gold for completed, disabled for failed, silver for available)
     -- Gold frame (completed)
     row.IconFrameGold = row:CreateTexture(nil, "OVERLAY", nil, 7)
-    row.IconFrameGold:SetSize(41, 41)
+    row.IconFrameGold:SetSize(42, 42)
     row.IconFrameGold:SetPoint("CENTER", row.Icon, "CENTER", 0, 0)
-    row.IconFrameGold:SetTexture("Interface\\AddOns\\HardcoreAchievements\\Images\\frame-gold.blp")
+    row.IconFrameGold:SetTexture("Interface\\AddOns\\HardcoreAchievements\\Images\\frame_gold.blp")
     row.IconFrameGold:SetDrawLayer("OVERLAY", 1)
     row.IconFrameGold:Hide()
     
-    -- Disabled frame (failed)
-    row.IconFrameDisabled = row:CreateTexture(nil, "OVERLAY", nil, 7)
-    row.IconFrameDisabled:SetSize(41, 41)
-    row.IconFrameDisabled:SetPoint("CENTER", row.Icon, "CENTER", 0, 0)
-    row.IconFrameDisabled:SetTexture("Interface\\AddOns\\HardcoreAchievements\\Images\\frame-disabled.blp")
-    row.IconFrameDisabled:SetDrawLayer("OVERLAY", 1)
-    row.IconFrameDisabled:Hide()
-    
-    -- Silver frame (available) - default
+    -- Silver frame (available/disabled) - default
     row.IconFrame = row:CreateTexture(nil, "OVERLAY", nil, 7)
-    row.IconFrame:SetSize(41, 41)
+    row.IconFrame:SetSize(42, 42)
     row.IconFrame:SetPoint("CENTER", row.Icon, "CENTER", 0, 0)
-    row.IconFrame:SetTexture("Interface\\AddOns\\HardcoreAchievements\\Images\\frame-silver.blp")
+    row.IconFrame:SetTexture("Interface\\AddOns\\HardcoreAchievements\\Images\\frame_silver.blp")
     row.IconFrame:SetDrawLayer("OVERLAY", 1)
     row.IconFrame:Show()
     
@@ -607,10 +661,10 @@ local function CreateEmbedModernRow(parent, srow)
     -- Circular frame for points (increased size)
     row.PointsFrame = CreateFrame("Frame", nil, row)
     row.PointsFrame:SetSize(56, 56) -- Increased from 48x48 to 56x56
-    row.PointsFrame:SetPoint("RIGHT", row, "RIGHT", -15, 0)
+    row.PointsFrame:SetPoint("RIGHT", row, "RIGHT", -15, -2)
     
     row.PointsFrame.Texture = row.PointsFrame:CreateTexture(nil, "BACKGROUND")
-    row.PointsFrame.Texture:SetTexture("Interface\\AddOns\\HardcoreAchievements\\Images\\WowUI_Circular_Frame.blp")
+    row.PointsFrame.Texture:SetTexture("Interface\\AddOns\\HardcoreAchievements\\Images\\ring_disabled.blp")
     row.PointsFrame.Texture:SetAllPoints(row.PointsFrame)
     
     row.Points = row.PointsFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
@@ -625,7 +679,7 @@ local function CreateEmbedModernRow(parent, srow)
     
     -- timestamp
     row.TS = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    row.TS:SetPoint("RIGHT", row.PointsFrame, "LEFT", -5, 0)
+    row.TS:SetPoint("RIGHT", row.PointsFrame, "LEFT", -5, -2)
     row.TS:SetJustifyH("RIGHT")
     row.TS:SetJustifyV("TOP")
     row.TS:SetText("")
@@ -640,7 +694,15 @@ local function CreateEmbedModernRow(parent, srow)
         UHCA.BorderClip:SetClipsChildren(true)
     end
     
+    row.Background = UHCA.BorderClip:CreateTexture(nil, "BACKGROUND")
+    row.Background:SetDrawLayer("BACKGROUND", 0)
+    row.Background:SetTexture("Interface\\AddOns\\HardcoreAchievements\\Images\\row_texture.blp")
+    row.Background:SetVertexColor(1, 1, 1)
+    row.Background:SetAlpha(1)
+    row.Background:Hide()
+    
     row.Border = UHCA.BorderClip:CreateTexture(nil, "BACKGROUND")
+    row.Border:SetDrawLayer("BACKGROUND", 1)
     row.Border:SetTexture("Interface\\AddOns\\HardcoreAchievements\\Images\\row-border.blp")
     row.Border:SetSize(256, 32)
     row.Border:SetAlpha(0.5)
@@ -730,20 +792,56 @@ local function UpdateEmbedModernRow(row, srow)
     row.sourceRow = srow
     row._def = def
     
+    if not row.Background and UHCA then
+        if not UHCA.BorderClip then
+            UHCA.BorderClip = CreateFrame("Frame", nil, UHCA)
+            UHCA.BorderClip:SetPoint("TOPLEFT", UHCA.Scroll, "TOPLEFT", -10, 2)
+            UHCA.BorderClip:SetPoint("BOTTOMRIGHT", UHCA.Scroll, "BOTTOMRIGHT", 10, -2)
+            UHCA.BorderClip:SetClipsChildren(true)
+        end
+        row.Background = UHCA.BorderClip:CreateTexture(nil, "BACKGROUND")
+        row.Background:SetDrawLayer("BACKGROUND", 0)
+        row.Background:SetTexture("Interface\\AddOns\\HardcoreAchievements\\Images\\row_texture.blp")
+        row.Background:SetVertexColor(1, 1, 1)
+        row.Background:SetAlpha(1)
+        row.Background:Hide()
+    end
+    
     -- Store trackers from source row
     row.killTracker = srow.killTracker
     row.questTracker = srow.questTracker
     row.allowSoloDouble = (def and def.allowSoloDouble ~= nil) and def.allowSoloDouble or (srow.allowSoloDouble ~= nil and srow.allowSoloDouble)
     
-    -- Update timestamp if completed
-    if row.completed and type(HardcoreAchievements_GetCharDB) == "function" then
-        local _, cdb = HardcoreAchievements_GetCharDB()
-        if cdb and cdb.achievements and cdb.achievements[achId] and cdb.achievements[achId].completedAt then
-            local timestamp = cdb.achievements[achId].completedAt
-            if row.TS then row.TS:SetText(FormatTimestampEmbed(timestamp)) end
+    -- Update timestamp display based on completion or failure state
+    if row.TS then
+        if row.completed and type(HardcoreAchievements_GetCharDB) == "function" then
+            local _, cdb = HardcoreAchievements_GetCharDB()
+            if cdb and cdb.achievements and cdb.achievements[achId] then
+                local timestamp = cdb.achievements[achId].completedAt
+                if timestamp then
+                    row.TS:SetText(FormatTimestampEmbed(timestamp))
+                else
+                    row.TS:SetText(FormatTimestampEmbed(time()))
+                end
+            else
+                row.TS:SetText(FormatTimestampEmbed(time()))
+            end
+            row.TS:SetTextColor(1, 1, 1)
+        elseif IsRowOutleveled(row) then
+            local failedAt = nil
+            if _G.HCA_GetFailureTimestamp then
+                failedAt = _G.HCA_GetFailureTimestamp(achId)
+            end
+            if not failedAt and _G.HCA_EnsureFailureTimestamp then
+                failedAt = _G.HCA_EnsureFailureTimestamp(achId)
+            end
+            failedAt = failedAt or time()
+            row.TS:SetText(FormatTimestampEmbed(failedAt))
+            row.TS:SetTextColor(0.957, 0.263, 0.212)
+        else
+            row.TS:SetText("")
+            row.TS:SetTextColor(1, 1, 1)
         end
-    elseif row.TS then
-        row.TS:SetText("")
     end
     
     -- Apply styling
@@ -772,11 +870,14 @@ local function LayoutModernRows(container, rows)
             if row.Border then
                 row.Border:Hide()
             end
+            if row.Background then
+                row.Background:Hide()
+            end
         end
     end
     
     local totalHeight = 0
-    local rowSpacing = 6 -- Increased spacing between rows
+    local rowSpacing = 8 -- Additional spacing for taller rows
     for i, row in ipairs(visibleRows) do
         -- Set row to full width minus 5px for scrollbar spacing
         row:SetWidth(containerWidth)
@@ -808,6 +909,9 @@ function EMBED:BuildModernRows(srcRows)
     self.rows[i]:Hide()
     if self.rows[i].Border then
       self.rows[i].Border:Hide()
+    end
+    if self.rows[i].Background then
+      self.rows[i].Background:Hide()
     end
   end
   
@@ -870,13 +974,13 @@ function EMBED:BuildModernRows(srcRows)
     if not row then
       row = CreateEmbedModernRow(self.Content, srow)
       self.rows[i] = row
-    else
-      -- Update existing row
-      UpdateEmbedModernRow(row, srow)
     end
     
+    -- Ensure row data (including timestamp) is refreshed
+    UpdateEmbedModernRow(row, srow)
+    
     -- Position row
-    local rowSpacing = 6 -- Increased spacing between rows
+    local rowSpacing = 8 -- Additional spacing for taller rows
     if i == 1 then
       row:SetPoint("TOPLEFT", self.Content, "TOPLEFT", 0, 0)
     else
@@ -892,6 +996,9 @@ function EMBED:BuildModernRows(srcRows)
       self.rows[i]:Hide()
       if self.rows[i].Border then
         self.rows[i].Border:Hide()
+      end
+      if self.rows[i].Background then
+        self.rows[i].Background:Hide()
       end
     end
   end
@@ -986,7 +1093,23 @@ local function UpdateTotalPointsText()
   if UHCA.TotalPointsTextShadow then
     UHCA.TotalPointsTextShadow:SetText(pointsStr)
   end
-  UHCA.TotalPointsText:SetTextColor(0.6, 0.9, 0.6)
+  if totalPoints > 0 then
+    UHCA.TotalPointsText:SetTextColor(0.6, 0.9, 0.6)
+    UHCA.PointsLabelText:SetTextColor(0.6, 0.9, 0.6)
+  else
+    UHCA.TotalPointsText:SetTextColor(1, 1, 1)
+    UHCA.PointsLabelText:SetTextColor(1, 1, 1)
+  end
+
+  if UHCA.PointsBackground then
+    if totalPoints > 0 then
+      UHCA.PointsBackground:SetDesaturated(true)
+      UHCA.PointsBackground:SetVertexColor(0.6, 0.9, 0.6, 1)
+    else
+      UHCA.PointsBackground:SetVertexColor(1, 1, 1, 1)
+      UHCA.PointsBackground:SetDesaturated(false)
+    end
+  end
 end
 
 -- ---------- Rebuild ----------
@@ -1132,15 +1255,15 @@ local function BuildEmbedIfNeeded()
     local bgHeight = 30  -- Reduced height
     UHCA.PointsBackground:SetSize(bgWidth, bgHeight)
     UHCA.PointsBackground:SetPoint("TOP", UHCA, "TOP", 0, -30) -- Brought down a bit
-    UHCA.PointsBackground:SetDesaturated(true)
+    UHCA.PointsBackground:SetDesaturated(false)
     UHCA.PointsBackground:SetAlpha(0.7)
-    UHCA.PointsBackground:SetVertexColor(0.6, 0.9, 0.6, 1) -- Green tint matching points text color
+    UHCA.PointsBackground:SetVertexColor(1, 1, 1, 1)
   end
 
   -- Points number text (centered over background, with drop shadow)
   if not UHCA.TotalPointsText then
     UHCA.TotalPointsText = UHCA:CreateFontString(nil, "OVERLAY", "GameFontHighlightLarge")
-    UHCA.TotalPointsText:SetPoint("CENTER", UHCA.PointsBackground, "CENTER", 0, 0)
+    UHCA.TotalPointsText:SetPoint("CENTER", UHCA.PointsBackground, "CENTER", 0, -1)
     UHCA.TotalPointsText:SetText("0") -- Will be updated by UpdateTotalPointsText
     UHCA.TotalPointsText:SetTextColor(0.6, 0.9, 0.6)
   end
@@ -1160,7 +1283,7 @@ local function BuildEmbedIfNeeded()
     -- Position it to the right of the points number
     UHCA.PointsLabelText:SetPoint("LEFT", UHCA.TotalPointsText, "RIGHT", 2, 0)
     UHCA.PointsLabelText:SetText(" pts")
-    UHCA.PointsLabelText:SetTextColor(0.6, 0.9, 0.6)
+    UHCA.PointsLabelText:SetTextColor(1, 1, 1)
   end
 
   -- Multiplier text (below the points background)
@@ -1215,7 +1338,7 @@ local function BuildEmbedIfNeeded()
   if not UHCA.SettingsButton then
     UHCA.SettingsButton = CreateFrame("Button", nil, UHCA)
     UHCA.SettingsButton:SetSize(16, 16)
-    UHCA.SettingsButton:SetPoint("BOTTOMLEFT", UHCA, "BOTTOMLEFT", -10, -43)
+    UHCA.SettingsButton:SetPoint("BOTTOMLEFT", UHCA, "BOTTOMLEFT", -10, -40)
     
     -- Create cogwheel icon texture (using a simple circular button style)
     UHCA.SettingsButton.Icon = UHCA.SettingsButton:CreateTexture(nil, "ARTWORK")
@@ -1254,6 +1377,45 @@ local function BuildEmbedIfNeeded()
       GameTooltip:Hide()
     end)
   end
+
+  if not UHCA.LayoutLabel then
+    UHCA.LayoutLabel = UHCA:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    UHCA.LayoutLabel:SetPoint("LEFT", UHCA.SettingsButton, "RIGHT", 6, 0)
+    UHCA.LayoutLabel:SetText("Layout:")
+    UHCA.LayoutLabel:SetTextColor(1, 1, 1)
+  end
+
+  if not UHCA.LayoutListCheckbox then
+    UHCA.LayoutListCheckbox = CreateFrame("CheckButton", nil, UHCA, "UICheckButtonTemplate")
+    UHCA.LayoutListCheckbox:SetPoint("LEFT", UHCA.LayoutLabel, "RIGHT", 6, 0)
+    UHCA.LayoutListCheckbox:SetSize(18, 18)
+    UHCA.LayoutListCheckbox.text:SetText("List")
+    UHCA.LayoutListCheckbox.text:SetTextColor(1, 1, 1)
+    UHCA.LayoutListCheckbox:SetScript("OnClick", function(self)
+      if not self:GetChecked() then
+        self:SetChecked(true)
+        return
+      end
+      SetModernRowsEnabled(true)
+    end)
+  end
+
+  if not UHCA.LayoutGridCheckbox then
+    UHCA.LayoutGridCheckbox = CreateFrame("CheckButton", nil, UHCA, "UICheckButtonTemplate")
+    UHCA.LayoutGridCheckbox:SetPoint("LEFT", UHCA.LayoutListCheckbox, "RIGHT", 20, 0)
+    UHCA.LayoutGridCheckbox:SetSize(18, 18)
+    UHCA.LayoutGridCheckbox.text:SetText("Grid")
+    UHCA.LayoutGridCheckbox.text:SetTextColor(1, 1, 1)
+    UHCA.LayoutGridCheckbox:SetScript("OnClick", function(self)
+      if not self:GetChecked() then
+        self:SetChecked(true)
+        return
+      end
+      SetModernRowsEnabled(false)
+    end)
+  end
+
+  UpdateLayoutCheckboxes(IsModernRowsEnabled())
 
   -- Only create filter dropdown if it doesn't exist
   local filterDropdown = UHCA.FilterDropdown
@@ -1435,78 +1597,131 @@ local function HookTabManager()
   EMBED._tmHooked = true
 end
 
+local function IsUltraHardcoreAddonName(name)
+  if type(name) ~= "string" then
+    return false
+  end
+  local normalized = name:lower():gsub("[^%w]", "")
+  return normalized:find("ultrahardcore", 1, true) ~= nil
+end
+
+local function FindLoadedUltraHardcoreAddon()
+  if GetNumAddOns and GetAddOnInfo then
+    for i = 1, GetNumAddOns() do
+      local candidate = GetAddOnInfo(i)
+      if IsUltraHardcoreAddonName(candidate) then
+        local loaded = false
+        if C_AddOns and C_AddOns.IsAddOnLoaded then
+          loaded = C_AddOns.IsAddOnLoaded(candidate)
+        elseif IsAddOnLoaded then
+          loaded = IsAddOnLoaded(candidate)
+        end
+        if loaded then
+          return candidate
+        end
+      end
+    end
+  end
+
+  if C_AddOns and C_AddOns.IsAddOnLoaded and C_AddOns.IsAddOnLoaded("UltraHardcore") then
+    return "UltraHardcore"
+  end
+  if IsAddOnLoaded and IsAddOnLoaded("UltraHardcore") then
+    return "UltraHardcore"
+  end
+end
+
+local function HandleUltraHardcoreMissing()
+  if EMBED._uhcMissingHandled then return end
+  EMBED._uhcMissingHandled = true
+
+  --print("|cff00ff00[HardcoreAchievements]|r UltraHardcore addon not detected")
+
+  if type(HardcoreAchievements_GetCharDB) == "function" then
+    local _, cdb = HardcoreAchievements_GetCharDB()
+    if cdb then
+      cdb.settings = cdb.settings or {}
+      cdb.settings.showCustomTab = true
+
+      if type(_G.HardcoreAchievements_LoadTabPosition) == "function" then
+        _G.HardcoreAchievements_LoadTabPosition()
+      end
+
+      local tab = _G["CharacterFrameTab" .. (CharacterFrame.numTabs + 1)]
+      if tab and tab:GetText() and tab:GetText():find(ACHIEVEMENTS) then
+        tab:Show()
+        tab:EnableMouse(true)
+        tab:SetScript("OnClick", function(self)
+          if HCA_ShowAchievementTab then
+            HCA_ShowAchievementTab()
+          end
+        end)
+
+        local point = tab:GetPoint()
+        if not point then
+          tab:SetPoint("RIGHT", _G["CharacterFrameTab" .. CharacterFrame.numTabs], "RIGHT", 43, 0)
+        end
+
+        if not tab:IsShown() then
+          tab:Show()
+        end
+      end
+    end
+  end
+end
+
+local function HandleUltraHardcoreDetected(addonName)
+  if EMBED._uhcDetected then return end
+  EMBED._uhcDetected = true
+
+  --print(string.format("|cff00ff00[HardcoreAchievements]|r %s addon detected", addonName or "UltraHardcore"))
+
+  HookTabManager()
+  HookSourceSignals()
+
+  C_Timer.After(0.5, function()
+    if BuildEmbedIfNeeded() then
+      C_Timer.After(0, function()
+        if EMBED.Rebuild then EMBED:Rebuild() else ApplyFilter() end
+      end)
+    end
+  end)
+
+  C_Timer.After(2.0, function()
+    if not UHCA and tabContents and tabContents[3] then
+      if BuildEmbedIfNeeded() then
+        C_Timer.After(0, function()
+          if EMBED.Rebuild then EMBED:Rebuild() else ApplyFilter() end
+        end)
+      end
+    end
+  end)
+end
+
 local f = CreateFrame("Frame")
 f:RegisterEvent("PLAYER_LOGIN")
 f:RegisterEvent("ADDON_LOADED")
 f:RegisterEvent("PLAYER_ENTERING_WORLD")
 f:SetScript("OnEvent", function(self, event, addonName)
-  -- Wait for UltraHardcore addon to be loaded
-  if event == "ADDON_LOADED" and addonName == "UltraHardcore" then
-    HookTabManager()
-    HookSourceSignals()
-    
-    -- Don't try to access player data here - playerGUID may not be set yet
-    
-    -- Try modern integration approach first
-    C_Timer.After(0.5, function()
-      if BuildEmbedIfNeeded() then
-        C_Timer.After(0, function() 
-          if EMBED.Rebuild then EMBED:Rebuild() else ApplyFilter() end
-        end)
-        --print("|cff00ff00[HardcoreAchievements]|r Successfully integrated with UltraHardcore")
-      end
-    end)
-    
-    -- Fallback method for old versions - try after 2 seconds
-    C_Timer.After(2.0, function()
-      if not UHCA and tabContents and tabContents[3] then
-        if BuildEmbedIfNeeded() then
-          C_Timer.After(0, function() 
-            if EMBED.Rebuild then EMBED:Rebuild() else ApplyFilter() end
-          end)
-          --print("|cff00ff00[HardcoreAchievements]|r Successfully integrated with UltraHardcore (fallback)")
+  if event == "ADDON_LOADED" then
+    if IsUltraHardcoreAddonName(addonName) then
+      HandleUltraHardcoreDetected(addonName)
+    elseif addonName == ADDON_NAME then
+      C_Timer.After(0, function()
+        if EMBED._uhcDetected then return end
+        local loadedName = FindLoadedUltraHardcoreAddon()
+        if loadedName then
+          HandleUltraHardcoreDetected(loadedName)
         end
-      end
-    end)
-  else
-    -- UltraHardcore is not loaded, so set showCustomTab to true
-    if type(HardcoreAchievements_GetCharDB) == "function" then
-      local _, cdb = HardcoreAchievements_GetCharDB()
-      if cdb then
-        cdb.settings = cdb.settings or {}
-        cdb.settings.showCustomTab = true
-        
-        -- Load tab position to apply the setting and show the tab
-        if type(_G.HardcoreAchievements_LoadTabPosition) == "function" then
-          _G.HardcoreAchievements_LoadTabPosition()
-        end
-        
-        -- Ensure the tab is visible if it exists (even if LoadTabPosition had no saved data)
-        local tab = _G["CharacterFrameTab" .. (CharacterFrame.numTabs + 1)]
-        if tab and tab:GetText() and tab:GetText():find(ACHIEVEMENTS) then
-          tab:Show()
-          -- Make sure the tab is enabled and has the click handler
-          tab:EnableMouse(true)
-          tab:SetScript("OnClick", function(self)
-            if HCA_ShowAchievementTab then
-              HCA_ShowAchievementTab()
-            end
-          end)
-          
-          -- If LoadTabPosition had no saved data, ensure the tab is at default position and visible
-          -- Check if tab is positioned (has points set), if not, it needs default positioning
-          local point, relativeTo, relativePoint = tab:GetPoint()
-          if not point then
-            -- Tab has no position, set it to default position
-            tab:SetPoint("RIGHT", _G["CharacterFrameTab" .. CharacterFrame.numTabs], "RIGHT", 43, 0)
-          end
-          
-          -- Ensure tab is not hidden
-          if not tab:IsShown() then
-            tab:Show()
-          end
-        end
-      end
+      end)
+    end
+  elseif event == "PLAYER_LOGIN" or event == "PLAYER_ENTERING_WORLD" then
+    if EMBED._uhcDetected then return end
+    local loadedName = FindLoadedUltraHardcoreAddon()
+    if loadedName then
+      HandleUltraHardcoreDetected(loadedName)
+    else
+      HandleUltraHardcoreMissing()
     end
   end
 end)

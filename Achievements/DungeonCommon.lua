@@ -10,7 +10,6 @@ function DungeonCommon.registerDungeonAchievement(def)
   local points = def.points
   local requiredQuestId = def.requiredQuestId
   local staticPoints = def.staticPoints or false
-  local zone = def.zone
   local requiredMapId = def.requiredMapId
   local requiredKills = def.requiredKills or {}
   local bossOrder = def.bossOrder  -- Optional ordering for tooltip display
@@ -24,7 +23,6 @@ function DungeonCommon.registerDungeonAchievement(def)
     tooltip = tooltip,
     icon = icon,
     points = points,
-    zone = def.zone,
     mapID = def.requiredMapId,
     mapName = def.title,
     requiredKills = requiredKills,
@@ -127,7 +125,7 @@ function DungeonCommon.registerDungeonAchievement(def)
       [3887] = "Baron Silverlaine",
       [4278] = "Commander Springvale",
       [4279] = "Odo the Blindwatcher",
-      [3872] = "Deathsworn Captain",
+      --[3872] = "Deathsworn Captain",
       [4274] = "Fenrus the Devourer",
       [3927] = "Wolf Master Nandos",
       [4275] = "Archmage Arugal",
@@ -148,7 +146,7 @@ function DungeonCommon.registerDungeonAchievement(def)
       [7079] = "Viscous Fallout",
       [6235] = "Electrocutioner 6000",
       [6229] = "Crowd Pummeler 9-60",
-      [6228] = "Dark Iron Ambassador",
+      --[6228] = "Dark Iron Ambassador",
       [7800] = "Mekgineer Thermaplugg",
       [6168] = "Roogug",
       [4424] = "Aggem Thorncurse",
@@ -167,11 +165,11 @@ function DungeonCommon.registerDungeonAchievement(def)
       [7355] = "Tuten'kash",
       [7356] = "Plaguemaw the Rotting",
       [7357] = "Mordresh Fire Eye",
-      [7354] = "Ragglesnout",
+      --[7354] = "Ragglesnout",
       [8567] = "Glutton",
       [7358] = "Amnennar the Coldbringer",
       [6910] = "Revelosh",
-      [6906] = "Baelog",
+      --[6906] = "Baelog",
       [7228] = "Ironaya",
       [7023] = "Obsidian Sentinel",
       [7206] = "Ancient Stone Keeper",
@@ -243,10 +241,10 @@ function DungeonCommon.registerDungeonAchievement(def)
       [10430] = "The Beast",
       [10363] = "General Drakkisath",
       [11058] = "Ezra Grimm",
-      [10393] = "Skul",
-      [10558] = "Hearthsinger Forresten",
+      --[10393] = "Skul",
+      --[10558] = "Hearthsinger Forresten",
       [10516] = "The Unforgiven",
-      [11143] = "Postmaster Malown",
+      --[11143] = "Postmaster Malown",
       [10808] = "Timmy the Cruel",
       [11032] = "Malor the Zealous",
       [10997] = "Cannon Master Willey",
@@ -254,7 +252,7 @@ function DungeonCommon.registerDungeonAchievement(def)
       [10811] = "Archivist Galford",
       [10813] = "Balnazzar",
       [10435] = "Magistrate Barthilas",
-      [10809] = "Stonespine",
+      --[10809] = "Stonespine",
       [10437] = "Nerub'enkan",
       [11121] = "Black Guard Swordsmith",
       [10438] = "Maleki the Pallid",
@@ -275,11 +273,11 @@ function DungeonCommon.registerDungeonAchievement(def)
       [11501] = "King Gordok",
       [11489] = "Tendris Warpwood",
       [11487] = "Magister Kalendris",
-      [11467] = "Tsu'zee",
+      --[11467] = "Tsu'zee",
       [11488] = "Illyanna Ravenoak",
       [11496] = "Immol'thar",
       [11486] = "Prince Tortheldrin",
-      [10506] = "Kirtonos the Herald",
+      --[10506] = "Kirtonos the Herald",
       [10503] = "Jandice Barov",
       [11622] = "Rattlegore",
       [10433] = "Marduk Blackpool",
@@ -335,10 +333,6 @@ function DungeonCommon.registerDungeonAchievement(def)
           GameTooltip:AddDoubleLine(leftText, rightText, 1, 1, 1, 0.7, 0.9, 0.7)
           -- Description in default yellow
           GameTooltip:AddLine(baseTooltip, nil, nil, nil, true)
-          -- Zone in gray under the description
-          if zone and tostring(zone) ~= "" then
-            GameTooltip:AddLine(tostring(zone), 0.5, 0.5, 0.5)
-          end
           
           if next(requiredKills) ~= nil then
             GameTooltip:AddLine("\nRequired Bosses:", 0, 1, 0) -- Green header
@@ -556,7 +550,7 @@ function DungeonCommon.registerDungeonAchievement(def)
       KillTracker,  -- Use the local function directly
       requiredQuestId,
       staticPoints,
-      zone,
+      nil,
       dungeonDef  -- Pass def with allowSoloDouble forced to false for dungeons
     )
     

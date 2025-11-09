@@ -780,6 +780,12 @@ local Achievements = {
 -- }
 }
 
+if _G.HCA_AppendProfessionAchievements then
+  _G.HCA_AppendProfessionAchievements(function(def)
+    Achievements[#Achievements + 1] = def
+  end)
+end
+
 local function IsEligible(def)
   -- Faction: "Alliance" / "Horde"
   if def.faction and UnitFactionGroup("player") ~= def.faction then

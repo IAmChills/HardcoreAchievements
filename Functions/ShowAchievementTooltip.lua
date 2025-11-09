@@ -11,6 +11,7 @@ function HCA_ShowAchievementTooltip(frame, data)
     local points = nil
     local allowSoloDouble = false
     local isSecretAchievement = false
+    local isProfessionAchievement = false
     local def = nil
     
     -- Extract data from row object or data table
@@ -26,6 +27,12 @@ function HCA_ShowAchievementTooltip(frame, data)
             allowSoloDouble = data.allowSoloDouble or false
             isSecretAchievement = data.isSecretAchievement or false
             def = data._def
+            if data.requireProfessionSkillID then
+                isProfessionAchievement = true
+            end
+            if def and def.requireProfessionSkillID then
+                isProfessionAchievement = true
+            end
         else
             -- It's a data table
             title = data.title or ""
@@ -36,6 +43,9 @@ function HCA_ShowAchievementTooltip(frame, data)
             points = data.points
             allowSoloDouble = data.allowSoloDouble or false
             isSecretAchievement = data.isSecretAchievement or false
+            if data.requireProfessionSkillID then
+                isProfessionAchievement = true
+            end
         end
     end
     
@@ -54,7 +64,9 @@ function HCA_ShowAchievementTooltip(frame, data)
     
     -- Show level and points for non-secret achievements (right-aligned below title, before description)
     -- Secret achievements show points below the description instead
-    if not isSecretAchievement then
+    local showPointsInBody = isSecretAchievement or isProfessionAchievement
+
+    if not showPointsInBody then
         local levelText = ""
         if maxLevel and maxLevel > 0 then
             levelText = LEVEL .. " " .. maxLevel
@@ -83,14 +95,14 @@ function HCA_ShowAchievementTooltip(frame, data)
     local isSecret = (def and def.secret) or isSecretAchievement
     local isSoloModeChecked = _G.HardcoreAchievements_IsSoloModeEnabled and _G.HardcoreAchievements_IsSoloModeEnabled() or false
     
-    if isCatalogAchievement and not isSecret and not isSoloModeChecked and (_G.IsLevelMilestone and not _G.IsLevelMilestone(achId)) then
+    if isCatalogAchievement and not isSecret and not isProfessionAchievement and not isSoloModeChecked and (_G.IsLevelMilestone and not _G.IsLevelMilestone(achId)) then
         tooltip = tooltip .. "|cffFFD700 (including all party members)|r"
     end
     
     GameTooltip:AddLine(tooltip, nil, nil, nil, true)
     
-    -- For secret achievements, show points below the description instead of with level
-    if isSecretAchievement then
+    -- For secret and profession achievements, show points below the description instead of with level
+    if showPointsInBody then
         local pointsText = ""
         if points and points > 0 then
             pointsText = "Points: " .. tostring(points)
@@ -99,7 +111,16 @@ function HCA_ShowAchievementTooltip(frame, data)
     end
     
     if zone then
-        GameTooltip:AddLine(zone, 0.6, 1, 0.86)
+        local isDungeonAchievement = false
+        if achId and _G.HCA_AchievementDefs then
+            local achDef = _G.HCA_AchievementDefs[tostring(achId)]
+            if achDef and achDef.mapID then
+                isDungeonAchievement = true
+            end
+        end
+        if not isDungeonAchievement then
+            GameTooltip:AddLine(zone, 0.6, 1, 0.86)
+        end
     end
     
     -- Check if this is a dungeon achievement (has requiredKills) and show boss requirements

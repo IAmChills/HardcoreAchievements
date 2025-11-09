@@ -129,6 +129,9 @@ function RefreshAllAchievementPoints()
                         killsSatisfied = hasKill and questNotTurnedIn
                     end
                     
+                    local playerLevel = UnitLevel("player") or 1
+                    local isOutleveled = (not row.completed) and row.maxLevel and (playerLevel > row.maxLevel) or false
+
                     _G.HCA_SetStatusTextOnRow(row, {
                         completed = row.completed or false,
                         hasSoloStatus = hasSoloStatus,
@@ -139,8 +142,14 @@ function RefreshAllAchievementPoints()
                         isSoloMode = isSoloMode,
                         wasSolo = wasSolo,
                         allowSoloDouble = row.allowSoloDouble,
-                        maxLevel = row.maxLevel
+                        maxLevel = row.maxLevel,
+                        isOutleveled = isOutleveled
                     })
+
+                    if isOutleveled and progress then
+                        progress.soloKill = nil
+                        progress.soloQuest = nil
+                    end
                 else
                     -- Fallback if helper not available
                     if hasIneligibleKill then

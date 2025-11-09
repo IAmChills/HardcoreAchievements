@@ -2,6 +2,10 @@ local ADDON_NAME, addon = ...
 local playerGUID
 HCA_SELF_FOUND_BONUS = 5
 
+local EvaluateCustomCompletions
+local RefreshOutleveledAll
+local ProfessionTracker = _G.HCA_ProfessionCommon
+
 -- Create/initialize addon table and expose globally (similar to BugSack pattern)
 if not addon then
     addon = {}
@@ -163,14 +167,23 @@ local function UpdateRowBorderColor(row)
     if not row or not row.Border then return end
     
     if row.completed then
-        -- Completed: green tint (full saturation for visibility)
         row.Border:SetVertexColor(0.6, 0.9, 0.6)
+        if row.Background then
+            row.Background:SetVertexColor(0.1, 1.0, 0.1)
+            row.Background:SetAlpha(1)
+        end
     elseif IsRowOutleveled(row) then
-        -- Failed/Outleveled: red tint (full saturation for visibility)
         row.Border:SetVertexColor(0.957, 0.263, 0.212)
+        if row.Background then
+            row.Background:SetVertexColor(1.0, 0.1, 0.1)
+            row.Background:SetAlpha(1)
+        end
     else
-        -- Default/Incomplete: neutral gray
         row.Border:SetVertexColor(0.8, 0.8, 0.8)
+        if row.Background then
+            row.Background:SetVertexColor(1, 1, 1)
+            row.Background:SetAlpha(1)
+        end
     end
 end
 
@@ -178,6 +191,7 @@ end
 local function PositionRowBorder(row)
     if not row or not row.Border or not row:IsShown() then 
         if row and row.Border then row.Border:Hide() end
+        if row and row.Background then row.Background:Hide() end
         return 
     end
     
@@ -185,6 +199,13 @@ local function PositionRowBorder(row)
     row.Border:SetPoint("TOPLEFT", row, "TOPLEFT", -4, 0)
     row.Border:SetSize(295, 43)
     row.Border:Show()
+    
+    if row.Background then
+        row.Background:ClearAllPoints()
+        row.Background:SetPoint("TOPLEFT", row, "TOPLEFT", -4, 0)
+        row.Background:SetSize(295, 43)
+        row.Background:Show()
+    end
 end
 
 -- Format timestamp into readable date/time string (locale-aware format)
@@ -209,6 +230,42 @@ local function FormatTimestamp(timestamp)
             dateInfo.year % 100)
     end
 end
+
+local function EnsureFailureTimestamp(achId)
+    if not achId then return nil end
+    local _, cdb = GetCharDB()
+    if not cdb then return nil end
+    cdb.achievements = cdb.achievements or {}
+    local rec = cdb.achievements[achId]
+    if not rec then
+        rec = {}
+        cdb.achievements[achId] = rec
+    end
+    if not rec.completed and not rec.failedAt then
+        rec.failedAt = time()
+    end
+    if rec.failedAt and not rec.failed then
+        rec.failed = true
+    end
+    return rec.failedAt
+end
+
+local function GetFailureTimestamp(achId)
+    if not achId then return nil end
+    local _, cdb = GetCharDB()
+    if not cdb or not cdb.achievements then return nil end
+    local rec = cdb.achievements[achId]
+    if rec and rec.failedAt then
+        if not rec.failed then
+            rec.failed = true
+        end
+        return rec.failedAt
+    end
+    return nil
+end
+
+_G.HCA_GetFailureTimestamp = GetFailureTimestamp
+_G.HCA_EnsureFailureTimestamp = EnsureFailureTimestamp
 
 -- Export function for embedded UI to get total points
 function HCA_GetTotalPoints()
@@ -306,6 +363,9 @@ local function SortAchievementRows()
             totalHeight = totalHeight + (row:GetHeight() + 2)
         elseif row.Border then
             row.Border:Hide()
+            if row.Background then
+                row.Background:Hide()
+            end
         end
     end
 
@@ -316,6 +376,19 @@ end
 -- Function to update points display and checkmark based on state
 local function UpdatePointsDisplay(row)
     if not row or not row.PointsFrame then return end
+    
+    if row.PointsFrame.Texture then
+        if row.completed then
+            row.PointsFrame.Texture:SetTexture("Interface\\AddOns\\HardcoreAchievements\\Images\\ring_gold.blp")
+        elseif IsRowOutleveled(row) then
+            row.PointsFrame.Texture:SetTexture("Interface\\AddOns\\HardcoreAchievements\\Images\\ring_failed.blp")
+        else
+            row.PointsFrame.Texture:SetTexture("Interface\\AddOns\\HardcoreAchievements\\Images\\ring_disabled.blp")
+        end
+        if row.PointsFrame.Texture.SetDesaturated then row.PointsFrame.Texture:SetDesaturated(false) end
+        if row.PointsFrame.Texture.SetVertexColor then row.PointsFrame.Texture:SetVertexColor(1, 1, 1) end
+        row.PointsFrame.Texture:SetAlpha(1)
+    end
     
     if row.completed then
         -- Completed: hide points text (make transparent), show green checkmark
@@ -383,74 +456,60 @@ local function UpdatePointsDisplay(row)
     end
 end
 
--- Function to apply outleveled style (icon and points frame desaturation)
 local function ApplyOutleveledStyle(row)
     if not row then return end
     
-    -- Desaturate icon
+    local achId = row.achId or row.id
+    local isOutleveled = IsRowOutleveled(row)
+    
     if row.Icon and row.Icon.SetDesaturated then
-        -- Failed achievements: NOT desaturated (keep color)
-        if IsRowOutleveled(row) then
+        if row.completed or isOutleveled then
             row.Icon:SetDesaturated(false)
-        -- Completed achievements: NOT desaturated (keep color)
-        elseif row.completed then
-            row.Icon:SetDesaturated(false)
-        -- Available but not yet complete achievements: desaturated
         else
             row.Icon:SetDesaturated(true)
         end
     end
     
-    -- Show/hide appropriate IconFrame based on state
-    if row.completed then
-        -- Completed: show gold frame
-        if row.IconFrameGold then row.IconFrameGold:Show() end
-        if row.IconFrameDisabled then row.IconFrameDisabled:Hide() end
-        if row.IconFrame then row.IconFrame:Hide() end
-    elseif IsRowOutleveled(row) then
-        -- Failed: show disabled frame
-        if row.IconFrameGold then row.IconFrameGold:Hide() end
-        if row.IconFrameDisabled then row.IconFrameDisabled:Show() end
-        if row.IconFrame then row.IconFrame:Hide() end
-    else
-        -- Available: show silver frame
-        if row.IconFrameGold then row.IconFrameGold:Hide() end
-        if row.IconFrameDisabled then row.IconFrameDisabled:Hide() end
-        if row.IconFrame then row.IconFrame:Show() end
+    if isOutleveled and row.Sub then
+        if row.maxLevel then
+            row.Sub:SetText((LEVEL or "Level") .. " " .. row.maxLevel)
+        else
+            row.Sub:SetText(AUCTION_TIME_LEFT0 or "")
+        end
     end
     
-    -- Desaturate/tint PointsFrame texture
-    if row.PointsFrame and row.PointsFrame.Texture then
-        -- Failed achievements: desaturated with subtle red tint
-        if IsRowOutleveled(row) then
-            if row.PointsFrame.Texture.SetDesaturated then
-                row.PointsFrame.Texture:SetDesaturated(false) -- Desaturated
+    if row.completed then
+        if row.IconFrameGold then row.IconFrameGold:Show() end
+        if row.IconFrame then row.IconFrame:Hide() end
+        if row.TS then
+            local _, cdb = GetCharDB()
+            local completedAt = nil
+            if cdb and cdb.achievements and achId and cdb.achievements[achId] then
+                completedAt = cdb.achievements[achId].completedAt
             end
-            if row.PointsFrame.Texture.SetVertexColor then
-                -- Subtle red tint (desaturated textures can still be tinted)
-                row.PointsFrame.Texture:SetVertexColor(0.75, 0.55, 0.55) -- Very subtle red tint
+            if completedAt then
+                row.TS:SetText(FormatTimestamp(completedAt))
+            elseif row.TS:GetText() == "" then
+                row.TS:SetText(FormatTimestamp(time()))
             end
-        -- Completed achievements: NOT desaturated (keep color, no tint)
-        elseif row.completed then
-            if row.PointsFrame.Texture.SetDesaturated then
-                row.PointsFrame.Texture:SetDesaturated(false)
-            end
-            if row.PointsFrame.Texture.SetVertexColor then
-                row.PointsFrame.Texture:SetVertexColor(1, 1, 1) -- White (no tint)
-            end
-        -- Available but not yet complete achievements: desaturated with darker tint
-        else
-            if row.PointsFrame.Texture.SetDesaturated then
-                row.PointsFrame.Texture:SetDesaturated(true)
-            end
-            if row.PointsFrame.Texture.SetVertexColor then
-                row.PointsFrame.Texture:SetVertexColor(0.5, 0.5, 0.5) -- Darker tint for available achievements
+            row.TS:SetTextColor(1, 1, 1)
+        end
+    else
+        if row.IconFrameGold then row.IconFrameGold:Hide() end
+        if row.IconFrame then row.IconFrame:Show() end
+        
+        if row.TS then
+            if isOutleveled then
+                local failedAt = GetFailureTimestamp(achId) or EnsureFailureTimestamp(achId) or time()
+                row.TS:SetText(FormatTimestamp(failedAt))
+                row.TS:SetTextColor(0.957, 0.263, 0.212)
+            else
+                row.TS:SetText("")
+                row.TS:SetTextColor(1, 1, 1)
             end
         end
     end
     
-    -- Update border color and points display when outleveled style is applied
-    -- Title color will be set by UpdatePointsDisplay
     UpdateRowBorderColor(row)
     UpdatePointsDisplay(row)
 end
@@ -538,10 +597,7 @@ function HCA_MarkRowCompleted(row)
     if row.Points then row.Points:SetTextColor(0.6, 0.9, 0.6) end
     if row.TS then row.TS:SetText(FormatTimestamp(time())) end
     
-    -- Update border color and points display when completed
-    UpdateRowBorderColor(row)
-    UpdatePointsDisplay(row)
-    -- Update icon desaturation (completed achievements should not be desaturated)
+    -- Update icon/frame styling to reflect completion
     ApplyOutleveledStyle(row)
     
     -- Reveal secret achievements before persisting/toast
@@ -612,10 +668,7 @@ local function RestoreCompletionsFromDB()
             if row.TS then row.TS:SetText(FormatTimestamp(rec.completedAt)) end
             if row.Points then row.Points:SetTextColor(1, 1, 1) end
             
-            -- Update border color and points display when loaded as completed
-            UpdateRowBorderColor(row)
-            UpdatePointsDisplay(row)
-            -- Update icon desaturation (completed achievements should not be desaturated)
+            -- Update icon/frame styling when loaded as completed
             ApplyOutleveledStyle(row)
 
             if rec.points then
@@ -640,6 +693,7 @@ local function RestoreCompletionsFromDB()
 
     if SortAchievementRows then SortAchievementRows() end
     if HCA_UpdateTotalPoints then HCA_UpdateTotalPoints() end
+    RefreshOutleveledAll()
 end
 
 -- =========================================================
@@ -945,12 +999,14 @@ end
 -- Outleveled (missed) indicator
 -- =========================================================
 
-local function RefreshOutleveledAll()
+RefreshOutleveledAll = function()
     if not AchievementPanel or not AchievementPanel.achievements then return end
     for _, row in ipairs(AchievementPanel.achievements) do
         ApplyOutleveledStyle(row)
     end
 end
+
+_G.HCA_RefreshOutleveledAll = RefreshOutleveledAll
 
 -- =========================================================
 -- Progress Helpers
@@ -1047,10 +1103,12 @@ local minimapDataObject = LDB:NewDataObject("HardcoreAchievements", {
                 local isShown = CharacterFrame and CharacterFrame:IsShown() and 
                                (AchievementPanel and AchievementPanel:IsShown() or (Tab and Tab.squareFrame and Tab.squareFrame:IsShown()))
                 if isShown then
-                    ToggleCharacter("PaperDollFrame")
-                    ToggleCharacter("PaperDollFrame")
+                    --ToggleCharacter("PaperDollFrame")
+                    --ToggleCharacter("PaperDollFrame")
+                    CharacterFrame:Hide()
                 elseif not CharacterFrame:IsShown() then
-                        ToggleCharacter("PaperDollFrame")
+                        --ToggleCharacter("PaperDollFrame")
+                        CharacterFrame:Show()
                     if HCA_ShowAchievementTab then
                         HCA_ShowAchievementTab()
                     end
@@ -1181,12 +1239,22 @@ initFrame:SetScript("OnEvent", function(self, event, ...)
             RefreshOutleveledAll()
         end
         SortAchievementRows()
+        if ProfessionTracker and ProfessionTracker.RefreshAll then
+            ProfessionTracker.RefreshAll()
+        end
         
         -- Initialize minimap button
         InitializeMinimapButton()
         
         -- Load saved tab position
         LoadTabPosition()
+        
+        if UISpecialFrames then
+            local frameName = AchievementPanel and AchievementPanel:GetName()
+            if frameName and not tContains(UISpecialFrames, frameName) then
+                table.insert(UISpecialFrames, frameName)
+            end
+        end
         
         -- Refresh options panel to sync checkbox states
         if _HardcoreAchievementsOptionsPanel and _HardcoreAchievementsOptionsPanel.refresh then
@@ -1706,11 +1774,128 @@ do
 end
 -- === end draggable curl behavior ===
  
-AchievementPanel = CreateFrame("Frame", "Achievements", CharacterFrame)
+AchievementPanel = CreateFrame("Frame", "HardcoreAchievementsFrame", CharacterFrame)
 AchievementPanel:Hide()
 AchievementPanel:EnableMouse(true)
 AchievementPanel:SetAllPoints(CharacterFrame)
 AchievementPanel:SetClipsChildren(true) -- Clip borders to stay within panel
+
+local pendingCharacterFrameClose = false
+local combatCloseWatcher = CreateFrame("Frame")
+local characterFrameHiddenForCombat = false
+local previousCharFrameAlpha = nil
+local previousCharFrameMouse = nil
+
+local function HideCharacterFrameContentsForCombat()
+    if CharacterFrame then
+        if not characterFrameHiddenForCombat then
+            previousCharFrameAlpha = CharacterFrame:GetAlpha()
+            previousCharFrameMouse = CharacterFrame:IsMouseEnabled()
+            CharacterFrame:SetAlpha(0)
+            CharacterFrame:EnableMouse(false)
+            characterFrameHiddenForCombat = true
+
+            if CharacterFrame.numTabs then
+                for i = 1, CharacterFrame.numTabs do
+                    local tab = _G["CharacterFrameTab"..i]
+                    if tab and tab:IsShown() then
+                        tab._hc_prevAlpha = tab:GetAlpha()
+                        tab._hc_prevMouse = tab:IsMouseEnabled()
+                        tab:SetAlpha(0)
+                        tab:EnableMouse(false)
+                    end
+                end
+            end
+        end
+    end
+
+    if _G["PaperDollFrame"]    then _G["PaperDollFrame"]:Hide()    end
+    if _G["PetPaperDollFrame"] then _G["PetPaperDollFrame"]:Hide() end
+    if _G["HonorFrame"]        then _G["HonorFrame"]:Hide()        end
+    if _G["SkillFrame"]        then _G["SkillFrame"]:Hide()        end
+    if _G["ReputationFrame"]   then _G["ReputationFrame"]:Hide()   end
+    if _G["TokenFrame"]        then _G["TokenFrame"]:Hide()        end
+    if type(_G.CSC_HideStatsPanel) == "function" then
+        _G.CSC_HideStatsPanel()
+    end
+end
+
+local function RestoreCharacterFrameAfterCombat()
+    if CharacterFrame and characterFrameHiddenForCombat then
+        CharacterFrame:SetAlpha(previousCharFrameAlpha or 1)
+        if previousCharFrameMouse ~= nil then
+            CharacterFrame:EnableMouse(previousCharFrameMouse)
+        else
+            CharacterFrame:EnableMouse(true)
+        end
+
+        if CharacterFrame.numTabs then
+            for i = 1, CharacterFrame.numTabs do
+                local tab = _G["CharacterFrameTab"..i]
+                if tab then
+                    tab:SetAlpha(tab._hc_prevAlpha or 1)
+                    if tab._hc_prevMouse ~= nil then
+                        tab:EnableMouse(tab._hc_prevMouse)
+                    else
+                        tab:EnableMouse(true)
+                    end
+                    tab._hc_prevAlpha = nil
+                    tab._hc_prevMouse = nil
+                end
+            end
+        end
+
+        previousCharFrameAlpha = nil
+        previousCharFrameMouse = nil
+        characterFrameHiddenForCombat = false
+    end
+end
+
+if CharacterFrame and not CharacterFrame._hc_restoreHooked then
+    CharacterFrame:HookScript("OnShow", RestoreCharacterFrameAfterCombat)
+    CharacterFrame._hc_restoreHooked = true
+end
+
+combatCloseWatcher:SetScript("OnEvent", function(self, event)
+    if event == "PLAYER_REGEN_ENABLED" and pendingCharacterFrameClose then
+        pendingCharacterFrameClose = false
+        self:UnregisterEvent("PLAYER_REGEN_ENABLED")
+        RestoreCharacterFrameAfterCombat()
+        if CharacterFrame and CharacterFrame:IsShown() then
+            HideUIPanel(CharacterFrame)
+        end
+    end
+end)
+
+AchievementPanel:HookScript("OnShow", function()
+    if pendingCharacterFrameClose then
+        pendingCharacterFrameClose = false
+        combatCloseWatcher:UnregisterEvent("PLAYER_REGEN_ENABLED")
+    end
+    RestoreCharacterFrameAfterCombat()
+end)
+
+AchievementPanel:HookScript("OnHide", function(self)
+    if self._suppressOnHide then
+        self._suppressOnHide = nil
+        return
+    end
+    
+    if InCombatLockdown and InCombatLockdown() then
+        HideCharacterFrameContentsForCombat()
+        pendingCharacterFrameClose = true
+        combatCloseWatcher:RegisterEvent("PLAYER_REGEN_ENABLED")
+    elseif CharacterFrame and CharacterFrame:IsShown() then
+        HideUIPanel(CharacterFrame)
+    end
+    
+    if Tab then
+        PanelTemplates_DeselectTab(Tab)
+        if Tab.squareFrame and Tab.squareFrame:IsShown() and Tab.squareFrame.highlight then
+            Tab.squareFrame.highlight:Hide()
+        end
+    end
+end)
 
 -- Filter dropdown
 local filterDropdown = CreateFrame("Frame", nil, AchievementPanel, "UIDropDownMenuTemplate")
@@ -1751,6 +1936,9 @@ local function ApplyFilter()
         if row.hiddenUntilComplete and not row.completed then
             shouldShow = false
         end
+        if row.hiddenByProfession then
+            shouldShow = false
+        end
         
         if shouldShow then
             row:Show()
@@ -1762,6 +1950,8 @@ local function ApplyFilter()
     -- Recalculate and update the row positioning after filtering
     SortAchievementRows()
 end
+
+_G.HCA_ApplyFilter = ApplyFilter
 
 UIDropDownMenu_Initialize(filterDropdown, function(self, level)
     if level == 1 then
@@ -1938,7 +2128,7 @@ function CreateAchievementRow(parent, achId, title, tooltip, icon, level, points
 
     -- icon
     row.Icon = row:CreateTexture(nil, "ARTWORK")
-    row.Icon:SetSize(32, 32)
+    row.Icon:SetSize(30, 30)
     row.Icon:SetPoint("LEFT", row, "LEFT", 1, 0) -- Shift to account for SSF border
     row.Icon:SetTexture(icon or 136116)
     
@@ -1953,23 +2143,15 @@ function CreateAchievementRow(parent, achId, title, tooltip, icon, level, points
     row.IconFrameGold = row:CreateTexture(nil, "OVERLAY", nil, 7)
     row.IconFrameGold:SetSize(33, 33)
     row.IconFrameGold:SetPoint("CENTER", row.Icon, "CENTER", 0, 0)
-    row.IconFrameGold:SetTexture("Interface\\AddOns\\HardcoreAchievements\\Images\\frame-gold.blp")
+    row.IconFrameGold:SetTexture("Interface\\AddOns\\HardcoreAchievements\\Images\\frame_gold.blp")
     row.IconFrameGold:SetDrawLayer("OVERLAY", 1)
     row.IconFrameGold:Hide()
     
-    -- Disabled frame (failed)
-    row.IconFrameDisabled = row:CreateTexture(nil, "OVERLAY", nil, 7)
-    row.IconFrameDisabled:SetSize(33, 33)
-    row.IconFrameDisabled:SetPoint("CENTER", row.Icon, "CENTER", 0, 0)
-    row.IconFrameDisabled:SetTexture("Interface\\AddOns\\HardcoreAchievements\\Images\\frame-disabled.blp")
-    row.IconFrameDisabled:SetDrawLayer("OVERLAY", 1)
-    row.IconFrameDisabled:Hide()
-    
-    -- Silver frame (available) - default
+    -- Silver frame (available/failed) - default
     row.IconFrame = row:CreateTexture(nil, "OVERLAY", nil, 7)
     row.IconFrame:SetSize(33, 33)
     row.IconFrame:SetPoint("CENTER", row.Icon, "CENTER", 0, 0)
-    row.IconFrame:SetTexture("Interface\\AddOns\\HardcoreAchievements\\Images\\frame-silver.blp")
+    row.IconFrame:SetTexture("Interface\\AddOns\\HardcoreAchievements\\Images\\frame_silver.blp")
     row.IconFrame:SetDrawLayer("OVERLAY", 1)
     row.IconFrame:Show()
 
@@ -2005,14 +2187,13 @@ function CreateAchievementRow(parent, achId, title, tooltip, icon, level, points
 
     -- Circular frame for points
     row.PointsFrame = CreateFrame("Frame", nil, row)
-    row.PointsFrame:SetSize(48, 48) -- Circular frame size (increased by 4px)
-    row.PointsFrame:SetPoint("RIGHT", row, "RIGHT", -15, 0) -- Centered vertically, positioned on right
+    row.PointsFrame:SetSize(42, 42)
+    row.PointsFrame:SetPoint("RIGHT", row, "RIGHT", -20, 0)
     
-    -- Circular frame texture
     row.PointsFrame.Texture = row.PointsFrame:CreateTexture(nil, "BACKGROUND")
-    row.PointsFrame.Texture:SetTexture("Interface\\AddOns\\HardcoreAchievements\\Images\\WowUI_Circular_Frame.blp")
+    row.PointsFrame.Texture:SetTexture("Interface\\AddOns\\HardcoreAchievements\\Images\\ring_disabled.blp")
     row.PointsFrame.Texture:SetAllPoints(row.PointsFrame)
-    row.PointsFrame.Texture:SetAlpha(0)
+    row.PointsFrame.Texture:SetAlpha(1)
     
     -- Points text (number only, no "pts")
     row.Points = row.PointsFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
@@ -2022,9 +2203,9 @@ function CreateAchievementRow(parent, achId, title, tooltip, icon, level, points
     
     -- Checkmark texture (for completed/failed states)
     row.PointsFrame.Checkmark = row.PointsFrame:CreateTexture(nil, "OVERLAY")
-    row.PointsFrame.Checkmark:SetSize(16, 16) -- Reduced by 50% from 32x32
+    row.PointsFrame.Checkmark:SetSize(14, 14)
     row.PointsFrame.Checkmark:SetPoint("CENTER", row.PointsFrame, "CENTER", 0, 0)
-    row.PointsFrame.Checkmark:Hide() -- Hidden by default
+    row.PointsFrame.Checkmark:Hide()
 
     -- timestamp
     row.TS = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
@@ -2034,13 +2215,20 @@ function CreateAchievementRow(parent, achId, title, tooltip, icon, level, points
     row.TS:SetText("")
     row.TS:SetTextColor(1, 1, 1)
 
-    -- border texture (child of BorderClip frame so it's clipped to Scroll bounds)
+    -- background + border textures (clipped to BorderClip frame)
+    row.Background = AchievementPanel.BorderClip:CreateTexture(nil, "BACKGROUND")
+    row.Background:SetDrawLayer("BACKGROUND", 0)
+    row.Background:SetTexture("Interface\\AddOns\\HardcoreAchievements\\Images\\row_texture.blp")
+    row.Background:SetVertexColor(1, 1, 1)
+    row.Background:SetAlpha(1)
+    row.Background:Hide()
+    
     row.Border = AchievementPanel.BorderClip:CreateTexture(nil, "BACKGROUND")
+    row.Border:SetDrawLayer("BACKGROUND", 1)
     row.Border:SetTexture("Interface\\AddOns\\HardcoreAchievements\\Images\\row-border.blp")
-    row.Border:SetSize(256, 32) -- Border texture size
-    row.Border:SetAlpha(0.5) -- 50% opacity as requested
-    -- Border will be positioned in SortAchievementRows function
-    row.Border:Hide() -- Hide initially, will be shown when positioned
+    row.Border:SetSize(256, 32)
+    row.Border:SetAlpha(0.5)
+    row.Border:Hide()
     
     -- highlight/tooltip
     row:EnableMouse(true)
@@ -2070,7 +2258,6 @@ function CreateAchievementRow(parent, achId, title, tooltip, icon, level, points
     row._achId = achId
     row._title = title
     row._tooltip = tooltip
-    row._zone = zone
     row._def = def
 
     row:SetScript("OnMouseUp", function(self, button)
@@ -2106,10 +2293,11 @@ function CreateAchievementRow(parent, achId, title, tooltip, icon, level, points
     row.tooltip = tooltip  -- Store the tooltip for later access
     row.zone = zone  -- Store the zone for later access
     row.achId = achId
-    -- Set initial border color and points display
-    UpdateRowBorderColor(row)
-    UpdatePointsDisplay(row)
-    -- Apply icon desaturation based on state
+    
+    if def and def.mapID then
+        row.zone = nil
+    end
+    -- Apply icon/frame styling for initial state
     ApplyOutleveledStyle(row)
 
     -- store trackers
@@ -2139,6 +2327,9 @@ function CreateAchievementRow(parent, achId, title, tooltip, icon, level, points
         row.hiddenUntilComplete = true
         -- Hide initially; filter logic will show it after completion
         row:Hide()
+    end
+    if ProfessionTracker and def and def.requireProfessionSkillID then
+        ProfessionTracker.RegisterRow(row, def)
     end
 
     -- Secret/hidden achievement support (optional via def)
@@ -2175,6 +2366,36 @@ function CreateAchievementRow(parent, achId, title, tooltip, icon, level, points
     HCA_UpdateTotalPoints()
 
     return row
+end
+
+EvaluateCustomCompletions = function(newLevel)
+    if not AchievementPanel or not AchievementPanel.achievements then return end
+
+    local anyCompleted = false
+    for _, row in ipairs(AchievementPanel.achievements) do
+        if not row.completed then
+            local fn = row.customIsCompleted
+            if type(fn) ~= "function" then
+                local id = row.id or row.achId
+                if id then
+                    fn = _G[id .. "_IsCompleted"]
+                end
+            end
+
+            if type(fn) == "function" then
+                local ok, result = pcall(fn, newLevel)
+                if ok and result == true then
+                    HCA_MarkRowCompleted(row)
+                    HCA_AchToast_Show(row.Icon:GetTexture(), row.Title:GetText(), row.points, row)
+                    anyCompleted = true
+                end
+            end
+        end
+    end
+
+    if anyCompleted then
+        RefreshOutleveledAll()
+    end
 end
 
 -- =========================================================
@@ -2293,35 +2514,7 @@ do
                 end
             elseif event == "PLAYER_LEVEL_CHANGED" then
                 local newLevel = tonumber(select(2, ...))
-                -- Check for level-based achievement completions
-                for _, row in ipairs(AchievementPanel.achievements) do
-                    if not row.completed then
-                        local isCompleted = false
-                        local fn = nil
-
-                        -- First try customIsCompleted on the row (direct from def)
-                        if type(row.customIsCompleted) == "function" then
-                            fn = row.customIsCompleted
-                        else
-                            -- Fallback to global _IsCompleted function
-                            local id = row.id or row.achId
-                            if id then
-                                fn = _G[id .. "_IsCompleted"]
-                            end
-                        end
-                        
-                        if type(fn) == "function" then
-                            local ok, result = pcall(fn, newLevel)
-                            if ok and result == true then
-                                isCompleted = true
-                            end
-                        end
-                        if isCompleted then
-                            HCA_MarkRowCompleted(row)
-                            HCA_AchToast_Show(row.Icon:GetTexture(), row.Title:GetText(), row.points, row)
-                        end
-                    end
-                end
+                EvaluateCustomCompletions(newLevel)
                 RefreshOutleveledAll()
             elseif event == "CHAT_MSG_LOOT" then
                 local msg, _, _, _, playerName = ...
@@ -2482,7 +2675,8 @@ hooksecurefunc("PanelTemplates_DeselectTab", function(tab)
 end)
 
 hooksecurefunc("CharacterFrame_ShowSubFrame", function(frameName)
-    if AchievementPanel and AchievementPanel:IsShown() and frameName ~= "Achievements" then
+    if AchievementPanel and AchievementPanel:IsShown() and frameName ~= "HardcoreAchievementsFrame" then
+        AchievementPanel._suppressOnHide = true
         AchievementPanel:Hide()
         -- AchievementPanel.PortraitCover:Hide()
         PanelTemplates_DeselectTab(Tab)

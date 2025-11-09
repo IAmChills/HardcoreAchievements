@@ -265,10 +265,13 @@ local function CreateOptionsPanel()
     modernRowsCB:SetChecked(GetSetting("modernRows", true))
     modernRowsCB:SetScript("OnClick", function(self)
         local isChecked = self:GetChecked()
-        SetSetting("modernRows", isChecked)
-        -- Refresh embed display when setting changes
-        if EMBED and EMBED.Rebuild then
-            EMBED:Rebuild()
+        if _G.HCA_SetModernRowsEnabled then
+            _G.HCA_SetModernRowsEnabled(isChecked)
+        else
+            SetSetting("modernRows", isChecked)
+            if EMBED and EMBED.Rebuild then
+                EMBED:Rebuild()
+            end
         end
     end)
     AddTooltipToCheckbox(modernRowsCB, "If enabled, the Ultra Hardcore achievements frame will display achievements as modern rows (similar to the character panel). If disabled, it will use the classic grid layout.")
@@ -328,6 +331,7 @@ local function CreateOptionsPanel()
         awardOnKill = awardOnKillCB,
         modernRows = modernRowsCB,
     }
+    panel.modernRows = modernRowsCB
     panel.buttons = {
         resetAchievementsTab = resetTabButton,
         discord = discordButton,
@@ -348,7 +352,7 @@ local function CreateOptionsPanel()
             awardOnKillCB:SetChecked(GetSetting("awardOnKill", false))
         end
         if modernRowsCB then
-            modernRowsCB:SetChecked(GetSetting("modernRows", false))
+            modernRowsCB:SetChecked(GetSetting("modernRows", true))
         end
     end
     

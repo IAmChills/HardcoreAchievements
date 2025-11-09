@@ -20,9 +20,10 @@
 - **Point System**: Earn points for completed achievements with multiplier bonuses
 
 ### **Achievement Categories**
-- **Boss Kills**: Defeat legendary bosses like Hogger, Rageclaw, and Mor'Ladim
+- **Boss Kills**: Defeat legendary bosses like Hogger, Fizzle, and Mor'Ladim
 - **Quest Completion**: Complete challenging quests within level requirements
 - **Level Milestones**: Reach level caps without dying (10, 20, 30, 40, 50, 60)
+- **Profession Milestones**: Earn points for reaching level caps (75, 150, 225, 300)
 - **Dungeon Challenges**: Complete dungeons and defeat dungeon bosses
 - **Special Events**: Unique achievements for special encounters and rare spawns
 
