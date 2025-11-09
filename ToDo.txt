@@ -9,4 +9,3 @@ New Achievements
 - No profession achievement for all points
 
 Bugs
-- Achievement in embed are not linkable
