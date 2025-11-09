@@ -60,6 +60,70 @@ end
 
 _G.HCA_SetModernRowsEnabled = SetModernRowsEnabled
 
+local function EmbedHasVisibleText(value)
+    if type(value) ~= "string" then
+        return false
+    end
+    return value:match("%S") ~= nil
+end
+
+local function UpdateEmbedRowTextLayout(row)
+    if not row or not row.Icon or not row.Title or not row.Sub then
+        return
+    end
+
+    local hasSubText = EmbedHasVisibleText(row.Sub:GetText())
+
+    row.Title:ClearAllPoints()
+    row.Sub:ClearAllPoints()
+    if row.TitleShadow then
+        row.TitleShadow:ClearAllPoints()
+    end
+
+    if hasSubText then
+        local text = row.Sub:GetText()
+        local extraLines = 0
+        if text and text ~= "" then
+            local _, newlines = text:gsub("\n", "")
+            extraLines = math.max(0, newlines)
+        end
+        local yOffset = 12 + (extraLines * 5)
+        row.Title:SetPoint("TOPLEFT", row.Icon, "RIGHT", 8, yOffset)
+        row.Sub:SetPoint("TOPLEFT", row.Title, "BOTTOMLEFT", 0, -2)
+        row.Sub:Show()
+    else
+        row.Title:SetPoint("LEFT", row.Icon, "RIGHT", 8, 0)
+        row.Sub:SetPoint("TOPLEFT", row.Title, "BOTTOMLEFT", 0, -2)
+        row.Sub:Hide()
+    end
+
+    if row.TitleShadow then
+        row.TitleShadow:SetPoint("LEFT", row.Title, "LEFT", 1, -1)
+    end
+end
+
+local function HookEmbedSubTextUpdates(row)
+    if not row or not row.Sub or row.Sub._hcaSetTextWrapped then
+        return
+    end
+
+    local fontString = row.Sub
+    local originalSetText = fontString.SetText
+    local originalSetFormattedText = fontString.SetFormattedText
+
+    fontString.SetText = function(self, text, ...)
+        originalSetText(self, text, ...)
+        UpdateEmbedRowTextLayout(row)
+    end
+
+    fontString.SetFormattedText = function(self, ...)
+        originalSetFormattedText(self, ...)
+        UpdateEmbedRowTextLayout(row)
+    end
+
+    fontString._hcaSetTextWrapped = true
+end
+
 -- Helper function to check if row is outleveled (must be defined before functions that use it)
 local function IsRowOutleveled(row)
   if not row or row.completed then return false end
@@ -637,13 +701,11 @@ local function CreateEmbedModernRow(parent, srow)
     
     -- title
     row.Title = row:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    row.Title:SetPoint("LEFT", row.Icon, "RIGHT", 8, 10)
     row.Title:SetText(title)
     row.Title:SetTextColor(1, 1, 1)
     
     -- title drop shadow (strip color codes so shadow is always black)
     row.TitleShadow = row:CreateFontString(nil, "BACKGROUND", "GameFontNormal")
-    row.TitleShadow:SetPoint("LEFT", row.Icon, "RIGHT", 9, 9)
     row.TitleShadow:SetText(StripColorCodes(title))
     row.TitleShadow:SetTextColor(0, 0, 0, 0.5)
     row.TitleShadow:SetDrawLayer("BACKGROUND", 0)
@@ -668,6 +730,9 @@ local function CreateEmbedModernRow(parent, srow)
         row.Sub:SetText(defaultSub)
         row._defaultSubText = defaultSub
     end
+    HookEmbedSubTextUpdates(row)
+    row.UpdateTextLayout = UpdateEmbedRowTextLayout
+    UpdateEmbedRowTextLayout(row)
     
     -- Circular frame for points (increased size)
     row.PointsFrame = CreateFrame("Frame", nil, row)
