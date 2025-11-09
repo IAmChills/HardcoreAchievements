@@ -218,80 +218,160 @@ local function CreateAdminPanel()
     -- Populate achievement dropdown
 	local function PopulateAchievementDropdown()
         local achievementList = {}
-        
-        -- Get achievements from the catalog
-        if _G.Achievements then
-            for _, achievement in ipairs(_G.Achievements) do
-                local levelText = achievement.level and (" (Level " .. achievement.level .. ")") or " (No Level)"
-                table.insert(achievementList, {
-					text = achievement.title .. levelText,
-                    value = achievement.achId,
-                    achievement = achievement
-                })
-            end
-        end
-        
-        -- Sort by level (nil values go to the end)
-        table.sort(achievementList, function(a, b)
-            local levelA = a.achievement.level or 999
-            local levelB = b.achievement.level or 999
-            return levelA < levelB
-        end)
-        
+        local buttons = {}
         local selectedAchievement = nil
 
-		-- Build scrollable buttons
-		local ROW_H = 20
-		local GAP = 2
-		local totalHeight = 0
-		local buttons = {}
-		
-		local function CreateOrUpdateButtons()
-			for i, item in ipairs(achievementList) do
-				local btn = buttons[i]
-				if not btn then
-					btn = CreateFrame("Button", nil, content)
-					btn:SetSize(210, ROW_H)
-					btn.text = btn:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-					btn.text:SetPoint("LEFT", btn, "LEFT", 6, 0)
-					btn.hl = btn:CreateTexture(nil, "BACKGROUND")
-					btn.hl:SetAllPoints()
-					btn.hl:SetColorTexture(1, 1, 1, 0.08)
-					btn.hl:Hide()
-					btn:SetScript("OnEnter", function(s) s.hl:Show() end)
-					btn:SetScript("OnLeave", function(s) s.hl:Hide() end)
-					buttons[i] = btn
-				end
-				btn:ClearAllPoints()
-				if i == 1 then
-					btn:SetPoint("TOPLEFT", content, "TOPLEFT", 0, 0)
-				else
-					btn:SetPoint("TOPLEFT", buttons[i-1], "BOTTOMLEFT", 0, -GAP)
-				end
-				btn.text:SetText(item.text)
-				btn:SetScript("OnMouseUp", function()
-					selectedAchievement = item.achievement
-					achievementSelectButton:SetText(item.text)
-					achievementListFrame:Hide()
-				end)
-				btn:Show()
-			end
-			totalHeight = (#achievementList > 0) and ((ROW_H * #achievementList) + (GAP * math.max(0, #achievementList - 1))) or 1
-			content:SetSize(210, totalHeight)
-			scroll:UpdateScrollChildRect()
-		end
+        local ROW_H = 20
+        local GAP = 2
 
-		CreateOrUpdateButtons()
+        local function AddEntry(targetList, seen, entry)
+            if not entry or not entry.achId then return end
+            local achId = tostring(entry.achId)
+            if seen[achId] then return end
+            seen[achId] = true
 
-		achievementSelectButton:SetScript("OnClick", function()
-			if achievementListFrame:IsShown() then
-				achievementListFrame:Hide()
-			else
-				achievementListFrame:Show()
-			end
-		end)
-        
-		-- Send button click handler
+            local title = entry.title or achId
+            local level = entry.level and tonumber(entry.level) or nil
+            local points = entry.points and tonumber(entry.points) or nil
+
+            table.insert(targetList, {
+                achievement = {
+                    achId = achId,
+                    title = title,
+                    level = level,
+                    points = points,
+                }
+            })
+        end
+
+        local function BuildAchievementEntries()
+            local entries = {}
+            local seen = {}
+
+            if AchievementPanel and AchievementPanel.achievements then
+                for _, row in ipairs(AchievementPanel.achievements) do
+                    local rowAchId = row.achId or row.id
+                    if rowAchId then
+                        local def = row._def or {}
+                        AddEntry(entries, seen, {
+                            achId = rowAchId,
+                            title = def.title or row._title or (row.Title and row.Title:GetText()) or tostring(rowAchId),
+                            level = def.level or row.maxLevel,
+                            points = def.points or row.originalPoints or row.points,
+                        })
+                    end
+                end
+            end
+
+            if _G.Achievements then
+                for _, achievement in ipairs(_G.Achievements) do
+                    AddEntry(entries, seen, achievement)
+                end
+            end
+
+            if _G.HCA_AchievementDefs then
+                for achId, achievement in pairs(_G.HCA_AchievementDefs) do
+                    AddEntry(entries, seen, {
+                        achId = achId,
+                        title = achievement.title,
+                        level = achievement.level or achievement.maxLevel,
+                        points = achievement.points,
+                    })
+                end
+            end
+
+            return entries
+        end
+
+        local function FormatButtonLabel(item)
+            local title = item.achievement.title or item.achievement.achId
+            local level = item.achievement.level
+            local levelText = level and (" (Level " .. level .. ")") or " (No Level)"
+            return title .. levelText
+        end
+
+        local function RefreshButtons()
+            achievementList = BuildAchievementEntries()
+
+            table.sort(achievementList, function(a, b)
+                local levelA = a.achievement.level or 999
+                local levelB = b.achievement.level or 999
+                if levelA == levelB then
+                    return (a.achievement.title or "") < (b.achievement.title or "")
+                end
+                return levelA < levelB
+            end)
+
+            for _, btn in ipairs(buttons) do
+                btn:Hide()
+            end
+
+            for i, item in ipairs(achievementList) do
+                local btn = buttons[i]
+                if not btn then
+                    btn = CreateFrame("Button", nil, content)
+                    btn:SetSize(210, ROW_H)
+                    btn.text = btn:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+                    btn.text:SetPoint("LEFT", btn, "LEFT", 6, 0)
+                    btn.hl = btn:CreateTexture(nil, "BACKGROUND")
+                    btn.hl:SetAllPoints()
+                    btn.hl:SetColorTexture(1, 1, 1, 0.08)
+                    btn.hl:Hide()
+                    btn:SetScript("OnEnter", function(s) s.hl:Show() end)
+                    btn:SetScript("OnLeave", function(s) s.hl:Hide() end)
+                    buttons[i] = btn
+                end
+                btn:ClearAllPoints()
+                if i == 1 then
+                    btn:SetPoint("TOPLEFT", content, "TOPLEFT", 0, 0)
+                else
+                    btn:SetPoint("TOPLEFT", buttons[i-1], "BOTTOMLEFT", 0, -GAP)
+                end
+                local label = FormatButtonLabel(item)
+                btn.text:SetText(label)
+                btn:SetScript("OnMouseUp", function()
+                    selectedAchievement = item.achievement
+                    achievementSelectButton:SetText(label)
+                    achievementListFrame:Hide()
+                end)
+                btn:Show()
+            end
+
+            local visibleCount = #achievementList
+            local totalHeight = (visibleCount > 0) and ((ROW_H * visibleCount) + (GAP * math.max(0, visibleCount - 1))) or 1
+            content:SetSize(210, totalHeight)
+            scroll:UpdateScrollChildRect()
+
+            if selectedAchievement then
+                local found = false
+                local matchedLabel = nil
+                for _, item in ipairs(achievementList) do
+                    if item.achievement.achId == selectedAchievement.achId then
+                        found = true
+                        matchedLabel = FormatButtonLabel(item)
+                        break
+                    end
+                end
+                if found and matchedLabel then
+                    achievementSelectButton:SetText(matchedLabel)
+                elseif not found then
+                    selectedAchievement = nil
+                    achievementSelectButton:SetText("Select Achievement...")
+                end
+            end
+        end
+
+        RefreshButtons()
+
+        achievementSelectButton:SetScript("OnClick", function()
+            if achievementListFrame:IsShown() then
+                achievementListFrame:Hide()
+            else
+                RefreshButtons()
+                achievementListFrame:Show()
+            end
+        end)
+
         sendButton:SetScript("OnClick", function()
             local characterName = characterInput:GetText():trim()
             if not selectedAchievement then
@@ -302,12 +382,12 @@ local function CreateAdminPanel()
                 print("|cffff0000[HardcoreAchievements Admin]|r Please enter a character name")
                 return
             end
-			
-			local forceUpdate = forceCheck:GetChecked() and true or false
-			local overridePoints = tonumber(pointsInput:GetText())
-			local overrideLevel = tonumber(levelInput:GetText())
-			
-			SendAdminCommand(selectedAchievement.achId, characterName, forceUpdate, overridePoints, overrideLevel)
+
+            local forceUpdate = forceCheck:GetChecked() and true or false
+            local overridePoints = tonumber(pointsInput:GetText())
+            local overrideLevel = tonumber(levelInput:GetText())
+
+            SendAdminCommand(selectedAchievement.achId, characterName, forceUpdate, overridePoints, overrideLevel)
         end)
     end
     
