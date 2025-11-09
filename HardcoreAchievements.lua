@@ -155,6 +155,70 @@ local function StripColorCodes(text)
     return text:gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", "")
 end
 
+local function HasVisibleText(value)
+    if type(value) ~= "string" then
+        return false
+    end
+    return value:match("%S") ~= nil
+end
+
+local function UpdateRowTextLayout(row)
+    if not row or not row.Icon or not row.Title or not row.Sub then
+        return
+    end
+
+    local hasSubText = HasVisibleText(row.Sub:GetText())
+
+    row.Title:ClearAllPoints()
+    row.Sub:ClearAllPoints()
+    if row.TitleShadow then
+        row.TitleShadow:ClearAllPoints()
+    end
+
+    if hasSubText then
+        local text = row.Sub:GetText()
+        local extraLines = 0
+        if text and text ~= "" then
+            local _, newlines = text:gsub("\n", "")
+            extraLines = math.max(0, newlines)
+        end
+        local yOffset = 11 + (extraLines * 5)
+        row.Title:SetPoint("TOPLEFT", row.Icon, "RIGHT", 8, yOffset)
+        row.Sub:SetPoint("TOPLEFT", row.Title, "BOTTOMLEFT", 0, -1)
+        row.Sub:Show()
+    else
+        row.Title:SetPoint("LEFT", row.Icon, "RIGHT", 8, 0)
+        row.Sub:SetPoint("TOPLEFT", row.Title, "BOTTOMLEFT", 0, -2)
+        row.Sub:Hide()
+    end
+
+    if row.TitleShadow then
+        row.TitleShadow:SetPoint("LEFT", row.Title, "LEFT", 1, -1)
+    end
+end
+
+local function HookRowSubTextUpdates(row)
+    if not row or not row.Sub or row.Sub._hcaSetTextWrapped then
+        return
+    end
+
+    local fontString = row.Sub
+    local originalSetText = fontString.SetText
+    local originalSetFormattedText = fontString.SetFormattedText
+
+    fontString.SetText = function(self, text, ...)
+        originalSetText(self, text, ...)
+        UpdateRowTextLayout(row)
+    end
+
+    fontString.SetFormattedText = function(self, ...)
+        originalSetFormattedText(self, ...)
+        UpdateRowTextLayout(row)
+    end
+
+    fontString._hcaSetTextWrapped = true
+end
+
 local function IsRowOutleveled(row)
     if not row or row.completed then return false end
     if not row.maxLevel then return false end
@@ -609,6 +673,10 @@ function HCA_MarkRowCompleted(row)
         if row.revealIcon and row.Icon then row.Icon:SetTexture(row.revealIcon) end
         if row.revealTooltip then row.tooltip = row.revealTooltip end
         row.staticPoints = row.revealStaticPoints or false
+    end
+
+    if ProfessionTracker and ProfessionTracker.NotifyRowCompleted then
+        ProfessionTracker.NotifyRowCompleted(row)
     end
     
     -- Broadcast achievement completion to emote channel
@@ -1969,6 +2037,8 @@ UIDropDownMenu_Initialize(filterDropdown, function(self, level)
         end
     end
 end)
+UIDropDownMenu_SetSelectedValue(filterDropdown, "all")
+UIDropDownMenu_SetText(filterDropdown, ACHIEVEMENTFRAME_FILTER_ALL)
 
 --AchievementPanel.Text = AchievementPanel:CreateFontString(nil, "OVERLAY", "GameFontNormal")
 --AchievementPanel.Text:SetPoint("TOP", 5, -45)
@@ -2157,13 +2227,11 @@ function CreateAchievementRow(parent, achId, title, tooltip, icon, level, points
 
     -- title
     row.Title = row:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    row.Title:SetPoint("LEFT", row.Icon, "RIGHT", 8, 10) -- Title stays anchored to icon
     row.Title:SetText(title or ("Achievement %d"):format(index))
     row.Title:SetTextColor(1, 1, 1) -- Default white (will be updated by UpdatePointsDisplay)
     
     -- title drop shadow (strip color codes so shadow is always black)
     row.TitleShadow = row:CreateFontString(nil, "BACKGROUND", "GameFontNormal")
-    row.TitleShadow:SetPoint("LEFT", row.Icon, "RIGHT", 9, 9) -- Slightly offset right and down
     row.TitleShadow:SetText(StripColorCodes(title or ("Achievement %d"):format(index)))
     row.TitleShadow:SetTextColor(0, 0, 0, 0.5) -- Black with 50% opacity for shadow
     row.TitleShadow:SetDrawLayer("BACKGROUND", 0) -- Behind the main title
@@ -2184,6 +2252,12 @@ function CreateAchievementRow(parent, achId, title, tooltip, icon, level, points
             row.Sub:SetText("")
         end
     end
+    if row.Sub then
+        row._defaultSubText = row.Sub:GetText() or ""
+    end
+    HookRowSubTextUpdates(row)
+    row.UpdateTextLayout = UpdateRowTextLayout
+    UpdateRowTextLayout(row)
 
     -- Circular frame for points
     row.PointsFrame = CreateFrame("Frame", nil, row)
@@ -2327,6 +2401,15 @@ function CreateAchievementRow(parent, achId, title, tooltip, icon, level, points
         row.hiddenUntilComplete = true
         -- Hide initially; filter logic will show it after completion
         row:Hide()
+    end
+    if def and def.requireProfessionSkillID then
+        row.hiddenByProfession = true
+        row._professionHiddenUntilComplete = row.hiddenUntilComplete
+        row._professionSkillID = def.requireProfessionSkillID
+        if row.Sub then
+            row.Sub:SetText("")
+            row._defaultSubText = ""
+        end
     end
     if ProfessionTracker and def and def.requireProfessionSkillID then
         ProfessionTracker.RegisterRow(row, def)

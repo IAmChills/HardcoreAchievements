@@ -6,3 +6,7 @@ Arc Challenges
 
 New Achievements
 - Black Quiraji Mount?
+- No profession achievement for all points
+
+Bugs
+- Achievement in embed are not linkable

@@ -96,6 +96,110 @@ local function IsRowCompleted(row, cdb)
     return false
 end
 
+local function ApplyFilterIfAvailable()
+    local apply = _G.HCA_ApplyFilter
+    if type(apply) == "function" then
+        apply()
+        return
+    end
+
+    local panel = _G.AchievementPanel
+    if panel and panel.achievements then
+        for _, row in ipairs(panel.achievements) do
+            if row.hiddenByProfession or (row.hiddenUntilComplete and not row.completed) then
+                row:Hide()
+            else
+                row:Show()
+            end
+        end
+    end
+end
+
+local function UpdateProfessionRowVisibility(skillID)
+    local rows = ProfessionRows[skillID]
+    if not rows or #rows == 0 then
+        return
+    end
+
+    table.sort(rows, function(a, b)
+        local defA = a and a._def or {}
+        local defB = b and b._def or {}
+        local rankA = defA.requiredProfessionRank or defA.requiredRank or 0
+        local rankB = defB.requiredProfessionRank or defB.requiredRank or 0
+        if rankA == rankB then
+            local idA = defA.achId or a.id or ""
+            local idB = defB.achId or b.id or ""
+            return idA < idB
+        end
+        return rankA < rankB
+    end)
+
+    local state = EnsureState(skillID)
+    local cdb = GetCharacterDB()
+    local hasKnown = state and state.known
+
+    local nextRowAssigned = false
+    local filterNeedsRefresh = false
+
+    for _, row in ipairs(rows) do
+        if row and row._def then
+            if row._professionHiddenUntilComplete == nil then
+                row._professionHiddenUntilComplete = row.hiddenUntilComplete
+            end
+
+            local completed = IsRowCompleted(row, cdb)
+            local shouldShow = completed
+
+            if not shouldShow and hasKnown then
+                if not nextRowAssigned then
+                    shouldShow = true
+                    nextRowAssigned = true
+                else
+                    shouldShow = false
+                end
+            end
+
+            if not hasKnown and not completed then
+                shouldShow = false
+            end
+
+            if shouldShow then
+                if row.hiddenByProfession then
+                    row.hiddenByProfession = nil
+                    filterNeedsRefresh = true
+                end
+                if row.hiddenUntilComplete and not completed then
+                    row.hiddenUntilComplete = false
+                    filterNeedsRefresh = true
+                end
+            else
+                if not row.hiddenByProfession then
+                    row.hiddenByProfession = true
+                    filterNeedsRefresh = true
+                end
+                local desiredHiddenUntilComplete = row._professionHiddenUntilComplete
+                if desiredHiddenUntilComplete == nil then
+                    desiredHiddenUntilComplete = row._def.hiddenUntilComplete == true
+                end
+                if row.hiddenUntilComplete ~= desiredHiddenUntilComplete then
+                    row.hiddenUntilComplete = desiredHiddenUntilComplete
+                    filterNeedsRefresh = true
+                end
+            end
+        end
+    end
+
+    if filterNeedsRefresh then
+        ApplyFilterIfAvailable()
+    end
+end
+
+local function UpdateAllProfessionRowVisibility()
+    for skillID, _ in pairs(ProfessionRows) do
+        UpdateProfessionRowVisibility(skillID)
+    end
+end
+
 local function EvaluateCompletions(skillID)
     local rows = ProfessionRows[skillID]
     if not rows then return end
@@ -132,6 +236,23 @@ function ProfessionTracker.RegisterRow(row, def)
 
     ProfessionRows[skillID] = ProfessionRows[skillID] or {}
     table.insert(ProfessionRows[skillID], row)
+
+    row._professionSkillID = skillID
+    if row._professionHiddenUntilComplete == nil then
+        row._professionHiddenUntilComplete = row.hiddenUntilComplete
+    end
+    row.hiddenByProfession = true
+
+    UpdateProfessionRowVisibility(skillID)
+end
+
+function ProfessionTracker.NotifyRowCompleted(row)
+    if not row then return end
+    local def = row._def
+    local skillID = (def and def.requireProfessionSkillID) or row._professionSkillID
+    if not skillID then return end
+
+    UpdateProfessionRowVisibility(skillID)
 end
 
 -- =========================================================
@@ -147,6 +268,7 @@ local function NotifySkillChanged(skillID, newRank, oldRank, localizedName)
     end
 
     EvaluateCompletions(skillID)
+    UpdateProfessionRowVisibility(skillID)
 end
 
 local function ScanSkills()
@@ -191,6 +313,8 @@ local function ScanSkills()
             NotifySkillChanged(skillID, 0, oldRank)
         end
     end
+
+    UpdateAllProfessionRowVisibility()
 end
 
 local function HandleConsoleSkillMessage(message)
@@ -244,6 +368,7 @@ end)
 
 function ProfessionTracker.RefreshAll()
     ScanSkills()
+    UpdateAllProfessionRowVisibility()
 end
 
 _G.HCA_ProfessionCommon = ProfessionTracker

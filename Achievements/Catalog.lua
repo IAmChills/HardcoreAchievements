@@ -1,9 +1,9 @@
 local Achievements = {
 
---{ achId="Test",  title="Boar Test",  level=1, tooltip="Kill |cff0091e6a boar", icon=134400, points=10, requiredQuestId=nil, targetNpcId=3098, faction="Horde", zone="Durotar" },
+{ achId="Test",  title="Boar Test",  level=1, tooltip="Kill |cff0091e6a boar", icon=134400, points=10, requiredQuestId=nil, targetNpcId=3098, faction="Horde", zone="Durotar" },
 --{ achId="Test2", title="Easy Quest Test", level=1, tooltip="Orc starter quest", icon=134400, points=10, requiredQuestId=4641, targetNpcId=nil, faction="Horde", zone="Durotar" },
---{ achId="Test3", title="Kill + Quest", level=1, tooltip="Kill a boar and complete the orc starter quest", icon=134400, points=10, requiredQuestId=4641, targetNpcId=3098, faction="Horde", zone="Durotar" },
---{ achId="Test4", title="Kill 3 Boars", level=1, tooltip="Kill 3 boars", icon=134400, points=10, requiredQuestId=nil, requiredKills = { [3098] = 3, }, faction="Horde", zone="Durotar" },
+{ achId="Test3", title="Kill + Quest", level=1, tooltip="Kill a boar and complete the orc starter quest", icon=134400, points=10, requiredQuestId=4641, targetNpcId=3098, faction="Horde", zone="Durotar" },
+{ achId="Test4", title="Kill 3 Boars", level=1, tooltip="Kill 3 boars", icon=134400, points=10, requiredQuestId=nil, requiredKills = { [3098] = 3, }, faction="Horde", zone="Durotar" },
 
 -- Alliance
 {
@@ -636,7 +636,7 @@ local Achievements = {
     achId = "AlchemistShopA",
     title = "Back to Elwynn! |cff3FC7EB[Mage]|r",
     level = 18,
-    tooltip = "Complete |cff0091e6Investigate the Alchemist Shop|r before level 19",
+    tooltip = "Complete |cff0091e6Investigate the Blue Recluse|r before level 19",
     icon = 135734,
     points = 10,
     allowSoloDouble = true,
