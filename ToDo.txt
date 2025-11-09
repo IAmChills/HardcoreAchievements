@@ -5,8 +5,9 @@ Arc Challenges
 - etc
 
 New Achievements
-- Black Quiraji Mount?
 - No profession achievement for all points
 
 Bugs
-- Achievement in embed are not linkable
+
+Helpful code
+|c" .. select(4, GetClassColor(select(2, UnitClass("player")))) .. "TEXTHERE|r

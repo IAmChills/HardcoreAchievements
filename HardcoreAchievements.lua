@@ -653,7 +653,7 @@ function HCA_MarkRowCompleted(row)
     if row.Sub then
         if wasSolo and isSelfFound then
             -- Completed achievements always show "Solo", not "Solo bonus"
-            row.Sub:SetText(AUCTION_TIME_LEFT0 .. "\n|cFFac81d6Solo|r")
+            row.Sub:SetText(AUCTION_TIME_LEFT0 .. "\n|c" .. select(4, GetClassColor(select(2, UnitClass("player")))) .. "Solo|r")
         else
             row.Sub:SetText(AUCTION_TIME_LEFT0)
         end
@@ -728,7 +728,7 @@ local function RestoreCompletionsFromDB()
             if row.Sub then
                 if rec.wasSolo and isSelfFound then
                     -- Completed achievements always show "Solo", not "Solo bonus"
-                    row.Sub:SetText(AUCTION_TIME_LEFT0 .. "\n|cFFac81d6Solo|r")
+                    row.Sub:SetText(AUCTION_TIME_LEFT0 .. "\n|c" .. select(4, GetClassColor(select(2, UnitClass("player")))) .. "Solo|r")
                 else
                     row.Sub:SetText(AUCTION_TIME_LEFT0)
                 end
@@ -1967,8 +1967,8 @@ end)
 
 -- Filter dropdown
 local filterDropdown = CreateFrame("Frame", nil, AchievementPanel, "UIDropDownMenuTemplate")
-filterDropdown:SetPoint("TOP", AchievementPanel, "TOP", 5, -50)
-UIDropDownMenu_SetWidth(filterDropdown, 110)
+filterDropdown:SetPoint("TOPRIGHT", AchievementPanel, "TOPRIGHT", -17, -50)
+UIDropDownMenu_SetWidth(filterDropdown, 90)
 UIDropDownMenu_SetText(filterDropdown, "All")
 
 local currentFilter = "all"
@@ -2046,7 +2046,7 @@ UIDropDownMenu_SetText(filterDropdown, ACHIEVEMENTFRAME_FILTER_ALL)
 --AchievementPanel.Text:SetTextColor(1, 1, 0)
 
 AchievementPanel.TotalPoints = AchievementPanel:CreateFontString(nil, "OVERLAY", "GameFontHighlightLarge")
-AchievementPanel.TotalPoints:SetPoint("TOPRIGHT", AchievementPanel, "TOPRIGHT", -65, -55)
+AchievementPanel.TotalPoints:SetPoint("TOP", AchievementPanel, "TOP", 0, -55)
 AchievementPanel.TotalPoints:SetText("0")
 AchievementPanel.TotalPoints:SetTextColor(0.6, 0.9, 0.6)
 
@@ -2094,7 +2094,7 @@ end)
 -- Scrollable container inside the AchievementPanel
 AchievementPanel.Scroll = CreateFrame("ScrollFrame", "$parentScroll", AchievementPanel, "UIPanelScrollFrameTemplate")
 AchievementPanel.Scroll:SetPoint("TOPLEFT", 30, -80)      -- adjust to taste
-AchievementPanel.Scroll:SetPoint("BOTTOMRIGHT", -65, 90)  -- leaves room for the scrollbar
+AchievementPanel.Scroll:SetPoint("BOTTOMRIGHT", -65, 85)  -- leaves room for the scrollbar
 AchievementPanel.Scroll:SetClipsChildren(false) -- Allow borders to extend into padding space
 
 -- Clipping frame for borders: allows horizontal extension but clips top/bottom

@@ -366,7 +366,7 @@ local Achievements = {
     title = "This Isn't Too Bad...",
     level = 10,
     tooltip = "Reach level 10 without dying",
-    icon = 894556,
+    icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\milestone_square.blp",
     points = 10,
     customIsCompleted = function(newLevel) return (newLevel or UnitLevel("player") or 1) >= 10 end,
     staticPoints = true,
@@ -375,7 +375,7 @@ local Achievements = {
     title = "Roaring Twenties",
     level = 20,
     tooltip = "Reach level 20 without dying",
-    icon = 894556,
+    icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\milestone_square.blp",
     points = 20,
     customIsCompleted = function(newLevel) return (newLevel or UnitLevel("player") or 1) >= 20 end,
     staticPoints = true,
@@ -384,7 +384,7 @@ local Achievements = {
     title = "Thirty and Flirty",
     level = 30,
     tooltip = "Reach level 30 without dying",
-    icon = 894556,
+    icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\milestone_square.blp",
     points = 30,
     customIsCompleted = function(newLevel) return (newLevel or UnitLevel("player") or 1) >= 30 end,
     staticPoints = true,
@@ -393,7 +393,7 @@ local Achievements = {
     title = "Over the Hill",
     level = 40,
     tooltip = "Reach level 40 without dying",
-    icon = 894556,
+    icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\milestone_square.blp",
     points = 40,
     customIsCompleted = function(newLevel) return (newLevel or UnitLevel("player") or 1) >= 40 end,
     staticPoints = true,
@@ -402,7 +402,7 @@ local Achievements = {
     title = "Lock In",
     level = 50,
     tooltip = "Reach level 50 without dying",
-    icon = 894556,
+    icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\milestone_square.blp",
     points = 50,
     customIsCompleted = function(newLevel) return (newLevel or UnitLevel("player") or 1) >= 50 end,
     staticPoints = true,
@@ -411,7 +411,7 @@ local Achievements = {
     title = "It's Been Sixty Years...",
     level = 60,
     tooltip = "Reach level 60 without dying",
-    icon = 894556,
+    icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\milestone_square.blp",
     points = 60,
     customIsCompleted = function(newLevel) return (newLevel or UnitLevel("player") or 1) >= 60 end,
     staticPoints = true,
@@ -728,6 +728,47 @@ local Achievements = {
     --secretIcon = 132387,
     secretPoints = 1,
     staticPoints = true,
+}, {
+    achId = "Secret3",
+    title = "Who's A Good Boy?",
+    level = nil,
+    tooltip = "You have completed the secret achievement: |cff0091e6Pet Spot the Wolf|r",
+    icon = 132203,
+    points = 1,
+    faction = FACTION_ALLIANCE,
+    customIsCompleted = function() return false end,
+    customEmote = function(token)
+        if token ~= "PET" then
+            return false
+        end
+
+        local targetGuid = UnitGUID("target")
+        if not targetGuid then
+            return false
+        end
+
+        local _, _, _, _, _, npcIdStr = strsplit("-", targetGuid)
+        local npcId = npcIdStr and tonumber(npcIdStr) or nil
+        return npcId == 1680
+    end,
+    secret = true,
+    secreTitle = "Secret Achievement",
+    secretTooltip = "I spot a good boy!",
+    --secretIcon = 132387,
+    secretPoints = 1,
+    staticPoints = true,
+}, {
+    achId = "Secret98",
+    title = "Legendary Resonance",
+    level = nil,
+    tooltip = "You have completed the secret achievement: |cffff8000Obtain the Black Qiraji Resonating Crystal|r",
+    icon = 134399,
+    points = 100,
+    customIsCompleted = function() return GetItemCount(21176, true) > 0 end,
+    -- Secret presentation before completion
+    secret = true,
+    staticPoints = true,
+    hiddenUntilComplete = true,
 }, {
     achId = "Secret99",
     title = "Level 18? Ughhh",

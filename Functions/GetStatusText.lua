@@ -34,27 +34,27 @@ local function GetStatusText(params)
     if hasIneligibleKill and not completed then
         -- Determine message based on whether both kill and quest are required
         if requiresBoth then
-            return "|cffcf7171Pending Turn-in (ineligible kill)|r"
+            return "|c" .. select(4, GetClassColor(select(2, UnitClass("player")))) .. "Pending Turn-in (ineligible kill)|r"
         else
             return "|cffcf7171Ineligible Kill|r"
         end
     end
     
     if completed and wasSolo and isSelfFound then
-        return "|cFFac81d6Solo|r"
+        return "|c" .. select(4, GetClassColor(select(2, UnitClass("player")))) .. "Solo|r"
     end
     
     -- Check if kills are satisfied but quest is pending (for achievements requiring both)
     if not completed and requiresBoth and killsSatisfied then
         if hasSoloStatus and isSelfFound then
-            return "|cFFac81d6Pending Turn-in (solo)|r"
+            return "|c" .. select(4, GetClassColor(select(2, UnitClass("player")))) .. "Pending Turn-in (solo)|r"
         else
-            return "|cFF99e699Pending Turn-in|r"
+            return "|c" .. select(4, GetClassColor(select(2, UnitClass("player")))) .. "Pending Turn-in|r"
         end
     end
     
     if not completed and requiresBoth and hasSoloStatus and isSelfFound then
-        return "|cFFac81d6Pending Turn-in (solo)|r"
+        return "|c" .. select(4, GetClassColor(select(2, UnitClass("player")))) .. "Pending Turn-in (solo)|r"
     end
     
     if not completed and isSoloMode and allowSoloDouble and not hasSoloStatus and isSelfFound then

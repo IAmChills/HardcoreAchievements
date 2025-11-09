@@ -250,7 +250,7 @@ local function CreateOptionsPanel()
     -- Award on Kill checkbox
     local awardOnKillCB = CreateFrame("CheckButton", nil, panel, "InterfaceOptionsCheckButtonTemplate")
     awardOnKillCB:SetPoint("TOPLEFT", soloAchievementsCB, "BOTTOMLEFT", 0, -8)
-    awardOnKillCB.Text:SetText("Award achievements on kill rather than quest")
+    awardOnKillCB.Text:SetText("Award achievements on required kill instead of quest completion when available")
     awardOnKillCB:SetChecked(GetSetting("awardOnKill", false))
     awardOnKillCB:SetScript("OnClick", function(self)
         local isChecked = self:GetChecked()
@@ -258,29 +258,29 @@ local function CreateOptionsPanel()
     end)
     AddTooltipToCheckbox(awardOnKillCB, "If enabled, achievements that require an NPC kill will be awarded immediately on kill rather than waiting for quest completion.")
 
-    -- Modern Rows checkbox (for embed display)
-    local modernRowsCB = CreateFrame("CheckButton", nil, panel, "InterfaceOptionsCheckButtonTemplate")
-    modernRowsCB:SetPoint("TOPLEFT", awardOnKillCB, "BOTTOMLEFT", 0, -8)
-    modernRowsCB.Text:SetText("Use Modern Rows (UltraHardcore Display)")
-    modernRowsCB:SetChecked(GetSetting("modernRows", true))
-    modernRowsCB:SetScript("OnClick", function(self)
-        local isChecked = self:GetChecked()
-        if _G.HCA_SetModernRowsEnabled then
-            _G.HCA_SetModernRowsEnabled(isChecked)
-        else
-            SetSetting("modernRows", isChecked)
-            if EMBED and EMBED.Rebuild then
-                EMBED:Rebuild()
-            end
-        end
-    end)
-    AddTooltipToCheckbox(modernRowsCB, "If enabled, the Ultra Hardcore achievements frame will display achievements as modern rows (similar to the character panel). If disabled, it will use the classic grid layout.")
+    -- -- Modern Rows checkbox (for embed display)
+    -- local modernRowsCB = CreateFrame("CheckButton", nil, panel, "InterfaceOptionsCheckButtonTemplate")
+    -- modernRowsCB:SetPoint("TOPLEFT", awardOnKillCB, "BOTTOMLEFT", 0, -8)
+    -- modernRowsCB.Text:SetText("Use Modern Rows (UltraHardcore Display)")
+    -- modernRowsCB:SetChecked(GetSetting("modernRows", true))
+    -- modernRowsCB:SetScript("OnClick", function(self)
+    --     local isChecked = self:GetChecked()
+    --     if _G.HCA_SetModernRowsEnabled then
+    --         _G.HCA_SetModernRowsEnabled(isChecked)
+    --     else
+    --         SetSetting("modernRows", isChecked)
+    --         if EMBED and EMBED.Rebuild then
+    --             EMBED:Rebuild()
+    --         end
+    --     end
+    -- end)
+    -- AddTooltipToCheckbox(modernRowsCB, "If enabled, the Ultra Hardcore achievements frame will display achievements as modern rows (similar to the character panel). If disabled, it will use the classic grid layout.")
 
     -- =========================================================
     -- User Interface Category
     -- =========================================================
     local uiCategoryTitle = panel:CreateFontString(nil, "ARTWORK", "GameFontNormalLarge")
-    uiCategoryTitle:SetPoint("TOPLEFT", modernRowsCB, "BOTTOMLEFT", 0, -30)
+    uiCategoryTitle:SetPoint("TOPLEFT", awardOnKillCB, "BOTTOMLEFT", 0, -30)
     uiCategoryTitle:SetText("|cff69adc9User Interface|r")
     
     -- Reset Achievements Tab button
@@ -323,6 +323,22 @@ local function CreateOptionsPanel()
         frame:Show()
     end)
     AddTooltipToCheckbox(discordButton, "Click to open Discord support")
+
+    -- =========================================================
+    -- Credits
+    -- =========================================================
+    local creditsCategoryTitle = panel:CreateFontString(nil, "ARTWORK", "GameFontNormalLarge")
+    creditsCategoryTitle:SetPoint("TOPLEFT", discordButton, "BOTTOMLEFT", 0, -30)
+    creditsCategoryTitle:SetText("|cff69adc9Credits|r")
+    
+    -- Credits text
+    local creditsText = panel:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
+    creditsText:SetPoint("TOPLEFT", creditsCategoryTitle, "BOTTOMLEFT", 0, -8)
+    creditsText:SetText("Special thanks to:\n\n|cffff8000Viviway|r for the help with the addon and the overall design for UI.\n|cffff8000Tulhur|r for the help with tracking down bugs and all his suggestions.\n|cffff8000BonniesDad|r for supplying the Ultra Hardcore addon and allowing Hardcore Achivement to thrive.")
+    creditsText:SetTextColor(0.8, 0.8, 0.8, 1)
+    creditsText:SetWidth(600)
+    creditsText:SetJustifyH("LEFT")
+    creditsText:SetJustifyV("TOP")
     
     -- Store references for future use
     panel.checkboxes = {

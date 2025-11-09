@@ -428,7 +428,7 @@ local function CreateEmbedIcon(parent)
 
   -- Create the achievement icon
   icon.Icon = icon:CreateTexture(nil, "ARTWORK")
-  icon.Icon:SetSize(ICON_SIZE - 2, ICON_SIZE - 2)
+  icon.Icon:SetSize(ICON_SIZE - 5, ICON_SIZE - 5)
   icon.Icon:SetPoint("CENTER", icon, "CENTER", 0, 0)
   icon.Icon:SetTexCoord(0.05, 0.95, 0.05, 0.95)
 
@@ -438,33 +438,43 @@ local function CreateEmbedIcon(parent)
   icon.Mask:SetTexture("Interface\\CharacterFrame\\TempPortraitAlphaMask", "CLAMPTOBLACKADDITIVE", "CLAMPTOBLACKADDITIVE")
   icon.Icon:AddMaskTexture(icon.Mask)
 
-  -- Create completion border as a green circle behind the icon
-  icon.GreenBorder = icon:CreateTexture(nil, "BACKGROUND")
-  icon.GreenBorder:SetSize(ICON_SIZE + 2, ICON_SIZE + 2) -- Slightly larger than icon
-  icon.GreenBorder:SetPoint("CENTER", icon, "CENTER", 0, 0)
-  icon.GreenBorder:SetTexture("Interface\\CharacterFrame\\TempPortraitAlphaMask")
-  icon.GreenBorder:SetTexCoord(0, 1, 0, 1)
-  icon.GreenBorder:SetVertexColor(0.6, 0.9, 0.6, 0.8) -- Green circle
-  icon.GreenBorder:Hide()
+  -- Create status rings that sit above the icon artwork
+  icon.RingGold = icon:CreateTexture(nil, "OVERLAY", nil, 1)
+  icon.RingGold:SetSize(ICON_SIZE + 2, ICON_SIZE + 2) -- Slightly larger than icon
+  icon.RingGold:SetPoint("CENTER", icon, "CENTER", 0, 0)
+  icon.RingGold:SetTexture("Interface\\AddOns\\HardcoreAchievements\\Images\\circle_256_green.blp")
+  icon.RingGold:SetTexCoord(0, 1, 0, 1)
+  icon.RingGold:Hide()
 
-  -- Create failed border as a red circle behind the icon
-  icon.RedBorder = icon:CreateTexture(nil, "BACKGROUND")
-  icon.RedBorder:SetSize(ICON_SIZE + 2, ICON_SIZE + 2) -- Slightly larger than icon
-  icon.RedBorder:SetPoint("CENTER", icon, "CENTER", 0, 0)
-  icon.RedBorder:SetTexture("Interface\\CharacterFrame\\TempPortraitAlphaMask")
-  icon.RedBorder:SetTexCoord(0, 1, 0, 1)
-  icon.RedBorder:SetVertexColor(0.53, 0.02, 0.03, 0.8) -- Red circle
-  icon.RedBorder:Hide()
+  icon.RingFailed = icon:CreateTexture(nil, "OVERLAY", nil, 1)
+  icon.RingFailed:SetSize(ICON_SIZE + 2, ICON_SIZE + 2)
+  icon.RingFailed:SetPoint("CENTER", icon, "CENTER", 0, 0)
+  icon.RingFailed:SetTexture("Interface\\AddOns\\HardcoreAchievements\\Images\\circle_256_red.blp")
+  icon.RingFailed:SetTexCoord(0, 1, 0, 1)
+  icon.RingFailed:Hide()
 
-      -- Create available border as a yellow circle behind the icon
-  icon.YellowBorder = icon:CreateTexture(nil, "BACKGROUND")
-  icon.YellowBorder:SetSize(ICON_SIZE + 2, ICON_SIZE + 2) -- Slightly larger than icon
-  icon.YellowBorder:SetPoint("CENTER", icon, "CENTER", 0, 0)
-  icon.YellowBorder:SetTexture("Interface\\CharacterFrame\\TempPortraitAlphaMask")
-  icon.YellowBorder:SetTexCoord(0, 1, 0, 1)
-  icon.YellowBorder:SetVertexColor(1, 0.82, 0, 0.8) -- Goldish yellow circle
-  icon.YellowBorder:Hide()
+  icon.RingDisabled = icon:CreateTexture(nil, "OVERLAY", nil, 1)
+  icon.RingDisabled:SetSize(ICON_SIZE + 2, ICON_SIZE + 2)
+  icon.RingDisabled:SetPoint("CENTER", icon, "CENTER", 0, 0)
+  icon.RingDisabled:SetTexture("Interface\\AddOns\\HardcoreAchievements\\Images\\circle_256_gold.blp")
+  icon.RingDisabled:SetTexCoord(0, 1, 0, 1)
+  icon.RingDisabled:Hide()
   
+  -- Status overlays (green check / red X)
+  icon.StatusCheck = icon:CreateTexture(nil, "OVERLAY", nil, 2)
+  icon.StatusCheck:SetSize(ICON_SIZE - 32, ICON_SIZE - 32)
+  icon.StatusCheck:SetPoint("CENTER", icon, "CENTER", 0, 0)
+  icon.StatusCheck:SetTexture("Interface\\AddOns\\HardcoreAchievements\\Images\\ReadyCheck-Ready.blp")
+  icon.StatusCheck:SetTexCoord(0, 1, 0, 1)
+  icon.StatusCheck:Hide()
+
+  icon.StatusFail = icon:CreateTexture(nil, "OVERLAY", nil, 2)
+  icon.StatusFail:SetSize(ICON_SIZE - 32, ICON_SIZE - 32)
+  icon.StatusFail:SetPoint("CENTER", icon, "CENTER", 0, 0)
+  icon.StatusFail:SetTexture("Interface\\AddOns\\HardcoreAchievements\\Images\\ReadyCheck-NotReady.blp")
+  icon.StatusFail:SetTexCoord(0, 1, 0, 1)
+  icon.StatusFail:Hide()
+
   -- Create SSF mode border as a purple/blue glow circle around the icon
   icon.SSFBorder = icon:CreateTexture(nil, "BACKGROUND")
   icon.SSFBorder:SetSize(ICON_SIZE + 4, ICON_SIZE + 4) -- Slightly larger than other borders
@@ -594,53 +604,70 @@ function EMBED:BuildClassicGrid(srcRows)
         icon.sourceRow = srow
 
         if data.iconTex then
-          icon.Icon:SetTexture(data.iconTex)
+          local useMilestoneRound = false
+          if data.iconTex == "Interface\\AddOns\\HardcoreAchievements\\Images\\milestone_square.blp" then
+            useMilestoneRound = true
+          elseif data.achId and tostring(data.achId):match("^Level%d+$") then
+            useMilestoneRound = true
+          end
+
+          if useMilestoneRound then
+            icon.Icon:SetTexture("Interface\\AddOns\\HardcoreAchievements\\Images\\milestone.blp")
+          else
+            icon.Icon:SetTexture(data.iconTex)
+          end
         else
           icon.Icon:SetTexture(136116) -- generic achievement icon
         end
 
         -- Set icon appearance based on status
+        local playerLevel = UnitLevel("player") or 0
+        local isOverLeveled = false
+        if data.maxLevel and data.maxLevel > 0 then
+          isOverLeveled = playerLevel > data.maxLevel
+        end
+        local isFailed = data.outleveled or isOverLeveled
+
         if data.completed then
           -- Completed: full color
           icon.Icon:SetDesaturated(false)
           icon.Icon:SetAlpha(1.0)
           icon.Icon:SetVertexColor(1.0, 1.0, 1.0)
+        elseif isFailed then
+          -- Failed: red tint, not desaturated
+          icon.Icon:SetDesaturated(true)
+          icon.Icon:SetAlpha(1.0)
+          icon.Icon:SetVertexColor(0.85, 0.45, 0.45)
         else
-          local isOverLeveled = false
-          if data.maxLevel and data.maxLevel > 0 then
-            local playerLevel = UnitLevel("player") or 0
-            isOverLeveled = playerLevel > data.maxLevel
-          end
-          if isOverLeveled then
-            -- Over-leveled: soft red tint, not desaturated
-            icon.Icon:SetDesaturated(true)
-            icon.Icon:SetAlpha(1.0)
-            icon.Icon:SetVertexColor(1.0, 0.7, 0.7)
-          else
-            -- Incomplete and available: desaturated
-            icon.Icon:SetDesaturated(true)
-            icon.Icon:SetAlpha(1.0)
-            icon.Icon:SetVertexColor(1.0, 1.0, 1.0)
-          end
+          -- Incomplete and available: desaturated
+          icon.Icon:SetDesaturated(true)
+          icon.Icon:SetAlpha(1.0)
+          icon.Icon:SetVertexColor(1.0, 1.0, 1.0)
         end
 
         -- Set completion border
+        icon.StatusCheck:Hide()
+        icon.StatusFail:Hide()
+
+        if data.completed then
+          icon.StatusCheck:Show()
+        elseif isFailed then
+          icon.StatusFail:Show()
+        end
+
         if icon.achId and icon.achId ~= "Secret100" then
+          icon.RingGold:Hide()
+          icon.RingFailed:Hide()
+          icon.RingDisabled:Hide()
           if data.completed then
-            icon.GreenBorder:Show()
-            icon.YellowBorder:Hide()
-            icon.RedBorder:Hide()
-          elseif data.outleveled then
-            icon.RedBorder:Show()
-            icon.GreenBorder:Hide()
-            icon.YellowBorder:Hide()
+            icon.RingGold:Show()
+          elseif isFailed then
+            icon.RingFailed:Show()
           else
-            icon.YellowBorder:Show()
-            icon.GreenBorder:Hide()
-            icon.RedBorder:Hide()
-      end
-    end
-    
+            icon.RingDisabled:Show()
+          end
+        end
+
         -- Show the icon
         icon:Show()
       end
