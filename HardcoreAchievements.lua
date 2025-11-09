@@ -2,6 +2,10 @@ local ADDON_NAME, addon = ...
 local playerGUID
 HCA_SELF_FOUND_BONUS = 5
 
+local EvaluateCustomCompletions
+local RefreshOutleveledAll
+local ProfessionTracker = _G.HCA_ProfessionCommon
+
 -- Create/initialize addon table and expose globally (similar to BugSack pattern)
 if not addon then
     addon = {}
@@ -451,9 +455,6 @@ local function UpdatePointsDisplay(row)
         end
     end
 end
-
--- Function to apply outleveled style (icon and points frame desaturation)
-local RefreshOutleveledAll
 
 local function ApplyOutleveledStyle(row)
     if not row then return end
@@ -1005,6 +1006,8 @@ RefreshOutleveledAll = function()
     end
 end
 
+_G.HCA_RefreshOutleveledAll = RefreshOutleveledAll
+
 -- =========================================================
 -- Progress Helpers
 -- =========================================================
@@ -1236,6 +1239,9 @@ initFrame:SetScript("OnEvent", function(self, event, ...)
             RefreshOutleveledAll()
         end
         SortAchievementRows()
+        if ProfessionTracker and ProfessionTracker.RefreshAll then
+            ProfessionTracker.RefreshAll()
+        end
         
         -- Initialize minimap button
         InitializeMinimapButton()
@@ -1930,6 +1936,9 @@ local function ApplyFilter()
         if row.hiddenUntilComplete and not row.completed then
             shouldShow = false
         end
+        if row.hiddenByProfession then
+            shouldShow = false
+        end
         
         if shouldShow then
             row:Show()
@@ -1941,6 +1950,8 @@ local function ApplyFilter()
     -- Recalculate and update the row positioning after filtering
     SortAchievementRows()
 end
+
+_G.HCA_ApplyFilter = ApplyFilter
 
 UIDropDownMenu_Initialize(filterDropdown, function(self, level)
     if level == 1 then
@@ -2317,6 +2328,9 @@ function CreateAchievementRow(parent, achId, title, tooltip, icon, level, points
         -- Hide initially; filter logic will show it after completion
         row:Hide()
     end
+    if ProfessionTracker and def and def.requireProfessionSkillID then
+        ProfessionTracker.RegisterRow(row, def)
+    end
 
     -- Secret/hidden achievement support (optional via def)
     if def and (def.secret or def.secretTitle or def.secretTooltip or def.secretIcon or def.secretPoints) then
@@ -2352,6 +2366,36 @@ function CreateAchievementRow(parent, achId, title, tooltip, icon, level, points
     HCA_UpdateTotalPoints()
 
     return row
+end
+
+EvaluateCustomCompletions = function(newLevel)
+    if not AchievementPanel or not AchievementPanel.achievements then return end
+
+    local anyCompleted = false
+    for _, row in ipairs(AchievementPanel.achievements) do
+        if not row.completed then
+            local fn = row.customIsCompleted
+            if type(fn) ~= "function" then
+                local id = row.id or row.achId
+                if id then
+                    fn = _G[id .. "_IsCompleted"]
+                end
+            end
+
+            if type(fn) == "function" then
+                local ok, result = pcall(fn, newLevel)
+                if ok and result == true then
+                    HCA_MarkRowCompleted(row)
+                    HCA_AchToast_Show(row.Icon:GetTexture(), row.Title:GetText(), row.points, row)
+                    anyCompleted = true
+                end
+            end
+        end
+    end
+
+    if anyCompleted then
+        RefreshOutleveledAll()
+    end
 end
 
 -- =========================================================
@@ -2470,35 +2514,7 @@ do
                 end
             elseif event == "PLAYER_LEVEL_CHANGED" then
                 local newLevel = tonumber(select(2, ...))
-                -- Check for level-based achievement completions
-                for _, row in ipairs(AchievementPanel.achievements) do
-                    if not row.completed then
-                        local isCompleted = false
-                        local fn = nil
-
-                        -- First try customIsCompleted on the row (direct from def)
-                        if type(row.customIsCompleted) == "function" then
-                            fn = row.customIsCompleted
-                        else
-                            -- Fallback to global _IsCompleted function
-                            local id = row.id or row.achId
-                            if id then
-                                fn = _G[id .. "_IsCompleted"]
-                            end
-                        end
-                        
-                        if type(fn) == "function" then
-                            local ok, result = pcall(fn, newLevel)
-                            if ok and result == true then
-                                isCompleted = true
-                            end
-                        end
-                        if isCompleted then
-                            HCA_MarkRowCompleted(row)
-                            HCA_AchToast_Show(row.Icon:GetTexture(), row.Title:GetText(), row.points, row)
-                        end
-                    end
-                end
+                EvaluateCustomCompletions(newLevel)
                 RefreshOutleveledAll()
             elseif event == "CHAT_MSG_LOOT" then
                 local msg, _, _, _, playerName = ...

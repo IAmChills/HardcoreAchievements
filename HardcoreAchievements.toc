@@ -23,11 +23,13 @@ Functions\IsGroupEligibleForAchievement.lua
 Functions\GetStatusText.lua
 Functions\RefreshAllAchievementPoints.lua
 Functions\ShowAchievementTooltip.lua
+Functions\ProfessionTracker.lua
 
 HardcoreAchievements.lua
 
 Achievements\Common.lua
 Achievements\DungeonCommon.lua
+Achievements\ProfessionCatalog.lua
 Achievements\Catalog.lua
 Achievements\DungeonCatalog.lua
 Achievements\FourCandles.lua
