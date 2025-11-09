@@ -610,6 +610,10 @@ function HCA_MarkRowCompleted(row)
         if row.revealTooltip then row.tooltip = row.revealTooltip end
         row.staticPoints = row.revealStaticPoints or false
     end
+
+    if ProfessionTracker and ProfessionTracker.NotifyRowCompleted then
+        ProfessionTracker.NotifyRowCompleted(row)
+    end
     
     -- Broadcast achievement completion to emote channel
 	local playerName = UnitName("player")
@@ -1969,6 +1973,8 @@ UIDropDownMenu_Initialize(filterDropdown, function(self, level)
         end
     end
 end)
+UIDropDownMenu_SetSelectedValue(filterDropdown, "all")
+UIDropDownMenu_SetText(filterDropdown, ACHIEVEMENTFRAME_FILTER_ALL)
 
 --AchievementPanel.Text = AchievementPanel:CreateFontString(nil, "OVERLAY", "GameFontNormal")
 --AchievementPanel.Text:SetPoint("TOP", 5, -45)
@@ -2184,6 +2190,9 @@ function CreateAchievementRow(parent, achId, title, tooltip, icon, level, points
             row.Sub:SetText("")
         end
     end
+    if row.Sub then
+        row._defaultSubText = row.Sub:GetText() or ""
+    end
 
     -- Circular frame for points
     row.PointsFrame = CreateFrame("Frame", nil, row)
@@ -2327,6 +2336,15 @@ function CreateAchievementRow(parent, achId, title, tooltip, icon, level, points
         row.hiddenUntilComplete = true
         -- Hide initially; filter logic will show it after completion
         row:Hide()
+    end
+    if def and def.requireProfessionSkillID then
+        row.hiddenByProfession = true
+        row._professionHiddenUntilComplete = row.hiddenUntilComplete
+        row._professionSkillID = def.requireProfessionSkillID
+        if row.Sub then
+            row.Sub:SetText("")
+            row._defaultSubText = ""
+        end
     end
     if ProfessionTracker and def and def.requireProfessionSkillID then
         ProfessionTracker.RegisterRow(row, def)

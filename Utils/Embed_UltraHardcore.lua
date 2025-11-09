@@ -656,7 +656,18 @@ local function CreateEmbedModernRow(parent, srow)
     row.Sub:SetJustifyV("TOP")
     row.Sub:SetWordWrap(true)
     row.Sub:SetTextColor(0.5, 0.5, 0.5)
-    -- Status text will be set by UpdateStatusTextEmbed
+    do
+        local defaultSub = srow._defaultSubText
+        if defaultSub == nil then
+            if level and level > 0 then
+                defaultSub = (LEVEL or "Level") .. " " .. level
+            else
+                defaultSub = ""
+            end
+        end
+        row.Sub:SetText(defaultSub)
+        row._defaultSubText = defaultSub
+    end
     
     -- Circular frame for points (increased size)
     row.PointsFrame = CreateFrame("Frame", nil, row)
@@ -727,6 +738,25 @@ local function CreateEmbedModernRow(parent, srow)
     row:SetScript("OnLeave", function(self)
         self.highlight:Hide()
         GameTooltip:Hide()
+    end)
+    
+    row:SetScript("OnMouseUp", function(self, button)
+        if button == "LeftButton" and IsShiftKeyDown() and self.achId then
+            local iconTexture = self.Icon and self.Icon.GetTexture and self.Icon:GetTexture() or ""
+            local bracket = _G.HCA_GetAchievementBracket and _G.HCA_GetAchievementBracket(self.achId, iconTexture) or string.format("[HCA:(%s,%s)]", tostring(self.achId), tostring(iconTexture))
+
+            local editBox = ChatEdit_GetActiveWindow()
+            if not editBox or not editBox:IsVisible() then
+                return
+            end
+            local currentText = editBox and (editBox:GetText() or "") or ""
+            if currentText == "" then
+                editBox:SetText(bracket)
+            else
+                editBox:SetText(currentText .. " " .. bracket)
+            end
+            editBox:SetFocus()
+        end
     end)
     
     -- Store reference to source row
@@ -1443,6 +1473,8 @@ local function BuildEmbedIfNeeded()
         end
       end
     end)
+    UIDropDownMenu_SetSelectedValue(filterDropdown, "all")
+    UIDropDownMenu_SetText(filterDropdown, ACHIEVEMENTFRAME_FILTER_ALL)
   end
 
   if not UHCA.HideCustomTabCheckbox then

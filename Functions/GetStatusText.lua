@@ -72,6 +72,13 @@ local function SetStatusTextOnRow(row, params)
     
     local statusText = GetStatusText(params)
     local maxLevel = row.maxLevel or (params.maxLevel and tonumber(params.maxLevel) > 0 and params.maxLevel) or nil
+    local isSecretAchievement = false
+    if params.isSecretAchievement ~= nil then
+        isSecretAchievement = params.isSecretAchievement
+    elseif row.isSecretAchievement ~= nil then
+        isSecretAchievement = row.isSecretAchievement
+    end
+    local completed = params.completed or false
     
     if statusText then
         if maxLevel then
@@ -80,10 +87,17 @@ local function SetStatusTextOnRow(row, params)
         else
             row.Sub:SetText(statusText)
         end
+    elseif isSecretAchievement and not completed then
+        row.Sub:SetText("")
     elseif maxLevel then
         row.Sub:SetText((LEVEL or "Level") .. " " .. maxLevel)
     else
-        row.Sub:SetText(AUCTION_TIME_LEFT0 or "")
+        if completed then
+            row.Sub:SetText(AUCTION_TIME_LEFT0 or "")
+        else
+            local defaultText = row._defaultSubText
+            row.Sub:SetText(defaultText or "")
+        end
     end
 end
 
