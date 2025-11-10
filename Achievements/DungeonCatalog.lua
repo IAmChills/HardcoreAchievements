@@ -108,12 +108,12 @@ local Dungeons = {
       [4831] = 1,  -- Lady Sarevess
       [6243] = 1,  -- Gelihast
       [12902] = 1, -- Lorgus Jett
-      [12876] = 1, -- Baron Aquanis
+      --[12876] = 1, -- Baron Aquanis
       [4832] = 1,  -- Twilight Lord Kelris
       [4830] = 1,  -- Old Serra'kis
       [4829] = 1,  -- Aku'mai
     },
-    bossOrder = {4887, 4831, 6243, 12902, 12876, 4832, 4830, 4829}
+    bossOrder = {4887, 4831, 6243, 12902, 4832, 4830, 4829}
   },
 
   -- The Stockade (Alliance, Level 22-30)

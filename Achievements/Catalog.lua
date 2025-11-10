@@ -408,7 +408,7 @@ local Achievements = {
     staticPoints = true,
 }, {
     achId = "Level60",
-    title = "It's Been Sixty Years...",
+    title = "Locked In and Dialed",
     level = 60,
     tooltip = "Reach level 60 without dying",
     icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\milestone_square_60.png",

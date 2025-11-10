@@ -371,6 +371,14 @@ function DungeonCommon.registerDungeonAchievement(def)
                 bossName = HCA_GetBossName(idNum)
                 done = current >= (tonumber(need) or 1)
               end
+
+              -- If the achievement is completed, ensure all bosses to show as white
+              if not done then
+                local row = _G[rowVarName]
+                if state.completed or (row and row.completed) then
+                  done = true
+                end
+              end
               
               if done then
                 GameTooltip:AddLine(bossName, 1, 1, 1) -- White for completed
