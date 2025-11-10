@@ -133,7 +133,7 @@ function DungeonCommon.registerDungeonAchievement(def)
       [4831] = "Lady Sarevess",
       [6243] = "Gelihast",
       [12902] = "Lorgus Jett",
-      [12876] = "Baron Aquanis",
+      --[12876] = "Baron Aquanis",
       [4832] = "Twilight Lord Kelris",
       [4830] = "Old Serra'kis",
       [4829] = "Aku'mai",
