@@ -13,6 +13,7 @@ function HCA_ShowAchievementTooltip(frame, data)
     local isSecretAchievement = false
     local isProfessionAchievement = false
     local def = nil
+    local achievementCompleted = false
     
     -- Extract data from row object or data table
     if type(data) == "table" then
@@ -33,6 +34,12 @@ function HCA_ShowAchievementTooltip(frame, data)
             if def and def.requireProfessionSkillID then
                 isProfessionAchievement = true
             end
+            if data.completed then
+                achievementCompleted = true
+            end
+            if not achievementCompleted and data.sourceRow and data.sourceRow.completed then
+                achievementCompleted = true
+            end
         else
             -- It's a data table
             title = data.title or ""
@@ -45,6 +52,22 @@ function HCA_ShowAchievementTooltip(frame, data)
             isSecretAchievement = data.isSecretAchievement or false
             if data.requireProfessionSkillID then
                 isProfessionAchievement = true
+            end
+            if data.completed then
+                achievementCompleted = true
+            end
+        end
+    end
+
+    if not achievementCompleted and achId then
+        local getCharDB = _G.GetCharDB or _G.HardcoreAchievements_GetCharDB
+        if type(getCharDB) == "function" then
+            local _, cdb = getCharDB()
+            if cdb and cdb.achievements then
+                local record = cdb.achievements[tostring(achId)]
+                if record and record.completed then
+                    achievementCompleted = true
+                end
             end
         end
     end
@@ -143,9 +166,15 @@ function HCA_ShowAchievementTooltip(frame, data)
         if data.Title and data.Title.GetText then
             -- It's a row object
             requiredKills = data.requiredKills
+            if not requiredKills and data.sourceRow and data.sourceRow.requiredKills then
+                requiredKills = data.sourceRow.requiredKills
+            end
         else
             -- It's a data table
             requiredKills = data.requiredKills
+            if not requiredKills and data.sourceRow and data.sourceRow.requiredKills then
+                requiredKills = data.sourceRow.requiredKills
+            end
         end
     end
     
@@ -171,23 +200,21 @@ function HCA_ShowAchievementTooltip(frame, data)
         
         -- Helper function to process a single boss entry
         local function processBossEntry(npcId, need)
-            local done = false
+            local done = achievementCompleted
             local bossName = ""
             
             -- Support both single NPC IDs and arrays of NPC IDs
             if type(need) == "table" then
                 -- Array of NPC IDs - check if any of them has been killed
-                local anyKilled = false
                 local bossNames = {}
                 for _, id in pairs(need) do
                     local current = (counts[id] or counts[tostring(id)] or 0)
                     local name = (_G.HCA_GetBossName and _G.HCA_GetBossName(id)) or ("Boss " .. tostring(id))
                     table.insert(bossNames, name)
-                    if current >= 1 then
-                        anyKilled = true
+                    if not done and current >= 1 then
+                        done = true
                     end
                 end
-                done = anyKilled
                 -- Use the key as display name for string keys
                 if type(npcId) == "string" then
                     bossName = npcId
@@ -200,7 +227,9 @@ function HCA_ShowAchievementTooltip(frame, data)
                 local idNum = tonumber(npcId) or npcId
                 local current = (counts[idNum] or counts[tostring(idNum)] or 0)
                 bossName = (_G.HCA_GetBossName and _G.HCA_GetBossName(idNum)) or ("Boss " .. tostring(idNum))
-                done = current >= (tonumber(need) or 1)
+                if not done then
+                    done = current >= (tonumber(need) or 1)
+                end
             end
             
             if done then

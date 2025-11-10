@@ -323,6 +323,8 @@ function DungeonCommon.registerDungeonAchievement(def)
           -- Load fresh progress from database before showing tooltip
           LoadProgress()
           
+          local achievementCompleted = state.completed or (self.completed == true)
+          
           GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
           GameTooltip:ClearLines()
           GameTooltip:SetText(title or "", 1, 1, 1)
@@ -338,24 +340,22 @@ function DungeonCommon.registerDungeonAchievement(def)
             GameTooltip:AddLine("\nRequired Bosses:", 0, 1, 0) -- Green header
             
             -- Helper function to process a single boss entry
-            local function processBossEntry(npcId, need)
-              local done = false
+          local function processBossEntry(npcId, need)
+            local done = achievementCompleted
               local bossName = ""
               
               -- Support both single NPC IDs and arrays of NPC IDs
               if type(need) == "table" then
                 -- Array of NPC IDs - check if any of them has been killed
-                local anyKilled = false
                 local bossNames = {}
                 for _, id in pairs(need) do
                   local current = (state.counts[id] or state.counts[tostring(id)] or 0)
                   local name = HCA_GetBossName(id)
                   table.insert(bossNames, name)
-                  if current >= 1 then
-                    anyKilled = true
+                if not achievementCompleted and current >= 1 then
+                  done = true
                   end
                 end
-                done = anyKilled
                 -- Use the key as display name for string keys
                 if type(npcId) == "string" then
                   -- Use the key as display name for string keys (e.g., "Ring Of Law")
@@ -369,15 +369,9 @@ function DungeonCommon.registerDungeonAchievement(def)
                 local idNum = tonumber(npcId) or npcId
                 local current = (state.counts[idNum] or state.counts[tostring(idNum)] or 0)
                 bossName = HCA_GetBossName(idNum)
+              if not done then
                 done = current >= (tonumber(need) or 1)
               end
-
-              -- If the achievement is completed, ensure all bosses to show as white
-              if not done then
-                local row = _G[rowVarName]
-                if state.completed or (row and row.completed) then
-                  done = true
-                end
               end
               
               if done then
