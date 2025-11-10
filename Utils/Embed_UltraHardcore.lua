@@ -6,6 +6,33 @@ local ICON_PADDING = 12
 local GRID_COLS = 7  -- Number of columns in the grid
 local currentFilter = "all"  -- Current filter state
 
+-- Map level milestones to their circular grid icon variants
+local milestoneGridTextures = {
+  ["10"] = "Interface\\AddOns\\HardcoreAchievements\\Images\\milestone_10.png",
+  ["20"] = "Interface\\AddOns\\HardcoreAchievements\\Images\\milestone_20.png",
+  ["30"] = "Interface\\AddOns\\HardcoreAchievements\\Images\\milestone_30.png",
+  ["40"] = "Interface\\AddOns\\HardcoreAchievements\\Images\\milestone_40.png",
+  ["50"] = "Interface\\AddOns\\HardcoreAchievements\\Images\\milestone_50.png",
+  ["60"] = "Interface\\AddOns\\HardcoreAchievements\\Images\\milestone_60.png",
+}
+
+local function GetGridMilestoneTexture(achId, fallback)
+  if not achId or type(achId) ~= "string" then
+    return fallback
+  end
+
+  if not (_G.IsLevelMilestone and _G.IsLevelMilestone(achId)) then
+    return fallback
+  end
+
+  local level = string.match(achId, "^Level(%d+)$")
+  if level and milestoneGridTextures[level] then
+    return milestoneGridTextures[level]
+  end
+
+  return fallback
+end
+
 -- Helper function to strip color codes from text (for shadow text)
 local function StripColorCodes(text)
     if not text or type(text) ~= "string" then return text end
@@ -287,11 +314,11 @@ local function UpdatePointsDisplayEmbed(row)
     if row.completed then
         if row.Points then row.Points:SetAlpha(0) end
         if row.PointsFrame.Checkmark then
-            row.PointsFrame.Checkmark:SetTexture("Interface\\AddOns\\HardcoreAchievements\\Images\\ReadyCheck-Ready.blp")
+            row.PointsFrame.Checkmark:SetTexture("Interface\\AddOns\\HardcoreAchievements\\Images\\ReadyCheck-Ready.png")
             row.PointsFrame.Checkmark:Show()
         end
         if row.PointsFrame.Texture then
-            row.PointsFrame.Texture:SetTexture("Interface\\AddOns\\HardcoreAchievements\\Images\\ring_gold.blp")
+            row.PointsFrame.Texture:SetTexture("Interface\\AddOns\\HardcoreAchievements\\Images\\ring_gold.png")
         end
         if row.IconOverlay then row.IconOverlay:Hide() end
         if row.Sub then row.Sub:SetTextColor(1, 1, 1) end
@@ -299,14 +326,14 @@ local function UpdatePointsDisplayEmbed(row)
     elseif IsRowOutleveled(row) then
         if row.Points then row.Points:SetAlpha(0) end
         if row.PointsFrame.Checkmark then
-            row.PointsFrame.Checkmark:SetTexture("Interface\\AddOns\\HardcoreAchievements\\Images\\ReadyCheck-NotReady.blp")
+            row.PointsFrame.Checkmark:SetTexture("Interface\\AddOns\\HardcoreAchievements\\Images\\ReadyCheck-NotReady.png")
             row.PointsFrame.Checkmark:Show()
         end
         if row.PointsFrame.Texture then
-            row.PointsFrame.Texture:SetTexture("Interface\\AddOns\\HardcoreAchievements\\Images\\ring_failed.blp")
+            row.PointsFrame.Texture:SetTexture("Interface\\AddOns\\HardcoreAchievements\\Images\\ring_failed.png")
         end
         if row.IconOverlay then
-            row.IconOverlay:SetTexture("Interface\\AddOns\\HardcoreAchievements\\Images\\ReadyCheck-NotReady.blp")
+            row.IconOverlay:SetTexture("Interface\\AddOns\\HardcoreAchievements\\Images\\ReadyCheck-NotReady.png")
             row.IconOverlay:Show()
         end
         if row.Sub then row.Sub:SetTextColor(0.5, 0.5, 0.5) end
@@ -315,7 +342,7 @@ local function UpdatePointsDisplayEmbed(row)
         if row.Points then row.Points:SetAlpha(1) end
         if row.PointsFrame.Checkmark then row.PointsFrame.Checkmark:Hide() end
         if row.PointsFrame.Texture then
-            row.PointsFrame.Texture:SetTexture("Interface\\AddOns\\HardcoreAchievements\\Images\\ring_disabled.blp")
+            row.PointsFrame.Texture:SetTexture("Interface\\AddOns\\HardcoreAchievements\\Images\\ring_disabled.png")
         end
         if row.IconOverlay then row.IconOverlay:Hide() end
         if row.Sub then row.Sub:SetTextColor(0.5, 0.5, 0.5) end
@@ -428,7 +455,7 @@ local function CreateEmbedIcon(parent)
 
   -- Create the achievement icon
   icon.Icon = icon:CreateTexture(nil, "ARTWORK")
-  icon.Icon:SetSize(ICON_SIZE - 2, ICON_SIZE - 2)
+  icon.Icon:SetSize(ICON_SIZE - 5, ICON_SIZE - 5)
   icon.Icon:SetPoint("CENTER", icon, "CENTER", 0, 0)
   icon.Icon:SetTexCoord(0.05, 0.95, 0.05, 0.95)
 
@@ -438,33 +465,43 @@ local function CreateEmbedIcon(parent)
   icon.Mask:SetTexture("Interface\\CharacterFrame\\TempPortraitAlphaMask", "CLAMPTOBLACKADDITIVE", "CLAMPTOBLACKADDITIVE")
   icon.Icon:AddMaskTexture(icon.Mask)
 
-  -- Create completion border as a green circle behind the icon
-  icon.GreenBorder = icon:CreateTexture(nil, "BACKGROUND")
-  icon.GreenBorder:SetSize(ICON_SIZE + 2, ICON_SIZE + 2) -- Slightly larger than icon
-  icon.GreenBorder:SetPoint("CENTER", icon, "CENTER", 0, 0)
-  icon.GreenBorder:SetTexture("Interface\\CharacterFrame\\TempPortraitAlphaMask")
-  icon.GreenBorder:SetTexCoord(0, 1, 0, 1)
-  icon.GreenBorder:SetVertexColor(0.6, 0.9, 0.6, 0.8) -- Green circle
-  icon.GreenBorder:Hide()
+  -- Create status rings that sit above the icon artwork
+  icon.RingGold = icon:CreateTexture(nil, "OVERLAY", nil, 1)
+  icon.RingGold:SetSize(ICON_SIZE + 2, ICON_SIZE + 2) -- Slightly larger than icon
+  icon.RingGold:SetPoint("CENTER", icon, "CENTER", 0, 0)
+  icon.RingGold:SetTexture("Interface\\AddOns\\HardcoreAchievements\\Images\\circle_256_green.png")
+  icon.RingGold:SetTexCoord(0, 1, 0, 1)
+  icon.RingGold:Hide()
 
-  -- Create failed border as a red circle behind the icon
-  icon.RedBorder = icon:CreateTexture(nil, "BACKGROUND")
-  icon.RedBorder:SetSize(ICON_SIZE + 2, ICON_SIZE + 2) -- Slightly larger than icon
-  icon.RedBorder:SetPoint("CENTER", icon, "CENTER", 0, 0)
-  icon.RedBorder:SetTexture("Interface\\CharacterFrame\\TempPortraitAlphaMask")
-  icon.RedBorder:SetTexCoord(0, 1, 0, 1)
-  icon.RedBorder:SetVertexColor(0.53, 0.02, 0.03, 0.8) -- Red circle
-  icon.RedBorder:Hide()
+  icon.RingFailed = icon:CreateTexture(nil, "OVERLAY", nil, 1)
+  icon.RingFailed:SetSize(ICON_SIZE + 2, ICON_SIZE + 2)
+  icon.RingFailed:SetPoint("CENTER", icon, "CENTER", 0, 0)
+  icon.RingFailed:SetTexture("Interface\\AddOns\\HardcoreAchievements\\Images\\circle_256_red.png")
+  icon.RingFailed:SetTexCoord(0, 1, 0, 1)
+  icon.RingFailed:Hide()
 
-      -- Create available border as a yellow circle behind the icon
-  icon.YellowBorder = icon:CreateTexture(nil, "BACKGROUND")
-  icon.YellowBorder:SetSize(ICON_SIZE + 2, ICON_SIZE + 2) -- Slightly larger than icon
-  icon.YellowBorder:SetPoint("CENTER", icon, "CENTER", 0, 0)
-  icon.YellowBorder:SetTexture("Interface\\CharacterFrame\\TempPortraitAlphaMask")
-  icon.YellowBorder:SetTexCoord(0, 1, 0, 1)
-  icon.YellowBorder:SetVertexColor(1, 0.82, 0, 0.8) -- Goldish yellow circle
-  icon.YellowBorder:Hide()
+  icon.RingDisabled = icon:CreateTexture(nil, "OVERLAY", nil, 1)
+  icon.RingDisabled:SetSize(ICON_SIZE + 2, ICON_SIZE + 2)
+  icon.RingDisabled:SetPoint("CENTER", icon, "CENTER", 0, 0)
+  icon.RingDisabled:SetTexture("Interface\\AddOns\\HardcoreAchievements\\Images\\circle_256_gold.png")
+  icon.RingDisabled:SetTexCoord(0, 1, 0, 1)
+  icon.RingDisabled:Hide()
   
+  -- Status overlays (green check / red X)
+  icon.StatusCheck = icon:CreateTexture(nil, "OVERLAY", nil, 2)
+  icon.StatusCheck:SetSize(ICON_SIZE - 32, ICON_SIZE - 32)
+  icon.StatusCheck:SetPoint("CENTER", icon, "CENTER", 0, 0)
+  icon.StatusCheck:SetTexture("Interface\\AddOns\\HardcoreAchievements\\Images\\ReadyCheck-Ready.png")
+  icon.StatusCheck:SetTexCoord(0, 1, 0, 1)
+  icon.StatusCheck:Hide()
+
+  icon.StatusFail = icon:CreateTexture(nil, "OVERLAY", nil, 2)
+  icon.StatusFail:SetSize(ICON_SIZE - 32, ICON_SIZE - 32)
+  icon.StatusFail:SetPoint("CENTER", icon, "CENTER", 0, 0)
+  icon.StatusFail:SetTexture("Interface\\AddOns\\HardcoreAchievements\\Images\\ReadyCheck-NotReady.png")
+  icon.StatusFail:SetTexCoord(0, 1, 0, 1)
+  icon.StatusFail:Hide()
+
   -- Create SSF mode border as a purple/blue glow circle around the icon
   icon.SSFBorder = icon:CreateTexture(nil, "BACKGROUND")
   icon.SSFBorder:SetSize(ICON_SIZE + 4, ICON_SIZE + 4) -- Slightly larger than other borders
@@ -593,54 +630,58 @@ function EMBED:BuildClassicGrid(srcRows)
         -- Store reference to source row for tooltip function (it can extract data directly from row)
         icon.sourceRow = srow
 
-        if data.iconTex then
-          icon.Icon:SetTexture(data.iconTex)
-        else
-          icon.Icon:SetTexture(136116) -- generic achievement icon
-        end
+        local iconTexture = data.iconTex or 136116
+        iconTexture = GetGridMilestoneTexture(icon.achId, iconTexture)
+        icon.Icon:SetTexture(iconTexture)
 
         -- Set icon appearance based on status
+        local playerLevel = UnitLevel("player") or 0
+        local isOverLeveled = false
+        if data.maxLevel and data.maxLevel > 0 then
+          isOverLeveled = playerLevel > data.maxLevel
+        end
+        local isFailed = data.outleveled or isOverLeveled
+
         if data.completed then
           -- Completed: full color
           icon.Icon:SetDesaturated(false)
           icon.Icon:SetAlpha(1.0)
           icon.Icon:SetVertexColor(1.0, 1.0, 1.0)
+        elseif isFailed then
+          -- Failed: red tint, not desaturated
+          icon.Icon:SetDesaturated(true)
+          icon.Icon:SetAlpha(1.0)
+          icon.Icon:SetVertexColor(0.85, 0.45, 0.45)
         else
-          local isOverLeveled = false
-          if data.maxLevel and data.maxLevel > 0 then
-            local playerLevel = UnitLevel("player") or 0
-            isOverLeveled = playerLevel > data.maxLevel
-          end
-          if isOverLeveled then
-            -- Over-leveled: soft red tint, not desaturated
-            icon.Icon:SetDesaturated(true)
-            icon.Icon:SetAlpha(1.0)
-            icon.Icon:SetVertexColor(1.0, 0.7, 0.7)
-          else
-            -- Incomplete and available: desaturated
-            icon.Icon:SetDesaturated(true)
-            icon.Icon:SetAlpha(1.0)
-            icon.Icon:SetVertexColor(1.0, 1.0, 1.0)
-          end
+          -- Incomplete and available: desaturated
+          icon.Icon:SetDesaturated(true)
+          icon.Icon:SetAlpha(1.0)
+          icon.Icon:SetVertexColor(1.0, 1.0, 1.0)
         end
 
         -- Set completion border
+        icon.StatusCheck:Hide()
+        icon.StatusFail:Hide()
+
+        if data.completed then
+          icon.StatusCheck:Show()
+        elseif isFailed then
+          icon.StatusFail:Show()
+        end
+
         if icon.achId and icon.achId ~= "Secret100" then
+          icon.RingGold:Hide()
+          icon.RingFailed:Hide()
+          icon.RingDisabled:Hide()
           if data.completed then
-            icon.GreenBorder:Show()
-            icon.YellowBorder:Hide()
-            icon.RedBorder:Hide()
-          elseif data.outleveled then
-            icon.RedBorder:Show()
-            icon.GreenBorder:Hide()
-            icon.YellowBorder:Hide()
+            icon.RingGold:Show()
+          elseif isFailed then
+            icon.RingFailed:Show()
           else
-            icon.YellowBorder:Show()
-            icon.GreenBorder:Hide()
-            icon.RedBorder:Hide()
-      end
-    end
-    
+            icon.RingDisabled:Show()
+          end
+        end
+
         -- Show the icon
         icon:Show()
       end
@@ -681,7 +722,7 @@ local function CreateEmbedModernRow(parent, srow)
     row.IconFrameGold = row:CreateTexture(nil, "OVERLAY", nil, 7)
     row.IconFrameGold:SetSize(42, 42)
     row.IconFrameGold:SetPoint("CENTER", row.Icon, "CENTER", 0, 0)
-    row.IconFrameGold:SetTexture("Interface\\AddOns\\HardcoreAchievements\\Images\\frame_gold.blp")
+    row.IconFrameGold:SetTexture("Interface\\AddOns\\HardcoreAchievements\\Images\\frame_gold.png")
     row.IconFrameGold:SetDrawLayer("OVERLAY", 1)
     row.IconFrameGold:Hide()
     
@@ -689,7 +730,7 @@ local function CreateEmbedModernRow(parent, srow)
     row.IconFrame = row:CreateTexture(nil, "OVERLAY", nil, 7)
     row.IconFrame:SetSize(42, 42)
     row.IconFrame:SetPoint("CENTER", row.Icon, "CENTER", 0, 0)
-    row.IconFrame:SetTexture("Interface\\AddOns\\HardcoreAchievements\\Images\\frame_silver.blp")
+    row.IconFrame:SetTexture("Interface\\AddOns\\HardcoreAchievements\\Images\\frame_silver.png")
     row.IconFrame:SetDrawLayer("OVERLAY", 1)
     row.IconFrame:Show()
     
@@ -740,7 +781,7 @@ local function CreateEmbedModernRow(parent, srow)
     row.PointsFrame:SetPoint("RIGHT", row, "RIGHT", -15, -2)
     
     row.PointsFrame.Texture = row.PointsFrame:CreateTexture(nil, "BACKGROUND")
-    row.PointsFrame.Texture:SetTexture("Interface\\AddOns\\HardcoreAchievements\\Images\\ring_disabled.blp")
+    row.PointsFrame.Texture:SetTexture("Interface\\AddOns\\HardcoreAchievements\\Images\\ring_disabled.png")
     row.PointsFrame.Texture:SetAllPoints(row.PointsFrame)
     
     row.Points = row.PointsFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
@@ -772,14 +813,14 @@ local function CreateEmbedModernRow(parent, srow)
     
     row.Background = UHCA.BorderClip:CreateTexture(nil, "BACKGROUND")
     row.Background:SetDrawLayer("BACKGROUND", 0)
-    row.Background:SetTexture("Interface\\AddOns\\HardcoreAchievements\\Images\\row_texture.blp")
+    row.Background:SetTexture("Interface\\AddOns\\HardcoreAchievements\\Images\\row_texture.png")
     row.Background:SetVertexColor(1, 1, 1)
     row.Background:SetAlpha(1)
     row.Background:Hide()
     
     row.Border = UHCA.BorderClip:CreateTexture(nil, "BACKGROUND")
     row.Border:SetDrawLayer("BACKGROUND", 1)
-    row.Border:SetTexture("Interface\\AddOns\\HardcoreAchievements\\Images\\row-border.blp")
+    row.Border:SetTexture("Interface\\AddOns\\HardcoreAchievements\\Images\\row-border.png")
     row.Border:SetSize(256, 32)
     row.Border:SetAlpha(0.5)
     row.Border:Hide()
@@ -896,7 +937,7 @@ local function UpdateEmbedModernRow(row, srow)
         end
         row.Background = UHCA.BorderClip:CreateTexture(nil, "BACKGROUND")
         row.Background:SetDrawLayer("BACKGROUND", 0)
-        row.Background:SetTexture("Interface\\AddOns\\HardcoreAchievements\\Images\\row_texture.blp")
+        row.Background:SetTexture("Interface\\AddOns\\HardcoreAchievements\\Images\\row_texture.png")
         row.Background:SetVertexColor(1, 1, 1)
         row.Background:SetAlpha(1)
         row.Background:Hide()
@@ -1344,7 +1385,7 @@ local function BuildEmbedIfNeeded()
   -- Points background texture (centered horizontally at top)
   if not UHCA.PointsBackground then
     UHCA.PointsBackground = UHCA:CreateTexture(nil, "BACKGROUND")
-    UHCA.PointsBackground:SetTexture("Interface\\AddOns\\HardcoreAchievements\\Images\\points-bg.blp")
+    UHCA.PointsBackground:SetTexture("Interface\\AddOns\\HardcoreAchievements\\Images\\points-bg.png")
     -- Size adjusted: wider and shorter
     local bgWidth = 300  -- Increased width
     local bgHeight = 30  -- Reduced height

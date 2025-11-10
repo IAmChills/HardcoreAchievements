@@ -94,8 +94,19 @@ function HCA_ShowAchievementTooltip(frame, data)
     
     local isSecret = (def and def.secret) or isSecretAchievement
     local isSoloModeChecked = _G.HardcoreAchievements_IsSoloModeEnabled and _G.HardcoreAchievements_IsSoloModeEnabled() or false
+
+    local requiresItemOnly = false
+    if def then
+        local hasQuestRequirement = def.requiredQuestId ~= nil
+        local hasKillRequirement = def.requiredKills ~= nil
+        local hasTargetNpc = def.targetNpcId ~= nil
+        local hasCustomTriggers = def.customKill or def.customSpell or def.customEmote or def.customEvent
+        if def.customIsCompleted and not hasQuestRequirement and not hasKillRequirement and not hasTargetNpc and not hasCustomTriggers then
+            requiresItemOnly = true
+        end
+    end
     
-    if isCatalogAchievement and not isSecret and not isProfessionAchievement and not isSoloModeChecked and (_G.IsLevelMilestone and not _G.IsLevelMilestone(achId)) then
+    if isCatalogAchievement and not isSecret and not isProfessionAchievement and not isSoloModeChecked and (_G.IsLevelMilestone and not _G.IsLevelMilestone(achId)) and not requiresItemOnly then
         tooltip = tooltip .. "|cffFFD700 (including all party members)|r"
     end
     
