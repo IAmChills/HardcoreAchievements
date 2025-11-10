@@ -837,7 +837,7 @@ local function CreateEmbedModernRow(parent, srow)
     row:SetScript("OnEnter", function(self)
         self.highlight:Show()
         if _G.HCA_ShowAchievementTooltip then
-            _G.HCA_ShowAchievementTooltip(self, srow)
+            _G.HCA_ShowAchievementTooltip(self, self)
         end
     end)
     
@@ -872,6 +872,7 @@ local function CreateEmbedModernRow(parent, srow)
     row._zone = zone
     row._def = def
     row.sourceRow = srow
+    row.requiredKills = srow.requiredKills
     
     -- Store data
     row.achId = achId
@@ -927,6 +928,7 @@ local function UpdateEmbedModernRow(row, srow)
     row.maxLevel = level > 0 and level or nil
     row.sourceRow = srow
     row._def = def
+    row.requiredKills = srow.requiredKills
     
     if not row.Background and UHCA then
         if not UHCA.BorderClip then
