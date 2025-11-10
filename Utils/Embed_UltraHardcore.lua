@@ -6,6 +6,33 @@ local ICON_PADDING = 12
 local GRID_COLS = 7  -- Number of columns in the grid
 local currentFilter = "all"  -- Current filter state
 
+-- Map level milestones to their circular grid icon variants
+local milestoneGridTextures = {
+  ["10"] = "Interface\\AddOns\\HardcoreAchievements\\Images\\milestone_10.png",
+  ["20"] = "Interface\\AddOns\\HardcoreAchievements\\Images\\milestone_20.png",
+  ["30"] = "Interface\\AddOns\\HardcoreAchievements\\Images\\milestone_30.png",
+  ["40"] = "Interface\\AddOns\\HardcoreAchievements\\Images\\milestone_40.png",
+  ["50"] = "Interface\\AddOns\\HardcoreAchievements\\Images\\milestone_50.png",
+  ["60"] = "Interface\\AddOns\\HardcoreAchievements\\Images\\milestone_60.png",
+}
+
+local function GetGridMilestoneTexture(achId, fallback)
+  if not achId or type(achId) ~= "string" then
+    return fallback
+  end
+
+  if not (_G.IsLevelMilestone and _G.IsLevelMilestone(achId)) then
+    return fallback
+  end
+
+  local level = string.match(achId, "^Level(%d+)$")
+  if level and milestoneGridTextures[level] then
+    return milestoneGridTextures[level]
+  end
+
+  return fallback
+end
+
 -- Helper function to strip color codes from text (for shadow text)
 local function StripColorCodes(text)
     if not text or type(text) ~= "string" then return text end
@@ -431,33 +458,6 @@ local function CreateEmbedIcon(parent)
   icon.Icon:SetSize(ICON_SIZE - 5, ICON_SIZE - 5)
   icon.Icon:SetPoint("CENTER", icon, "CENTER", 0, 0)
   icon.Icon:SetTexCoord(0.05, 0.95, 0.05, 0.95)
-
-  -- Create class icon-- Map level milestones to their circular grid icon variants
-  local milestoneGridTextures = {
-    ["10"] = "Interface\\AddOns\\HardcoreAchievements\\Images\\milestone_10.png",
-    ["20"] = "Interface\\AddOns\\HardcoreAchievements\\Images\\milestone_20.png",
-    ["30"] = "Interface\\AddOns\\HardcoreAchievements\\Images\\milestone_30.png",
-    ["40"] = "Interface\\AddOns\\HardcoreAchievements\\Images\\milestone_40.png",
-    ["50"] = "Interface\\AddOns\\HardcoreAchievements\\Images\\milestone_50.png",
-    ["60"] = "Interface\\AddOns\\HardcoreAchievements\\Images\\milestone_60.png",
-  }
-
-  local function GetGridMilestoneTexture(achId, fallback)
-    if not achId or type(achId) ~= "string" then
-      return fallback
-    end
-
-    if not (_G.IsLevelMilestone and _G.IsLevelMilestone(achId)) then
-      return fallback
-    end
-
-    local level = string.match(achId, "^Level(%d+)$")
-    if level and milestoneGridTextures[level] then
-      return milestoneGridTextures[level]
-    end
-
-    return fallback
-  end
 
   -- Create circular mask for the icon
   icon.Mask = icon:CreateMaskTexture()
