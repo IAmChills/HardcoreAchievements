@@ -443,11 +443,11 @@ local function UpdatePointsDisplay(row)
     
     if row.PointsFrame.Texture then
         if row.completed then
-            row.PointsFrame.Texture:SetTexture("Interface\\AddOns\\HardcoreAchievements\\Images\\ring_gold.blp")
+            row.PointsFrame.Texture:SetTexture("Interface\\AddOns\\HardcoreAchievements\\Images\\ring_gold.png")
         elseif IsRowOutleveled(row) then
-            row.PointsFrame.Texture:SetTexture("Interface\\AddOns\\HardcoreAchievements\\Images\\ring_failed.blp")
+            row.PointsFrame.Texture:SetTexture("Interface\\AddOns\\HardcoreAchievements\\Images\\ring_failed.png")
         else
-            row.PointsFrame.Texture:SetTexture("Interface\\AddOns\\HardcoreAchievements\\Images\\ring_disabled.blp")
+            row.PointsFrame.Texture:SetTexture("Interface\\AddOns\\HardcoreAchievements\\Images\\ring_disabled.png")
         end
         if row.PointsFrame.Texture.SetDesaturated then row.PointsFrame.Texture:SetDesaturated(false) end
         if row.PointsFrame.Texture.SetVertexColor then row.PointsFrame.Texture:SetVertexColor(1, 1, 1) end
@@ -460,7 +460,7 @@ local function UpdatePointsDisplay(row)
             row.Points:SetAlpha(0) -- Transparent but still exists for calculations
         end
         if row.PointsFrame.Checkmark then
-            row.PointsFrame.Checkmark:SetTexture("Interface\\AddOns\\HardcoreAchievements\\Images\\ReadyCheck-Ready.blp")
+            row.PointsFrame.Checkmark:SetTexture("Interface\\AddOns\\HardcoreAchievements\\Images\\ReadyCheck-Ready.png")
             row.PointsFrame.Checkmark:Show()
         end
         -- Hide icon overlay for completed achievements (they show green checkmark in points circle)
@@ -481,12 +481,12 @@ local function UpdatePointsDisplay(row)
             row.Points:SetAlpha(0) -- Transparent but still exists for calculations
         end
         if row.PointsFrame.Checkmark then
-            row.PointsFrame.Checkmark:SetTexture("Interface\\AddOns\\HardcoreAchievements\\Images\\ReadyCheck-NotReady.blp")
+            row.PointsFrame.Checkmark:SetTexture("Interface\\AddOns\\HardcoreAchievements\\Images\\ReadyCheck-NotReady.png")
             row.PointsFrame.Checkmark:Show()
         end
         -- Show red X overlay on icon
         if row.IconOverlay then
-            row.IconOverlay:SetTexture("Interface\\AddOns\\HardcoreAchievements\\Images\\ReadyCheck-NotReady.blp")
+            row.IconOverlay:SetTexture("Interface\\AddOns\\HardcoreAchievements\\Images\\ReadyCheck-NotReady.png")
             row.IconOverlay:Show()
         end
         -- Subtitle (level) text: gray when failed
@@ -1562,7 +1562,7 @@ do
         -- Background - Stat background texture only
         local bg = squareFrame:CreateTexture(nil, "BACKGROUND")
         bg:SetAllPoints()
-        bg:SetTexture("Interface\\Spellbook\\SpellBook-SkillLineTab.blp")
+        bg:SetTexture("Interface\\Spellbook\\SpellBook-SkillLineTab.png")
         bg:SetTexCoord(0, 1, 0, 1)
         squareFrame.bg = bg
         
@@ -2213,7 +2213,7 @@ function CreateAchievementRow(parent, achId, title, tooltip, icon, level, points
     row.IconFrameGold = row:CreateTexture(nil, "OVERLAY", nil, 7)
     row.IconFrameGold:SetSize(33, 33)
     row.IconFrameGold:SetPoint("CENTER", row.Icon, "CENTER", 0, 0)
-    row.IconFrameGold:SetTexture("Interface\\AddOns\\HardcoreAchievements\\Images\\frame_gold.blp")
+    row.IconFrameGold:SetTexture("Interface\\AddOns\\HardcoreAchievements\\Images\\frame_gold.png")
     row.IconFrameGold:SetDrawLayer("OVERLAY", 1)
     row.IconFrameGold:Hide()
     
@@ -2221,7 +2221,7 @@ function CreateAchievementRow(parent, achId, title, tooltip, icon, level, points
     row.IconFrame = row:CreateTexture(nil, "OVERLAY", nil, 7)
     row.IconFrame:SetSize(33, 33)
     row.IconFrame:SetPoint("CENTER", row.Icon, "CENTER", 0, 0)
-    row.IconFrame:SetTexture("Interface\\AddOns\\HardcoreAchievements\\Images\\frame_silver.blp")
+    row.IconFrame:SetTexture("Interface\\AddOns\\HardcoreAchievements\\Images\\frame_silver.png")
     row.IconFrame:SetDrawLayer("OVERLAY", 1)
     row.IconFrame:Show()
 
@@ -2265,7 +2265,7 @@ function CreateAchievementRow(parent, achId, title, tooltip, icon, level, points
     row.PointsFrame:SetPoint("RIGHT", row, "RIGHT", -20, 0)
     
     row.PointsFrame.Texture = row.PointsFrame:CreateTexture(nil, "BACKGROUND")
-    row.PointsFrame.Texture:SetTexture("Interface\\AddOns\\HardcoreAchievements\\Images\\ring_disabled.blp")
+    row.PointsFrame.Texture:SetTexture("Interface\\AddOns\\HardcoreAchievements\\Images\\ring_disabled.png")
     row.PointsFrame.Texture:SetAllPoints(row.PointsFrame)
     row.PointsFrame.Texture:SetAlpha(1)
     
@@ -2292,14 +2292,14 @@ function CreateAchievementRow(parent, achId, title, tooltip, icon, level, points
     -- background + border textures (clipped to BorderClip frame)
     row.Background = AchievementPanel.BorderClip:CreateTexture(nil, "BACKGROUND")
     row.Background:SetDrawLayer("BACKGROUND", 0)
-    row.Background:SetTexture("Interface\\AddOns\\HardcoreAchievements\\Images\\row_texture.blp")
+    row.Background:SetTexture("Interface\\AddOns\\HardcoreAchievements\\Images\\row_texture.png")
     row.Background:SetVertexColor(1, 1, 1)
     row.Background:SetAlpha(1)
     row.Background:Hide()
     
     row.Border = AchievementPanel.BorderClip:CreateTexture(nil, "BACKGROUND")
     row.Border:SetDrawLayer("BACKGROUND", 1)
-    row.Border:SetTexture("Interface\\AddOns\\HardcoreAchievements\\Images\\row-border.blp")
+    row.Border:SetTexture("Interface\\AddOns\\HardcoreAchievements\\Images\\row-border.png")
     row.Border:SetSize(256, 32)
     row.Border:SetAlpha(0.5)
     row.Border:Hide()
