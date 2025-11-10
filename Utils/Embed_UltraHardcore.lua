@@ -9,6 +9,33 @@ local CHECKBOX_TEXTURE_ACTIVE = "Interface\\AddOns\\HardcoreAchievements\\Images
 local SETTINGS_ICON_TEXTURE = "Interface\\AddOns\\HardcoreAchievements\\Images\\icon_gear.png"
 local currentFilter = "all"  -- Current filter state
 
+-- Map level milestones to their circular grid icon variants
+local milestoneGridTextures = {
+  ["10"] = "Interface\\AddOns\\HardcoreAchievements\\Images\\milestone_10.png",
+  ["20"] = "Interface\\AddOns\\HardcoreAchievements\\Images\\milestone_20.png",
+  ["30"] = "Interface\\AddOns\\HardcoreAchievements\\Images\\milestone_30.png",
+  ["40"] = "Interface\\AddOns\\HardcoreAchievements\\Images\\milestone_40.png",
+  ["50"] = "Interface\\AddOns\\HardcoreAchievements\\Images\\milestone_50.png",
+  ["60"] = "Interface\\AddOns\\HardcoreAchievements\\Images\\milestone_60.png",
+}
+
+local function GetGridMilestoneTexture(achId, fallback)
+  if not achId or type(achId) ~= "string" then
+    return fallback
+  end
+
+  if not (_G.IsLevelMilestone and _G.IsLevelMilestone(achId)) then
+    return fallback
+  end
+
+  local level = string.match(achId, "^Level(%d+)$")
+  if level and milestoneGridTextures[level] then
+    return milestoneGridTextures[level]
+  end
+
+  return fallback
+end
+
 -- Helper function to strip color codes from text (for shadow text)
 local function StripColorCodes(text)
     if not text or type(text) ~= "string" then return text end
@@ -850,7 +877,7 @@ local function CreateEmbedModernRow(parent, srow)
     row:SetScript("OnEnter", function(self)
         self.highlight:Show()
         if _G.HCA_ShowAchievementTooltip then
-            _G.HCA_ShowAchievementTooltip(self, srow)
+            _G.HCA_ShowAchievementTooltip(self, self)
         end
     end)
     
@@ -885,6 +912,7 @@ local function CreateEmbedModernRow(parent, srow)
     row._zone = zone
     row._def = def
     row.sourceRow = srow
+    row.requiredKills = srow.requiredKills
     
     -- Store data
     row.achId = achId
@@ -940,6 +968,7 @@ local function UpdateEmbedModernRow(row, srow)
     row.maxLevel = level > 0 and level or nil
     row.sourceRow = srow
     row._def = def
+    row.requiredKills = srow.requiredKills
     
     if not row.Background and UHCA then
         if not UHCA.BorderClip then
