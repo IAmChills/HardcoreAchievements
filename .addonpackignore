@@ -6,5 +6,7 @@ Admin
 *.md
 *.addonpackignore
 *.svg
-*.png
 *.txt
+HardcoreAchievementsButton.png
+HardcoreAchievementsCurse.png
+HardcoreAchievementsSquare.png
