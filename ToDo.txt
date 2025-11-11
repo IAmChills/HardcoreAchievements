@@ -8,7 +8,6 @@ New Achievements
 - No profession achievement for all points
 
 Bugs
-- Achievement count is using total and not filtered for leaderboard
 
 Helpful code
 |c" .. select(4, GetClassColor(select(2, UnitClass("player")))) .. "TEXTHERE|r
