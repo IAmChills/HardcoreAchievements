@@ -2277,7 +2277,7 @@ function CreateAchievementRow(parent, achId, title, tooltip, icon, level, points
     
     -- Checkmark texture (for completed/failed states)
     row.PointsFrame.Checkmark = row.PointsFrame:CreateTexture(nil, "OVERLAY")
-    row.PointsFrame.Checkmark:SetSize(14, 14)
+    row.PointsFrame.Checkmark:SetSize(10, 10)
     row.PointsFrame.Checkmark:SetPoint("CENTER", row.PointsFrame, "CENTER", 0, 0)
     row.PointsFrame.Checkmark:Hide()
 
