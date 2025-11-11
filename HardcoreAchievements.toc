@@ -38,3 +38,4 @@ Utils\Embed_UltraHardcore.lua
 Utils\CommandHandler.lua
 Utils\AchievementLinks.lua
 Utils\OptionsPanel.lua
+Utils\CharacterInspection.lua
