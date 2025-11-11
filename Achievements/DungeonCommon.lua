@@ -501,7 +501,7 @@ function DungeonCommon.registerDungeonAchievement(def)
         
         SaveProgress() -- Save progress after each kill
         UpdateTooltip() -- Update tooltip to show progress
-        print("[HardcoreAchievements] " .. HCA_GetBossName(npcId) .. " killed as part of achievement: " .. title)
+        print("|cff69adc9[HardcoreAchievements]|r " .. HCA_GetBossName(npcId) .. " killed as part of achievement: " .. title)
       end
     end
 

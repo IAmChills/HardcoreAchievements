@@ -35,17 +35,17 @@ local function ApplyDropdownBorder(frame)
         border:SetAllPoints(frame)
 
         border.top = border:CreateTexture(nil, "OVERLAY")
-        border.top:SetPoint("TOPLEFT", -12, 0)
+        border.top:SetPoint("TOPLEFT", 10, 0)
         border.top:SetPoint("TOPRIGHT", -11, 0)
         border.top:SetHeight(1)
 
         border.bottom = border:CreateTexture(nil, "OVERLAY")
-        border.bottom:SetPoint("BOTTOMLEFT", -12, 0)
+        border.bottom:SetPoint("BOTTOMLEFT", 10, 0)
         border.bottom:SetPoint("BOTTOMRIGHT", -11, 0)
         border.bottom:SetHeight(1)
 
         border.left = border:CreateTexture(nil, "OVERLAY")
-        border.left:SetPoint("TOPLEFT", -12, 0)
+        border.left:SetPoint("TOPLEFT", 10, 0)
         border.left:SetPoint("BOTTOMLEFT", -12, 0)
         border.left:SetWidth(1)
 
@@ -70,7 +70,7 @@ local function ApplyDropdownBorder(frame)
     end
 
     background:ClearAllPoints()
-    background:SetPoint("TOPLEFT", frame, "TOPLEFT", -12, -1)
+    background:SetPoint("TOPLEFT", frame, "TOPLEFT", 10, -1)
     background:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -10, 1)
     background:SetColorTexture(0, 0, 0, 0.96)
     background:Show()
@@ -417,6 +417,12 @@ local function PositionRowBorderEmbed(row)
         row.Background:SetSize(rowWidth + 8, rowHeight + 4)
         row.Background:Show()
     end
+
+    if row.highlight then
+        row.highlight:ClearAllPoints()
+        row.highlight:SetPoint("TOPLEFT", row, "TOPLEFT", -4, 0)
+        row.highlight:SetPoint("BOTTOMRIGHT", row, "BOTTOMRIGHT", 3, -1)
+    end
 end
 
 local function UpdatePointsDisplayEmbed(row)
@@ -609,7 +615,19 @@ local function CreateEmbedIcon(parent)
   icon.SSFBorder:SetVertexColor(0.5, 0.3, 0.9, 0.6) -- Purple glow
   icon.SSFBorder:Hide()
 
+  -- Highlight glow on hover
+  icon.Highlight = icon:CreateTexture(nil, "HIGHLIGHT")
+  icon.Highlight:SetTexture("Interface\\AddOns\\HardcoreAchievements\\Images\\grid_texture.png")
+  icon.Highlight:SetPoint("CENTER", icon, "CENTER", 0, 0)
+  icon.Highlight:SetSize(ICON_SIZE, ICON_SIZE)
+  icon.Highlight:SetVertexColor(1, 1, 1, 1)
+  icon.Highlight:SetBlendMode("ADD")
+  icon.Highlight:Hide()
+
   icon:SetScript("OnEnter", function(self)
+    if self.Highlight then
+      self.Highlight:Show()
+    end
     -- Use centralized tooltip function with source row directly
     if _G.HCA_ShowAchievementTooltip and self.sourceRow then
       _G.HCA_ShowAchievementTooltip(self, self.sourceRow)
@@ -637,7 +655,18 @@ local function CreateEmbedIcon(parent)
       return
     end
   end)
-  icon:SetScript("OnLeave", function() GameTooltip:Hide() end)
+  icon:SetScript("OnLeave", function(self)
+    GameTooltip:Hide()
+    if self.Highlight then
+      self.Highlight:Hide()
+    end
+  end)
+
+  icon:SetScript("OnHide", function(self)
+    if self.Highlight then
+      self.Highlight:Hide()
+    end
+  end)
 
   return icon
 end
@@ -931,14 +960,18 @@ local function CreateEmbedModernRow(parent, srow)
     
     -- highlight/tooltip
     row:EnableMouse(true)
-    row.highlight = row:CreateTexture(nil, "BACKGROUND")
-    -- Set highlight to match border positioning (extends 4px left to match border, 2px right)
-    row.highlight:SetPoint("TOPLEFT", row, "TOPLEFT", 0, 0)
-    row.highlight:SetPoint("BOTTOMRIGHT", row, "BOTTOMRIGHT", 2, 0)
-    row.highlight:SetColorTexture(1, 1, 1, 0.10)
+    row.highlight = UHCA.BorderClip:CreateTexture(nil, "BACKGROUND", nil, 0)
+    row.highlight:SetPoint("TOPLEFT", row, "TOPLEFT", -4, 0)
+    row.highlight:SetPoint("BOTTOMRIGHT", row, "BOTTOMRIGHT", 3, -1)
+    row.highlight:SetTexture("Interface\\AddOns\\HardcoreAchievements\\Images\\row_texture.png")
+    row.highlight:SetVertexColor(1, 1, 1, 0.75)
+    row.highlight:SetBlendMode("ADD")
     row.highlight:Hide()
     
     row:SetScript("OnEnter", function(self)
+        if self.highlight then
+            self.highlight:SetVertexColor(1, 1, 1, 0.75)
+        end
         self.highlight:Show()
         if _G.HCA_ShowAchievementTooltip then
             _G.HCA_ShowAchievementTooltip(self, self)
@@ -1018,10 +1051,8 @@ local function UpdateEmbedModernRow(row, srow)
     local def = srow._def or (_G.HCA_AchievementDefs and _G.HCA_AchievementDefs[achId])
     
     if row.Icon then row.Icon:SetTexture(iconTex) end
-    if row.Title then 
-        row.Title:SetText(title)
-        if row.TitleShadow then row.TitleShadow:SetText(StripColorCodes(title)) end
-    end
+    if row.Title then row.Title:SetText(title) end
+    if row.TitleShadow then row.TitleShadow:SetText(StripColorCodes(title)) end
     if row.Points then row.Points:SetText(tostring(points)) end
     
     -- Update stored data
@@ -1033,6 +1064,11 @@ local function UpdateEmbedModernRow(row, srow)
     row.sourceRow = srow
     row._def = def
     row.requiredKills = srow.requiredKills
+    row.tooltip = srow.tooltip or srow._tooltip or ""
+    row._tooltip = row.tooltip
+    row.zone = srow.zone or srow._zone
+    row._zone = row.zone
+    row._title = title
     
     if not row.Background and UHCA then
         if not UHCA.BorderClip then

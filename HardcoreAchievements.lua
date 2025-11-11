@@ -270,6 +270,12 @@ local function PositionRowBorder(row)
         row.Background:SetSize(295, 43)
         row.Background:Show()
     end
+
+    if row.highlight then
+        row.highlight:ClearAllPoints()
+        row.highlight:SetPoint("TOPLEFT", row, "TOPLEFT", -4, 0)
+        row.highlight:SetPoint("BOTTOMRIGHT", row, "BOTTOMRIGHT", -20, -1)
+    end
 end
 
 -- Format timestamp into readable date/time string (locale-aware format)
@@ -370,6 +376,14 @@ function HCA_UpdateTotalPoints()
     local total = HCA_GetTotalPoints()
     if AchievementPanel and AchievementPanel.TotalPoints then
         AchievementPanel.TotalPoints:SetText(tostring(total))
+        if AchievementPanel.CountsText then
+            local completed, totalCount = HCA_AchievementCount()
+            if completed and totalCount then
+                AchievementPanel.CountsText:SetText(string.format(" (%d/%d)", completed or 0, totalCount or 0))
+            else
+                AchievementPanel.CountsText:SetText("")
+            end
+        end
     end
 end
 
@@ -2062,6 +2076,11 @@ AchievementPanel.PointsLabelText:SetPoint("LEFT", AchievementPanel.TotalPoints, 
 AchievementPanel.PointsLabelText:SetText(" pts")
 AchievementPanel.PointsLabelText:SetTextColor(0.6, 0.9, 0.6)
 
+AchievementPanel.CountsText = AchievementPanel:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+AchievementPanel.CountsText:SetPoint("BOTTOMRIGHT", filterDropdown, "TOPRIGHT", -50, 20)
+AchievementPanel.CountsText:SetText("(0/0)")
+AchievementPanel.CountsText:SetTextColor(0.8, 0.8, 0.8)
+
 -- Preset multiplier label, e.g. "Point Multiplier (Lite +)"
 AchievementPanel.MultiplierText = AchievementPanel:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
 AchievementPanel.MultiplierText:SetPoint("TOP", 15, -40)
@@ -2282,7 +2301,7 @@ function CreateAchievementRow(parent, achId, title, tooltip, icon, level, points
     
     -- Checkmark texture (for completed/failed states)
     row.PointsFrame.Checkmark = row.PointsFrame:CreateTexture(nil, "OVERLAY")
-    row.PointsFrame.Checkmark:SetSize(10, 10)
+    row.PointsFrame.Checkmark:SetSize(14, 14)
     row.PointsFrame.Checkmark:SetPoint("CENTER", row.PointsFrame, "CENTER", 0, 0)
     row.PointsFrame.Checkmark:Hide()
 
@@ -2311,13 +2330,18 @@ function CreateAchievementRow(parent, achId, title, tooltip, icon, level, points
     
     -- highlight/tooltip
     row:EnableMouse(true)
-    row.highlight = row:CreateTexture(nil, "BACKGROUND")
-    row.highlight:SetAllPoints(row)
-    row.highlight:SetColorTexture(1, 1, 1, 0.10)
+    row.highlight = AchievementPanel.BorderClip:CreateTexture(nil, "BACKGROUND", nil, 0)
+    row.highlight:SetPoint("TOPLEFT", row, "TOPLEFT", -4, 0)
+    row.highlight:SetPoint("BOTTOMRIGHT", row, "BOTTOMRIGHT", -20, -1)
+    row.highlight:SetTexture("Interface\\AddOns\\HardcoreAchievements\\Images\\row_texture.png")
+    row.highlight:SetVertexColor(1, 1, 1, 0.75)
+    row.highlight:SetBlendMode("ADD")
     row.highlight:Hide()
 
     row:SetScript("OnEnter", function(self)
-        self.highlight:SetColorTexture(1, 1, 1, 0.10)
+        if self.highlight then
+            self.highlight:SetVertexColor(1, 1, 1, 0.75)
+        end
         self.highlight:Show()
 
         if self.Title and self.Title.GetText then

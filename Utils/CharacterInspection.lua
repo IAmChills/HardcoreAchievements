@@ -30,6 +30,385 @@ local CACHE_DURATION = 300 -- 5 minutes
 local currentInspectionTarget = nil
 local inspectionFrame = nil
 local inspectionAchievementPanel = nil
+local achievementDefinitionCache = {}
+local panelIndexed = false
+local inspectionTabID = nil
+local HANDSHAKE_TIMEOUT = 3
+local handshakeTimer = nil
+local handshakeTarget = nil
+
+local function NormalizeAchievementId(achId)
+    if achId == nil then
+        return nil
+    end
+    if type(achId) == "number" then
+        return tostring(achId)
+    end
+    return achId
+end
+
+local function InspectStripColorCodes(text)
+    if not text or type(text) ~= "string" then return text end
+    return text:gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", "")
+end
+
+local function InspectHasVisibleText(value)
+    if type(value) ~= "string" then
+        return false
+    end
+    return value:match("%S") ~= nil
+end
+
+local function UpdateInspectionRowTextLayout(row)
+    if not row or not row.Icon or not row.Title or not row.Sub then
+        return
+    end
+
+    local hasSubText = InspectHasVisibleText(row.Sub:GetText())
+
+    row.Title:ClearAllPoints()
+    row.Sub:ClearAllPoints()
+    if row.TitleShadow then
+        row.TitleShadow:ClearAllPoints()
+    end
+
+    if hasSubText then
+        local text = row.Sub:GetText()
+        local extraLines = 0
+        if text and text ~= "" then
+            local _, newlines = text:gsub("\n", "")
+            extraLines = math.max(0, newlines)
+        end
+        local yOffset = 11 + (extraLines * 5)
+        row.Title:SetPoint("TOPLEFT", row.Icon, "RIGHT", 8, yOffset)
+        row.Sub:SetPoint("TOPLEFT", row.Title, "BOTTOMLEFT", 0, -1)
+        row.Sub:Show()
+    else
+        row.Title:SetPoint("LEFT", row.Icon, "RIGHT", 8, 0)
+        row.Sub:SetPoint("TOPLEFT", row.Title, "BOTTOMLEFT", 0, -2)
+        row.Sub:Hide()
+    end
+
+    if row.TitleShadow then
+        row.TitleShadow:SetPoint("LEFT", row.Title, "LEFT", 1, -1)
+    end
+end
+
+local function HookInspectionRowSubTextUpdates(row)
+    if not row or not row.Sub or row.Sub._hcaSetTextWrapped then
+        return
+    end
+
+    local fontString = row.Sub
+    local originalSetText = fontString.SetText
+    local originalSetFormattedText = fontString.SetFormattedText
+
+    fontString.SetText = function(self, text, ...)
+        originalSetText(self, text, ...)
+        UpdateInspectionRowTextLayout(row)
+    end
+
+    fontString.SetFormattedText = function(self, ...)
+        originalSetFormattedText(self, ...)
+        UpdateInspectionRowTextLayout(row)
+    end
+
+    fontString._hcaSetTextWrapped = true
+end
+
+local function IsInspectionRowOutleveled(row)
+    if not row or row.completed then return false end
+    if not row.maxLevel then return false end
+    local lvl = UnitLevel("player") or 1
+    return lvl > row.maxLevel
+end
+
+local function FormatInspectionTimestamp(timestamp)
+    if not timestamp then return "" end
+    local dateInfo = date("*t", timestamp)
+    if not dateInfo then return "" end
+
+    local locale = GetLocale and GetLocale() or "enUS"
+    if locale == "enUS" then
+        return string.format("%02d/%02d/%02d",
+            dateInfo.month,
+            dateInfo.day,
+            dateInfo.year % 100)
+    else
+        return string.format("%02d/%02d/%02d",
+            dateInfo.day,
+            dateInfo.month,
+            dateInfo.year % 100)
+    end
+end
+
+local function UpdateInspectionPointsDisplay(row)
+    if not row or not row.PointsFrame then return end
+
+    local isOutleveled = IsInspectionRowOutleveled(row)
+
+    if row.PointsFrame.Texture then
+        if row.completed then
+            row.PointsFrame.Texture:SetTexture("Interface\\AddOns\\HardcoreAchievements\\Images\\ring_gold.png")
+        elseif isOutleveled then
+            row.PointsFrame.Texture:SetTexture("Interface\\AddOns\\HardcoreAchievements\\Images\\ring_failed.png")
+        else
+            row.PointsFrame.Texture:SetTexture("Interface\\AddOns\\HardcoreAchievements\\Images\\ring_disabled.png")
+        end
+        row.PointsFrame.Texture:SetAlpha(1)
+    end
+
+    if row.Points then
+        if row.completed or isOutleveled then
+            row.Points:SetAlpha(0)
+        else
+            row.Points:SetAlpha(1)
+        end
+    end
+
+    if row.PointsFrame.Checkmark then
+        if row.completed then
+            row.PointsFrame.Checkmark:SetTexture("Interface\\AddOns\\HardcoreAchievements\\Images\\ReadyCheck-Ready.png")
+            row.PointsFrame.Checkmark:Show()
+        elseif isOutleveled then
+            row.PointsFrame.Checkmark:SetTexture("Interface\\AddOns\\HardcoreAchievements\\Images\\ReadyCheck-NotReady.png")
+            row.PointsFrame.Checkmark:Show()
+        else
+            row.PointsFrame.Checkmark:Hide()
+        end
+    end
+
+    if row.IconOverlay then
+        if isOutleveled then
+            row.IconOverlay:SetTexture("Interface\\AddOns\\HardcoreAchievements\\Images\\ReadyCheck-NotReady.png")
+            row.IconOverlay:Show()
+        else
+            row.IconOverlay:Hide()
+        end
+    end
+
+    if row.IconFrameGold and row.IconFrame then
+        if row.completed then
+            row.IconFrameGold:Show()
+            row.IconFrame:Hide()
+        else
+            row.IconFrameGold:Hide()
+            row.IconFrame:Show()
+        end
+    end
+
+    if row.Title then
+        if row.completed then
+            row.Title:SetTextColor(1, 0.82, 0)
+        elseif isOutleveled then
+            row.Title:SetTextColor(0.957, 0.263, 0.212)
+        else
+            row.Title:SetTextColor(1, 1, 1)
+        end
+    end
+
+    if row.Sub then
+        if row.completed then
+            row.Sub:SetTextColor(1, 1, 1)
+        else
+            row.Sub:SetTextColor(0.5, 0.5, 0.5)
+        end
+    end
+
+    if row.Icon and row.Icon.SetDesaturated then
+        if row.completed or isOutleveled then
+            row.Icon:SetDesaturated(false)
+        else
+            row.Icon:SetDesaturated(true)
+        end
+    end
+
+    if row.Background then
+        if row.completed then
+            row.Background:SetVertexColor(0.1, 1.0, 0.1)
+        elseif isOutleveled then
+            row.Background:SetVertexColor(1.0, 0.1, 0.1)
+        else
+            row.Background:SetVertexColor(1, 1, 1)
+        end
+        row.Background:SetAlpha(1)
+    end
+
+    if row.Border then
+        if row.completed then
+            row.Border:SetVertexColor(0.6, 0.9, 0.6)
+        elseif isOutleveled then
+            row.Border:SetVertexColor(0.957, 0.263, 0.212)
+        else
+            row.Border:SetVertexColor(0.8, 0.8, 0.8)
+        end
+        row.Border:SetAlpha(0.5)
+    end
+    
+    if row.TS then
+        if row.completed then
+            row.TS:SetTextColor(1, 1, 1)
+        elseif isOutleveled then
+            row.TS:SetTextColor(0.957, 0.263, 0.212)
+        else
+            row.TS:SetTextColor(1, 1, 1)
+        end
+    end
+end
+
+local function ClearInspectionAchievementRows(statusText, statusColor)
+    if not inspectionAchievementPanel or not inspectionAchievementPanel.achievements then return end
+
+    for _, row in ipairs(inspectionAchievementPanel.achievements) do
+        if row and row:IsObjectType("Frame") then
+            if row.Border then row.Border:Hide() end
+            if row.Background then row.Background:Hide() end
+            row:Hide()
+            row:SetParent(nil)
+        end
+    end
+
+    wipe(inspectionAchievementPanel.achievements)
+
+    if inspectionAchievementPanel.Content and inspectionAchievementPanel.Scroll then
+        inspectionAchievementPanel.Content:SetHeight(inspectionAchievementPanel.Scroll:GetHeight() or 0)
+        inspectionAchievementPanel.Scroll:UpdateScrollChildRect()
+    end
+
+    if inspectionAchievementPanel.StatusText then
+        if statusText then
+            inspectionAchievementPanel.StatusText:SetText(statusText)
+            local r, g, b = 1, 1, 0
+            if type(statusColor) == "table" then
+                r = tonumber(statusColor[1]) or r
+                g = tonumber(statusColor[2]) or g
+                b = tonumber(statusColor[3]) or b
+            end
+            inspectionAchievementPanel.StatusText:SetTextColor(r, g, b)
+            inspectionAchievementPanel.StatusText:Show()
+        else
+            inspectionAchievementPanel.StatusText:SetText("")
+            inspectionAchievementPanel.StatusText:Hide()
+        end
+    end
+
+    if inspectionAchievementPanel.TotalPoints then
+        inspectionAchievementPanel.TotalPoints:SetText("0 pts")
+    end
+
+    if inspectionAchievementPanel.CountsText then
+        inspectionAchievementPanel.CountsText:SetText("(0/0)")
+    end
+end
+
+CharacterInspection.ClearInspectionAchievementRows = ClearInspectionAchievementRows
+
+local function CancelInspectionHandshakeTimer()
+    if handshakeTimer and handshakeTimer.Cancel then
+        handshakeTimer:Cancel()
+    end
+    handshakeTimer = nil
+    handshakeTarget = nil
+end
+
+local function StartInspectionHandshakeTimer(targetName)
+    CancelInspectionHandshakeTimer()
+    handshakeTarget = targetName
+    if C_Timer and C_Timer.NewTimer then
+        handshakeTimer = C_Timer.NewTimer(HANDSHAKE_TIMEOUT, function()
+            if currentInspectionTarget == targetName then
+                ClearInspectionAchievementRows("No response from " .. targetName .. ". They may not have HardcoreAchievements installed.", {1, 0.5, 0.5})
+            end
+            CancelInspectionHandshakeTimer()
+        end)
+    end
+end
+
+local function PositionInspectionRowBorder(row)
+    if not row or not inspectionAchievementPanel or not inspectionAchievementPanel.BorderClip then
+        return
+    end
+    if not row.Border then return end
+
+    if not row:IsShown() then
+        row.Border:Hide()
+        if row.Background then
+            row.Background:Hide()
+        end
+        return
+    end
+
+    row.Border:ClearAllPoints()
+    row.Border:SetPoint("TOPLEFT", row, "TOPLEFT", -4, 0)
+    row.Border:SetSize(295, 43)
+    row.Border:Show()
+
+    if row.Background then
+        row.Background:ClearAllPoints()
+        row.Background:SetPoint("TOPLEFT", row, "TOPLEFT", -4, 0)
+        row.Background:SetSize(295, 43)
+        row.Background:Show()
+    end
+end
+
+local function IndexLocalAchievementRows()
+    if panelIndexed then return end
+    if not AchievementPanel or not AchievementPanel.achievements then return end
+
+    for _, row in ipairs(AchievementPanel.achievements) do
+        local id = row.id or row.achId
+        local key = NormalizeAchievementId(id)
+        if key and not achievementDefinitionCache[key] then
+            achievementDefinitionCache[key] = {
+                achId = id,
+                title = row.Title and row.Title.GetText and row.Title:GetText() or (type(id) == "string" and id or "Unknown Achievement"),
+                tooltip = row.tooltip or "",
+                icon = row.Icon and row.Icon:GetTexture() or 136116,
+                points = row.originalPoints or row.points or 0,
+                level = row.maxLevel or row.level,
+                zone = row.zone,
+            }
+        end
+    end
+
+    panelIndexed = true
+end
+
+local function GetAchievementDefinition(achId)
+    if not achId then return nil end
+
+    local key = NormalizeAchievementId(achId)
+    if not key then return nil end
+
+    if achievementDefinitionCache[key] then
+        return achievementDefinitionCache[key]
+    end
+
+    IndexLocalAchievementRows()
+    if achievementDefinitionCache[key] then
+        return achievementDefinitionCache[key]
+    end
+
+    if _G.HCA_AchievementDefs and _G.HCA_AchievementDefs[key] then
+        local def = _G.HCA_AchievementDefs[key]
+        achievementDefinitionCache[key] = {
+            achId = def.achId or achId,
+            title = def.title or (type(achId) == "string" and achId or "Unknown Achievement"),
+            tooltip = def.tooltip or "",
+            icon = def.icon or 136116,
+            points = def.points or 0,
+            level = def.level,
+            zone = def.zone or def.mapName,
+            requiredKills = def.requiredKills,
+            bossOrder = def.bossOrder,
+        }
+        return achievementDefinitionCache[key]
+    end
+
+    return nil
+end
+
+CharacterInspection.GetAchievementDefinition = GetAchievementDefinition
 
 -- Initialize the inspection system
 local function InitializeInspectionSystem()
@@ -62,14 +441,18 @@ end
 
 -- Setup the achievement tab on the inspection frame
 function CharacterInspection.SetupInspectionTab()
-    if not InspectFrame then return end
+    if not InspectFrame or inspectionAchievementPanel then return end
     
     -- Create achievement tab
-    local tabID = InspectFrame.numTabs + 1
+    local tabID = (InspectFrame.numTabs or 0) + 1
     local achievementTab = CreateFrame("Button", "InspectFrameTab" .. tabID, InspectFrame, "CharacterFrameTabButtonTemplate")
-    achievementTab:SetPoint("RIGHT", _G["InspectFrameTab" .. (tabID - 1)], "RIGHT", 43, 0)
+    achievementTab:SetID(tabID)
+    achievementTab:SetPoint("LEFT", _G["InspectFrameTab" .. (tabID - 1)], "RIGHT", -15, 0)
     achievementTab:SetText(ACHIEVEMENTS)
     PanelTemplates_DeselectTab(achievementTab)
+    inspectionTabID = tabID
+    InspectFrame.numTabs = tabID
+    PanelTemplates_SetNumTabs(InspectFrame, tabID)
     
     -- Create achievement panel for inspection
     inspectionAchievementPanel = CreateFrame("Frame", "InspectAchievementPanel", InspectFrame)
@@ -81,17 +464,48 @@ function CharacterInspection.SetupInspectionTab()
     CharacterInspection.SetupInspectionAchievementPanel()
     
     -- Tab click handler
-    achievementTab:SetScript("OnClick", function()
-        CharacterInspection.ShowInspectionAchievementTab()
+    achievementTab.subFrame = "InspectAchievementPanel"
+    achievementTab:SetScript("OnClick", function(self)
+        PanelTemplates_SetTab(InspectFrame, self:GetID())
+        if InspectFrame_ShowSubFrame then
+            InspectFrame_ShowSubFrame(self.subFrame)
+        else
+            CharacterInspection.ShowInspectionAchievementTab()
+        end
     end)
     
     -- Hook into inspection frame tab switching
-    hooksecurefunc("InspectFrame_ShowSubFrame", function(frameName)
-        if inspectionAchievementPanel and inspectionAchievementPanel:IsShown() and frameName ~= "InspectAchievementPanel" then
-            inspectionAchievementPanel:Hide()
-            PanelTemplates_DeselectTab(achievementTab)
+    if InspectFrame_ShowSubFrame then
+        hooksecurefunc("InspectFrame_ShowSubFrame", function(frameName)
+            if frameName == "InspectAchievementPanel" then
+                CharacterInspection.ShowInspectionAchievementTab()
+            elseif inspectionAchievementPanel and inspectionAchievementPanel:IsShown() then
+                inspectionAchievementPanel:Hide()
+            end
+        end)
+    elseif InspectFrameTab_OnClick then
+        hooksecurefunc("InspectFrameTab_OnClick", function(tabID)
+            if tabID == inspectionTabID then
+                CharacterInspection.ShowInspectionAchievementTab()
+            elseif inspectionAchievementPanel and inspectionAchievementPanel:IsShown() then
+                inspectionAchievementPanel:Hide()
+            end
+        end)
+    end
+
+    -- Ensure the default inspect framework knows about our new panel
+    if type(INSPECTFRAME_SUBFRAMES) == "table" then
+        local exists = false
+        for _, name in ipairs(INSPECTFRAME_SUBFRAMES) do
+            if name == "InspectAchievementPanel" then
+                exists = true
+                break
+            end
         end
-    end)
+        if not exists then
+            table.insert(INSPECTFRAME_SUBFRAMES, "InspectAchievementPanel")
+        end
+    end
 end
 
 -- Setup the inspection achievement panel UI
@@ -106,20 +520,28 @@ function CharacterInspection.SetupInspectionAchievementPanel()
     
     -- Total points display
     inspectionAchievementPanel.TotalPoints = inspectionAchievementPanel:CreateFontString(nil, "OVERLAY", "GameFontHighlightLarge")
-    inspectionAchievementPanel.TotalPoints:SetPoint("TOPRIGHT", inspectionAchievementPanel, "TOPRIGHT", -50, -30)
+    inspectionAchievementPanel.TotalPoints:SetPoint("TOP", inspectionAchievementPanel, "TOP", 5, -30)
     inspectionAchievementPanel.TotalPoints:SetText("0 pts")
     inspectionAchievementPanel.TotalPoints:SetTextColor(0.6, 0.9, 0.6)
     
+    inspectionAchievementPanel.CountsText = inspectionAchievementPanel:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    inspectionAchievementPanel.CountsText:SetPoint("CENTER", inspectionAchievementPanel.TotalPoints, "CENTER", 0, -15)
+    inspectionAchievementPanel.CountsText:SetText("(0/0)")
+    inspectionAchievementPanel.CountsText:SetTextColor(0.8, 0.8, 0.8)
+    
     -- Status text (loading, error, etc.)
     inspectionAchievementPanel.StatusText = inspectionAchievementPanel:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    inspectionAchievementPanel.StatusText:SetPoint("CENTER", inspectionAchievementPanel, "CENTER", 0, 0)
+    inspectionAchievementPanel.StatusText:SetPoint("CENTER", inspectionAchievementPanel, "CENTER", -10, 0)
     inspectionAchievementPanel.StatusText:SetText("Requesting achievement data...")
     inspectionAchievementPanel.StatusText:SetTextColor(1, 1, 0)
+    inspectionAchievementPanel.StatusText:SetJustifyH("CENTER")
+    inspectionAchievementPanel.StatusText:SetJustifyV("MIDDLE")
+    inspectionAchievementPanel.StatusText:SetWordWrap(true)
     
     -- Scrollable container
     inspectionAchievementPanel.Scroll = CreateFrame("ScrollFrame", "$parentScroll", inspectionAchievementPanel, "UIPanelScrollFrameTemplate")
-    inspectionAchievementPanel.Scroll:SetPoint("TOPLEFT", 30, -60)
-    inspectionAchievementPanel.Scroll:SetPoint("BOTTOMRIGHT", -65, 70)
+    inspectionAchievementPanel.Scroll:SetPoint("TOPLEFT", 10, -65)
+    inspectionAchievementPanel.Scroll:SetPoint("BOTTOMRIGHT", -35, 10)
     
     -- Content frame
     inspectionAchievementPanel.Content = CreateFrame("Frame", nil, inspectionAchievementPanel.Scroll)
@@ -128,10 +550,23 @@ function CharacterInspection.SetupInspectionAchievementPanel()
     inspectionAchievementPanel.Scroll:SetScrollChild(inspectionAchievementPanel.Content)
     
     inspectionAchievementPanel.Content:SetWidth(inspectionAchievementPanel.Scroll:GetWidth())
+    if inspectionAchievementPanel.StatusText then
+        inspectionAchievementPanel.StatusText:SetWidth(math.max((inspectionAchievementPanel.Scroll:GetWidth() or 0) - 20, 200))
+    end
     inspectionAchievementPanel.Scroll:SetScript("OnSizeChanged", function(self)
         inspectionAchievementPanel.Content:SetWidth(self:GetWidth())
         self:UpdateScrollChildRect()
+        if inspectionAchievementPanel.StatusText then
+            inspectionAchievementPanel.StatusText:SetWidth(math.max((self:GetWidth() or 0) - 20, 200))
+        end
     end)
+    
+    if not inspectionAchievementPanel.BorderClip then
+        inspectionAchievementPanel.BorderClip = CreateFrame("Frame", nil, inspectionAchievementPanel)
+        inspectionAchievementPanel.BorderClip:SetPoint("TOPLEFT", inspectionAchievementPanel.Scroll, "TOPLEFT", -10, 2)
+        inspectionAchievementPanel.BorderClip:SetPoint("BOTTOMRIGHT", inspectionAchievementPanel.Scroll, "BOTTOMRIGHT", 10, -2)
+        inspectionAchievementPanel.BorderClip:SetClipsChildren(true)
+    end
     
     -- Mouse wheel support
     inspectionAchievementPanel.Scroll:EnableMouseWheel(true)
@@ -149,26 +584,26 @@ function CharacterInspection.SetupInspectionAchievementPanel()
     -- Background textures (same as main panel)
     local TL = inspectionAchievementPanel:CreateTexture(nil, "BACKGROUND", nil, 0)
     TL:SetTexture("Interface\\PaperDollInfoFrame\\UI-Character-General-TopLeft")
-    TL:SetPoint("TOPLEFT", 2, -1)
-    TL:SetSize(256, 256)
+    TL:SetPoint("TOPLEFT", -13, 13)
+    TL:SetSize(258, 258)
     
     local TR = inspectionAchievementPanel:CreateTexture(nil, "BACKGROUND", nil, 0)
     TR:SetTexture("Interface\\PaperDollInfoFrame\\UI-Character-General-TopRight")
     TR:SetPoint("TOPLEFT", TL, "TOPRIGHT", 0, 0)
-    TR:SetPoint("RIGHT", inspectionAchievementPanel, "RIGHT", 2, -1)
-    TR:SetHeight(256)
+    TR:SetPoint("RIGHT", inspectionAchievementPanel, "RIGHT", 32, -1)
+    TR:SetHeight(258)
     
     local BL = inspectionAchievementPanel:CreateTexture(nil, "BACKGROUND", nil, 0)
     BL:SetTexture("Interface\\PaperDollInfoFrame\\UI-Character-General-BottomLeft")
     BL:SetPoint("TOPLEFT", TL, "BOTTOMLEFT", 0, 0)
-    BL:SetPoint("BOTTOMLEFT", inspectionAchievementPanel, "BOTTOMLEFT", 2, -1)
-    BL:SetWidth(256)
+    BL:SetPoint("BOTTOMLEFT", inspectionAchievementPanel, "BOTTOMLEFT", 2, -75)
+    BL:SetWidth(258)
     
     local BR = inspectionAchievementPanel:CreateTexture(nil, "BACKGROUND", nil, 0)
     BR:SetTexture("Interface\\PaperDollInfoFrame\\UI-Character-General-BottomRight")
     BR:SetPoint("TOPLEFT", BL, "TOPRIGHT", 0, 0)
     BR:SetPoint("LEFT", TR, "LEFT", 0, 0)
-    BR:SetPoint("BOTTOMRIGHT", inspectionAchievementPanel, "BOTTOMRIGHT", 2, -1)
+    BR:SetPoint("BOTTOMRIGHT", inspectionAchievementPanel, "BOTTOMRIGHT", 32, -75)
     
     -- Initialize achievements array
     inspectionAchievementPanel.achievements = {}
@@ -194,16 +629,27 @@ function CharacterInspection.ShowInspectionAchievementTab()
     end
     
     -- Select our tab
-    local tabID = InspectFrame.numTabs + 1
+    local tabID = inspectionTabID or InspectFrame.numTabs
     local achievementTab = _G["InspectFrameTab" .. tabID]
     if achievementTab then
         PanelTemplates_SelectTab(achievementTab)
     end
     
     -- Hide other subframes
+    if type(INSPECTFRAME_SUBFRAMES) == "table" then
+        for _, frameName in ipairs(INSPECTFRAME_SUBFRAMES) do
+            if frameName ~= "InspectAchievementPanel" then
+                local frame = _G[frameName]
+                if frame and frame.Hide then
+                    frame:Hide()
+                end
+            end
+        end
+    end
     if InspectPaperDollFrame then InspectPaperDollFrame:Hide() end
     if InspectHonorFrame then InspectHonorFrame:Hide() end
     if InspectTalentFrame then InspectTalentFrame:Hide() end
+    if InspectPVPFrame then InspectPVPFrame:Hide() end
     
     -- Show our panel
     inspectionAchievementPanel:Show()
@@ -225,15 +671,14 @@ function CharacterInspection.RequestAchievementData(targetName)
     local cacheKey = targetName
     local cachedData = inspectionCache[cacheKey]
     if cachedData and (time() - cachedData.timestamp) < CACHE_DURATION then
+        CancelInspectionHandshakeTimer()
         CharacterInspection.DisplayAchievementData(cachedData.data)
         return
     end
     
     -- Show loading state
-    if inspectionAchievementPanel and inspectionAchievementPanel.StatusText then
-        inspectionAchievementPanel.StatusText:SetText("Requesting achievement data from " .. targetName .. "...")
-        inspectionAchievementPanel.StatusText:SetTextColor(1, 1, 0)
-    end
+    ClearInspectionAchievementRows("Checking for HardcoreAchievements addon on " .. targetName .. "...", {1, 1, 0})
+    StartInspectionHandshakeTimer(targetName)
     
     -- Send request
     local requestPayload = {
@@ -278,13 +723,22 @@ function CharacterInspection.OnInspectionResponse(prefix, message, distribution,
     
     local success, payload = AceSerialize:Deserialize(message)
     if not success or not payload or payload.type ~= "achievement_response" then return end
+    if payload.requester and payload.requester ~= UnitName("player") then return end
+    if sender ~= currentInspectionTarget then return end
+    
+    local wasPending = (handshakeTarget == sender)
+    if wasPending then
+        CancelInspectionHandshakeTimer()
+    end
     
     if not payload.hasAddon then
         -- Target doesn't have the addon
-        if inspectionAchievementPanel and inspectionAchievementPanel.StatusText then
-            inspectionAchievementPanel.StatusText:SetText("Target player does not have HardcoreAchievements addon")
-            inspectionAchievementPanel.StatusText:SetTextColor(1, 0.5, 0.5)
-        end
+        ClearInspectionAchievementRows("Target player does not have the HardcoreAchievements addon installed.", {1, 0.5, 0.5})
+        return
+    end
+
+    if wasPending then
+        ClearInspectionAchievementRows("Receiving achievement data from " .. sender .. "...", {0.6, 0.9, 0.6})
     end
     -- If they have the addon, we'll receive the data via OnInspectionData
 end
@@ -295,6 +749,10 @@ function CharacterInspection.OnInspectionData(prefix, message, distribution, sen
     
     local success, payload = AceSerialize:Deserialize(message)
     if not success or not payload or payload.type ~= "achievement_data" then return end
+    
+    if sender == currentInspectionTarget then
+        CancelInspectionHandshakeTimer()
+    end
     
     -- Cache the data
     local cacheKey = sender
@@ -318,21 +776,41 @@ function CharacterInspection.SendAchievementData(targetName)
     end
     
     -- Prepare data for transmission
-    local achievementData = {
-        meta = charDB.meta or {},
-        achievements = charDB.achievements or {},
-        totalPoints = HCA_GetTotalPoints and HCA_GetTotalPoints() or 0,
-        completedCount = 0,
-        totalCount = 0
-    }
+    local completedAchievements = {}
+    local totalCount = 0
+    local completedCount = 0
+    local totalPoints = 0
     
-    -- Count achievements
-    for _, achievement in pairs(charDB.achievements) do
-        achievementData.totalCount = achievementData.totalCount + 1
+    local achievements = charDB.achievements or {}
+    for achId, achievement in pairs(achievements) do
+        totalCount = totalCount + 1
         if achievement.completed then
-            achievementData.completedCount = achievementData.completedCount + 1
+            completedCount = completedCount + 1
+            local key = NormalizeAchievementId(achId)
+            local definition = GetAchievementDefinition(achId)
+            local points = achievement.points or (definition and definition.points) or 0
+            totalPoints = totalPoints + (tonumber(points) or 0)
+            
+            completedAchievements[key] = {
+                completed = true,
+                completedAt = achievement.completedAt,
+                points = points,
+                level = achievement.level,
+                wasSolo = achievement.wasSolo,
+                sfMod = achievement.SFMod,
+                notes = achievement.notes,
+            }
         end
     end
+    
+    local achievementData = {
+        meta = charDB.meta or {},
+        completed = completedAchievements,
+        totalPoints = totalPoints,
+        completedCount = completedCount,
+        totalCount = totalCount,
+        version = 2,
+    }
     
     -- Send the data
     local dataPayload = {
@@ -351,47 +829,80 @@ end
 function CharacterInspection.DisplayAchievementData(data)
     if not inspectionAchievementPanel or not data then return end
     
+    inspectionAchievementPanel.achievements = inspectionAchievementPanel.achievements or {}
+    
     -- Clear existing achievements
-    if inspectionAchievementPanel.achievements then
-        for _, row in ipairs(inspectionAchievementPanel.achievements) do
-            if row and row:IsObjectType("Frame") then
-                row:Hide()
-                row:SetParent(nil)
+    ClearInspectionAchievementRows()
+    
+    -- Normalize incoming payload
+    local completedMap = {}
+    if type(data.completed) == "table" then
+        completedMap = data.completed
+    end
+    
+    -- Compute total points (fall back to provided totalPoints if available)
+    local totalPoints = tonumber(data.totalPoints) or 0
+    if totalPoints == 0 then
+        for _, achievementData in pairs(completedMap) do
+            totalPoints = totalPoints + (tonumber(achievementData.points) or 0)
+        end
+    end
+    if inspectionAchievementPanel.TotalPoints then
+        inspectionAchievementPanel.TotalPoints:SetText(string.format("%d pts", totalPoints))
+    end
+    
+    local createdRows = 0
+    for achId, achievementData in pairs(completedMap) do
+        local definition = GetAchievementDefinition(achId)
+        local title = (definition and definition.title) or tostring(achId)
+        local tooltip = (definition and definition.tooltip) or ""
+        local icon = (definition and definition.icon) or 136116
+        local definitionLevel = nil
+        if definition then
+            if definition.level then
+                definitionLevel = tonumber(definition.level)
+            end
+            if not definitionLevel and definition.maxLevel then
+                definitionLevel = tonumber(definition.maxLevel)
             end
         end
-        inspectionAchievementPanel.achievements = {}
+        local points = achievementData.points or (definition and definition.points) or 0
+        
+        local inspectionRow = CharacterInspection.CreateInspectionAchievementRow(
+            inspectionAchievementPanel.Content,
+            achId,
+            title,
+            tooltip,
+            icon,
+            definitionLevel,
+            points,
+            achievementData,
+            definition
+        )
+        
+        createdRows = createdRows + 1
+        table.insert(inspectionAchievementPanel.achievements, inspectionRow)
+    end
+
+    local completedCount = tonumber(data.completedCount) or createdRows
+    local totalCount = tonumber(data.totalCount) or math.max(completedCount, createdRows)
+    if inspectionAchievementPanel.CountsText then
+        inspectionAchievementPanel.CountsText:SetText(string.format("(%d/%d)", completedCount or 0, totalCount or 0))
     end
     
-    -- Update status
+    if createdRows == 0 then
+        if inspectionAchievementPanel.StatusText then
+            inspectionAchievementPanel.StatusText:SetText("No completed achievements to display yet.")
+            inspectionAchievementPanel.StatusText:SetTextColor(0.9, 0.9, 0.9)
+            inspectionAchievementPanel.StatusText:Show()
+        end
+        inspectionAchievementPanel.Content:SetHeight(inspectionAchievementPanel.Scroll:GetHeight() or 0)
+        inspectionAchievementPanel.Scroll:UpdateScrollChildRect()
+        return
+    end
+    
     if inspectionAchievementPanel.StatusText then
         inspectionAchievementPanel.StatusText:SetText("")
-    end
-    
-    -- Update total points
-    if inspectionAchievementPanel.TotalPoints then
-        inspectionAchievementPanel.TotalPoints:SetText(tostring(data.totalPoints or 0))
-    end
-    
-    -- Create achievement rows based on our local achievement definitions
-    if AchievementPanel and AchievementPanel.achievements then
-        for _, localRow in ipairs(AchievementPanel.achievements) do
-            local achId = localRow.id
-            local achievementData = data.achievements[achId]
-            
-            -- Create inspection row
-            local inspectionRow = CharacterInspection.CreateInspectionAchievementRow(
-                inspectionAchievementPanel.Content,
-                achId,
-                localRow.Title and localRow.Title:GetText() or "Unknown Achievement",
-                localRow.tooltip or "",
-                localRow.Icon and localRow.Icon:GetTexture() or 136116,
-                localRow.maxLevel or 0,
-                localRow.originalPoints or 0,
-                achievementData
-            )
-            
-            table.insert(inspectionAchievementPanel.achievements, inspectionRow)
-        end
     end
     
     -- Sort and position rows
@@ -399,56 +910,125 @@ function CharacterInspection.DisplayAchievementData(data)
 end
 
 -- Create an achievement row for inspection display
-function CharacterInspection.CreateInspectionAchievementRow(parent, achId, title, tooltip, icon, level, points, achievementData)
+function CharacterInspection.CreateInspectionAchievementRow(parent, achId, title, tooltip, icon, level, points, achievementData, definition)
     local index = (#inspectionAchievementPanel.achievements) + 1
     local row = CreateFrame("Frame", nil, parent)
-    row:SetSize(300, 36)
+    row:SetSize(310, 42)
+    row:SetClipsChildren(false)
     
     -- Position
     if index == 1 then
-        row:SetPoint("TOPLEFT", parent, "TOPLEFT", 0, 0)
+        row:SetPoint("TOPLEFT", parent, "TOPLEFT", 4, 0)
     else
-        row:SetPoint("TOPLEFT", inspectionAchievementPanel.achievements[index-1], "BOTTOMLEFT", 0, 0)
+        row:SetPoint("TOPLEFT", inspectionAchievementPanel.achievements[index-1], "BOTTOMLEFT", 0, -2)
     end
     
-    -- Icon
+    -- Icon and frames
     row.Icon = row:CreateTexture(nil, "ARTWORK")
-    row.Icon:SetSize(32, 32)
-    row.Icon:SetPoint("LEFT", row, "LEFT", -1, 0)
+    row.Icon:SetSize(30, 30)
+    row.Icon:SetPoint("LEFT", row, "LEFT", 1, 0)
     row.Icon:SetTexture(icon or 136116)
     
-    -- Title
+    row.IconOverlay = row:CreateTexture(nil, "OVERLAY")
+    row.IconOverlay:SetSize(20, 20)
+    row.IconOverlay:SetPoint("CENTER", row.Icon, "CENTER", 0, 0)
+    row.IconOverlay:Hide()
+    
+    row.IconFrameGold = row:CreateTexture(nil, "OVERLAY", nil, 7)
+    row.IconFrameGold:SetSize(33, 33)
+    row.IconFrameGold:SetPoint("CENTER", row.Icon, "CENTER", 0, 0)
+    row.IconFrameGold:SetTexture("Interface\\AddOns\\HardcoreAchievements\\Images\\frame_gold.png")
+    row.IconFrameGold:SetDrawLayer("OVERLAY", 1)
+    row.IconFrameGold:Hide()
+    
+    row.IconFrame = row:CreateTexture(nil, "OVERLAY", nil, 7)
+    row.IconFrame:SetSize(33, 33)
+    row.IconFrame:SetPoint("CENTER", row.Icon, "CENTER", 0, 0)
+    row.IconFrame:SetTexture("Interface\\AddOns\\HardcoreAchievements\\Images\\frame_silver.png")
+    row.IconFrame:SetDrawLayer("OVERLAY", 1)
+    row.IconFrame:Show()
+    
+    -- Title + shadow
     row.Title = row:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    row.Title:SetPoint("LEFT", row.Icon, "RIGHT", 8, 10)
     row.Title:SetText(title or ("Achievement %d"):format(index))
+    
+    row.TitleShadow = row:CreateFontString(nil, "BACKGROUND", "GameFontNormal")
+    row.TitleShadow:SetText(InspectStripColorCodes(row.Title:GetText() or ""))
+    row.TitleShadow:SetTextColor(0, 0, 0, 0.5)
+    row.TitleShadow:SetDrawLayer("BACKGROUND", 0)
     
     -- Subtitle / progress
     row.Sub = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    row.Sub:SetPoint("TOPLEFT", row.Title, "BOTTOMLEFT", 0, -2)
     row.Sub:SetWidth(265)
     row.Sub:SetJustifyH("LEFT")
     row.Sub:SetJustifyV("TOP")
     row.Sub:SetWordWrap(true)
-    row.Sub:SetText(level and string.format(LEVEL, level) or "—")
+    row.Sub:SetTextColor(0.5, 0.5, 0.5)
+    local capNum = tonumber(level)
+    local completionLevel = tonumber(achievementData and achievementData.level)
+    local subLines = {}
+    if capNum and capNum > 0 then
+        table.insert(subLines, ((LEVEL or "Level") .. " " .. capNum))
+    end
+    if completionLevel and completionLevel > 0 then
+        local completionText
+        if type(ACHIEVEMENT_COMPLETED_AT_LEVEL) == "string" then
+            completionText = string.format(ACHIEVEMENT_COMPLETED_AT_LEVEL, completionLevel)
+        else
+            completionText = string.format("Completed at level %d", completionLevel)
+        end
+        table.insert(subLines, completionText)
+    end
+    row.Sub:SetText(table.concat(subLines, "\n"))
+    row._defaultSubText = row.Sub:GetText() or ""
+    HookInspectionRowSubTextUpdates(row)
+    row.UpdateTextLayout = UpdateInspectionRowTextLayout
     
-    -- Points
-    row.Points = row:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    row.Points:SetPoint("RIGHT", row, "RIGHT", -15, 10)
-    row.Points:SetWidth(100)
-    row.Points:SetJustifyH("RIGHT")
-    row.Points:SetJustifyV("TOP")
+    -- Points frame
+    row.PointsFrame = CreateFrame("Frame", nil, row)
+    row.PointsFrame:SetSize(42, 42)
+    row.PointsFrame:SetPoint("RIGHT", row, "RIGHT", -20, 0)
+    
+    row.PointsFrame.Texture = row.PointsFrame:CreateTexture(nil, "BACKGROUND")
+    row.PointsFrame.Texture:SetAllPoints(row.PointsFrame)
+    row.PointsFrame.Texture:SetTexture("Interface\\AddOns\\HardcoreAchievements\\Images\\ring_disabled.png")
+    
+    row.Points = row.PointsFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    row.Points:SetPoint("CENTER", row.PointsFrame, "CENTER", 0, 0)
     row.Points:SetText(tostring(points or 0))
     row.Points:SetTextColor(1, 1, 1)
     
+    row.PointsFrame.Checkmark = row.PointsFrame:CreateTexture(nil, "OVERLAY")
+    row.PointsFrame.Checkmark:SetSize(10, 10)
+    row.PointsFrame.Checkmark:SetPoint("CENTER", row.PointsFrame, "CENTER", 0, 0)
+    row.PointsFrame.Checkmark:Hide()
+    
     -- Timestamp
     row.TS = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    row.TS:SetPoint("RIGHT", row.Points, "RIGHT", 0, -15)
+    row.TS:SetPoint("RIGHT", row.PointsFrame, "LEFT", -5, 0)
     row.TS:SetJustifyH("RIGHT")
     row.TS:SetJustifyV("TOP")
     row.TS:SetText("")
-    row.TS:SetTextColor(0.5, 0.5, 0.5)
+    row.TS:SetTextColor(1, 1, 1)
     
-    -- Highlight/tooltip
+    -- Background + border (clipped)
+    if inspectionAchievementPanel.BorderClip then
+        row.Background = inspectionAchievementPanel.BorderClip:CreateTexture(nil, "BACKGROUND")
+        row.Background:SetDrawLayer("BACKGROUND", 0)
+        row.Background:SetTexture("Interface\\AddOns\\HardcoreAchievements\\Images\\row_texture.png")
+        row.Background:SetVertexColor(1, 1, 1)
+        row.Background:SetAlpha(1)
+        row.Background:Hide()
+        
+        row.Border = inspectionAchievementPanel.BorderClip:CreateTexture(nil, "BACKGROUND")
+        row.Border:SetDrawLayer("BACKGROUND", 1)
+        row.Border:SetTexture("Interface\\AddOns\\HardcoreAchievements\\Images\\row-border.png")
+        row.Border:SetSize(256, 32)
+        row.Border:SetAlpha(0.5)
+        row.Border:Hide()
+    end
+    
+    -- Highlight/tooltip handling
     row:EnableMouse(true)
     row.highlight = row:CreateTexture(nil, "BACKGROUND")
     row.highlight:SetAllPoints(row)
@@ -459,10 +1039,14 @@ function CharacterInspection.CreateInspectionAchievementRow(parent, achId, title
         self.highlight:SetColorTexture(1, 1, 1, 0.10)
         self.highlight:Show()
         
-        if self.Title and self.Title.GetText then
+        if _G.HCA_ShowAchievementTooltip then
+            _G.HCA_ShowAchievementTooltip(row, self)
+        else
             GameTooltip:SetOwner(row, "ANCHOR_RIGHT")
-            GameTooltip:SetText(title or "", 1, 1, 1)
-            GameTooltip:AddLine(tooltip, nil, nil, nil, true)
+            GameTooltip:SetText(row._title or row.Title:GetText() or "", 1, 1, 1)
+            if row._tooltip and row._tooltip ~= "" then
+                GameTooltip:AddLine(row._tooltip, nil, nil, nil, true)
+            end
             GameTooltip:Show()
         end
     end)
@@ -472,54 +1056,78 @@ function CharacterInspection.CreateInspectionAchievementRow(parent, achId, title
         GameTooltip:Hide()
     end)
     
-    -- Set completion state based on received data
-    if achievementData and achievementData.completed then
-        row.completed = true
-        if row.Title and row.Title.SetTextColor then row.Title:SetTextColor(0.6, 0.9, 0.6) end
-        -- Check if achievement was completed solo and show indicator
-        if row.Sub then
-            if achievementData.wasSolo then
-                row.Sub:SetText(AUCTION_TIME_LEFT0 .. "\n|c" .. select(4, GetClassColor(select(2, UnitClass("player")))) .. "Solo|r")
+    row:SetScript("OnMouseUp", function(self, button)
+        if button == "LeftButton" and IsShiftKeyDown() and row.achId then
+            local iconTexture = row.Icon and row.Icon:GetTexture() or ""
+            local bracket = _G.HCA_GetAchievementBracket and _G.HCA_GetAchievementBracket(row.achId, iconTexture) or string.format("[HCA:(%s,%s)]", tostring(row.achId), tostring(iconTexture))
+            
+            local editBox = ChatEdit_GetActiveWindow()
+            if not editBox or not editBox:IsVisible() then
+                return
+            end
+            local currentText = editBox:GetText() or ""
+            if currentText == "" then
+                editBox:SetText(bracket)
             else
-                row.Sub:SetText(AUCTION_TIME_LEFT0)
+                editBox:SetText(currentText .. " " .. bracket)
             end
+            editBox:SetFocus()
         end
-        if row.Points then row.Points:SetTextColor(0.6, 0.9, 0.6) end
-        if row.TS then 
-            local timestamp = achievementData.completedAt
-            if timestamp then
-                local dateInfo = date("*t", timestamp)
-                local monthNames = {FULLDATE_MONTH_JANUARY, FULLDATE_MONTH_FEBRUARY, FULLDATE_MONTH_MARCH,
-                                    FULLDATE_MONTH_APRIL, FULLDATE_MONTH_MAY, FULLDATE_MONTH_JUNE, 
-                                    FULLDATE_MONTH_JULY, FULLDATE_MONTH_AUGUST, FULLDATE_MONTH_SEPTEMBER,
-                                    FULLDATE_MONTH_OCTOBER, FULLDATE_MONTH_NOVEMBER, FULLDATE_MONTH_DECEMBER}
-
-                row.TS:SetText(string.format("%s %d, %d %02d:%02d", 
-                    monthNames[dateInfo.month], 
-                    dateInfo.day, 
-                    dateInfo.year, 
-                    dateInfo.hour, 
-                    dateInfo.min))
-            end
-        end
-        if row.Icon and row.Icon.SetDesaturated then row.Icon:SetDesaturated(false) end
-        
-        -- Update points if different
+    end)
+    
+    -- Metadata + state
+    row.achId = achId
+    row.id = achId
+    row.tooltip = tooltip
+    row._achId = achId
+    row._title = title
+    row._tooltip = tooltip
+    row._def = definition
+    if definition and definition.zone then
+        row.zone = definition.zone
+    elseif definition and definition.mapName then
+        row.zone = definition.mapName
+    end
+    
+    row.points = tonumber(points) or 0
+    row.originalPoints = row.points
+    row.staticPoints = true
+    row.completed = false
+    row.maxLevel = (capNum and capNum > 0) and capNum or nil
+    row.sfMod = achievementData and achievementData.sfMod
+    row.wasSolo = achievementData and achievementData.wasSolo
+    row.notes = achievementData and achievementData.notes
+    
+    if achievementData then
         if achievementData.points then
-            row.Points:SetText(tostring(achievementData.points))
+            row.points = tonumber(achievementData.points) or row.points
+            row.Points:SetText(tostring(row.points))
         end
-    else
-        row.completed = false
-        -- Check if outleveled
-        local playerLevel = UnitLevel("player")
-        if level and playerLevel > level then
-            if row.Title and row.Title.SetTextColor then row.Title:SetTextColor(0.957, 0.263, 0.212) end
-            if row.Icon and row.Icon.SetDesaturated then row.Icon:SetDesaturated(true) end
+        if achievementData.completed then
+            row.completed = true
+        end
+        if achievementData.completedAt and row.TS then
+            row.TS:SetText(FormatInspectionTimestamp(achievementData.completedAt))
+        end
+        if achievementData.wasSolo then
+            local base = row._defaultSubText or ""
+            local soloText = "|cff69adc9Solo|r"
+            if base ~= "" then
+                row.Sub:SetText(base .. "\n" .. soloText)
+            else
+                row.Sub:SetText(soloText)
+            end
+            row._defaultSubText = row.Sub:GetText() or row._defaultSubText
+        end
+        if achievementData.notes and achievementData.notes ~= "" then
+            row._tooltip = (tooltip and tooltip ~= "" and (tooltip .. "\n\n" .. achievementData.notes)) or achievementData.notes
+            row.tooltip = row._tooltip
         end
     end
     
-    row.achId = achId
-    row.tooltip = tooltip
+    UpdateInspectionRowTextLayout(row)
+    UpdateInspectionPointsDisplay(row)
+    PositionInspectionRowBorder(row)
     
     return row
 end
@@ -553,10 +1161,15 @@ function CharacterInspection.SortInspectionAchievementRows()
             if prev and prev ~= row then
                 row:SetPoint("TOPLEFT", prev, "BOTTOMLEFT", 0, -2)
             else
-                row:SetPoint("TOPLEFT", inspectionAchievementPanel.Content, "TOPLEFT", 0, 0)
+                row:SetPoint("TOPLEFT", inspectionAchievementPanel.Content, "TOPLEFT", 4, 0)
             end
             prev = row
+            UpdateInspectionPointsDisplay(row)
+            PositionInspectionRowBorder(row)
             totalHeight = totalHeight + (row:GetHeight() + 2)
+        else
+            if row.Border then row.Border:Hide() end
+            if row.Background then row.Background:Hide() end
         end
     end
     
@@ -572,9 +1185,7 @@ local function HookInspectionEvents()
             local targetName = UnitName(unit)
             if targetName then
                 -- Clear previous data
-                if inspectionAchievementPanel and inspectionAchievementPanel.StatusText then
-                    inspectionAchievementPanel.StatusText:SetText("")
-                end
+                ClearInspectionAchievementRows()
                 currentInspectionTarget = targetName
             end
         end
