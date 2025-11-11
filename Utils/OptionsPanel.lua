@@ -92,7 +92,7 @@ local function CreateDiscordFrame()
     local placeholderIcon = discordFrame:CreateTexture(nil, "OVERLAY")
     placeholderIcon:SetSize(175, 175)
     placeholderIcon:SetPoint("TOP", titleText, "BOTTOM", 0, -10)
-    placeholderIcon:SetTexture("Interface\\AddOns\\HardcoreAchievements\\Images\\DiscordQR.tga")
+    placeholderIcon:SetTexture("Interface\\AddOns\\HardcoreAchievements\\Images\\DiscordQR.png")
     placeholderIcon:SetAlpha(1.0) -- Fully opaque, don't inherit transparency
     
     -- Discord link (read-only input box)

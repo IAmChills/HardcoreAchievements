@@ -1161,7 +1161,7 @@ local LDBIcon = LibStub("LibDBIcon-1.0")
 local minimapDataObject = LDB:NewDataObject("HardcoreAchievements", {
     type = "data source",
     text = "HardcoreAchievements",
-    icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\HardcoreAchievementsButton.tga",
+    icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\HardcoreAchievementsButton.png",
     OnClick = function(self, button)
         if button == "LeftButton" and not IsShiftKeyDown() then
             local _, cdb = GetCharDB()
@@ -1570,7 +1570,7 @@ do
         local logo = squareFrame:CreateTexture(nil, "ARTWORK")
         logo:SetSize(26, 26) -- Fixed size, not dependent on frame size
         logo:SetPoint("CENTER", squareFrame, "CENTER", -12, 5)
-        logo:SetTexture("Interface\\AddOns\\HardcoreAchievements\\Images\\HardcoreAchievementsButton.tga")
+        logo:SetTexture("Interface\\AddOns\\HardcoreAchievements\\Images\\HardcoreAchievementsButton.png")
         squareFrame.logo = logo
         
         -- Highlight texture (like default tab)
@@ -2117,7 +2117,7 @@ AchievementPanel.Scroll:SetScript("OnSizeChanged", function(self)
 end)
 
 -- AchievementPanel.PortraitCover = AchievementPanel:CreateTexture(nil, "OVERLAY")
--- AchievementPanel.PortraitCover:SetTexture("Interface\\AddOns\\HardcoreAchievements\\Images\\HardcoreAchievementsButton.tga")
+-- AchievementPanel.PortraitCover:SetTexture("Interface\\AddOns\\HardcoreAchievements\\Images\\HardcoreAchievementsButton.png")
 -- AchievementPanel.PortraitCover:SetSize(75, 75)
 -- AchievementPanel.PortraitCover:SetPoint("TOPLEFT", CharacterFramePortrait, "TOPLEFT", -5, 6)
 -- AchievementPanel.PortraitCover:Show()
