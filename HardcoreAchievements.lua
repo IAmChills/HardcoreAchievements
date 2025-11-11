@@ -370,6 +370,14 @@ function HCA_UpdateTotalPoints()
     local total = HCA_GetTotalPoints()
     if AchievementPanel and AchievementPanel.TotalPoints then
         AchievementPanel.TotalPoints:SetText(tostring(total))
+        if AchievementPanel.CountsText then
+            local completed, totalCount = HCA_AchievementCount()
+            if completed and totalCount then
+                AchievementPanel.CountsText:SetText(string.format(" (%d/%d)", completed or 0, totalCount or 0))
+            else
+                AchievementPanel.CountsText:SetText("")
+            end
+        end
     end
 end
 
@@ -2061,6 +2069,11 @@ AchievementPanel.PointsLabelText = AchievementPanel:CreateFontString(nil, "OVERL
 AchievementPanel.PointsLabelText:SetPoint("LEFT", AchievementPanel.TotalPoints, "RIGHT", 2, 0)
 AchievementPanel.PointsLabelText:SetText(" pts")
 AchievementPanel.PointsLabelText:SetTextColor(0.6, 0.9, 0.6)
+
+AchievementPanel.CountsText = AchievementPanel:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+AchievementPanel.CountsText:SetPoint("BOTTOMRIGHT", filterDropdown, "TOPRIGHT", -25, 0)
+AchievementPanel.CountsText:SetText(" (0/0)")
+AchievementPanel.CountsText:SetTextColor(0.8, 0.8, 0.8)
 
 -- Preset multiplier label, e.g. "Point Multiplier (Lite +)"
 AchievementPanel.MultiplierText = AchievementPanel:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")

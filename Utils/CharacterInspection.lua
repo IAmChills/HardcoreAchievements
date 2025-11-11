@@ -33,6 +33,9 @@ local inspectionAchievementPanel = nil
 local achievementDefinitionCache = {}
 local panelIndexed = false
 local inspectionTabID = nil
+local HANDSHAKE_TIMEOUT = 3
+local handshakeTimer = nil
+local handshakeTarget = nil
 
 local function NormalizeAchievementId(achId)
     if achId == nil then
@@ -285,11 +288,41 @@ local function ClearInspectionAchievementRows(statusText, statusColor)
             inspectionAchievementPanel.StatusText:Show()
         else
             inspectionAchievementPanel.StatusText:SetText("")
+            inspectionAchievementPanel.StatusText:Hide()
         end
+    end
+
+    if inspectionAchievementPanel.TotalPoints then
+        inspectionAchievementPanel.TotalPoints:SetText("0 pts")
+    end
+
+    if inspectionAchievementPanel.CountsText then
+        inspectionAchievementPanel.CountsText:SetText("(0/0)")
     end
 end
 
 CharacterInspection.ClearInspectionAchievementRows = ClearInspectionAchievementRows
+
+local function CancelInspectionHandshakeTimer()
+    if handshakeTimer and handshakeTimer.Cancel then
+        handshakeTimer:Cancel()
+    end
+    handshakeTimer = nil
+    handshakeTarget = nil
+end
+
+local function StartInspectionHandshakeTimer(targetName)
+    CancelInspectionHandshakeTimer()
+    handshakeTarget = targetName
+    if C_Timer and C_Timer.NewTimer then
+        handshakeTimer = C_Timer.NewTimer(HANDSHAKE_TIMEOUT, function()
+            if currentInspectionTarget == targetName then
+                ClearInspectionAchievementRows("No response from " .. targetName .. ". They may not have HardcoreAchievements installed.", {1, 0.5, 0.5})
+            end
+            CancelInspectionHandshakeTimer()
+        end)
+    end
+end
 
 local function PositionInspectionRowBorder(row)
     if not row or not inspectionAchievementPanel or not inspectionAchievementPanel.BorderClip then
@@ -491,11 +524,19 @@ function CharacterInspection.SetupInspectionAchievementPanel()
     inspectionAchievementPanel.TotalPoints:SetText("0 pts")
     inspectionAchievementPanel.TotalPoints:SetTextColor(0.6, 0.9, 0.6)
     
+    inspectionAchievementPanel.CountsText = inspectionAchievementPanel:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    inspectionAchievementPanel.CountsText:SetPoint("CENTER", inspectionAchievementPanel.TotalPoints, "CENTER", 0, -15)
+    inspectionAchievementPanel.CountsText:SetText("(0/0)")
+    inspectionAchievementPanel.CountsText:SetTextColor(0.8, 0.8, 0.8)
+    
     -- Status text (loading, error, etc.)
     inspectionAchievementPanel.StatusText = inspectionAchievementPanel:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    inspectionAchievementPanel.StatusText:SetPoint("CENTER", inspectionAchievementPanel, "CENTER", 0, 0)
+    inspectionAchievementPanel.StatusText:SetPoint("CENTER", inspectionAchievementPanel, "CENTER", -10, 0)
     inspectionAchievementPanel.StatusText:SetText("Requesting achievement data...")
     inspectionAchievementPanel.StatusText:SetTextColor(1, 1, 0)
+    inspectionAchievementPanel.StatusText:SetJustifyH("CENTER")
+    inspectionAchievementPanel.StatusText:SetJustifyV("MIDDLE")
+    inspectionAchievementPanel.StatusText:SetWordWrap(true)
     
     -- Scrollable container
     inspectionAchievementPanel.Scroll = CreateFrame("ScrollFrame", "$parentScroll", inspectionAchievementPanel, "UIPanelScrollFrameTemplate")
@@ -509,9 +550,15 @@ function CharacterInspection.SetupInspectionAchievementPanel()
     inspectionAchievementPanel.Scroll:SetScrollChild(inspectionAchievementPanel.Content)
     
     inspectionAchievementPanel.Content:SetWidth(inspectionAchievementPanel.Scroll:GetWidth())
+    if inspectionAchievementPanel.StatusText then
+        inspectionAchievementPanel.StatusText:SetWidth(math.max((inspectionAchievementPanel.Scroll:GetWidth() or 0) - 20, 200))
+    end
     inspectionAchievementPanel.Scroll:SetScript("OnSizeChanged", function(self)
         inspectionAchievementPanel.Content:SetWidth(self:GetWidth())
         self:UpdateScrollChildRect()
+        if inspectionAchievementPanel.StatusText then
+            inspectionAchievementPanel.StatusText:SetWidth(math.max((self:GetWidth() or 0) - 20, 200))
+        end
     end)
     
     if not inspectionAchievementPanel.BorderClip then
@@ -619,18 +666,19 @@ function CharacterInspection.RequestAchievementData(targetName)
     if not targetName then return end
     
     currentInspectionTarget = targetName
-    ClearInspectionAchievementRows()
     
     -- Check cache first
     local cacheKey = targetName
     local cachedData = inspectionCache[cacheKey]
     if cachedData and (time() - cachedData.timestamp) < CACHE_DURATION then
+        CancelInspectionHandshakeTimer()
         CharacterInspection.DisplayAchievementData(cachedData.data)
         return
     end
     
     -- Show loading state
-    ClearInspectionAchievementRows("Requesting achievement data from " .. targetName .. "...", {1, 1, 0})
+    ClearInspectionAchievementRows("Checking for HardcoreAchievements addon on " .. targetName .. "...", {1, 1, 0})
+    StartInspectionHandshakeTimer(targetName)
     
     -- Send request
     local requestPayload = {
@@ -675,13 +723,22 @@ function CharacterInspection.OnInspectionResponse(prefix, message, distribution,
     
     local success, payload = AceSerialize:Deserialize(message)
     if not success or not payload or payload.type ~= "achievement_response" then return end
+    if payload.requester and payload.requester ~= UnitName("player") then return end
+    if sender ~= currentInspectionTarget then return end
+    
+    local wasPending = (handshakeTarget == sender)
+    if wasPending then
+        CancelInspectionHandshakeTimer()
+    end
     
     if not payload.hasAddon then
         -- Target doesn't have the addon
-        if inspectionAchievementPanel and inspectionAchievementPanel.StatusText then
-            inspectionAchievementPanel.StatusText:SetText("Target player does not have HardcoreAchievements addon")
-            inspectionAchievementPanel.StatusText:SetTextColor(1, 0.5, 0.5)
-        end
+        ClearInspectionAchievementRows("Target player does not have the HardcoreAchievements addon installed.", {1, 0.5, 0.5})
+        return
+    end
+
+    if wasPending then
+        ClearInspectionAchievementRows("Receiving achievement data from " .. sender .. "...", {0.6, 0.9, 0.6})
     end
     -- If they have the addon, we'll receive the data via OnInspectionData
 end
@@ -692,6 +749,10 @@ function CharacterInspection.OnInspectionData(prefix, message, distribution, sen
     
     local success, payload = AceSerialize:Deserialize(message)
     if not success or not payload or payload.type ~= "achievement_data" then return end
+    
+    if sender == currentInspectionTarget then
+        CancelInspectionHandshakeTimer()
+    end
     
     -- Cache the data
     local cacheKey = sender
@@ -796,7 +857,15 @@ function CharacterInspection.DisplayAchievementData(data)
         local title = (definition and definition.title) or tostring(achId)
         local tooltip = (definition and definition.tooltip) or ""
         local icon = (definition and definition.icon) or 136116
-        local level = achievementData.level or (definition and definition.level) or 0
+        local definitionLevel = nil
+        if definition then
+            if definition.level then
+                definitionLevel = tonumber(definition.level)
+            end
+            if not definitionLevel and definition.maxLevel then
+                definitionLevel = tonumber(definition.maxLevel)
+            end
+        end
         local points = achievementData.points or (definition and definition.points) or 0
         
         local inspectionRow = CharacterInspection.CreateInspectionAchievementRow(
@@ -805,7 +874,7 @@ function CharacterInspection.DisplayAchievementData(data)
             title,
             tooltip,
             icon,
-            level,
+            definitionLevel,
             points,
             achievementData,
             definition
@@ -813,6 +882,12 @@ function CharacterInspection.DisplayAchievementData(data)
         
         createdRows = createdRows + 1
         table.insert(inspectionAchievementPanel.achievements, inspectionRow)
+    end
+
+    local completedCount = tonumber(data.completedCount) or createdRows
+    local totalCount = tonumber(data.totalCount) or math.max(completedCount, createdRows)
+    if inspectionAchievementPanel.CountsText then
+        inspectionAchievementPanel.CountsText:SetText(string.format("(%d/%d)", completedCount or 0, totalCount or 0))
     end
     
     if createdRows == 0 then
@@ -890,11 +965,21 @@ function CharacterInspection.CreateInspectionAchievementRow(parent, achId, title
     row.Sub:SetWordWrap(true)
     row.Sub:SetTextColor(0.5, 0.5, 0.5)
     local capNum = tonumber(level)
+    local completionLevel = tonumber(achievementData and achievementData.level)
+    local subLines = {}
     if capNum and capNum > 0 then
-        row.Sub:SetText((LEVEL or "Level") .. " " .. capNum)
-    else
-        row.Sub:SetText("")
+        table.insert(subLines, ((LEVEL or "Level") .. " " .. capNum))
     end
+    if completionLevel and completionLevel > 0 then
+        local completionText
+        if type(ACHIEVEMENT_COMPLETED_AT_LEVEL) == "string" then
+            completionText = string.format(ACHIEVEMENT_COMPLETED_AT_LEVEL, completionLevel)
+        else
+            completionText = string.format("Completed at level %d", completionLevel)
+        end
+        table.insert(subLines, completionText)
+    end
+    row.Sub:SetText(table.concat(subLines, "\n"))
     row._defaultSubText = row.Sub:GetText() or ""
     HookInspectionRowSubTextUpdates(row)
     row.UpdateTextLayout = UpdateInspectionRowTextLayout
@@ -1032,6 +1117,7 @@ function CharacterInspection.CreateInspectionAchievementRow(parent, achId, title
             else
                 row.Sub:SetText(soloText)
             end
+            row._defaultSubText = row.Sub:GetText() or row._defaultSubText
         end
         if achievementData.notes and achievementData.notes ~= "" then
             row._tooltip = (tooltip and tooltip ~= "" and (tooltip .. "\n\n" .. achievementData.notes)) or achievementData.notes
