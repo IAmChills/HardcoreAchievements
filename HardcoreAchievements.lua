@@ -351,9 +351,14 @@ function HCA_AchievementCount()
     
     if AchievementPanel and AchievementPanel.achievements then
         for _, row in ipairs(AchievementPanel.achievements) do
-            total = total + 1
-            if row.completed then
-                completed = completed + 1
+            local hiddenByProfession = row.hiddenByProfession
+            local hiddenUntilComplete = row.hiddenUntilComplete and not row.completed
+            
+            if not hiddenByProfession and not hiddenUntilComplete then
+                total = total + 1
+                if row.completed then
+                    completed = completed + 1
+                end
             end
         end
     end
@@ -2495,6 +2500,51 @@ do
                 recentKills[destGUID] = nil
             end)
         end
+
+        -- Dedicated support for the Rats achievement: NPC IDs that qualify
+        local RAT_NPC_IDS = {
+            [4075] = true,
+            [13016] = true,
+            [2110] = true,
+        }
+
+        -- Damage events that include overkill information for player attacks
+        local RAT_DAMAGE_SUBEVENTS = {
+            SWING_DAMAGE = true,
+            SPELL_DAMAGE = true,
+            SPELL_PERIODIC_DAMAGE = true,
+            RANGE_DAMAGE = true,
+        }
+
+        local function getNpcIdFromGUID(guid)
+            if not guid then
+                return nil
+            end
+            local _, _, _, _, _, npcId = strsplit("-", guid)
+            return npcId and tonumber(npcId) or nil
+        end
+
+        local function processKill(destGUID)
+            if not destGUID or recentKills[destGUID] then
+                return
+            end
+
+            recentKills[destGUID] = true
+            clearRecentKill(destGUID)
+
+            if not (AchievementPanel and AchievementPanel.achievements) then
+                return
+            end
+
+            for _, row in ipairs(AchievementPanel.achievements) do
+                if not row.completed and type(row.killTracker) == "function" then
+                    if row.killTracker(destGUID) then
+                        HCA_MarkRowCompleted(row)
+                        HCA_AchToast_Show(row.Icon:GetTexture(), row.Title:GetText(), row.points, row)
+                    end
+                end
+            end
+        end
         
         AchievementPanel._achEvt:RegisterEvent("COMBAT_LOG_EVENT_UNFILTERED")
         AchievementPanel._achEvt:RegisterEvent("QUEST_TURNED_IN")
@@ -2505,22 +2555,24 @@ do
         AchievementPanel._achEvt:RegisterEvent("CHAT_MSG_LOOT")
         AchievementPanel._achEvt:SetScript("OnEvent", function(_, event, ...)
             if event == "COMBAT_LOG_EVENT_UNFILTERED" then
-                local _, subevent, _, _, _, _, _, destGUID = CombatLogGetCurrentEventInfo()
-                if subevent ~= "PARTY_KILL" and subevent ~= "UNIT_DIED" then return end
-                if not destGUID then return end
-                
-                -- Deduplicate: skip if we've already processed this kill recently
-                if recentKills[destGUID] then
-                    return
-                end
-                recentKills[destGUID] = true
-                clearRecentKill(destGUID)
-                
-                for _, row in ipairs(AchievementPanel.achievements) do
-                    if not row.completed and type(row.killTracker) == "function" then
-                        if row.killTracker(destGUID) then
-                            HCA_MarkRowCompleted(row)
-                            HCA_AchToast_Show(row.Icon:GetTexture(), row.Title:GetText(), row.points, row)
+                local _, subevent, _, sourceGUID, _, _, _, destGUID, _, _, _, param12, param13, param14, param15, param16 = CombatLogGetCurrentEventInfo()
+                if subevent == "PARTY_KILL" then
+                    processKill(destGUID)
+                elseif RAT_DAMAGE_SUBEVENTS[subevent] then
+                    local playerGUID = UnitGUID("player")
+                    if playerGUID and sourceGUID == playerGUID and destGUID then
+                        local overkill
+                        if subevent == "SWING_DAMAGE" then
+                            overkill = param13
+                        else
+                            overkill = param16
+                        end
+
+                        if overkill and overkill >= 0 then
+                            local npcId = getNpcIdFromGUID(destGUID)
+                            if npcId and RAT_NPC_IDS[npcId] then
+                                processKill(destGUID)
+                            end
                         end
                     end
                 end
