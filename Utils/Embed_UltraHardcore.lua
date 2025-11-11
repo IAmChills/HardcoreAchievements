@@ -615,7 +615,19 @@ local function CreateEmbedIcon(parent)
   icon.SSFBorder:SetVertexColor(0.5, 0.3, 0.9, 0.6) -- Purple glow
   icon.SSFBorder:Hide()
 
+  -- Highlight glow on hover
+  icon.Highlight = icon:CreateTexture(nil, "HIGHLIGHT")
+  icon.Highlight:SetTexture("Interface\\AddOns\\HardcoreAchievements\\Images\\grid_texture.png")
+  icon.Highlight:SetPoint("CENTER", icon, "CENTER", 0, 0)
+  icon.Highlight:SetSize(ICON_SIZE, ICON_SIZE)
+  icon.Highlight:SetVertexColor(1, 1, 1, 1)
+  icon.Highlight:SetBlendMode("ADD")
+  icon.Highlight:Hide()
+
   icon:SetScript("OnEnter", function(self)
+    if self.Highlight then
+      self.Highlight:Show()
+    end
     -- Use centralized tooltip function with source row directly
     if _G.HCA_ShowAchievementTooltip and self.sourceRow then
       _G.HCA_ShowAchievementTooltip(self, self.sourceRow)
@@ -643,7 +655,18 @@ local function CreateEmbedIcon(parent)
       return
     end
   end)
-  icon:SetScript("OnLeave", function() GameTooltip:Hide() end)
+  icon:SetScript("OnLeave", function(self)
+    GameTooltip:Hide()
+    if self.Highlight then
+      self.Highlight:Hide()
+    end
+  end)
+
+  icon:SetScript("OnHide", function(self)
+    if self.Highlight then
+      self.Highlight:Hide()
+    end
+  end)
 
   return icon
 end
