@@ -4,33 +4,124 @@ local UHCA -- tabContents[3]
 local ICON_SIZE = 60
 local ICON_PADDING = 12
 local GRID_COLS = 7  -- Number of columns in the grid
+local CHECKBOX_TEXTURE_NORMAL = "Interface\\AddOns\\HardcoreAchievements\\Images\\box.png"
+local CHECKBOX_TEXTURE_ACTIVE = "Interface\\AddOns\\HardcoreAchievements\\Images\\box_active.png"
+local SETTINGS_ICON_TEXTURE = "Interface\\AddOns\\HardcoreAchievements\\Images\\icon_gear.png"
+
+local function GetPlayerClassColor()
+    local _, class = UnitClass("player")
+    if class and RAID_CLASS_COLORS and RAID_CLASS_COLORS[class] then
+        local color = RAID_CLASS_COLORS[class]
+        return color.r, color.g, color.b
+    end
+    return 1, 1, 1
+end
+
+local function ApplyDropdownBorder(frame)
+    if not frame then
+        return
+    end
+
+    local background = frame.__HCABackground
+    if not background then
+        background = frame:CreateTexture(nil, "BACKGROUND")
+        frame.__HCABackground = background
+    end
+
+    local border = frame.__HCAThinBorder
+    if not border then
+        border = CreateFrame("Frame", nil, frame)
+        frame.__HCAThinBorder = border
+        border:SetAllPoints(frame)
+
+        border.top = border:CreateTexture(nil, "OVERLAY")
+        border.top:SetPoint("TOPLEFT", -12, 0)
+        border.top:SetPoint("TOPRIGHT", -11, 0)
+        border.top:SetHeight(1)
+
+        border.bottom = border:CreateTexture(nil, "OVERLAY")
+        border.bottom:SetPoint("BOTTOMLEFT", -12, 0)
+        border.bottom:SetPoint("BOTTOMRIGHT", -11, 0)
+        border.bottom:SetHeight(1)
+
+        border.left = border:CreateTexture(nil, "OVERLAY")
+        border.left:SetPoint("TOPLEFT", -12, 0)
+        border.left:SetPoint("BOTTOMLEFT", -12, 0)
+        border.left:SetWidth(1)
+
+        border.right = border:CreateTexture(nil, "OVERLAY")
+        border.right:SetPoint("TOPRIGHT", -11, 0)
+        border.right:SetPoint("BOTTOMRIGHT", -11, 0)
+        border.right:SetWidth(1)
+    end
+
+    local existingBackground = frame.__HCABackground
+    local existingBorder = frame.__HCAThinBorder
+
+    local regions = { frame:GetRegions() }
+    for _, region in ipairs(regions) do
+        if region and region:IsObjectType("Texture") then
+            if region ~= existingBackground
+                and (not existingBorder or (region ~= existingBorder.top and region ~= existingBorder.bottom and region ~= existingBorder.left and region ~= existingBorder.right)) then
+                region:SetTexture(nil)
+                region:SetAlpha(0)
+            end
+        end
+    end
+
+    background:ClearAllPoints()
+    background:SetPoint("TOPLEFT", frame, "TOPLEFT", -12, -1)
+    background:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -10, 1)
+    background:SetColorTexture(0, 0, 0, 0.96)
+    background:Show()
+
+    border:SetFrameLevel(frame:GetFrameLevel() + 1)
+    border.top:SetColorTexture(0.4, 0.4, 0.4, 1)
+    border.bottom:SetColorTexture(0.4, 0.4, 0.4, 1)
+    border.left:SetColorTexture(0.4, 0.4, 0.4, 1)
+    border.right:SetColorTexture(0.4, 0.4, 0.4, 1)
+    border:Show()
+end
+
+hooksecurefunc("UIDropDownMenu_CreateFrames", function(level)
+    ApplyDropdownBorder(_G["DropDownList" .. level .. "Backdrop"])
+    ApplyDropdownBorder(_G["DropDownList" .. level .. "MenuBackdrop"])
+end)
+
 local currentFilter = "all"  -- Current filter state
 
--- Map level milestones to their circular grid icon variants
-local milestoneGridTextures = {
-  ["10"] = "Interface\\AddOns\\HardcoreAchievements\\Images\\milestone_10.png",
-  ["20"] = "Interface\\AddOns\\HardcoreAchievements\\Images\\milestone_20.png",
-  ["30"] = "Interface\\AddOns\\HardcoreAchievements\\Images\\milestone_30.png",
-  ["40"] = "Interface\\AddOns\\HardcoreAchievements\\Images\\milestone_40.png",
-  ["50"] = "Interface\\AddOns\\HardcoreAchievements\\Images\\milestone_50.png",
-  ["60"] = "Interface\\AddOns\\HardcoreAchievements\\Images\\milestone_60.png",
+local POINTS_FONT_PATH = "Interface\\AddOns\\HardcoreAchievements\\Fonts\\friz-quadrata-regular.ttf"
+
+-- Map class tokens to their icon variants
+local classIconTextures = {
+  WARRIOR   = "Interface\\AddOns\\HardcoreAchievements\\Images\\Class_WARRIOR.png",
+  PALADIN   = "Interface\\AddOns\\HardcoreAchievements\\Images\\Class_PALADIN.png",
+  HUNTER    = "Interface\\AddOns\\HardcoreAchievements\\Images\\Class_HUNTER.png",
+  ROGUE     = "Interface\\AddOns\\HardcoreAchievements\\Images\\Class_ROGUE.png",
+  PRIEST    = "Interface\\AddOns\\HardcoreAchievements\\Images\\Class_PRIEST.png",
+  SHAMAN    = "Interface\\AddOns\\HardcoreAchievements\\Images\\Class_SHAMAN.png",
+  MAGE      = "Interface\\AddOns\\HardcoreAchievements\\Images\\Class_MAGE.png",
+  WARLOCK   = "Interface\\AddOns\\HardcoreAchievements\\Images\\Class_WARLOCK.png",
+  DRUID     = "Interface\\AddOns\\HardcoreAchievements\\Images\\Class_DRUID.png",
 }
 
-local function GetGridMilestoneTexture(achId, fallback)
-  if not achId or type(achId) ~= "string" then
-    return fallback
+local function GetClassIconTexture(classToken)
+  if classToken and classIconTextures[classToken] then
+    return classIconTextures[classToken]
   end
 
-  if not (_G.IsLevelMilestone and _G.IsLevelMilestone(achId)) then
-    return fallback
+  return "Interface\\AddOns\\HardcoreAchievements\\Images\\class_icon.png"
+end
+
+local function UpdateEmbedClassIcon()
+  if not UHCA or not UHCA.ClassIcon then
+    return
   end
 
-  local level = string.match(achId, "^Level(%d+)$")
-  if level and milestoneGridTextures[level] then
-    return milestoneGridTextures[level]
-  end
+  local _, classToken = UnitClass("player")
+  local texture = GetClassIconTexture(classToken)
 
-  return fallback
+  UHCA.ClassIcon:SetTexture(texture)
 end
 
 -- Helper function to strip color codes from text (for shadow text)
@@ -62,6 +153,26 @@ local function UpdateLayoutCheckboxes(useModernRows)
     end
     if UHCA and UHCA.LayoutGridCheckbox then
         UHCA.LayoutGridCheckbox:SetChecked(not useModernRows)
+    end
+end
+
+local function ApplyCustomCheckboxTextures(checkbox)
+    if not checkbox then return end
+
+    checkbox:SetNormalTexture(CHECKBOX_TEXTURE_NORMAL)
+    checkbox:SetPushedTexture(CHECKBOX_TEXTURE_NORMAL)
+    checkbox:SetHighlightTexture(CHECKBOX_TEXTURE_NORMAL, "ADD")
+    checkbox:SetCheckedTexture(CHECKBOX_TEXTURE_ACTIVE)
+    checkbox:SetDisabledCheckedTexture(CHECKBOX_TEXTURE_ACTIVE)
+
+    local r, g, b = GetPlayerClassColor()
+    local checked = checkbox:GetCheckedTexture()
+    if checked then
+        checked:SetVertexColor(r, g, b)
+    end
+    local disabledChecked = checkbox:GetDisabledCheckedTexture()
+    if disabledChecked then
+        disabledChecked:SetVertexColor(r, g, b)
     end
 end
 
@@ -457,35 +568,22 @@ local function CreateEmbedIcon(parent)
   icon.Icon = icon:CreateTexture(nil, "ARTWORK")
   icon.Icon:SetSize(ICON_SIZE - 5, ICON_SIZE - 5)
   icon.Icon:SetPoint("CENTER", icon, "CENTER", 0, 0)
-  icon.Icon:SetTexCoord(0.05, 0.95, 0.05, 0.95)
+  icon.Icon:SetTexCoord(0, 1, 0, 1)
 
-  -- Create circular mask for the icon
-  icon.Mask = icon:CreateMaskTexture()
-  icon.Mask:SetAllPoints(icon.Icon)
-  icon.Mask:SetTexture("Interface\\CharacterFrame\\TempPortraitAlphaMask", "CLAMPTOBLACKADDITIVE", "CLAMPTOBLACKADDITIVE")
-  icon.Icon:AddMaskTexture(icon.Mask)
+  -- Create status frames that match the list view styling
+  icon.FrameGold = icon:CreateTexture(nil, "OVERLAY", nil, 1)
+  icon.FrameGold:SetSize(ICON_SIZE, ICON_SIZE)
+  icon.FrameGold:SetPoint("CENTER", icon, "CENTER", 0, 0)
+  icon.FrameGold:SetTexture("Interface\\AddOns\\HardcoreAchievements\\Images\\frame_gold.png")
+  icon.FrameGold:SetTexCoord(0, 1, 0, 1)
+  icon.FrameGold:Hide()
 
-  -- Create status rings that sit above the icon artwork
-  icon.RingGold = icon:CreateTexture(nil, "OVERLAY", nil, 1)
-  icon.RingGold:SetSize(ICON_SIZE + 2, ICON_SIZE + 2) -- Slightly larger than icon
-  icon.RingGold:SetPoint("CENTER", icon, "CENTER", 0, 0)
-  icon.RingGold:SetTexture("Interface\\AddOns\\HardcoreAchievements\\Images\\circle_256_green.png")
-  icon.RingGold:SetTexCoord(0, 1, 0, 1)
-  icon.RingGold:Hide()
-
-  icon.RingFailed = icon:CreateTexture(nil, "OVERLAY", nil, 1)
-  icon.RingFailed:SetSize(ICON_SIZE + 2, ICON_SIZE + 2)
-  icon.RingFailed:SetPoint("CENTER", icon, "CENTER", 0, 0)
-  icon.RingFailed:SetTexture("Interface\\AddOns\\HardcoreAchievements\\Images\\circle_256_red.png")
-  icon.RingFailed:SetTexCoord(0, 1, 0, 1)
-  icon.RingFailed:Hide()
-
-  icon.RingDisabled = icon:CreateTexture(nil, "OVERLAY", nil, 1)
-  icon.RingDisabled:SetSize(ICON_SIZE + 2, ICON_SIZE + 2)
-  icon.RingDisabled:SetPoint("CENTER", icon, "CENTER", 0, 0)
-  icon.RingDisabled:SetTexture("Interface\\AddOns\\HardcoreAchievements\\Images\\circle_256_gold.png")
-  icon.RingDisabled:SetTexCoord(0, 1, 0, 1)
-  icon.RingDisabled:Hide()
+  icon.FrameSilver = icon:CreateTexture(nil, "OVERLAY", nil, 1)
+  icon.FrameSilver:SetSize(ICON_SIZE, ICON_SIZE)
+  icon.FrameSilver:SetPoint("CENTER", icon, "CENTER", 0, 0)
+  icon.FrameSilver:SetTexture("Interface\\AddOns\\HardcoreAchievements\\Images\\frame_silver.png")
+  icon.FrameSilver:SetTexCoord(0, 1, 0, 1)
+  icon.FrameSilver:Show()
   
   -- Status overlays (green check / red X)
   icon.StatusCheck = icon:CreateTexture(nil, "OVERLAY", nil, 2)
@@ -559,7 +657,7 @@ local function LayoutIcons(container, icons)
   local totalIcons = #visibleIcons
   local rows = math.ceil(totalIcons / GRID_COLS)
   local startX = ICON_PADDING
-  local startY = -2
+  local startY = -ICON_PADDING
   
   for i, icon in ipairs(visibleIcons) do
     local col = ((i - 1) % GRID_COLS)
@@ -631,8 +729,17 @@ function EMBED:BuildClassicGrid(srcRows)
         icon.sourceRow = srow
 
         local iconTexture = data.iconTex or 136116
-        iconTexture = GetGridMilestoneTexture(icon.achId, iconTexture)
         icon.Icon:SetTexture(iconTexture)
+        icon.Icon:SetTexCoord(0, 1, 0, 1)
+
+        if icon.Mask then
+          if icon.Icon.RemoveMaskTexture then
+            icon.Icon:RemoveMaskTexture(icon.Mask)
+          end
+          icon.Mask:Hide()
+          icon.Mask:SetParent(nil)
+          icon.Mask = nil
+        end
 
         -- Set icon appearance based on status
         local playerLevel = UnitLevel("player") or 0
@@ -670,15 +777,12 @@ function EMBED:BuildClassicGrid(srcRows)
         end
 
         if icon.achId and icon.achId ~= "Secret100" then
-          icon.RingGold:Hide()
-          icon.RingFailed:Hide()
-          icon.RingDisabled:Hide()
+          if icon.FrameGold then icon.FrameGold:Hide() end
+          if icon.FrameSilver then icon.FrameSilver:Hide() end
           if data.completed then
-            icon.RingGold:Show()
-          elseif isFailed then
-            icon.RingFailed:Show()
+            if icon.FrameGold then icon.FrameGold:Show() end
           else
-            icon.RingDisabled:Show()
+            if icon.FrameSilver then icon.FrameSilver:Show() end
           end
         end
 
@@ -1160,7 +1264,7 @@ local function LayoutIcons(container, icons)
   local totalIcons = #visibleIcons
   local rows = math.ceil(totalIcons / GRID_COLS)
   local startX = ICON_PADDING
-  local startY = -2
+  local startY = -ICON_PADDING
   
   for i, icon in ipairs(visibleIcons) do
     local col = ((i - 1) % GRID_COLS)
@@ -1180,8 +1284,19 @@ end
 -- Keep content width synced to the scroll frame so text aligns and doesn't bunch up
 local function SyncContentWidth()
   if not UHCA or not UHCA.Scroll or not UHCA.Content then return end
-  local w = math.max(UHCA.Scroll:GetWidth(), 1)
+  local scrollWidth = UHCA.Scroll:GetWidth() or 0
+  local w = math.max(scrollWidth, 1)
   UHCA.Content:SetWidth(w)
+
+  local horizontalPadding = math.max((scrollWidth - w) * 0.5, 0)
+  UHCA.Content:ClearAllPoints()
+  if IsModernRowsEnabled() then
+    UHCA.Content:SetPoint("TOPLEFT", UHCA.Scroll, "TOPLEFT", horizontalPadding, 0)
+    UHCA.Content:SetPoint("TOPRIGHT", UHCA.Scroll, "TOPRIGHT", -horizontalPadding, 0)
+  else
+    UHCA.Content:SetPoint("TOPLEFT", UHCA.Scroll, "TOPLEFT", 0, 0)
+    UHCA.Content:SetPoint("TOPRIGHT", UHCA.Scroll, "TOPRIGHT", 0, 0)
+  end
 end
 
 -- Function to update multiplier text
@@ -1213,7 +1328,7 @@ local function UpdateMultiplierText()
   end
   
   UHCA.MultiplierText:SetText(labelText)
-  UHCA.MultiplierText:SetTextColor(0.8, 0.8, 0.8)
+  UHCA.MultiplierText:SetTextColor(0.922, 0.871, 0.761)
 end
 
 -- Function to update total points text
@@ -1232,22 +1347,13 @@ local function UpdateTotalPointsText()
     UHCA.TotalPointsTextShadow:SetText(pointsStr)
   end
   if totalPoints > 0 then
-    UHCA.TotalPointsText:SetTextColor(0.6, 0.9, 0.6)
-    UHCA.PointsLabelText:SetTextColor(0.6, 0.9, 0.6)
+    UHCA.TotalPointsText:SetTextColor(0.922, 0.871, 0.761)
+    UHCA.PointsLabelText:SetTextColor(0.922, 0.871, 0.761)
   else
     UHCA.TotalPointsText:SetTextColor(1, 1, 1)
     UHCA.PointsLabelText:SetTextColor(1, 1, 1)
   end
 
-  if UHCA.PointsBackground then
-    if totalPoints > 0 then
-      UHCA.PointsBackground:SetDesaturated(true)
-      UHCA.PointsBackground:SetVertexColor(0.6, 0.9, 0.6, 1)
-    else
-      UHCA.PointsBackground:SetVertexColor(1, 1, 1, 1)
-      UHCA.PointsBackground:SetDesaturated(false)
-    end
-  end
 end
 
 -- ---------- Rebuild ----------
@@ -1266,6 +1372,14 @@ function EMBED:Rebuild()
 
   -- Check if modern rows is enabled
   local useModernRows = IsModernRowsEnabled()
+
+  if UHCA and UHCA.ScrollBackground then
+    if useModernRows then
+      UHCA.ScrollBackground:Hide()
+    else
+      UHCA.ScrollBackground:Show()
+    end
+  end
   
   if useModernRows then
     -- Modern rows mode: build rows similar to character panel
@@ -1368,8 +1482,66 @@ local function BuildEmbedIfNeeded()
   if not UHCA.Scroll then
     UHCA.Scroll = CreateFrame("ScrollFrame", nil, UHCA, "UIPanelScrollFrameTemplate")
     -- Adjust top position to account for points background and multiplier text (tightened headspace)
-    UHCA.Scroll:SetPoint("TOPLEFT", UHCA, "TOPLEFT", -4, -80)
+    UHCA.Scroll:SetPoint("TOPLEFT", UHCA, "TOPLEFT", -4, -150)
     UHCA.Scroll:SetPoint("BOTTOMRIGHT", UHCA, "BOTTOMRIGHT", -8, -15)
+    
+    do
+      local scrollBar = UHCA.Scroll and UHCA.Scroll.ScrollBar
+      if scrollBar then
+
+        local function ApplyDropdownArrowTextures(button, texturePath)
+          if not button or not texturePath then return end
+
+          local arrowR, arrowG, arrowB = 0.922, 0.871, 0.761
+
+          button:SetNormalTexture(texturePath)
+          button:SetPushedTexture(texturePath)
+          button:SetDisabledTexture(texturePath)
+          button:SetHighlightTexture(texturePath)
+          button:SetSize(20, 20)
+
+          local textures = {
+            button:GetNormalTexture(),
+            button:GetPushedTexture(),
+            button:GetDisabledTexture(),
+            button:GetHighlightTexture(),
+          }
+
+          for _, tex in ipairs(textures) do
+            if tex then
+              tex:ClearAllPoints()
+              tex:SetPoint("CENTER", button, "CENTER", 0, 0)
+              tex:SetSize(16, 16)
+              tex:SetVertexColor(arrowR, arrowG, arrowB)
+            end
+          end
+
+          local highlight = button:GetHighlightTexture()
+          if highlight then
+            highlight:SetBlendMode("ADD")
+            highlight:SetAlpha(0.7)
+            highlight:SetVertexColor(arrowR, arrowG, arrowB)
+          end
+        end
+
+        ApplyDropdownArrowTextures(
+          scrollBar.ScrollUpButton or scrollBar.UpButton or (scrollBar:GetName() and _G[scrollBar:GetName() .. "ScrollUpButton"]),
+          "Interface\\AddOns\\HardcoreAchievements\\Images\\dropdown_arrow_up.png"
+        )
+        ApplyDropdownArrowTextures(
+          scrollBar.ScrollDownButton or scrollBar.DownButton or (scrollBar:GetName() and _G[scrollBar:GetName() .. "ScrollDownButton"]),
+          "Interface\\AddOns\\HardcoreAchievements\\Images\\dropdown_arrow_down.png"
+        )
+
+        local thumb = scrollBar.GetThumbTexture and scrollBar:GetThumbTexture()
+        if thumb then
+          thumb:SetTexture("Interface\\AddOns\\HardcoreAchievements\\Images\\thumb_box.png")
+          thumb:SetSize(12, 12)
+          thumb:SetTexCoord(0, 1, 0, 1)
+          thumb:SetVertexColor(0.922, 0.871, 0.761)
+        end
+      end
+    end
     
     -- Hide the scroll bar but keep it functional
     if UHCA.Scroll.ScrollBar then
@@ -1383,60 +1555,124 @@ local function BuildEmbedIfNeeded()
     UHCA.Scroll:SetScrollChild(UHCA.Content)
   end
 
-  -- Only create UI elements if they don't exist
-  -- Points background texture (centered horizontally at top)
-  if not UHCA.PointsBackground then
-    UHCA.PointsBackground = UHCA:CreateTexture(nil, "BACKGROUND")
-    UHCA.PointsBackground:SetTexture("Interface\\AddOns\\HardcoreAchievements\\Images\\points-bg.png")
-    -- Size adjusted: wider and shorter
-    local bgWidth = 300  -- Increased width
-    local bgHeight = 30  -- Reduced height
-    UHCA.PointsBackground:SetSize(bgWidth, bgHeight)
-    UHCA.PointsBackground:SetPoint("TOP", UHCA, "TOP", 0, -30) -- Brought down a bit
-    UHCA.PointsBackground:SetDesaturated(false)
-    UHCA.PointsBackground:SetAlpha(0.7)
-    UHCA.PointsBackground:SetVertexColor(1, 1, 1, 1)
+  if not UHCA.ScrollBackground then
+    local backdropTemplate = BackdropTemplateMixin and "BackdropTemplate" or nil
+    local background = CreateFrame("Frame", nil, UHCA, backdropTemplate)
+    background:SetPoint("TOPLEFT", UHCA.Scroll, "TOPLEFT", 0, 0)
+    background:SetPoint("BOTTOMRIGHT", UHCA.Scroll, "BOTTOMRIGHT", 0, 0)
+    background:SetFrameStrata(UHCA.Scroll:GetFrameStrata())
+    local scrollLevel = UHCA.Scroll:GetFrameLevel() or 1
+    background:SetFrameLevel(scrollLevel > 0 and (scrollLevel - 1) or 0)
+    background:EnableMouse(false)
+
+    if background.SetBackdrop then
+      background:SetBackdrop({
+        bgFile = "Interface\\Buttons\\WHITE8X8",
+        edgeFile = "Interface\\Buttons\\WHITE8X8",
+        edgeSize = 1,
+      })
+      background:SetBackdropColor(0, 0, 0, 0.45)
+      background:SetBackdropBorderColor(0.282, 0.275, 0.259)
+    else
+      local fill = background:CreateTexture(nil, "BACKGROUND")
+      fill:SetAllPoints()
+      fill:SetColorTexture(0, 0, 0, 0.45)
+      background.Fill = fill
+    end
+
+    background:Hide()
+    UHCA.ScrollBackground = background
   end
 
-  -- Points number text (centered over background, with drop shadow)
+  if not UHCA.BlurOverlayFrame then
+    UHCA.BlurOverlayFrame = CreateFrame("Frame", nil, UHCA)
+    UHCA.BlurOverlayFrame:SetFrameStrata("DIALOG")
+    UHCA.BlurOverlayFrame:SetFrameLevel(18)
+    UHCA.BlurOverlayFrame:SetAllPoints(UHCA)
+  end
+
+  if not UHCA.BlurOverlay then
+    UHCA.BlurOverlay = UHCA.BlurOverlayFrame:CreateTexture(nil, "OVERLAY")
+    UHCA.BlurOverlay:SetTexture("Interface\\AddOns\\HardcoreAchievements\\Images\\blur.png")
+    UHCA.BlurOverlay:SetBlendMode("BLEND")
+    UHCA.BlurOverlay:SetTexCoord(0, 1, 0, 1)
+    UHCA.BlurOverlay:SetPoint("BOTTOMLEFT", UHCA.BlurOverlayFrame, "BOTTOMLEFT", -18, -47)
+    UHCA.BlurOverlay:SetPoint("BOTTOMRIGHT", UHCA.BlurOverlayFrame, "BOTTOMRIGHT", 18, -47)
+  end
+
+  if not UHCA.UIOverlayFrame then
+    UHCA.UIOverlayFrame = CreateFrame("Frame", nil, UHCA.BlurOverlayFrame)
+    UHCA.UIOverlayFrame:SetAllPoints(UHCA)
+    UHCA.UIOverlayFrame:SetFrameStrata("DIALOG")
+    UHCA.UIOverlayFrame:SetFrameLevel(19)
+  end
+
+  -- Class icon (centered over background, with drop shadow)
+  if not UHCA.ClassIcon then
+    UHCA.ClassIcon = UHCA:CreateTexture(nil, "OVERLAY")
+    UHCA.ClassIcon:SetPoint("TOPRIGHT", UHCA, "TOPRIGHT", - 11, -65)
+    UHCA.ClassIcon:SetTexCoord(0, 1, 0, 1)
+    UHCA.ClassIcon:SetSize(44, 44)
+  end
+
+  UpdateEmbedClassIcon()
+
+  -- Points number text (with drop shadow)
   if not UHCA.TotalPointsText then
-    UHCA.TotalPointsText = UHCA:CreateFontString(nil, "OVERLAY", "GameFontHighlightLarge")
-    UHCA.TotalPointsText:SetPoint("CENTER", UHCA.PointsBackground, "CENTER", 0, -1)
+    UHCA.TotalPointsText = UHCA:CreateFontString(nil, "OVERLAY", "GameFontHighlightHuge")
+    UHCA.TotalPointsText:SetPoint("TOPLEFT", UHCA, "TOPLEFT", -7, -60)
     UHCA.TotalPointsText:SetText("0") -- Will be updated by UpdateTotalPointsText
-    UHCA.TotalPointsText:SetTextColor(0.6, 0.9, 0.6)
+    UHCA.TotalPointsText:SetTextColor(0.922, 0.871, 0.761)
+    UHCA.TotalPointsText:SetFont(POINTS_FONT_PATH, 42)
   end
 
   -- Points number drop shadow
   if not UHCA.TotalPointsTextShadow then
-    UHCA.TotalPointsTextShadow = UHCA:CreateFontString(nil, "BACKGROUND", "GameFontHighlightLarge")
-    UHCA.TotalPointsTextShadow:SetPoint("CENTER", UHCA.PointsBackground, "CENTER", 1, -1)
+    UHCA.TotalPointsTextShadow = UHCA:CreateFontString(nil, "BACKGROUND", "GameFontHighlightHuge")
+    UHCA.TotalPointsTextShadow:SetPoint("CENTER", UHCA.TotalPointsText, "CENTER", 1, -1)
     UHCA.TotalPointsTextShadow:SetText("0")
     UHCA.TotalPointsTextShadow:SetTextColor(0, 0, 0, 0.5)
     UHCA.TotalPointsTextShadow:SetDrawLayer("BACKGROUND", 0)
+    UHCA.TotalPointsTextShadow:SetFont(POINTS_FONT_PATH, 42)
   end
 
   -- " pts" text (smaller, positioned after the number)
   if not UHCA.PointsLabelText then
-    UHCA.PointsLabelText = UHCA:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    UHCA.PointsLabelText = UHCA:CreateFontString(nil, "OVERLAY", "GameFontHighlightHuge")
     -- Position it to the right of the points number
     UHCA.PointsLabelText:SetPoint("LEFT", UHCA.TotalPointsText, "RIGHT", 2, 0)
     UHCA.PointsLabelText:SetText(" pts")
-    UHCA.PointsLabelText:SetTextColor(1, 1, 1)
+    UHCA.PointsLabelText:SetTextColor(0.922, 0.871, 0.761)
+    UHCA.PointsLabelText:SetFont(POINTS_FONT_PATH, 32)
+  end
+
+  -- Player name text (centered above the points background)
+  if not UHCA.PlayerNameText then
+    UHCA.PlayerNameText = UHCA:CreateFontString(nil, "OVERLAY", "GameFontHighlightLarge")
+    UHCA.PlayerNameText:SetPoint("TOPLEFT", UHCA.TotalPointsText, "BOTTOMLEFT", 2, -6)
+    UHCA.PlayerNameText:SetJustifyH("LEFT")
+    UHCA.PlayerNameText:SetText(GetUnitName('player')) -- Will be updated by UpdatePlayerNameText
+    --UHCA.PlayerNameText:SetTextColor(0.42, 0.396, 0.345)
+    UHCA.PlayerNameText:SetTextColor(GetPlayerClassColor())
   end
 
   -- Multiplier text (below the points background)
   if not UHCA.MultiplierText then
     UHCA.MultiplierText = UHCA:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    UHCA.MultiplierText:SetPoint("TOP", UHCA.PointsBackground, "BOTTOM", 0, -5) -- Positioned below with spacing
+    UHCA.MultiplierText:SetPoint("TOPLEFT", UHCA.PlayerNameText, "BOTTOMLEFT", 1, - 12) -- Positioned below with spacing
     UHCA.MultiplierText:SetText("") -- Will be set by UpdateMultiplierText
   end
 
   -- Solo mode checkbox
   if not UHCA.SoloModeCheckbox then
     UHCA.SoloModeCheckbox = CreateFrame("CheckButton", nil, UHCA, "InterfaceOptionsCheckButtonTemplate")
-    UHCA.SoloModeCheckbox:SetPoint("TOPLEFT", UHCA, "TOPLEFT", -10, -30)
+    UHCA.SoloModeCheckbox:SetPoint("TOP", UHCA, "TOP", 85, -130)
+    UHCA.SoloModeCheckbox:SetSize(12, 12)
     UHCA.SoloModeCheckbox.Text:SetText("SSF")
-    UHCA.SoloModeCheckbox.Text:SetTextColor(1, 1, 1, 1)
+    UHCA.SoloModeCheckbox.Text:SetTextColor(0.922, 0.871, 0.761)
+    UHCA.SoloModeCheckbox.Text:ClearAllPoints()
+    UHCA.SoloModeCheckbox.Text:SetPoint("LEFT", UHCA.SoloModeCheckbox, "RIGHT", 5, 0)
+    ApplyCustomCheckboxTextures(UHCA.SoloModeCheckbox)
     UHCA.SoloModeCheckbox:SetScript("OnClick", function(self)
       if self:IsEnabled() then
         local isChecked = self:GetChecked()
@@ -1474,16 +1710,18 @@ local function BuildEmbedIfNeeded()
 
   -- Settings button (cogwheel icon) in bottom left of frame
   if not UHCA.SettingsButton then
-    UHCA.SettingsButton = CreateFrame("Button", nil, UHCA)
-    UHCA.SettingsButton:SetSize(16, 16)
-    UHCA.SettingsButton:SetPoint("BOTTOMLEFT", UHCA, "BOTTOMLEFT", -10, -40)
+    local parent = UHCA.UIOverlayFrame or UHCA
+    UHCA.SettingsButton = CreateFrame("Button", nil, parent)
+    UHCA.SettingsButton:SetSize(10, 10)
+    UHCA.SettingsButton:SetPoint("BOTTOMLEFT", UHCA, "BOTTOMLEFT", -5, -40)
+    UHCA.SettingsButton:SetFrameLevel(19)
     
     -- Create cogwheel icon texture (using a simple circular button style)
     UHCA.SettingsButton.Icon = UHCA.SettingsButton:CreateTexture(nil, "ARTWORK")
     UHCA.SettingsButton.Icon:SetAllPoints(UHCA.SettingsButton)
-    -- Use a simple circular icon - try using the minimap button background or a simple texture
-    UHCA.SettingsButton.Icon:SetTexture("Interface\\GossipFrame\\BinderGossipIcon")
-    UHCA.SettingsButton:SetHighlightTexture("Interface\\Buttons\\UI-Common-MouseHilight", "ADD")
+    -- Use addon-provided gear icon texture
+    UHCA.SettingsButton.Icon:SetTexture(SETTINGS_ICON_TEXTURE)
+    UHCA.SettingsButton.Icon:SetVertexColor(GetPlayerClassColor())
     
     -- Click handler to open Options panel
     UHCA.SettingsButton:SetScript("OnClick", function(self)
@@ -1517,18 +1755,25 @@ local function BuildEmbedIfNeeded()
   end
 
   if not UHCA.LayoutLabel then
-    UHCA.LayoutLabel = UHCA:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    UHCA.LayoutLabel:SetPoint("LEFT", UHCA.SettingsButton, "RIGHT", 6, 0)
+    local parent = UHCA.UIOverlayFrame or UHCA
+    UHCA.LayoutLabel = parent:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    UHCA.LayoutLabel:SetPoint("LEFT", UHCA.SettingsButton, "RIGHT", 25, 0)
     UHCA.LayoutLabel:SetText("Layout:")
-    UHCA.LayoutLabel:SetTextColor(1, 1, 1)
+    UHCA.LayoutLabel:SetTextColor(0.922, 0.871, 0.761)
+    UHCA.LayoutLabel:SetDrawLayer("OVERLAY", 7)
   end
 
   if not UHCA.LayoutListCheckbox then
-    UHCA.LayoutListCheckbox = CreateFrame("CheckButton", nil, UHCA, "UICheckButtonTemplate")
+    local parent = UHCA.UIOverlayFrame or UHCA
+    UHCA.LayoutListCheckbox = CreateFrame("CheckButton", nil, parent, "UICheckButtonTemplate")
     UHCA.LayoutListCheckbox:SetPoint("LEFT", UHCA.LayoutLabel, "RIGHT", 6, 0)
-    UHCA.LayoutListCheckbox:SetSize(18, 18)
+    UHCA.LayoutListCheckbox:SetSize(10, 10)
+    UHCA.LayoutListCheckbox:SetFrameLevel(19)
     UHCA.LayoutListCheckbox.text:SetText("List")
-    UHCA.LayoutListCheckbox.text:SetTextColor(1, 1, 1)
+    UHCA.LayoutListCheckbox.text:SetTextColor(0.922, 0.871, 0.761)
+    UHCA.LayoutListCheckbox.text:ClearAllPoints()
+    UHCA.LayoutListCheckbox.text:SetPoint("LEFT", UHCA.LayoutListCheckbox, "RIGHT", 5, 0)
+    ApplyCustomCheckboxTextures(UHCA.LayoutListCheckbox)
     UHCA.LayoutListCheckbox:SetScript("OnClick", function(self)
       if not self:GetChecked() then
         self:SetChecked(true)
@@ -1539,11 +1784,16 @@ local function BuildEmbedIfNeeded()
   end
 
   if not UHCA.LayoutGridCheckbox then
-    UHCA.LayoutGridCheckbox = CreateFrame("CheckButton", nil, UHCA, "UICheckButtonTemplate")
-    UHCA.LayoutGridCheckbox:SetPoint("LEFT", UHCA.LayoutListCheckbox, "RIGHT", 20, 0)
-    UHCA.LayoutGridCheckbox:SetSize(18, 18)
+    local parent = UHCA.UIOverlayFrame or UHCA
+    UHCA.LayoutGridCheckbox = CreateFrame("CheckButton", nil, parent, "UICheckButtonTemplate")
+    UHCA.LayoutGridCheckbox:SetPoint("LEFT", UHCA.LayoutListCheckbox, "RIGHT", 30, 0)
+    UHCA.LayoutGridCheckbox:SetSize(10, 10)
+    UHCA.LayoutGridCheckbox:SetFrameLevel(19)
     UHCA.LayoutGridCheckbox.text:SetText("Grid")
-    UHCA.LayoutGridCheckbox.text:SetTextColor(1, 1, 1)
+    UHCA.LayoutGridCheckbox.text:SetTextColor(0.922, 0.871, 0.761)
+    UHCA.LayoutGridCheckbox.text:ClearAllPoints()
+    UHCA.LayoutGridCheckbox.text:SetPoint("LEFT", UHCA.LayoutGridCheckbox, "RIGHT", 5, 0)
+    ApplyCustomCheckboxTextures(UHCA.LayoutGridCheckbox)
     UHCA.LayoutGridCheckbox:SetScript("OnClick", function(self)
       if not self:GetChecked() then
         self:SetChecked(true)
@@ -1559,10 +1809,38 @@ local function BuildEmbedIfNeeded()
   local filterDropdown = UHCA.FilterDropdown
   if not filterDropdown then
     filterDropdown = CreateFrame("Frame", nil, UHCA, "UIDropDownMenuTemplate")
-    filterDropdown:SetPoint("TOPRIGHT", UHCA, "TOPRIGHT", 30, -35) -- Moved down 10px (from -25 to -35)
-    UIDropDownMenu_SetWidth(filterDropdown, 110)
+    filterDropdown.Left:Hide()
+    filterDropdown.Middle:Hide()
+    filterDropdown.Right:Hide()
+    local bg = filterDropdown:CreateTexture(nil, "BACKGROUND")
+    bg:SetPoint("TOPLEFT", -4, 0)
+    bg:SetPoint("BOTTOMRIGHT", -17, 9)
+    bg:SetTexture("Interface\\AddOns\\HardcoreAchievements\\Images\\dropdown.png")
+    filterDropdown:SetPoint("LEFT", UHCA.SoloModeCheckbox, "RIGHT", 40, 0)
+    UIDropDownMenu_SetWidth(filterDropdown, 87)
     UIDropDownMenu_SetText(filterDropdown, "All")
-    UHCA.FilterDropdown = filterDropdown
+
+    local button = filterDropdown.Button
+    button:ClearAllPoints()
+    button:SetPoint("RIGHT", filterDropdown, "RIGHT", -16, 4)
+    button:SetNormalTexture("Interface\\AddOns\\HardcoreAchievements\\Images\\dropdown_arrow_down.png")
+    button:SetPushedTexture("Interface\\AddOns\\HardcoreAchievements\\Images\\dropdown_arrow_down.png")
+    button:SetDisabledTexture("Interface\\AddOns\\HardcoreAchievements\\Images\\dropdown_arrow_down.png")
+
+    local normalTexture = button:GetNormalTexture()
+    local pushedTexture = button:GetPushedTexture()
+    local disabledTexture = button:GetDisabledTexture()
+
+    local arrowR, arrowG, arrowB = GetPlayerClassColor()
+
+    for _, tex in ipairs({ normalTexture, pushedTexture, disabledTexture }) do
+      if tex then
+        tex:ClearAllPoints()
+        tex:SetPoint("CENTER", button, "CENTER", 0, 0)
+        tex:SetSize(20, 20)
+        tex:SetVertexColor(arrowR, arrowG, arrowB)
+      end
+    end
     
     -- Initialize filter dropdown
     UIDropDownMenu_Initialize(filterDropdown, function(self, level)
@@ -1588,8 +1866,10 @@ local function BuildEmbedIfNeeded()
   if not UHCA.HideCustomTabCheckbox then
     -- Add checkbox to control custom tab visibility
     UHCA.HideCustomTabCheckbox = CreateFrame("CheckButton", nil, UHCA, "UICheckButtonTemplate")
-    UHCA.HideCustomTabCheckbox:SetPoint("BOTTOMRIGHT", UHCA, "BOTTOMRIGHT", 8, -43)
-    UHCA.HideCustomTabCheckbox:SetSize(20, 20)
+    UHCA.HideCustomTabCheckbox:SetPoint("BOTTOM", UHCA, "BOTTOM", 0, -40)
+    UHCA.HideCustomTabCheckbox:SetSize(10, 10)
+    UHCA.HideCustomTabCheckbox:SetFrameLevel(19)
+    ApplyCustomCheckboxTextures(UHCA.HideCustomTabCheckbox)
     
     local function GetShowCustomTabSetting()
       if type(HardcoreAchievements_GetCharDB) == "function" then
@@ -1601,10 +1881,12 @@ local function BuildEmbedIfNeeded()
     UHCA.HideCustomTabCheckbox:SetChecked(GetShowCustomTabSetting()) -- Default to not showing custom tab, but respect saved state
     
     -- Add label for the checkbox
-    UHCA.HideCustomTabLabel = UHCA:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    UHCA.HideCustomTabLabel:SetPoint("RIGHT", UHCA.HideCustomTabCheckbox, "LEFT", -3, 0)
+    local labelParent = UHCA.UIOverlayFrame or UHCA
+    UHCA.HideCustomTabLabel = labelParent:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    UHCA.HideCustomTabLabel:SetPoint("LEFT", UHCA.HideCustomTabCheckbox, "RIGHT", 8, 0)
     UHCA.HideCustomTabLabel:SetText("Show Achievements on the Character Info Panel")
-    UHCA.HideCustomTabLabel:SetTextColor(0.8, 0.8, 0.8)
+    UHCA.HideCustomTabLabel:SetTextColor(0.922, 0.871, 0.761)
+    UHCA.HideCustomTabLabel:SetDrawLayer("OVERLAY", 10)
     
     -- Handle checkbox changes
     UHCA.HideCustomTabCheckbox:SetScript("OnClick", function(self)
