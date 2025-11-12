@@ -6,41 +6,93 @@ local AceComm = LibStub("AceComm-3.0")
 local AceSerialize = LibStub("AceSerializer-3.0")
 
 local AdminPanel = {}
-local ADMIN_SIGNATURE = "HC_ADMIN_CHILLS" -- Your unique admin signature
 local COMM_PREFIX = "HCA_Admin_Cmd" -- AceComm prefix for admin commands
 local RESPONSE_PREFIX = "HCA_Admin_Resp" -- AceComm prefix for responses (max 16 chars)
 
 -- Admin panel UI
 local adminFrame = nil
 
--- Security and validation functions
-local function CreatePayloadHash(payload)
-    local hashString = payload.version .. payload.timestamp .. payload.achievementId .. payload.targetCharacter .. ADMIN_SIGNATURE
-    local hash = 0
-    for i = 1, #hashString do
-        hash = hash + string.byte(hashString, i) * i
+-- SECURITY: Get admin secret key from database (set by admin via slash command)
+-- This key is NOT in source code and must be set by the admin
+local function GetAdminSecretKey()
+    if not HardcoreAchievementsDB then
+        HardcoreAchievementsDB = {}
     end
-    return hash % 1000000 -- Simple hash for validation
+    return HardcoreAchievementsDB.adminSecretKey
 end
 
+-- SECURITY: HMAC-style hash function using secret key
+-- This matches the hash function in CommandHandler.lua
+local function CreateSecureHash(payload, secretKey)
+    if not secretKey or secretKey == "" then
+        return nil
+    end
+    
+    -- Create message to sign: all critical fields in canonical order
+    local message = string.format("%d:%d:%s:%s:%s",
+        payload.version or 0,
+        payload.timestamp or 0,
+        payload.achievementId or "",
+        payload.targetCharacter or "",
+        payload.nonce or ""
+    )
+    
+    -- HMAC-style hash: hash(key + message + key)
+    local combined = secretKey .. message .. secretKey
+    
+    -- Use a more complex hash algorithm
+    local hash = 0
+    local prime1 = 31
+    local prime2 = 17
+    
+    for i = 1, #combined do
+        local byte = string.byte(combined, i)
+        hash = ((hash * prime1) + byte * prime2) % 2147483647
+        hash = (hash + (byte * i * prime1)) % 2147483647
+    end
+    
+    -- Combine with secret key length for additional entropy
+    hash = (hash * #secretKey) % 2147483647
+    
+    -- Return as hex string for better security
+    return string.format("%08x", hash)
+end
+
+-- Generate a nonce for replay protection
+local function GenerateNonce()
+    return string.format("%d:%d", time(), math.random(1000000, 9999999))
+end
+
+-- SECURITY: Create secure payload using version 2 protocol
 local function CreateSecurePayload(achievementId, targetCharacter, opts)
+    -- Get secret key from database
+    local secretKey = GetAdminSecretKey()
+    if not secretKey or secretKey == "" then
+        error("Admin secret key not set! Use /hca adminkey set <key> first")
+    end
+    
     local payload = {
-        version = 1,
+        version = 2,  -- Version 2 uses secure hash with secret key
         timestamp = time(),
         achievementId = achievementId,
         targetCharacter = targetCharacter,
-        adminSignature = ADMIN_SIGNATURE,
-		validationHash = 0 -- Will be set after creation
+        nonce = GenerateNonce(),  -- Replay protection
     }
 	
-	-- Optional update/override fields (not part of validation hash)
+	-- Optional update/override fields
 	if opts then
 		if opts.forceUpdate ~= nil then payload.forceUpdate = opts.forceUpdate and true or false end
 		if opts.overridePoints ~= nil then payload.overridePoints = tonumber(opts.overridePoints) end
 		if opts.overrideLevel ~= nil then payload.overrideLevel = tonumber(opts.overrideLevel) end
 	end
     
-    payload.validationHash = CreatePayloadHash(payload)
+    -- Create secure hash using secret key
+    payload.validationHash = CreateSecureHash(payload, secretKey)
+    
+    if not payload.validationHash then
+        error("Failed to create secure hash")
+    end
+    
     return payload
 end
 
@@ -55,7 +107,27 @@ local function SendAdminCommand(achievementId, targetCharacter, forceUpdate, ove
         return
     end
     
-	local payload = CreateSecurePayload(achievementId, targetCharacter, { forceUpdate = forceUpdate, overridePoints = overridePoints, overrideLevel = overrideLevel })
+    -- Check if secret key is set
+    local secretKey = GetAdminSecretKey()
+    if not secretKey or secretKey == "" then
+        print("|cffff0000[HardcoreAchievements Admin]|r Admin secret key not set!")
+        print("|cffffff00[HardcoreAchievements Admin]|r Use: /hca adminkey set <your-secret-key-here>")
+        print("|cffffff00[HardcoreAchievements Admin]|r Key must be at least 16 characters long")
+        return
+    end
+    
+    -- Create secure payload
+    local success, payload = pcall(CreateSecurePayload, achievementId, targetCharacter, { 
+        forceUpdate = forceUpdate, 
+        overridePoints = overridePoints, 
+        overrideLevel = overrideLevel 
+    })
+    
+    if not success or not payload then
+        print("|cffff0000[HardcoreAchievements Admin]|r Failed to create secure payload: " .. tostring(payload))
+        return
+    end
+    
     local serializedPayload = AceSerialize:Serialize(payload)
     
     if not serializedPayload then
@@ -83,8 +155,15 @@ local function SendAdminCommand(achievementId, targetCharacter, forceUpdate, ove
 		adminCharacter = UnitName("player"),
 		forceUpdate = forceUpdate and true or false,
 		overridePoints = overridePoints and tonumber(overridePoints) or nil,
-		overrideLevel = overrideLevel and tonumber(overrideLevel) or nil
+		overrideLevel = overrideLevel and tonumber(overrideLevel) or nil,
+        nonce = payload.nonce,
+        payloadHash = payload.validationHash
     })
+    
+    -- Keep only last 100 log entries to prevent database bloat
+    if #HardcoreAchievementsDB.adminLog > 100 then
+        table.remove(HardcoreAchievementsDB.adminLog, 1)
+    end
 end
 
 local function CreateAdminPanel()
@@ -92,7 +171,7 @@ local function CreateAdminPanel()
     
 	-- Create main frame (use a unique name that doesn't collide with exported table)
 	adminFrame = CreateFrame("Frame", "HardcoreAchievementsAdminPanelFrame", UIParent, "BasicFrameTemplateWithInset")
-    adminFrame:SetSize(400, 300)
+    adminFrame:SetSize(400, 350)  -- Increased height to accommodate key status indicator
     adminFrame:SetPoint("CENTER")
     adminFrame:Hide()
 
@@ -114,6 +193,28 @@ local function CreateAdminPanel()
     titleText:SetPoint("TOP", adminFrame, "TOP", 0, -5)
     titleText:SetText("HardcoreAchievements Admin Panel")
     
+    -- SECURITY: Status indicator for secret key
+    local keyStatusText = adminFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    keyStatusText:SetPoint("TOP", titleText, "BOTTOM", 0, -5)
+    keyStatusText:SetJustifyH("CENTER")
+    
+    local function UpdateKeyStatus()
+        local secretKey = GetAdminSecretKey()
+        if secretKey and secretKey ~= "" then
+            keyStatusText:SetText("|cff00ff00Secret Key: Set|r")
+            keyStatusText:SetTextColor(0, 1, 0)
+        else
+            keyStatusText:SetText("|cffff0000Secret Key: NOT SET|r")
+            keyStatusText:SetTextColor(1, 0, 0)
+        end
+    end
+    
+    -- Update status when frame is shown
+    adminFrame:SetScript("OnShow", function()
+        UpdateKeyStatus()
+    end)
+    UpdateKeyStatus()
+    
     -- Make it draggable
     adminFrame:SetMovable(true)
     adminFrame:EnableMouse(true)
@@ -123,11 +224,11 @@ local function CreateAdminPanel()
     
 	-- Achievement selector (scrollable list)
 	local achievementLabel = adminFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-	achievementLabel:SetPoint("TOP", adminFrame, "TOP", 0, -40)
+	achievementLabel:SetPoint("TOP", keyStatusText, "BOTTOM", 0, -10)
 	achievementLabel:SetText("Achievement")
 
 	local achievementSelectButton = CreateFrame("Button", nil, adminFrame, "UIPanelButtonTemplate")
-	achievementSelectButton:SetPoint("TOP", adminFrame, "TOP", 0, -55)
+	achievementSelectButton:SetPoint("TOP", achievementLabel, "BOTTOM", 0, -5)
 	achievementSelectButton:SetSize(220, 22)
 	achievementSelectButton:SetText("Select Achievement...")
 
@@ -158,32 +259,32 @@ local function CreateAdminPanel()
     
     -- Character name input
     local characterLabel = adminFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    characterLabel:SetPoint("TOP", adminFrame, "TOP", 0, -100)
+    characterLabel:SetPoint("TOP", achievementSelectButton, "BOTTOM", 0, -30)
     characterLabel:SetText("Target Character")
     
     local characterInput = CreateFrame("EditBox", nil, adminFrame, "InputBoxTemplate")
-    characterInput:SetPoint("TOP", adminFrame, "TOP", 0, -115)
+    characterInput:SetPoint("TOP", characterLabel, "BOTTOM", 0, -5)
     characterInput:SetSize(125, 32)
     characterInput:SetAutoFocus(false)
     characterInput:SetText("")
 
 	-- Force update checkbox
 	local forceCheck = CreateFrame("CheckButton", nil, adminFrame, "ChatConfigCheckButtonTemplate")
-	forceCheck:SetPoint("TOP", adminFrame, "TOP", 0, -165)
+	forceCheck:SetPoint("TOP", characterInput, "BOTTOM", 0, -15)
 	-- Prevent the template from expanding the clickable area far to the right
 	forceCheck:SetHitRectInsets(0, 0, 0, 0)
 	forceCheck.tooltip = "Override existing completion and update points"
 	local forceLabel = adminFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-	forceLabel:SetPoint("TOP", adminFrame, "TOP", 0, -200)
+	forceLabel:SetPoint("LEFT", forceCheck, "RIGHT", 5, 0)
 	forceLabel:SetText("Force Update (override if completed)")
 
 	-- Override points input
 	local pointsLabel = adminFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-	pointsLabel:SetPoint("TOP", adminFrame, "TOP", -110, -150)
+	pointsLabel:SetPoint("TOP", forceCheck, "BOTTOM", -110, -10)
 	pointsLabel:SetText("Override Points (optional)")
 
 	local pointsInput = CreateFrame("EditBox", nil, adminFrame, "InputBoxTemplate")
-	pointsInput:SetPoint("TOP", adminFrame, "TOP", -110, -165)
+	pointsInput:SetPoint("TOP", pointsLabel, "BOTTOM", 0, -5)
 	pointsInput:SetSize(80, 28)
 	pointsInput:SetAutoFocus(false)
 	pointsInput:SetNumeric(false)
@@ -191,11 +292,11 @@ local function CreateAdminPanel()
 
 	-- Override level input
 	local levelLabel = adminFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-	levelLabel:SetPoint("TOP", adminFrame, "TOP", 100, -150)
+	levelLabel:SetPoint("TOP", forceCheck, "BOTTOM", 100, -10)
 	levelLabel:SetText("Override Level (optional)")
 
 	local levelInput = CreateFrame("EditBox", nil, adminFrame, "InputBoxTemplate")
-	levelInput:SetPoint("TOP", adminFrame, "TOP", 100, -165)
+	levelInput:SetPoint("TOP", levelLabel, "BOTTOM", 0, -5)
 	levelInput:SetSize(80, 28)
 	levelInput:SetAutoFocus(false)
 	levelInput:SetNumeric(true)
@@ -213,7 +314,7 @@ local function CreateAdminPanel()
     statusText:SetSize(360, 60)
     statusText:SetJustifyH("LEFT")
     statusText:SetJustifyV("TOP")
-    statusText:SetText("Select an achievement and enter the target character name, then click Send Command to manually complete the achievement for that player.")
+    statusText:SetText("Select an achievement and enter the target character name, then click Send Command to manually complete the achievement for that player.\n\n|cffff0000Note:|r Admin secret key must be set via /hca adminkey set <key> before sending commands.")
     
     -- Populate achievement dropdown
 	local function PopulateAchievementDropdown()

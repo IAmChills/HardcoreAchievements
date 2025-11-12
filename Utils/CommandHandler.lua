@@ -6,34 +6,128 @@ local AceComm = LibStub("AceComm-3.0")
 local AceSerialize = LibStub("AceSerializer-3.0")
 
 local AdminCommandHandler = {}
-local ADMIN_SIGNATURE = "HC_ADMIN_CHILLS" -- Must match admin panel signature
 local COMM_PREFIX = "HCA_Admin_Cmd" -- AceComm prefix for admin commands
 local RESPONSE_PREFIX = "HCA_Admin_Resp" -- AceComm prefix for responses (max 16 chars)
 local MAX_PAYLOAD_AGE = 300 -- 5 minutes in seconds
 
--- Security and validation functions
-local function CreatePayloadHash(payload)
-    local hashString = payload.version .. payload.timestamp .. payload.achievementId .. payload.targetCharacter .. ADMIN_SIGNATURE
-    local hash = 0
-    for i = 1, #hashString do
-        hash = hash + string.byte(hashString, i) * i
+-- SECURITY: Get admin secret key from database (set by admin via slash command)
+-- This key is NOT in source code and must be set by the admin
+local function GetAdminSecretKey()
+    if not HardcoreAchievementsDB then
+        HardcoreAchievementsDB = {}
     end
-    return hash % 1000000 -- Simple hash for validation
+    return HardcoreAchievementsDB.adminSecretKey
 end
 
-local function ValidatePayload(payload)
+-- SECURITY: Set admin secret key (only accessible via slash command)
+local function SetAdminSecretKey(key)
+    if not HardcoreAchievementsDB then
+        HardcoreAchievementsDB = {}
+    end
+    if key and #key >= 16 then
+        HardcoreAchievementsDB.adminSecretKey = key
+        return true
+    end
+    return false
+end
+
+-- SECURITY: HMAC-style hash function using secret key
+-- This provides much better security than a simple hash
+local function CreateSecureHash(payload, secretKey)
+    if not secretKey or secretKey == "" then
+        return nil
+    end
+    
+    -- Create message to sign: all critical fields in canonical order
+    local message = string.format("%d:%d:%s:%s:%s",
+        payload.version or 0,
+        payload.timestamp or 0,
+        payload.achievementId or "",
+        payload.targetCharacter or "",
+        payload.nonce or ""
+    )
+    
+    -- HMAC-style hash: hash(key + message + key)
+    local combined = secretKey .. message .. secretKey
+    
+    -- Use a more complex hash algorithm
+    local hash = 0
+    local prime1 = 31
+    local prime2 = 17
+    
+    for i = 1, #combined do
+        local byte = string.byte(combined, i)
+        hash = ((hash * prime1) + byte * prime2) % 2147483647
+        hash = (hash + (byte * i * prime1)) % 2147483647
+    end
+    
+    -- Combine with secret key length for additional entropy
+    hash = (hash * #secretKey) % 2147483647
+    
+    -- Return as hex string for better security
+    return string.format("%08x", hash)
+end
+
+-- Generate a nonce for replay protection
+local function GenerateNonce()
+    return string.format("%d:%d", time(), math.random(1000000, 9999999))
+end
+
+local function ValidatePayload(payload, sender)
     if not payload then return false, "No payload" end
-    if not payload.version or payload.version ~= 1 then return false, "Invalid version" end
-    if not payload.timestamp or not payload.achievementId or not payload.targetCharacter then return false, "Missing required fields" end
-    if not payload.adminSignature or payload.adminSignature ~= ADMIN_SIGNATURE then return false, "Invalid admin signature" end
+    if not payload.version or payload.version ~= 2 then 
+        -- Version 2 uses secure hash, version 1 is deprecated
+        return false, "Invalid version (must be 2)" 
+    end
+    if not payload.timestamp or not payload.achievementId or not payload.targetCharacter or not payload.nonce then 
+        return false, "Missing required fields" 
+    end
     
-    -- Check payload age
+    -- SECURITY: Get secret key from database
+    local secretKey = GetAdminSecretKey()
+    if not secretKey or secretKey == "" then
+        return false, "Admin secret key not configured"
+    end
+    
+    -- Check payload age (prevent replay attacks)
     local currentTime = time()
-    if currentTime - payload.timestamp > MAX_PAYLOAD_AGE then return false, "Payload too old" end
+    if currentTime - payload.timestamp > MAX_PAYLOAD_AGE then 
+        return false, "Payload too old (max 5 minutes)" 
+    end
+    if payload.timestamp > currentTime + 60 then
+        return false, "Payload timestamp too far in future"
+    end
     
-    -- Validate hash
-    local expectedHash = CreatePayloadHash(payload)
-    if payload.validationHash ~= expectedHash then return false, "Invalid payload hash" end
+    -- SECURITY: Validate secure hash
+    local expectedHash = CreateSecureHash(payload, secretKey)
+    if not expectedHash or payload.validationHash ~= expectedHash then 
+        return false, "Invalid authentication hash" 
+    end
+    
+    -- SECURITY: Check nonce to prevent replay attacks
+    -- Store used nonces in database (with expiration)
+    if not HardcoreAchievementsDB.adminNonces then
+        HardcoreAchievementsDB.adminNonces = {}
+    end
+    
+    -- Clean old nonces (older than MAX_PAYLOAD_AGE)
+    local noncesToRemove = {}
+    for nonce, nonceTime in pairs(HardcoreAchievementsDB.adminNonces) do
+        if currentTime - nonceTime > MAX_PAYLOAD_AGE then
+            table.insert(noncesToRemove, nonce)
+        end
+    end
+    for _, nonce in ipairs(noncesToRemove) do
+        HardcoreAchievementsDB.adminNonces[nonce] = nil
+    end
+    
+    -- Check if nonce was already used (replay attack)
+    if HardcoreAchievementsDB.adminNonces[payload.nonce] then
+        return false, "Nonce already used (replay attack detected)"
+    end
+    
+    -- Store nonce to prevent reuse
+    HardcoreAchievementsDB.adminNonces[payload.nonce] = currentTime
     
     return true, "Valid"
 end
@@ -65,8 +159,8 @@ local function SendResponseToAdmin(sender, message)
 end
 
 local function ProcessAdminCommand(payload, sender)
-    -- Validate the payload
-    local isValid, reason = ValidatePayload(payload)
+    -- SECURITY: Validate the payload (includes secret key verification)
+    local isValid, reason = ValidatePayload(payload, sender)
     if not isValid then
         SendResponseToAdmin(sender, "|cffff0000[HardcoreAchievements]|r Admin command rejected: " .. reason)
         return false
@@ -176,16 +270,22 @@ local function ProcessAdminCommand(payload, sender)
 	
 	SendResponseToAdmin(sender, "|cff00ff00[HardcoreAchievements]|r Achievement '" .. payload.achievementId .. "' completed via admin command")
     
-    -- Log the admin command
-    if not HardcoreAchievementsDB then HardcoreAchievementsDB = {} end
+    -- Log the admin command (for audit trail)
     if not HardcoreAchievementsDB.adminCommands then HardcoreAchievementsDB.adminCommands = {} end
     
     table.insert(HardcoreAchievementsDB.adminCommands, {
         timestamp = time(),
         achievementId = payload.achievementId,
-        adminSignature = payload.adminSignature,
+        sender = sender,
+        targetCharacter = payload.targetCharacter,
+        nonce = payload.nonce,
         payloadHash = payload.validationHash
     })
+    
+    -- Keep only last 100 commands to prevent database bloat
+    if #HardcoreAchievementsDB.adminCommands > 100 then
+        table.remove(HardcoreAchievementsDB.adminCommands, 1)
+    end
     
     return true
 end
@@ -214,7 +314,11 @@ end
 
 -- Slash command handler
 local function HandleSlashCommand(msg)
-    local command = string.lower(string.trim(msg or ""))
+    local args = {}
+    for arg in string.gmatch(msg or "", "%S+") do
+        table.insert(args, arg)
+    end
+    local command = args[1] and string.lower(args[1]) or ""
     
     if command == "show" then
         -- Set database flag to show custom tab
@@ -236,13 +340,52 @@ local function HandleSlashCommand(msg)
         else
             print("|cffff0000[HardcoreAchievements]|r Custom achievement tab not found")
         end
-    elseif command == "reset tab" then
-        ResetTabPosition()
-        print("|cff00ff00[HardcoreAchievements]|r Tab position reset to default")
+    elseif command == "reset" and args[2] == "tab" then
+        if ResetTabPosition then
+            ResetTabPosition()
+            print("|cff00ff00[HardcoreAchievements]|r Tab position reset to default")
+        else
+            print("|cffff0000[HardcoreAchievements]|r ResetTabPosition function not found")
+        end
+    elseif command == "adminkey" then
+        -- SECURITY: Set admin secret key for secure command authentication
+        if args[2] == "set" and args[3] then
+            local key = args[3]
+            if #key >= 16 then
+                if SetAdminSecretKey(key) then
+                    print("|cff00ff00[HardcoreAchievements]|r Admin secret key set successfully")
+                    print("|cffffff00[HardcoreAchievements]|r Keep this key secret! Anyone with this key can send admin commands.")
+                else
+                    print("|cffff0000[HardcoreAchievements]|r Failed to set admin secret key")
+                end
+            else
+                print("|cffff0000[HardcoreAchievements]|r Admin secret key must be at least 16 characters long")
+            end
+        elseif args[2] == "check" then
+            local key = GetAdminSecretKey()
+            if key and key ~= "" then
+                print("|cff00ff00[HardcoreAchievements]|r Admin secret key is set (length: " .. #key .. ")")
+            else
+                print("|cffff0000[HardcoreAchievements]|r Admin secret key is NOT set")
+                print("|cffffff00[HardcoreAchievements]|r Use: /hca adminkey set <your-secret-key-here>")
+                print("|cffffff00[HardcoreAchievements]|r Key must be at least 16 characters long")
+            end
+        elseif args[2] == "clear" then
+            if HardcoreAchievementsDB then
+                HardcoreAchievementsDB.adminSecretKey = nil
+                print("|cff00ff00[HardcoreAchievements]|r Admin secret key cleared")
+            end
+        else
+            print("|cff00ff00[HardcoreAchievements]|r Admin key commands:")
+            print("  |cffffff00/hca adminkey set <key>|r - Set admin secret key (min 16 chars)")
+            print("  |cffffff00/hca adminkey check|r - Check if admin key is set")
+            print("  |cffffff00/hca adminkey clear|r - Clear admin secret key")
+        end
     else
         print("|cff00ff00[HardcoreAchievements]|r Available commands:")
         print("  |cffffff00/hca show|r - Enable and show the custom achievement tab")
         print("  |cffffff00/hca reset tab|r - Reset the tab position to default")
+        print("  |cffffff00/hca adminkey|r - Manage admin secret key for secure commands")
     end
 end
 
@@ -261,5 +404,39 @@ initFrame:SetScript("OnEvent", function(self, event)
     end
 end)
 
--- Export functions
+-- Export functions for admin panel (if needed)
+AdminCommandHandler.CreateSecureHash = CreateSecureHash
+AdminCommandHandler.GetAdminSecretKey = GetAdminSecretKey
+AdminCommandHandler.GenerateNonce = GenerateNonce
+
+-- Export globally for admin tools
 _G.HardcoreAchievementsAdminCommandHandler = AdminCommandHandler
+
+-- Helper function to create a secure admin command payload
+-- This is what the admin panel should use to send commands
+function AdminCommandHandler.CreateAdminPayload(targetCharacter, achievementId, overridePoints, overrideLevel, forceUpdate)
+    local secretKey = GetAdminSecretKey()
+    if not secretKey or secretKey == "" then
+        error("Admin secret key not set! Use /hca adminkey set <key> first")
+    end
+    
+    local payload = {
+        version = 2,  -- Version 2 uses secure hash
+        timestamp = time(),
+        achievementId = achievementId,
+        targetCharacter = targetCharacter,
+        nonce = GenerateNonce(),
+        overridePoints = overridePoints,
+        overrideLevel = overrideLevel,
+        forceUpdate = forceUpdate
+    }
+    
+    -- Create secure hash using secret key
+    payload.validationHash = CreateSecureHash(payload, secretKey)
+    
+    if not payload.validationHash then
+        error("Failed to create secure hash")
+    end
+    
+    return payload
+end
