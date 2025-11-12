@@ -109,6 +109,7 @@ end
 ---------------------------------------
 -- Grouped player > threshold% threat?
 -- Only checks PARTY/RAID *players* via unit tokens (pets excluded by token choice).
+-- Checks both scaled and raw threat, and tanking status.
 ---------------------------------------
 local function AnyGroupedPlayerOverThresholdOn(mobUnit, pct)
     if IsInRaid() then
@@ -116,8 +117,21 @@ local function AnyGroupedPlayerOverThresholdOn(mobUnit, pct)
         for i = 1, n do
             local u = "raid"..i
             if UnitExists(u) and not UnitIsUnit(u, "player") then
-                local _, _, scaledPct = UnitDetailedThreatSituation(u, mobUnit)
+                local isUnitTanking, unitStatus, scaledPct, rawPct = UnitDetailedThreatSituation(u, mobUnit)
+                
+                -- Check if this unit is tanking (definitely helping) - disqualify immediately
+                if isUnitTanking and unitStatus and unitStatus >= 2 then
+                    return true
+                end
+                
+                -- Check if this unit has >threshold% threat on EITHER scaled or raw threat
+                -- Disqualify if scaledPct > threshold OR rawPct > threshold
+                -- This ensures we catch cases where either metric shows they're helping
                 if scaledPct and scaledPct > pct then
+                    return true
+                end
+                
+                if rawPct and rawPct > pct then
                     return true
                 end
             end
@@ -127,8 +141,21 @@ local function AnyGroupedPlayerOverThresholdOn(mobUnit, pct)
         for i = 1, n do
             local u = "party"..i
             if UnitExists(u) then
-                local _, _, scaledPct = UnitDetailedThreatSituation(u, mobUnit)
+                local isUnitTanking, unitStatus, scaledPct, rawPct = UnitDetailedThreatSituation(u, mobUnit)
+                
+                -- Check if this unit is tanking (definitely helping) - disqualify immediately
+                if isUnitTanking and unitStatus and unitStatus >= 2 then
+                    return true
+                end
+                
+                -- Check if this unit has >threshold% threat on EITHER scaled or raw threat
+                -- Disqualify if scaledPct > threshold OR rawPct > threshold
+                -- This ensures we catch cases where either metric shows they're helping
                 if scaledPct and scaledPct > pct then
+                    return true
+                end
+                
+                if rawPct and rawPct > pct then
                     return true
                 end
             end
