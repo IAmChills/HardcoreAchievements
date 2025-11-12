@@ -1220,6 +1220,12 @@ function EMBED:BuildModernRows(srcRows)
   end
   
   -- Sort rows (failed to bottom, maintaining level order)
+  -- Get database access for timestamps
+  local _, cdb = nil, nil
+  if type(HardcoreAchievements_GetCharDB) == "function" then
+    _, cdb = HardcoreAchievements_GetCharDB()
+  end
+  
   table.sort(visibleRows, function(a, b)
     -- First, separate into three groups: completed, available, failed
     local aCompleted = a.completed or false
@@ -1235,12 +1241,35 @@ function EMBED:BuildModernRows(srcRows)
       return aGroup < bGroup  -- completed first, then available, then failed
     end
     
-    -- Within same group, sort by level
-    local la = (a.maxLevel ~= nil) and a.maxLevel or 9999
-    local lb = (b.maxLevel ~= nil) and b.maxLevel or 9999
-    if la ~= lb then return la < lb end
+    -- Within the same group, apply group-specific sorting
+    if aGroup == 1 then
+      -- Completed group: sort by completedAt timestamp descending (most recent first)
+      local aId = a.id or (a.Title and a.Title.GetText and a.Title:GetText()) or ""
+      local bId = b.id or (b.Title and b.Title.GetText and b.Title:GetText()) or ""
+      local aRec = cdb and cdb.achievements and cdb.achievements[aId]
+      local bRec = cdb and cdb.achievements and cdb.achievements[bId]
+      local aTimestamp = (aRec and aRec.completedAt) or 0
+      local bTimestamp = (bRec and bRec.completedAt) or 0
+      if aTimestamp ~= bTimestamp then
+        return aTimestamp > bTimestamp  -- Descending order (most recent first)
+      end
+    elseif aGroup == 2 then
+      -- Available group: sort by level ascending (normal level requirement order)
+      local la = (a.maxLevel ~= nil) and a.maxLevel or 9999
+      local lb = (b.maxLevel ~= nil) and b.maxLevel or 9999
+      if la ~= lb then return la < lb end
+    elseif aGroup == 3 then
+      -- Failed group: sort by failedAt timestamp descending (most recent first)
+      local aId = a.id or (a.Title and a.Title.GetText and a.Title:GetText()) or ""
+      local bId = b.id or (b.Title and b.Title.GetText and b.Title:GetText()) or ""
+      local aFailedAt = (_G.HCA_GetFailureTimestamp and _G.HCA_GetFailureTimestamp(aId)) or 0
+      local bFailedAt = (_G.HCA_GetFailureTimestamp and _G.HCA_GetFailureTimestamp(bId)) or 0
+      if aFailedAt ~= bFailedAt then
+        return aFailedAt > bFailedAt  -- Descending order (most recent first)
+      end
+    end
     
-    -- Fallback by title
+    -- Fallback: stable sort by title/id for ties
     local at = (a.Title and a.Title.GetText and a.Title:GetText()) or (a.id or "")
     local bt = (b.Title and b.Title.GetText and b.Title:GetText()) or (b.id or "")
     return tostring(at) < tostring(bt)
