@@ -138,29 +138,7 @@ local Dungeons = {
     bossOrder = {1696, 1666, 1717, 1663, 1716}
   },
 
-  -- Gnomeregan (Alliance, Level 24-33)
-  {
-    achId = "GNOM",
-    title = DUNGEON_FLOOR_DUNMOROGH10,
-    tooltip = "Defeat the bosses of |cff0091e6"..DUNGEON_FLOOR_DUNMOROGH10.."|r before level 32 (including party members)",
-    icon = 134152,
-    level = 31,
-    points = 10,
-    requiredQuestId = nil,
-    staticPoints = false,
-    requiredMapId = 90,
-    requiredKills = {
-      [7361] = 1,  -- Grubbis
-      [7079] = 1,  -- Viscous Fallout
-      [6235] = 1,  -- Electrocutioner 6000
-      [6229] = 1,  -- Crowd Pummeler 9-60
-      --[6228] = 1,  -- Dark Iron Ambassador
-      [7800] = 1,  -- Mekgineer Thermaplugg
-    },
-    bossOrder = {7361, 7079, 6235, 6229, 7800}
-  },
-
-  -- Razorfen Kraul (Both, Level 25-35)
+    -- Razorfen Kraul (Both, Level 25-35)
   {
     achId = "RFK",
     title = DUNGEON_FLOOR_RAZORFENKRAUL1,
@@ -180,6 +158,28 @@ local Dungeons = {
       [4421] = 1,  -- Charlga Razorflank
     },
     bossOrder = {6168, 4424, 4428, 4420, 4422, 4421}
+  },
+
+  -- Gnomeregan (Alliance, Level 24-33)
+  {
+    achId = "GNOM",
+    title = DUNGEON_FLOOR_DUNMOROGH10,
+    tooltip = "Defeat the bosses of |cff0091e6"..DUNGEON_FLOOR_DUNMOROGH10.."|r before level 33 (including party members)",
+    icon = 134152,
+    level = 32,
+    points = 10,
+    requiredQuestId = nil,
+    staticPoints = false,
+    requiredMapId = 90,
+    requiredKills = {
+      [7361] = 1,  -- Grubbis
+      [7079] = 1,  -- Viscous Fallout
+      [6235] = 1,  -- Electrocutioner 6000
+      [6229] = 1,  -- Crowd Pummeler 9-60
+      --[6228] = 1,  -- Dark Iron Ambassador
+      [7800] = 1,  -- Mekgineer Thermaplugg
+    },
+    bossOrder = {7361, 7079, 6235, 6229, 7800}
   },
 
   -- Scarlet Monastery (Both, Level 28-38)
