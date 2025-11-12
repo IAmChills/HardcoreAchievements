@@ -624,8 +624,17 @@ function M.registerQuestAchievement(cfg)
                 setProg("levelAtKill", killLevel)
                 
                 -- Solo points only apply if player is self-found
+                -- Use stored solo status from combat tracking (more accurate than checking at kill time)
                 local isSelfFound = _G.IsSelfFound and _G.IsSelfFound() or false
-                local isSoloKill = isSelfFound and (_G.PlayerIsSolo and _G.PlayerIsSolo() or false) or false
+                local storedSoloStatus = nil
+                if destGUID and _G.PlayerIsSoloForGUID then
+                    storedSoloStatus = _G.PlayerIsSoloForGUID(destGUID)
+                end
+                -- Fallback to current check if no stored status available
+                local isSoloKill = isSelfFound and (
+                    (storedSoloStatus ~= nil and storedSoloStatus) or
+                    (storedSoloStatus == nil and _G.PlayerIsSolo and _G.PlayerIsSolo() or false)
+                ) or false
                 
                 -- Store points at time of kill if this is the first kill (for solo tracking)
                 if not state.killed then
@@ -673,10 +682,17 @@ function M.registerQuestAchievement(cfg)
             else
                 -- TARGET_NPC_ID: track kill normally (eligible kill)
                 -- Solo points only apply if player is self-found
-                -- Always require PlayerIsSolo check regardless of toggle state
-                -- This validates the kill was actually solo
+                -- Use stored solo status from combat tracking (more accurate than checking at kill time)
                 local isSelfFound = _G.IsSelfFound and _G.IsSelfFound() or false
-                local isSoloKill = isSelfFound and (_G.PlayerIsSolo and _G.PlayerIsSolo() or false) or false
+                local storedSoloStatus = nil
+                if destGUID and _G.PlayerIsSoloForGUID then
+                    storedSoloStatus = _G.PlayerIsSoloForGUID(destGUID)
+                end
+                -- Fallback to current check if no stored status available
+                local isSoloKill = isSelfFound and (
+                    (storedSoloStatus ~= nil and storedSoloStatus) or
+                    (storedSoloStatus == nil and _G.PlayerIsSolo and _G.PlayerIsSolo() or false)
+                ) or false
                 
                 state.killed = true
                 setProg("killed", true)

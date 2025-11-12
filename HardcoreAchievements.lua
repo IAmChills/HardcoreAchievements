@@ -2627,6 +2627,35 @@ do
                         end
                     end
                 end
+                
+                -- Track threat/solo status during combat for tracked NPCs
+                -- This ensures we have solo status available when PARTY_KILL fires
+                if destGUID and sourceGUID == UnitGUID("player") then
+                    local npcId = getNpcIdFromGUID(destGUID)
+                    if npcId then
+                        -- Check if this NPC is tracked by any achievement
+                        local isTracked = false
+                        if AchievementPanel and AchievementPanel.achievements then
+                            for _, row in ipairs(AchievementPanel.achievements) do
+                                if not row.completed and type(row.killTracker) == "function" then
+                                    -- This NPC might be tracked, update solo status during combat
+                                    isTracked = true
+                                    break
+                                end
+                            end
+                        end
+                        
+                        -- Update solo status if this is a tracked NPC and we're in combat
+                        if isTracked and UnitAffectingCombat("player") then
+                            -- Check if this is our current target
+                            if UnitExists("target") and UnitGUID("target") == destGUID then
+                                if _G.PlayerIsSolo_UpdateStatusForGUID then
+                                    _G.PlayerIsSolo_UpdateStatusForGUID(destGUID)
+                                end
+                            end
+                        end
+                    end
+                end
             elseif event == "QUEST_TURNED_IN" then
                 local questID = ...
                 -- Determine the level at turn-in: if player leveled up during turn-in, use the level before
