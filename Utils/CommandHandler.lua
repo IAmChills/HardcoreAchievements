@@ -313,7 +313,7 @@ local function ProcessClearSecretKeyCommand(payload, sender)
         
         if hadKey then
             SendResponseToAdmin(sender, "|cff00ff00[HardcoreAchievements]|r Secret key cleared successfully for " .. currentCharacter)
-            print("|cffff0000[HardcoreAchievements]|r Your admin secret key has been cleared by admin. You will no longer be able to receieve admin commands unless you set another key.")
+            print("|cffff0000[HardcoreAchievements]|r Your admin secret key has been cleared by the admin. This is intentional, to prevent you from receiving admin commands unless you set another key.")
         else
             SendResponseToAdmin(sender, "|cffffff00[HardcoreAchievements]|r Secret key was not set for " .. currentCharacter .. " (already cleared)")
         end
