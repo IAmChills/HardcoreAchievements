@@ -84,7 +84,62 @@ local function CreateSecurePayload(achievementId, targetCharacter, opts)
 		if opts.forceUpdate ~= nil then payload.forceUpdate = opts.forceUpdate and true or false end
 		if opts.overridePoints ~= nil then payload.overridePoints = tonumber(opts.overridePoints) end
 		if opts.overrideLevel ~= nil then payload.overrideLevel = tonumber(opts.overrideLevel) end
+		if opts.commandType ~= nil then payload.commandType = opts.commandType end
 	end
+    
+    -- Create secure hash using secret key
+    payload.validationHash = CreateSecureHash(payload, secretKey)
+    
+    if not payload.validationHash then
+        error("Failed to create secure hash")
+    end
+    
+    return payload
+end
+
+-- SECURITY: Create secure payload for delete achievement command
+local function CreateDeleteAchievementPayload(achievementId, targetCharacter)
+    -- Get secret key from database
+    local secretKey = GetAdminSecretKey()
+    if not secretKey or secretKey == "" then
+        error("Admin secret key not set! Use /hca adminkey set <key> first")
+    end
+    
+    local payload = {
+        version = 2,
+        timestamp = time(),
+        commandType = "delete_achievement",
+        achievementId = achievementId,
+        targetCharacter = targetCharacter,
+        nonce = GenerateNonce(),
+    }
+    
+    -- Create secure hash using secret key
+    payload.validationHash = CreateSecureHash(payload, secretKey)
+    
+    if not payload.validationHash then
+        error("Failed to create secure hash")
+    end
+    
+    return payload
+end
+
+-- SECURITY: Create secure payload for clear secret key command
+local function CreateClearKeyPayload(targetCharacter)
+    -- Get secret key from database
+    local secretKey = GetAdminSecretKey()
+    if not secretKey or secretKey == "" then
+        error("Admin secret key not set! Use /hca adminkey set <key> first")
+    end
+    
+    local payload = {
+        version = 2,
+        timestamp = time(),
+        commandType = "clear_secret_key",
+        targetCharacter = targetCharacter,
+        achievementId = "",  -- Not used for clear key command, but required for hash
+        nonce = GenerateNonce(),
+    }
     
     -- Create secure hash using secret key
     payload.validationHash = CreateSecureHash(payload, secretKey)
@@ -166,12 +221,123 @@ local function SendAdminCommand(achievementId, targetCharacter, forceUpdate, ove
     end
 end
 
+-- SECURITY: Send delete achievement command to target player
+local function SendDeleteAchievementCommand(achievementId, targetCharacter)
+    if not achievementId or not targetCharacter then
+        print("|cffff0000[HardcoreAchievements Admin]|r Invalid achievement ID or character name")
+        return
+    end
+    
+    -- Check if secret key is set
+    local secretKey = GetAdminSecretKey()
+    if not secretKey or secretKey == "" then
+        print("|cffff0000[HardcoreAchievements Admin]|r Admin secret key not set!")
+        print("|cffffff00[HardcoreAchievements Admin]|r Use: /hca adminkey set <your-secret-key-here>")
+        print("|cffffff00[HardcoreAchievements Admin]|r Key must be at least 16 characters long")
+        return
+    end
+    
+    -- Create delete achievement payload
+    local success, payload = pcall(CreateDeleteAchievementPayload, achievementId, targetCharacter)
+    
+    if not success or not payload then
+        print("|cffff0000[HardcoreAchievements Admin]|r Failed to create delete achievement payload: " .. tostring(payload))
+        return
+    end
+    
+    local serializedPayload = AceSerialize:Serialize(payload)
+    
+    if not serializedPayload then
+        print("|cffff0000[HardcoreAchievements Admin]|r Failed to serialize payload")
+        return
+    end
+    
+    -- Send the command via AceComm
+    AceComm:SendCommMessage(COMM_PREFIX, serializedPayload, "WHISPER", targetCharacter)
+    
+    print("|cff00ff00[HardcoreAchievements Admin]|r Sent delete achievement command for '" .. achievementId .. "' to " .. targetCharacter)
+    
+    -- Log the admin action
+    if not HardcoreAchievementsDB then HardcoreAchievementsDB = {} end
+    if not HardcoreAchievementsDB.adminLog then HardcoreAchievementsDB.adminLog = {} end
+    
+    table.insert(HardcoreAchievementsDB.adminLog, {
+        timestamp = time(),
+        commandType = "delete_achievement",
+        achievementId = achievementId,
+        targetCharacter = targetCharacter,
+        adminCharacter = UnitName("player"),
+        nonce = payload.nonce,
+        payloadHash = payload.validationHash
+    })
+    
+    -- Keep only last 100 log entries to prevent database bloat
+    if #HardcoreAchievementsDB.adminLog > 100 then
+        table.remove(HardcoreAchievementsDB.adminLog, 1)
+    end
+end
+
+-- SECURITY: Send clear secret key command to target player
+local function SendClearSecretKeyCommand(targetCharacter)
+    if not targetCharacter or targetCharacter == "" then
+        print("|cffff0000[HardcoreAchievements Admin]|r Invalid character name")
+        return
+    end
+    
+    -- Check if secret key is set
+    local secretKey = GetAdminSecretKey()
+    if not secretKey or secretKey == "" then
+        print("|cffff0000[HardcoreAchievements Admin]|r Admin secret key not set!")
+        print("|cffffff00[HardcoreAchievements Admin]|r Use: /hca adminkey set <your-secret-key-here>")
+        print("|cffffff00[HardcoreAchievements Admin]|r Key must be at least 16 characters long")
+        return
+    end
+    
+    -- Create clear key payload
+    local success, payload = pcall(CreateClearKeyPayload, targetCharacter)
+    
+    if not success or not payload then
+        print("|cffff0000[HardcoreAchievements Admin]|r Failed to create clear key payload: " .. tostring(payload))
+        return
+    end
+    
+    local serializedPayload = AceSerialize:Serialize(payload)
+    
+    if not serializedPayload then
+        print("|cffff0000[HardcoreAchievements Admin]|r Failed to serialize payload")
+        return
+    end
+    
+    -- Send the command via AceComm
+    AceComm:SendCommMessage(COMM_PREFIX, serializedPayload, "WHISPER", targetCharacter)
+    
+    print("|cff00ff00[HardcoreAchievements Admin]|r Sent clear secret key command to " .. targetCharacter)
+    
+    -- Log the admin action
+    if not HardcoreAchievementsDB then HardcoreAchievementsDB = {} end
+    if not HardcoreAchievementsDB.adminLog then HardcoreAchievementsDB.adminLog = {} end
+    
+    table.insert(HardcoreAchievementsDB.adminLog, {
+        timestamp = time(),
+        commandType = "clear_secret_key",
+        targetCharacter = targetCharacter,
+        adminCharacter = UnitName("player"),
+        nonce = payload.nonce,
+        payloadHash = payload.validationHash
+    })
+    
+    -- Keep only last 100 log entries to prevent database bloat
+    if #HardcoreAchievementsDB.adminLog > 100 then
+        table.remove(HardcoreAchievementsDB.adminLog, 1)
+    end
+end
+
 local function CreateAdminPanel()
     if adminFrame then return adminFrame end
     
 	-- Create main frame (use a unique name that doesn't collide with exported table)
 	adminFrame = CreateFrame("Frame", "HardcoreAchievementsAdminPanelFrame", UIParent, "BasicFrameTemplateWithInset")
-    adminFrame:SetSize(400, 350)  -- Increased height to accommodate key status indicator
+    adminFrame:SetSize(400, 400)  -- Increased height to accommodate key status indicator
     adminFrame:SetPoint("CENTER")
     adminFrame:Hide()
 
@@ -195,7 +361,7 @@ local function CreateAdminPanel()
     
     -- SECURITY: Status indicator for secret key
     local keyStatusText = adminFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    keyStatusText:SetPoint("TOP", titleText, "BOTTOM", 0, -5)
+    keyStatusText:SetPoint("TOPLEFT", adminFrame, "TOPLEFT", 10, -30)
     keyStatusText:SetJustifyH("CENTER")
     
     local function UpdateKeyStatus()
@@ -224,7 +390,7 @@ local function CreateAdminPanel()
     
 	-- Achievement selector (scrollable list)
 	local achievementLabel = adminFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-	achievementLabel:SetPoint("TOP", keyStatusText, "BOTTOM", 0, -10)
+	achievementLabel:SetPoint("TOP", titleText, "BOTTOM", 0, -20)
 	achievementLabel:SetText("Achievement")
 
 	local achievementSelectButton = CreateFrame("Button", nil, adminFrame, "UIPanelButtonTemplate")
@@ -270,7 +436,7 @@ local function CreateAdminPanel()
 
 	-- Force update checkbox
 	local forceCheck = CreateFrame("CheckButton", nil, adminFrame, "ChatConfigCheckButtonTemplate")
-	forceCheck:SetPoint("TOP", characterInput, "BOTTOM", 0, -15)
+	forceCheck:SetPoint("TOP", characterInput, "BOTTOM", -175, -15)
 	-- Prevent the template from expanding the clickable area far to the right
 	forceCheck:SetHitRectInsets(0, 0, 0, 0)
 	forceCheck.tooltip = "Override existing completion and update points"
@@ -280,7 +446,7 @@ local function CreateAdminPanel()
 
 	-- Override points input
 	local pointsLabel = adminFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-	pointsLabel:SetPoint("TOP", forceCheck, "BOTTOM", -110, -10)
+	pointsLabel:SetPoint("TOP", forceCheck, "BOTTOM", 80, -10)
 	pointsLabel:SetText("Override Points (optional)")
 
 	local pointsInput = CreateFrame("EditBox", nil, adminFrame, "InputBoxTemplate")
@@ -292,7 +458,7 @@ local function CreateAdminPanel()
 
 	-- Override level input
 	local levelLabel = adminFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-	levelLabel:SetPoint("TOP", forceCheck, "BOTTOM", 100, -10)
+	levelLabel:SetPoint("TOP", forceCheck, "BOTTOM", 275, -10)
 	levelLabel:SetText("Override Level (optional)")
 
 	local levelInput = CreateFrame("EditBox", nil, adminFrame, "InputBoxTemplate")
@@ -304,17 +470,59 @@ local function CreateAdminPanel()
     
     -- Send button
     local sendButton = CreateFrame("Button", nil, adminFrame, "UIPanelButtonTemplate")
-    sendButton:SetPoint("BOTTOM", adminFrame, "BOTTOM", 0, 40)
-    sendButton:SetSize(120, 32)
-    sendButton:SetText("Send Command")
+    sendButton:SetPoint("BOTTOM", adminFrame, "BOTTOM", -110, 20)
+    sendButton:SetSize(100, 32)
+    sendButton:SetText("Send")
+    
+    -- Delete Achievement button
+    local deleteButton = CreateFrame("Button", nil, adminFrame, "UIPanelButtonTemplate")
+    deleteButton:SetPoint("BOTTOM", adminFrame, "BOTTOM", 0, 20)
+    deleteButton:SetSize(100, 32)
+    deleteButton:SetText("Delete")
+    deleteButton:SetNormalFontObject("GameFontNormalSmall")
+    deleteButton:GetFontString():SetTextColor(1, 0.3, 0.3)  -- Red tint to indicate danger
+    
+    -- Tooltip for delete button
+    deleteButton:SetScript("OnEnter", function(self)
+        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+        GameTooltip:SetText("Delete Achievement", 1, 0.3, 0.3)
+        GameTooltip:AddLine("Removes the achievement from the target player's database.", 1, 1, 1, true)
+        GameTooltip:AddLine("This will reset the achievement to its initial state.", 1, 1, 1, true)
+        GameTooltip:AddLine("Use this to correct incorrect completions.", 1, 0.5, 0.5, true)
+        GameTooltip:Show()
+    end)
+    deleteButton:SetScript("OnLeave", function(self)
+        GameTooltip:Hide()
+    end)
+    
+    -- Clear Key button (security feature)
+    local clearKeyButton = CreateFrame("Button", nil, adminFrame, "UIPanelButtonTemplate")
+    clearKeyButton:SetPoint("BOTTOM", adminFrame, "BOTTOM", 110, 20)
+    clearKeyButton:SetSize(100, 32)
+    clearKeyButton:SetText("Clear Key")
+    clearKeyButton:SetNormalFontObject("GameFontNormalSmall")
+    clearKeyButton:GetFontString():SetTextColor(1, 0.5, 0.5)  -- Reddish tint to indicate danger
+    
+    -- Tooltip for clear key button
+    clearKeyButton:SetScript("OnEnter", function(self)
+        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+        GameTooltip:SetText("Clear Secret Key", 1, 1, 1)
+        GameTooltip:AddLine("Remotely clears the secret key for the target player.", 1, 1, 1, true)
+        GameTooltip:AddLine("Use this if you suspect the key has been compromised.", 1, 0.5, 0.5, true)
+        GameTooltip:AddLine("The player will need to set a new key afterward.", 1, 1, 1, true)
+        GameTooltip:Show()
+    end)
+    clearKeyButton:SetScript("OnLeave", function(self)
+        GameTooltip:Hide()
+    end)
     
     -- Status text
     local statusText = adminFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    statusText:SetPoint("BOTTOM", adminFrame, "BOTTOM", 0, -30)
-    statusText:SetSize(360, 60)
+    statusText:SetPoint("BOTTOM", adminFrame, "BOTTOM", 0, 10)
+    statusText:SetSize(360, 100)
     statusText:SetJustifyH("LEFT")
     statusText:SetJustifyV("TOP")
-    statusText:SetText("Select an achievement and enter the target character name, then click Send Command to manually complete the achievement for that player.\n\n|cffff0000Note:|r Admin secret key must be set via /hca adminkey set <key> before sending commands.")
+    statusText:SetText("Select an achievement and enter the target character name.\n|cff00ff00Send Command:|r Completes the achievement.\n|cffff0000Delete:|r Removes the achievement from player's database.\n|cffff0000Clear Key:|r Clears player's secret key if compromised.")
     
     -- Populate achievement dropdown
 	local function PopulateAchievementDropdown()
@@ -490,6 +698,43 @@ local function CreateAdminPanel()
 
             SendAdminCommand(selectedAchievement.achId, characterName, forceUpdate, overridePoints, overrideLevel)
         end)
+        
+        -- Delete Achievement button handler
+        deleteButton:SetScript("OnClick", function()
+            local characterName = characterInput:GetText():trim()
+            if not selectedAchievement then
+                print("|cffff0000[HardcoreAchievements Admin]|r Please select an achievement")
+                return
+            end
+            if not characterName or characterName == "" then
+                print("|cffff0000[HardcoreAchievements Admin]|r Please enter a character name")
+                return
+            end
+            
+            -- Confirm before deleting (store achievement ID and character name in popup data)
+            local popup = StaticPopup_Show("HCA_DELETE_ACHIEVEMENT_CONFIRM", selectedAchievement.achId, characterName)
+            if popup then
+                popup.data = {
+                    achievementId = selectedAchievement.achId,
+                    characterName = characterName
+                }
+            end
+        end)
+        
+        -- Clear Key button handler
+        clearKeyButton:SetScript("OnClick", function()
+            local characterName = characterInput:GetText():trim()
+            if not characterName or characterName == "" then
+                print("|cffff0000[HardcoreAchievements Admin]|r Please enter a character name")
+                return
+            end
+            
+            -- Confirm before clearing (store character name in popup data)
+            local popup = StaticPopup_Show("HCA_CLEAR_KEY_CONFIRM", characterName)
+            if popup then
+                popup.data = characterName
+            end
+        end)
     end
     
     -- Initialize dropdown
@@ -535,6 +780,46 @@ end
 
 -- Register AceComm handler for responses
 AceComm:RegisterComm(RESPONSE_PREFIX, OnResponseReceived)
+
+-- Create confirmation dialog for delete achievement command
+StaticPopupDialogs["HCA_DELETE_ACHIEVEMENT_CONFIRM"] = {
+    text = "Are you sure you want to delete achievement '%s' for %s?\n\nThis will remove the achievement from their database and reset it to its initial state.\n\n|cffff0000This action cannot be undone!|r",
+    button1 = "Yes, Delete",
+    button2 = "Cancel",
+    OnAccept = function(self, data)
+        if data and data.achievementId and data.characterName then
+            SendDeleteAchievementCommand(data.achievementId, data.characterName)
+        end
+    end,
+    OnCancel = function(self, data)
+        -- Do nothing
+    end,
+    timeout = 0,
+    whileDead = true,
+    hideOnEscape = true,
+    preferredIndex = 3,
+    showAlert = true,
+}
+
+-- Create confirmation dialog for clear key command
+StaticPopupDialogs["HCA_CLEAR_KEY_CONFIRM"] = {
+    text = "Are you sure you want to clear the secret key for %s?\n\nThis will prevent them from receiving admin commands until they set a new key.\n\n|cffff0000This action cannot be undone!|r",
+    button1 = "Yes, Clear Key",
+    button2 = "Cancel",
+    OnAccept = function(self, data)
+        if data and data ~= "" then
+            SendClearSecretKeyCommand(data)
+        end
+    end,
+    OnCancel = function(self, data)
+        -- Do nothing
+    end,
+    timeout = 0,
+    whileDead = true,
+    hideOnEscape = true,
+    preferredIndex = 3,
+    showAlert = true,
+}
 
 -- Export functions
 _G.HardcoreAchievementsAdminPanel = AdminPanel

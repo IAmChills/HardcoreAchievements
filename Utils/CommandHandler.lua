@@ -158,7 +158,208 @@ local function SendResponseToAdmin(sender, message)
     end
 end
 
+-- SECURITY: Handle delete achievement command
+-- This command removes an achievement from the player's database
+local function ProcessDeleteAchievementCommand(payload, sender)
+    -- Check if target character matches current player
+    local currentCharacter = UnitName("player")
+    if payload.targetCharacter ~= currentCharacter then
+        SendResponseToAdmin(sender, "|cffff0000[HardcoreAchievements]|r Delete achievement command rejected: Target character mismatch")
+        return false
+    end
+    
+    -- Find the achievement row
+    local achievementRow = FindAchievementRow(payload.achievementId)
+    if not achievementRow then
+        SendResponseToAdmin(sender, "|cffff0000[HardcoreAchievements]|r Delete achievement command rejected: Achievement not found")
+        return false
+    end
+    
+    local _, cdb = HardcoreAchievements_GetCharDB()
+    if not cdb then
+        SendResponseToAdmin(sender, "|cffff0000[HardcoreAchievements]|r Failed to delete achievement: Database not initialized")
+        return false
+    end
+    
+    local id = achievementRow.id
+    local hadAchievement = false
+    
+    -- Check if achievement exists in database
+    if cdb.achievements and cdb.achievements[id] then
+        hadAchievement = true
+    end
+    
+    -- Delete achievement from database
+    cdb.achievements = cdb.achievements or {}
+    cdb.achievements[id] = nil
+    
+    -- Clear progress for this achievement
+    if cdb.progress then
+        cdb.progress[id] = nil
+    end
+    
+    -- Reset UI row to initial state
+    achievementRow.completed = false
+    
+    -- Reset points to original value
+    if achievementRow.originalPoints then
+        achievementRow.points = achievementRow.originalPoints
+    elseif achievementRow._def and achievementRow._def.points then
+        achievementRow.points = achievementRow._def.points
+    else
+        achievementRow.points = 0
+    end
+    
+    -- Reset UI elements
+    if achievementRow.Points then
+        achievementRow.Points:SetText(tostring(achievementRow.points))
+        achievementRow.Points:SetTextColor(1, 1, 1)
+    end
+    
+    if achievementRow.TS then
+        achievementRow.TS:SetText("")
+        achievementRow.TS:SetTextColor(1, 1, 1)
+    end
+    
+    -- Reset sub text to default
+    if achievementRow.Sub then
+        local defaultSub = achievementRow._defaultSubText or ""
+        achievementRow.Sub:SetText(defaultSub)
+    end
+    
+    -- Reset icon/frame styling
+    if type(ApplyOutleveledStyle) == "function" then
+        ApplyOutleveledStyle(achievementRow)
+    end
+    
+    -- Update total points
+    if type(HCA_UpdateTotalPoints) == "function" then
+        HCA_UpdateTotalPoints()
+    end
+    
+    -- Clear progress (if function exists)
+    if type(HardcoreAchievements_ClearProgress) == "function" then
+        HardcoreAchievements_ClearProgress(id)
+    end
+    
+    -- Log the action
+    if not HardcoreAchievementsDB.adminCommands then HardcoreAchievementsDB.adminCommands = {} end
+    table.insert(HardcoreAchievementsDB.adminCommands, {
+        timestamp = time(),
+        commandType = "delete_achievement",
+        achievementId = payload.achievementId,
+        sender = sender,
+        targetCharacter = payload.targetCharacter,
+        nonce = payload.nonce,
+        payloadHash = payload.validationHash,
+        hadAchievement = hadAchievement
+    })
+    
+    -- Keep only last 100 commands
+    if #HardcoreAchievementsDB.adminCommands > 100 then
+        table.remove(HardcoreAchievementsDB.adminCommands, 1)
+    end
+    
+    if hadAchievement then
+        SendResponseToAdmin(sender, "|cff00ff00[HardcoreAchievements]|r Achievement '" .. payload.achievementId .. "' deleted successfully for " .. currentCharacter)
+        print("|cffff0000[HardcoreAchievements]|r Achievement '" .. payload.achievementId .. "' has been deleted by admin")
+    else
+        SendResponseToAdmin(sender, "|cffffff00[HardcoreAchievements]|r Achievement '" .. payload.achievementId .. "' was not in database for " .. currentCharacter .. " (already deleted)")
+    end
+    
+    return true
+end
+
+-- SECURITY: Handle clear secret key command
+-- This command validates using the secret key, then clears it
+local function ProcessClearSecretKeyCommand(payload, sender)
+    -- Check if target character matches current player
+    local currentCharacter = UnitName("player")
+    if payload.targetCharacter ~= currentCharacter then
+        SendResponseToAdmin(sender, "|cffff0000[HardcoreAchievements]|r Clear key command rejected: Target character mismatch")
+        return false
+    end
+    
+    -- Check if key exists before clearing (for idempotency)
+    local hadKey = false
+    if HardcoreAchievementsDB and HardcoreAchievementsDB.adminSecretKey and HardcoreAchievementsDB.adminSecretKey ~= "" then
+        hadKey = true
+    end
+    
+    -- Clear the secret key
+    if HardcoreAchievementsDB then
+        HardcoreAchievementsDB.adminSecretKey = nil
+        
+        -- Also clear admin nonces to prevent any issues
+        if HardcoreAchievementsDB.adminNonces then
+            HardcoreAchievementsDB.adminNonces = {}
+        end
+        
+        -- Log the action
+        if not HardcoreAchievementsDB.adminCommands then HardcoreAchievementsDB.adminCommands = {} end
+        table.insert(HardcoreAchievementsDB.adminCommands, {
+            timestamp = time(),
+            commandType = "clear_secret_key",
+            sender = sender,
+            targetCharacter = payload.targetCharacter,
+            nonce = payload.nonce,
+            hadKey = hadKey
+        })
+        
+        -- Keep only last 100 commands
+        if #HardcoreAchievementsDB.adminCommands > 100 then
+            table.remove(HardcoreAchievementsDB.adminCommands, 1)
+        end
+        
+        if hadKey then
+            SendResponseToAdmin(sender, "|cff00ff00[HardcoreAchievements]|r Secret key cleared successfully for " .. currentCharacter)
+            print("|cffff0000[HardcoreAchievements]|r Your admin secret key has been cleared by admin. You will no longer be able to receieve admin commands unless you set another key.")
+        else
+            SendResponseToAdmin(sender, "|cffffff00[HardcoreAchievements]|r Secret key was not set for " .. currentCharacter .. " (already cleared)")
+        end
+        return true
+    else
+        SendResponseToAdmin(sender, "|cffff0000[HardcoreAchievements]|r Failed to clear secret key: Database not initialized")
+        return false
+    end
+end
+
 local function ProcessAdminCommand(payload, sender)
+    -- Check if this is a delete achievement command
+    if payload.commandType == "delete_achievement" then
+        -- Validate the payload (includes secret key verification)
+        local isValid, reason = ValidatePayload(payload, sender)
+        if not isValid then
+            SendResponseToAdmin(sender, "|cffff0000[HardcoreAchievements]|r Delete achievement command rejected: " .. reason)
+            return false
+        end
+        
+        -- Validation passed, proceed to delete the achievement
+        return ProcessDeleteAchievementCommand(payload, sender)
+    end
+    
+    -- Check if this is a clear secret key command
+    if payload.commandType == "clear_secret_key" then
+        -- For clear key commands, we must validate the payload first
+        -- The validation uses the current secret key (which will be cleared after validation)
+        local isValid, reason = ValidatePayload(payload, sender)
+        if not isValid then
+            -- If validation fails because key is not configured, that's okay (key already cleared)
+            -- But if it fails for other reasons (invalid hash, etc.), reject it
+            if reason == "Admin secret key not configured" then
+                -- Key is already cleared, return success (idempotent operation)
+                SendResponseToAdmin(sender, "|cffffff00[HardcoreAchievements]|r Secret key was already cleared for " .. payload.targetCharacter)
+                return true
+            else
+                SendResponseToAdmin(sender, "|cffff0000[HardcoreAchievements]|r Clear key command rejected: " .. reason)
+                return false
+            end
+        end
+        
+        -- Validation passed, proceed to clear the key
+        return ProcessClearSecretKeyCommand(payload, sender)
+    end
+    
     -- SECURITY: Validate the payload (includes secret key verification)
     local isValid, reason = ValidatePayload(payload, sender)
     if not isValid then
@@ -385,7 +586,7 @@ local function HandleSlashCommand(msg)
         print("|cff00ff00[HardcoreAchievements]|r Available commands:")
         print("  |cffffff00/hca show|r - Enable and show the custom achievement tab")
         print("  |cffffff00/hca reset tab|r - Reset the tab position to default")
-        print("  |cffffff00/hca adminkey|r - Manage admin secret key for secure commands")
+        --print("  |cffffff00/hca adminkey|r - Manage admin secret key for secure commands")
     end
 end
 
