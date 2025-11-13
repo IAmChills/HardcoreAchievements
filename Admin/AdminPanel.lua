@@ -446,7 +446,7 @@ local function CreateAdminPanel()
 
 	-- Override points input
 	local pointsLabel = adminFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-	pointsLabel:SetPoint("TOP", forceCheck, "BOTTOM", 80, -10)
+	pointsLabel:SetPoint("TOP", forceCheck, "BOTTOM", 80, -30)
 	pointsLabel:SetText("Override Points (optional)")
 
 	local pointsInput = CreateFrame("EditBox", nil, adminFrame, "InputBoxTemplate")
@@ -458,7 +458,7 @@ local function CreateAdminPanel()
 
 	-- Override level input
 	local levelLabel = adminFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-	levelLabel:SetPoint("TOP", forceCheck, "BOTTOM", 275, -10)
+	levelLabel:SetPoint("TOP", forceCheck, "BOTTOM", 275, -30)
 	levelLabel:SetText("Override Level (optional)")
 
 	local levelInput = CreateFrame("EditBox", nil, adminFrame, "InputBoxTemplate")
@@ -470,13 +470,13 @@ local function CreateAdminPanel()
     
     -- Send button
     local sendButton = CreateFrame("Button", nil, adminFrame, "UIPanelButtonTemplate")
-    sendButton:SetPoint("BOTTOM", adminFrame, "BOTTOM", -110, 20)
+    sendButton:SetPoint("BOTTOM", adminFrame, "BOTTOM", -110, 75)
     sendButton:SetSize(100, 32)
     sendButton:SetText("Send")
     
     -- Delete Achievement button
     local deleteButton = CreateFrame("Button", nil, adminFrame, "UIPanelButtonTemplate")
-    deleteButton:SetPoint("BOTTOM", adminFrame, "BOTTOM", 0, 20)
+    deleteButton:SetPoint("BOTTOM", adminFrame, "BOTTOM", 0, 75)
     deleteButton:SetSize(100, 32)
     deleteButton:SetText("Delete")
     deleteButton:SetNormalFontObject("GameFontNormalSmall")
@@ -497,7 +497,7 @@ local function CreateAdminPanel()
     
     -- Clear Key button (security feature)
     local clearKeyButton = CreateFrame("Button", nil, adminFrame, "UIPanelButtonTemplate")
-    clearKeyButton:SetPoint("BOTTOM", adminFrame, "BOTTOM", 110, 20)
+    clearKeyButton:SetPoint("BOTTOM", adminFrame, "BOTTOM", 110, 75)
     clearKeyButton:SetSize(100, 32)
     clearKeyButton:SetText("Clear Key")
     clearKeyButton:SetNormalFontObject("GameFontNormalSmall")
@@ -518,7 +518,7 @@ local function CreateAdminPanel()
     
     -- Status text
     local statusText = adminFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    statusText:SetPoint("BOTTOM", adminFrame, "BOTTOM", 0, 10)
+    statusText:SetPoint("BOTTOM", adminFrame, "BOTTOM", 0, -50)
     statusText:SetSize(360, 100)
     statusText:SetJustifyH("LEFT")
     statusText:SetJustifyV("TOP")
