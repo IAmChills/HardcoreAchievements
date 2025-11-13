@@ -13,3 +13,4 @@ Bugs
 Helpful code
 |c" .. select(4, GetClassColor(select(2, UnitClass("player")))) .. "TEXTHERE|r
 /script print (UnitGroupRolesAssigned('player'))
+if event == "ADDON_LOADED" and select(1, ...) == "UltraHardcore" then -- Does not work :(

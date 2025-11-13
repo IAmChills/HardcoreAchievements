@@ -108,7 +108,7 @@ local Dungeons = {
       [4831] = 1,  -- Lady Sarevess
       [6243] = 1,  -- Gelihast
       [12902] = 1, -- Lorgus Jett
-      --[12876] = 1, -- Baron Aquanis
+      --[12876] = 1, -- Baron Aquanis (Horde only quest)
       [4832] = 1,  -- Twilight Lord Kelris
       [4830] = 1,  -- Old Serra'kis
       [4829] = 1,  -- Aku'mai
@@ -138,7 +138,7 @@ local Dungeons = {
     bossOrder = {1696, 1666, 1717, 1663, 1716}
   },
 
-    -- Razorfen Kraul (Both, Level 25-35)
+  -- Razorfen Kraul (Both, Level 25-35)
   {
     achId = "RFK",
     title = DUNGEON_FLOOR_RAZORFENKRAUL1,
@@ -150,7 +150,7 @@ local Dungeons = {
     staticPoints = false,
     requiredMapId = 47,
     requiredKills = {
-      [6168] = 1,  -- Roogug
+      [6168] = 1,  -- Roogug (No one does this boss, left side)
       [4424] = 1,  -- Aggem Thorncurse
       [4428] = 1,  -- Death Speaker Jargba
       [4420] = 1,  -- Overlord Ramtusk
