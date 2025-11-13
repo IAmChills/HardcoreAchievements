@@ -1,16 +1,31 @@
-Arc Challenges
-- Unholy
-- Bloodbath
-- Assassin
-- etc
+TODO LIST
+=========
 
-New Achievements
-- No profession achievement for all points
+1. Order same date achievements by level ascending
 
-Bugs
-- Achievement count is using total and not filtered for leaderboard
+2. Ensure pending turn-ins do not get marked as failed if over-leveled
 
-Helpful code
-|c" .. select(4, GetClassColor(select(2, UnitClass("player")))) .. "TEXTHERE|r
-/script print (UnitGroupRolesAssigned('player'))
-if event == "ADDON_LOADED" and select(1, ...) == "UltraHardcore" then -- Does not work :(
+3. Arc Challenges
+   - Unholy
+   - Bloodbath
+   - Assassin
+   - etc.
+
+4. New Achievements
+   - No profession achievement for all points
+
+5. [Reserved]
+
+6. Bugs
+   - 
+
+7. Helpful Code Snippets
+   ---------------------
+   -- Class-colored text
+   |c" .. select(4, GetClassColor(select(2, UnitClass("player")))) .. "TEXTHERE|r
+   
+   -- Print player's assigned group role
+   /script print(UnitGroupRolesAssigned('player'))
+   
+   -- Check if UltraHardcore addon is loaded (Does not work)
+   if event == "ADDON_LOADED" and select(1, ...) == "UltraHardcore" then
