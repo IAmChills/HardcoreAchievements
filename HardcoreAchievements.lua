@@ -222,6 +222,42 @@ end
 local function IsRowOutleveled(row)
     if not row or row.completed then return false end
     if not row.maxLevel then return false end
+    
+    -- Check if there's pending turn-in progress (kill completed but quest not turned in)
+    -- If so, don't mark as outleveled - player can still complete it
+    if row.questTracker and (row.killTracker or row.requiredKills) then
+        -- Achievement requires both kill and quest
+        local progress = HardcoreAchievements_GetProgress and HardcoreAchievements_GetProgress(row.id)
+        if progress then
+            local hasKill = false
+            if row.requiredKills then
+                -- Check if all required kills are satisfied
+                if progress.eligibleCounts then
+                    local allSatisfied = true
+                    for npcId, requiredCount in pairs(row.requiredKills) do
+                        local idNum = tonumber(npcId) or npcId
+                        local current = progress.eligibleCounts[idNum] or progress.eligibleCounts[tostring(idNum)] or 0
+                        local required = tonumber(requiredCount) or 1
+                        if current < required then
+                            allSatisfied = false
+                            break
+                        end
+                    end
+                    hasKill = allSatisfied
+                end
+            else
+                -- Single kill achievement
+                hasKill = progress.killed or false
+            end
+            
+            local questNotTurnedIn = not progress.quest
+            -- If kills are satisfied but quest is not turned in, keep achievement available
+            if hasKill and questNotTurnedIn then
+                return false
+            end
+        end
+    end
+    
     local lvl = UnitLevel("player") or 1
     return lvl > row.maxLevel
 end
@@ -427,6 +463,12 @@ local function SortAchievementRows()
             if aTimestamp ~= bTimestamp then
                 return aTimestamp > bTimestamp  -- Descending order (most recent first)
             end
+            -- Tiebreaker: sort by level ascending when dates match
+            local la = (a.maxLevel ~= nil) and a.maxLevel or 9999
+            local lb = (b.maxLevel ~= nil) and b.maxLevel or 9999
+            if la ~= lb then
+                return la < lb  -- Ascending order (lower level first)
+            end
         elseif aGroup == 2 then
             -- Available group: sort by level ascending (normal level requirement order)
             -- Treat uncapped (nil) maxLevel as very large so they sort to the bottom
@@ -445,6 +487,12 @@ local function SortAchievementRows()
             local bFailedAt = GetFailureTimestamp(bId) or 0
             if aFailedAt ~= bFailedAt then
                 return aFailedAt > bFailedAt  -- Descending order (most recent first)
+            end
+            -- Tiebreaker: sort by level ascending when dates match
+            local la = (a.maxLevel ~= nil) and a.maxLevel or 9999
+            local lb = (b.maxLevel ~= nil) and b.maxLevel or 9999
+            if la ~= lb then
+                return la < lb  -- Ascending order (lower level first)
             end
         end
         
