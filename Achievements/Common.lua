@@ -480,6 +480,40 @@ function M.registerQuestAchievement(cfg)
                 end
             end
         end
+        -- Check if we have kills satisfied but quest is pending (restore "Pending Turn-in" status)
+        -- This handles the case where NPC is killed before quest is obtained
+        if not state.completed and REQUIRED_QUEST_ID and (TARGET_NPC_ID or REQUIRED_KILLS) then
+            local killsOk = false
+            if REQUIRED_KILLS then
+                killsOk = countsSatisfied()
+            else
+                killsOk = state.killed or (p and p.killed) or false
+            end
+            local questNotTurnedIn = not state.quest and not (p and p.quest)
+            -- Only show "Pending Turn-in" if kills are satisfied, quest is not turned in, and no ineligible kill
+            if killsOk and questNotTurnedIn and not (p and p.ineligibleKill) then
+                if AchievementPanel and AchievementPanel.achievements then
+                    for _, row in ipairs(AchievementPanel.achievements) do
+                        if row.id == ACH_ID and not row.completed then
+                            local isSelfFound = _G.IsSelfFound and _G.IsSelfFound() or false
+                            local progress = HardcoreAchievements_GetProgress and HardcoreAchievements_GetProgress(ACH_ID)
+                            local hasSoloStatus = progress and (progress.soloKill or progress.soloQuest)
+                            if _G.HCA_SetStatusTextOnRow then
+                                _G.HCA_SetStatusTextOnRow(row, {
+                                    completed = false,
+                                    hasSoloStatus = hasSoloStatus,
+                                    requiresBoth = true,
+                                    killsSatisfied = true,
+                                    isSelfFound = isSelfFound,
+                                    maxLevel = row.maxLevel
+                                })
+                            end
+                            break
+                        end
+                    end
+                end
+            end
+        end
         checkComplete()
     end
 
@@ -636,43 +670,97 @@ function M.registerQuestAchievement(cfg)
                     (storedSoloStatus == nil and _G.PlayerIsSolo and _G.PlayerIsSolo() or false)
                 ) or false
                 
-                -- Store points at time of kill if this is the first kill (for solo tracking)
+                -- Mark as killed (allows re-killing to update solo status and points)
                 if not state.killed then
                     state.killed = true
-                    if AchievementPanel and AchievementPanel.achievements then
-                        for _, row in ipairs(AchievementPanel.achievements) do
-                            if row.id == ACH_ID and row.points then
-                                -- Get the original base points (before preview doubling or self-found bonus)
-                                local currentPoints = tonumber(row.points) or 0
-                                local isSelfFound = _G.IsSelfFound and _G.IsSelfFound() or false
-                                local isSoloMode = _G.HardcoreAchievements_IsSoloModeEnabled and _G.HardcoreAchievements_IsSoloModeEnabled() or false
-                                
-                                local basePoints = currentPoints
-                                if isSelfFound and not row.isSecretAchievement then
-                                    basePoints = basePoints - HCA_SELF_FOUND_BONUS
+                end
+                
+                -- Always update points and solo status on kill (allows re-killing to upgrade from non-solo to solo)
+                if AchievementPanel and AchievementPanel.achievements then
+                    for _, row in ipairs(AchievementPanel.achievements) do
+                        if row.id == ACH_ID and row.points then
+                            -- Get the original base points (before preview doubling or self-found bonus)
+                            local currentPoints = tonumber(row.points) or 0
+                            local isSelfFound = _G.IsSelfFound and _G.IsSelfFound() or false
+                            local isSoloMode = _G.HardcoreAchievements_IsSoloModeEnabled and _G.HardcoreAchievements_IsSoloModeEnabled() or false
+                            
+                            -- Always recalculate base points from originalPoints if available, or from current points
+                            local basePoints = currentPoints
+                            if isSelfFound and not row.isSecretAchievement then
+                                basePoints = basePoints - HCA_SELF_FOUND_BONUS
+                            end
+                            if row.originalPoints then
+                                -- Use stored original points and apply current preset multiplier
+                                basePoints = tonumber(row.originalPoints) or basePoints
+                                if not row.staticPoints then
+                                    local preset = _G.GetPlayerPresetFromSettings and _G.GetPlayerPresetFromSettings() or nil
+                                    local multiplier = _G.GetPresetMultiplier and _G.GetPresetMultiplier(preset) or 1.0
+                                    basePoints = basePoints + math.floor((basePoints) * (multiplier - 1) + 0.5)
                                 end
-                                if row.originalPoints then
-                                    basePoints = tonumber(row.originalPoints) or basePoints
-                                    if not row.staticPoints then
-                                        local preset = _G.GetPlayerPresetFromSettings and _G.GetPlayerPresetFromSettings() or nil
-                                        local multiplier = _G.GetPresetMultiplier and _G.GetPresetMultiplier(preset) or 1.0
-                                        basePoints = basePoints + math.floor((basePoints) * (multiplier - 1) + 0.5)
-                                    end
-                                elseif isSoloMode and row.allowSoloDouble and not row.staticPoints then
-                                    local progress = HardcoreAchievements_GetProgress and HardcoreAchievements_GetProgress(ACH_ID)
-                                    if not (progress and progress.pointsAtKill) then
+                            elseif isSoloMode and row.allowSoloDouble and not row.staticPoints then
+                                -- Points might have been doubled by preview, divide by 2 to get base
+                                -- Check if we have a stored pointsAtKill that was already doubled (solo kill)
+                                local progress = HardcoreAchievements_GetProgress and HardcoreAchievements_GetProgress(ACH_ID)
+                                local storedPointsAtKill = progress and progress.pointsAtKill
+                                if storedPointsAtKill then
+                                    -- If stored points are doubled (solo), divide by 2 to get base
+                                    -- Otherwise use current points (might already be base)
+                                    local storedSolo = progress and progress.soloKill
+                                    if storedSolo then
+                                        basePoints = math.floor(tonumber(storedPointsAtKill) / 2 + 0.5)
+                                    else
                                         basePoints = math.floor(basePoints / 2 + 0.5)
                                     end
+                                else
+                                    basePoints = math.floor(basePoints / 2 + 0.5)
                                 end
-                                
-                                local pointsToStore = basePoints
-                                if isSoloKill then
-                                    pointsToStore = basePoints * 2
-                                    setProg("soloKill", true)
-                                end
-                                setProg("pointsAtKill", pointsToStore)
-                                break
                             end
+                            
+                            -- Check existing progress to preserve solo status and only upgrade points
+                            local progress = HardcoreAchievements_GetProgress and HardcoreAchievements_GetProgress(ACH_ID)
+                            local existingSoloKill = progress and progress.soloKill or false
+                            local existingPointsAtKill = progress and progress.pointsAtKill
+                            
+                            local pointsToStore = basePoints
+                            if isSoloKill then
+                                pointsToStore = basePoints * 2
+                            end
+                            
+                            -- Never overwrite soloKill = true with false
+                            local shouldUpdateSoloKill = true
+                            local shouldUpdatePoints = true
+                            
+                            if existingSoloKill and not isSoloKill then
+                                -- Existing is solo, new is non-solo - preserve solo status and never update points
+                                shouldUpdateSoloKill = false
+                                shouldUpdatePoints = false
+                            elseif existingPointsAtKill then
+                                -- Calculate base points for comparison (always compare base to base)
+                                local existingBasePoints = existingSoloKill and math.floor(tonumber(existingPointsAtKill) / 2 + 0.5) or tonumber(existingPointsAtKill)
+                                local newBasePoints = basePoints
+                                
+                                -- Check if we're upgrading from non-solo to solo
+                                local isUpgradingToSolo = not existingSoloKill and isSoloKill
+                                
+                                -- Only update if new base points are higher, OR if upgrading to solo (even with same base points)
+                                -- Solo status rules:
+                                -- - false -> false: OK if points higher
+                                -- - false -> true: Always update (solo upgrade, even if base points same)
+                                -- - true -> true: OK if points higher
+                                -- - true -> false: Never (handled above)
+                                if not isUpgradingToSolo and newBasePoints <= existingBasePoints then
+                                    shouldUpdatePoints = false
+                                end
+                            end
+                            
+                            if shouldUpdatePoints then
+                                setProg("pointsAtKill", pointsToStore)
+                            end
+                            
+                            if shouldUpdateSoloKill then
+                                setProg("soloKill", isSoloKill)
+                            end
+                            break
                         end
                     end
                 end
@@ -713,17 +801,14 @@ function M.registerQuestAchievement(cfg)
                             local isSelfFound = _G.IsSelfFound and _G.IsSelfFound() or false
                             local isSoloMode = _G.HardcoreAchievements_IsSoloModeEnabled and _G.HardcoreAchievements_IsSoloModeEnabled() or false
                             
-                            -- Detect if points have been doubled by preview toggle
+                            -- Always recalculate base points from originalPoints if available, or from current points
                             local basePoints = currentPoints
                             if isSelfFound and not row.isSecretAchievement then
                                 basePoints = basePoints - HCA_SELF_FOUND_BONUS
                             end
-                            -- If solo mode toggle is on and row.allowSoloDouble, the points might be doubled
-                            -- Use originalPoints if available, otherwise divide by 2 if doubled
                             if row.originalPoints then
-                                -- Use stored original points
+                                -- Use stored original points and apply current preset multiplier
                                 basePoints = tonumber(row.originalPoints) or basePoints
-                                -- Apply multiplier if not static
                                 if not row.staticPoints then
                                     local preset = _G.GetPlayerPresetFromSettings and _G.GetPlayerPresetFromSettings() or nil
                                     local multiplier = _G.GetPresetMultiplier and _G.GetPresetMultiplier(preset) or 1.0
@@ -731,18 +816,77 @@ function M.registerQuestAchievement(cfg)
                                 end
                             elseif isSoloMode and row.allowSoloDouble and not row.staticPoints then
                                 -- Points might have been doubled by preview, divide by 2 to get base
+                                -- Check if we have a stored pointsAtKill that was already doubled (solo kill)
                                 local progress = HardcoreAchievements_GetProgress and HardcoreAchievements_GetProgress(ACH_ID)
-                                if not (progress and progress.pointsAtKill) then
+                                local storedPointsAtKill = progress and progress.pointsAtKill
+                                if storedPointsAtKill then
+                                    -- If stored points are doubled (solo), divide by 2 to get base
+                                    -- Otherwise use current points (might already be base)
+                                    local storedSolo = progress and progress.soloKill
+                                    if storedSolo then
+                                        basePoints = math.floor(tonumber(storedPointsAtKill) / 2 + 0.5)
+                                    else
+                                        basePoints = math.floor(basePoints / 2 + 0.5)
+                                    end
+                                else
                                     basePoints = math.floor(basePoints / 2 + 0.5)
                                 end
                             end
+                            
+                            -- Check existing progress to preserve solo status and only upgrade points
+                            local progress = HardcoreAchievements_GetProgress and HardcoreAchievements_GetProgress(ACH_ID)
+                            local existingSoloKill = progress and progress.soloKill or false
+                            local existingPointsAtKill = progress and progress.pointsAtKill
                             
                             local pointsToStore = basePoints
                             -- If solo kill, store doubled points; otherwise store regular points
                             if isSoloKill then
                                 pointsToStore = basePoints * 2
+                            end
+                            
+                            -- Never overwrite soloKill = true with false
+                            local shouldUpdateSoloKill = true
+                            local shouldUpdatePoints = true
+                            
+                            if existingSoloKill and not isSoloKill then
+                                -- Existing is solo, new is non-solo - preserve solo status and never update points
+                                shouldUpdateSoloKill = false
+                                shouldUpdatePoints = false
+                            elseif existingPointsAtKill then
+                                -- Calculate base points for comparison (always compare base to base)
+                                local existingBasePoints = existingSoloKill and math.floor(tonumber(existingPointsAtKill) / 2 + 0.5) or tonumber(existingPointsAtKill)
+                                local newBasePoints = basePoints
+                                
+                                -- Check if we're upgrading from non-solo to solo
+                                local isUpgradingToSolo = not existingSoloKill and isSoloKill
+                                
+                                -- Only update if new base points are higher, OR if upgrading to solo (even with same base points)
+                                -- Solo status rules:
+                                -- - false -> false: OK if points higher
+                                -- - false -> true: Always update (solo upgrade, even if base points same)
+                                -- - true -> true: OK if points higher
+                                -- - true -> false: Never (handled above)
+                                if not isUpgradingToSolo and newBasePoints <= existingBasePoints then
+                                    shouldUpdatePoints = false
+                                end
+                            end
+                            
+                            -- Use the preserved solo status for display and UI updates
+                            local effectiveSoloKill = shouldUpdateSoloKill and isSoloKill or existingSoloKill
+                            local effectivePoints = shouldUpdatePoints and pointsToStore or (existingPointsAtKill and tonumber(existingPointsAtKill) or pointsToStore)
+                            
+                            if shouldUpdatePoints then
+                                setProg("pointsAtKill", pointsToStore)
+                            end
+                            
+                            if shouldUpdateSoloKill then
+                                setProg("soloKill", isSoloKill)
+                            end
+                            
+                            -- Update UI display with effective values
+                            if effectiveSoloKill then
                                 -- Update points display to show doubled value (including self-found bonus for display)
-                                local displayPoints = pointsToStore
+                                local displayPoints = effectivePoints
                                 if isSelfFound and not row.isSecretAchievement then
                                     displayPoints = displayPoints + HCA_SELF_FOUND_BONUS
                                 end
@@ -775,9 +919,6 @@ function M.registerQuestAchievement(cfg)
                                     })
                                 end
                             end
-                            setProg("pointsAtKill", pointsToStore)
-                            -- Also store solo status for later reference
-                            setProg("soloKill", isSoloKill)
                             break
                         end
                     end

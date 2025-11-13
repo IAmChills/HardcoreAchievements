@@ -749,7 +749,7 @@ local Achievements = {
 
         local _, _, _, _, _, npcIdStr = strsplit("-", targetGuid)
         local npcId = npcIdStr and tonumber(npcIdStr) or nil
-        return npcId == 1680
+        return npcId == 4950
     end,
     secret = true,
     secreTitle = "Secret Achievement",

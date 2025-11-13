@@ -130,7 +130,16 @@ function RefreshAllAchievementPoints()
                     end
                     
                     local playerLevel = UnitLevel("player") or 1
-                    local isOutleveled = (not row.completed) and row.maxLevel and (playerLevel > row.maxLevel) or false
+                    local isOutleveled = false
+                    -- Check if player is over level, but don't mark as outleveled if there's pending turn-in
+                    if (not row.completed) and row.maxLevel and (playerLevel > row.maxLevel) then
+                        -- If kills are satisfied but quest is not turned in, keep achievement available
+                        if killsSatisfied then
+                            isOutleveled = false
+                        else
+                            isOutleveled = true
+                        end
+                    end
 
                     _G.HCA_SetStatusTextOnRow(row, {
                         completed = row.completed or false,
@@ -154,7 +163,7 @@ function RefreshAllAchievementPoints()
                     -- Fallback if helper not available
                     if hasIneligibleKill then
                         local requiresBoth = row.questTracker and row.killTracker
-                        local message = requiresBoth and "|c" .. select(4, GetClassColor(select(2, UnitClass("player")))) .. "Pending Turn-in (ineligible kill)|r" or "|cffcf7171Ineligible Kill|r"
+                        local message = requiresBoth and "|cffff4646Pending Turn-in (ineligible kill)|r" or "|cffcf7171Ineligible Kill|r"
                         row.Sub:SetText(levelText .. "\n" .. message)
                     elseif hasSoloStatus and isSelfFound then
                         row.Sub:SetText(levelText .. "\n|cFFac81d6Pending solo|r")
