@@ -4,6 +4,10 @@
 
 **Hardcore Achievements** is a comprehensive WoW Classic addon designed specifically for the fearless Hardcore community. Track your most grueling accomplishments, celebrate your survival milestones, and prove your mettle in the unforgiving world of Azeroth!
 
+## Companion Addons
+<a href="https://www.curseforge.com/wow/addons/ultra-hardcore" target="_blank" rel="nofollow">Ultra Hardcore</a></div>
+<a href="https://www.curseforge.com/wow/addons/ultra-hardcore-leaderboard-by-chills" target="_blank" rel="nofollow">Ultra Hardcore Leaderboard</a></div>
+
 ## Features
 
 ### **Achievement System**
@@ -40,21 +44,21 @@
 - **"Hogger? Never Heard of Her"**: Defeat Hogger and complete the wanted quest before level 12
 - **"Four Candles"**: Light all four candles in Blackfathom Deeps in a single combat
 - **"It's Been Sixty Years..."**: Reach level 60 without dying
-- **"Claw of the Wilds"**: Defeat Rageclaw and complete Druid of the Claw before level 10
+- **"Blackrock Depths"**: Defeat the bosses of Blackrock Depths before level 59 (including party members)
 
 ## Technical Details
 
 - **Interface Version**: 11508 (WoW Classic compatible)
 - **Dependencies**: Ace3 libraries (AceComm, AceSerializer)
 - **Integration**: UltraHardcore addon compatibility
-- **Database**: Persistent achievement tracking across sessions
+- **Database**: Persistent achievement tracking across sessions on the same computer
 - **Performance**: Lightweight and optimized for smooth gameplay
 
 ## Future Features
 
 - **More Achievements**: Additional challenges and milestones
-- **Achievement Sharing**: Seeing what achievements other players have unlocked
-- **Statistics**: Detailed achievement statistics and analytics
+- **Achievement Sharing**: Seeing what achievements other players have unlocked by linking them in chat or inspecting other players
+- **Statistics**: Detailed achievement statistics and analytics with it's companion addons Ulra Hardcore Leaderboard and Ultra Hardcore
 
 ---
 
