@@ -182,6 +182,27 @@ local Dungeons = {
     bossOrder = {7361, 7079, 6235, 6229, 7800}
   },
 
+  --  -- The Stockade (Alliance, Level 22-30)
+  --  {
+  --   achId = "CurseOfDuskwood",
+  --   title = "The Curse of Duskwood",
+  --   tooltip = "Defeat the enemies of |cff0091e6Duskwood|r before level 36 (including party members)",
+  --   icon = 236757,
+  --   level = 35,
+  --   points = 10,
+  --   requiredQuestId = nil,
+  --   staticPoints = false,
+  --   requiredMapId = nil,
+  --   faction = FACTION_ALLIANCE,
+  --   requiredKills = {
+  --     [1200] = 1,  -- Morbent Fel
+  --     [314] = 1,  -- Eliza
+  --     [522] = 1,  -- Mor'Ladim
+  --     [412] = 1,  -- Stitches
+  --   },
+  --   bossOrder = {1200, 314, 522, 412}
+  -- },
+
   -- Scarlet Monastery (Both, Level 28-38)
   {
     achId = "SM",
