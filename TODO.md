@@ -2,10 +2,6 @@
 
 ## Active Tasks
 
-- [ ] Colonel Kurzen (202)
-- [ ] Morbent Fel (55)
-- [ ] Bridge of the Embalmer [Eliza] (253)
-
 - [ ] Arc Challenges
   - [ ] Unholy
   - [ ] Bloodbath

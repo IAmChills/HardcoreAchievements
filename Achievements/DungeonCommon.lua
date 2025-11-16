@@ -68,6 +68,10 @@ function DungeonCommon.registerDungeonAchievement(def)
   end
 
   local function IsOnRequiredMap()
+    -- If no map restriction, allow anywhere
+    if requiredMapId == nil then
+      return true
+    end
     local mapId = select(8, GetInstanceInfo())
     return mapId == requiredMapId
   end
@@ -289,7 +293,11 @@ function DungeonCommon.registerDungeonAchievement(def)
       [10507] = "The Ravenian",
       [10504] = "Lord Alexei Barov",
       [10502] = "Lady Illucia Barov",
-      [1853] = "Darkmaster Gandling"
+      [1853] = "Darkmaster Gandling",
+      -- [1200] = "Morbent Fel", -- Duskwood Achievement
+      -- [314] = "Eliza", -- Duskwood Achievement
+      -- [522] = "Mor'Ladim", -- Duskwood Achievement
+      -- [412] = "Stitches", -- Duskwood Achievement
     }
     return bossNames[npcId] or ("Boss " .. npcId)
   end
