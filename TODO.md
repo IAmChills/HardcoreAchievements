@@ -35,3 +35,9 @@ if event == "ADDON_LOADED" and select(1, ...) == "UltraHardcore" then
 ```lua
 /run HardcoreAchievementsDB.chars[UnitGUID("player")].progress["Test3"] = nil; ReloadUI()
 ```
+
+## TBC Brainstorm
+
+- [ ] Dungeons before specific level
+- [ ] Difficult Quests?
+- [ ] ??

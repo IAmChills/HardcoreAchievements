@@ -349,7 +349,7 @@ function DungeonCommon.registerDungeonAchievement(def)
             
             -- Helper function to process a single boss entry
           local function processBossEntry(npcId, need)
-            local done = achievementCompleted
+            local done = false
               local bossName = ""
               
               -- Support both single NPC IDs and arrays of NPC IDs
@@ -360,8 +360,9 @@ function DungeonCommon.registerDungeonAchievement(def)
                   local current = (state.counts[id] or state.counts[tostring(id)] or 0)
                   local name = HCA_GetBossName(id)
                   table.insert(bossNames, name)
-                if not achievementCompleted and current >= 1 then
-                  done = true
+                  -- Mark as done if this boss has been killed (or if achievement is complete)
+                  if current >= 1 then
+                    done = true
                   end
                 end
                 -- Use the key as display name for string keys
@@ -377,9 +378,13 @@ function DungeonCommon.registerDungeonAchievement(def)
                 local idNum = tonumber(npcId) or npcId
                 local current = (state.counts[idNum] or state.counts[tostring(idNum)] or 0)
                 bossName = HCA_GetBossName(idNum)
-              if not done then
+                -- Mark as done if this boss has been killed enough times (or if achievement is complete)
                 done = current >= (tonumber(need) or 1)
               end
+              
+              -- If achievement is complete, all bosses show as done
+              if achievementCompleted then
+                done = true
               end
               
               if done then
@@ -456,65 +461,115 @@ function DungeonCommon.registerDungeonAchievement(def)
     local npcId = GetNpcIdFromGUID(destGUID)
     
     if npcId then
-      local found = false
+      -- Check if this is a required boss first
+      local isRequiredBoss = false
       -- Support both single NPC IDs and arrays of NPC IDs
       if requiredKills[npcId] then
-        -- Direct lookup for single NPC ID
-        if type(requiredKills[npcId]) == "table" then
-          -- This is an array entry - increment the actual killed NPC ID
-          state.counts[npcId] = (state.counts[npcId] or 0) + 1
-          found = true
-        else
-          -- Single NPC ID with count requirement
-          state.counts[npcId] = (state.counts[npcId] or 0) + 1
-          found = true
-        end
+        isRequiredBoss = true
       else
         -- Check if this NPC ID is in any array
         for key, value in pairs(requiredKills) do
           if type(value) == "table" then
             for _, id in pairs(value) do
               if id == npcId then
-                state.counts[npcId] = (state.counts[npcId] or 0) + 1
-                found = true
+                isRequiredBoss = true
                 break
               end
             end
-            if found then break end
+            if isRequiredBoss then break end
           end
         end
       end
       
-      if found then
-        -- Dungeons do not support solo points - store regular points only
-        if AchievementPanel and AchievementPanel.achievements then
-          local rowVarName = achId .. "_Row"
-          local row = _G[rowVarName]
-          if row and row.points then
-            -- Calculate base points (row.points includes self-found bonus, subtract it)
-            -- Self-found bonus will be added at completion time
-            local basePoints = tonumber(row.points) or 0
-            local isSelfFound = _G.IsSelfFound and _G.IsSelfFound() or false
-            if isSelfFound and not row.isSecretAchievement then
-              basePoints = basePoints - HCA_SELF_FOUND_BONUS
+      if isRequiredBoss then
+        -- Check group eligibility BEFORE counting the kill
+        -- Only count kills when group is eligible - allows returning later with eligible group
+        local isEligible = IsGroupEligible()
+        if isEligible then
+          -- Group is eligible - count this kill
+          if requiredKills[npcId] then
+            -- Direct lookup for single NPC ID
+            if type(requiredKills[npcId]) == "table" then
+              -- This is an array entry - increment the actual killed NPC ID
+              state.counts[npcId] = (state.counts[npcId] or 0) + 1
+            else
+              -- Single NPC ID with count requirement
+              state.counts[npcId] = (state.counts[npcId] or 0) + 1
             end
-            
-            -- Store regular points (no solo doubling for dungeons)
-            local pointsToStore = basePoints
-            HardcoreAchievements_SetProgress(achId, "pointsAtKill", pointsToStore)
+          else
+            -- Check if this NPC ID is in any array
+            for key, value in pairs(requiredKills) do
+              if type(value) == "table" then
+                for _, id in pairs(value) do
+                  if id == npcId then
+                    state.counts[npcId] = (state.counts[npcId] or 0) + 1
+                    break
+                  end
+                end
+              end
+            end
           end
+          
+          -- Store the level when this boss was killed (for eligibility checking)
+          local killLevel = UnitLevel("player") or 1
+          HardcoreAchievements_SetProgress(achId, "levelAtKill", killLevel)
+          
+          -- Dungeons do not support solo points - store regular points only
+          if AchievementPanel and AchievementPanel.achievements then
+            local rowVarName = achId .. "_Row"
+            local row = _G[rowVarName]
+            if row and row.points then
+              -- Calculate base points (row.points includes self-found bonus, subtract it)
+              -- Self-found bonus will be added at completion time
+              local basePoints = tonumber(row.points) or 0
+              local isSelfFound = _G.IsSelfFound and _G.IsSelfFound() or false
+              if isSelfFound and not row.isSecretAchievement then
+                basePoints = basePoints - HCA_SELF_FOUND_BONUS
+              end
+              
+              -- Store regular points (no solo doubling for dungeons)
+              local pointsToStore = basePoints
+              HardcoreAchievements_SetProgress(achId, "pointsAtKill", pointsToStore)
+            end
+          end
+          
+          SaveProgress() -- Save progress after each eligible kill
+          UpdateTooltip() -- Update tooltip to show progress
+          print("|cff69adc9[HardcoreAchievements]|r " .. HCA_GetBossName(npcId) .. " killed as part of achievement: " .. title)
+        else
+          -- Group is ineligible - don't count this kill
+          -- Player can return later with an eligible group to kill this boss
+          print("|cff69adc9[HardcoreAchievements]|r " .. HCA_GetBossName(npcId) .. " killed but group is ineligible - kill not counted for achievement: " .. title)
         end
-        
-        SaveProgress() -- Save progress after each kill
-        UpdateTooltip() -- Update tooltip to show progress
-        print("|cff69adc9[HardcoreAchievements]|r " .. HCA_GetBossName(npcId) .. " killed as part of achievement: " .. title)
       end
     end
 
-    if CountsSatisfied() and IsGroupEligible() then
+    -- Check if achievement should be completed
+    local progress = HardcoreAchievements_GetProgress(achId)
+    if progress and progress.completed then
       state.completed = true
-      HardcoreAchievements_SetProgress(achId, "completed", true)
       return true
+    end
+    
+    -- Check if all bosses are killed
+    if CountsSatisfied() then
+      -- Check eligibility using stored level at kill time, not current level
+      -- This prevents failing if player leveled up during the kill
+      -- Since we only count kills when eligible, if CountsSatisfied() is true,
+      -- all bosses were killed while eligible
+      if progress and progress.levelAtKill then
+        local levelToCheck = progress.levelAtKill
+        
+        -- If player was eligible when bosses were killed, complete the achievement
+        -- We use the stored level because that's when the requirement was fulfilled
+        if levelToCheck <= level then
+          state.completed = true
+          HardcoreAchievements_SetProgress(achId, "completed", true)
+          return true
+        end
+        -- If levelToCheck > level, the player was over-leveled when they killed a boss,
+        -- so we don't complete it (this is the fail case)
+      end
     end
 
     return false
