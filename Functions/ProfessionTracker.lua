@@ -138,6 +138,20 @@ local function UpdateProfessionRowVisibility(skillID)
     local cdb = GetCharacterDB()
     local hasKnown = state and state.known
 
+    -- Find the highest completed achievement rank
+    local highestCompletedRank = 0
+    for _, row in ipairs(rows) do
+        if row and row._def then
+            local completed = IsRowCompleted(row, cdb)
+            if completed then
+                local rank = row._def.requiredProfessionRank or row._def.requiredRank or 0
+                if rank > highestCompletedRank then
+                    highestCompletedRank = rank
+                end
+            end
+        end
+    end
+
     local nextRowAssigned = false
     local filterNeedsRefresh = false
 
@@ -148,18 +162,22 @@ local function UpdateProfessionRowVisibility(skillID)
             end
 
             local completed = IsRowCompleted(row, cdb)
-            local shouldShow = completed
+            local currentRank = row._def.requiredProfessionRank or row._def.requiredRank or 0
+            local shouldShow = false
 
-            if not shouldShow and hasKnown then
+            if completed then
+                -- Only show the highest completed achievement
+                shouldShow = (currentRank == highestCompletedRank)
+            elseif hasKnown then
+                -- Show only the next incomplete achievement
                 if not nextRowAssigned then
                     shouldShow = true
                     nextRowAssigned = true
                 else
                     shouldShow = false
                 end
-            end
-
-            if not hasKnown and not completed then
+            else
+                -- Player doesn't have profession and achievement not completed
                 shouldShow = false
             end
 
