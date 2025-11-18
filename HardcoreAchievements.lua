@@ -2652,6 +2652,7 @@ do
         AchievementPanel._achEvt:RegisterEvent("CHAT_MSG_TEXT_EMOTE")
         AchievementPanel._achEvt:RegisterEvent("PLAYER_LEVEL_CHANGED")
         AchievementPanel._achEvt:RegisterEvent("CHAT_MSG_LOOT")
+        AchievementPanel._achEvt:RegisterEvent("PLAYER_DEAD")
         AchievementPanel._achEvt:SetScript("OnEvent", function(_, event, ...)
             if event == "COMBAT_LOG_EVENT_UNFILTERED" then
                 local _, subevent, _, sourceGUID, _, _, _, destGUID, _, _, _, param12, param13, param14, param15, param16 = CombatLogGetCurrentEventInfo()
@@ -2794,6 +2795,13 @@ do
                             HCA_MarkRowCompleted(row)
                             HCA_AchToast_Show(row.Icon:GetTexture(), row.Title:GetText(), row.points, row)
                         end
+                    end
+                end
+            elseif event == "PLAYER_DEAD" then
+                for _, row in ipairs(AchievementPanel.achievements) do
+                    if not row.completed and row.id == "Secret4" then
+                        HCA_MarkRowCompleted(row)
+                        HCA_AchToast_Show(row.Icon:GetTexture(), row.Title:GetText(), row.points, row)
                     end
                 end
             end

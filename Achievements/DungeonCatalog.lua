@@ -182,7 +182,7 @@ local Dungeons = {
     bossOrder = {7361, 7079, 6235, 6229, 7800}
   },
 
-  --  -- The Stockade (Alliance, Level 22-30)
+  --  -- Potential Duskwood Achievement (Alliance)
   --  {
   --   achId = "CurseOfDuskwood",
   --   title = "The Curse of Duskwood",
@@ -213,7 +213,7 @@ local Dungeons = {
     points = 10,
     requiredQuestId = nil,
     staticPoints = false,
-    requiredMapId = 1004,
+    requiredMapId = 189,
     requiredKills = {
       [3983] = 1,  -- Interrogator Vishas
       [4543] = 1,  -- Bloodmage Thalnos
@@ -488,7 +488,7 @@ local Dungeons = {
     points = 10,
     requiredQuestId = nil,
     staticPoints = false,
-    requiredMapId = 1007,
+    requiredMapId = 289,
     requiredKills = {
       --[10506] = 1, -- Kirtonos the Herald (summoned)
       [10503] = 1, -- Jandice Barov

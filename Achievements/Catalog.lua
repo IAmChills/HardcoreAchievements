@@ -758,7 +758,7 @@ local Achievements = {
         return false
     end,
     secret = true,
-    secreTitle = "Secret Achievement",
+    secretTitle = "Secret Achievement",
     secretTooltip = "You will probably complete this achievement by accident",
     --secretIcon = 132387,
     secretPoints = 1,
@@ -787,11 +787,22 @@ local Achievements = {
         return npcId == 4950
     end,
     secret = true,
-    secreTitle = "Secret Achievement",
+    secretTitle = "Secret Achievement",
     secretTooltip = "I spot a good boy!",
     --secretIcon = 132387,
     secretPoints = 1,
     staticPoints = true,
+}, {
+    achId = "Secret4",
+    title = "The Last Achievement",
+    level = nil,
+    tooltip = string.format("%s... your tale slips quietly into forgotten pages. Only echoes will remember your name now.", GetUnitName("player")),
+    icon = 237542,
+    points = 0,
+    customIsCompleted = function() return UnitIsDeadOrGhost("player") end,
+    secret = true,
+    staticPoints = true,
+    hiddenUntilComplete = true,
 }, {
     achId = "Secret98",
     title = "Legendary Resonance",
