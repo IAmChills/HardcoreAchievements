@@ -182,7 +182,7 @@ local Dungeons = {
     bossOrder = {7361, 7079, 6235, 6229, 7800}
   },
 
-  --  -- The Stockade (Alliance, Level 22-30)
+  --  -- Potential Duskwood Achievement (Alliance)
   --  {
   --   achId = "CurseOfDuskwood",
   --   title = "The Curse of Duskwood",
