@@ -2,7 +2,7 @@ local Achievements = {
 
 --{ achId="Test",  title="Boar Test",  level=2, tooltip="Kill |cff0091e6a boar", icon=134400, points=10, requiredQuestId=nil, targetNpcId=3098, faction="Horde", zone="Durotar" },
 --{ achId="Test2", title="Easy Quest Test", level=1, tooltip="Orc starter quest", icon=134400, points=10, requiredQuestId=4641, targetNpcId=nil, faction="Horde", zone="Durotar" },
---{ achId="Test3", title="Kill + Quest", level=1, tooltip="Kill a boar and complete the orc starter quest", icon=134400, points=10, requiredQuestId=4641, targetNpcId=3098, faction="Horde", zone="Durotar" },
+{ achId="Test3", title="Kill + Quest", level=2, tooltip="Kill a boar and complete the orc starter quest", icon=134400, points=10, requiredQuestId=4641, targetNpcId=3098, faction="Horde", zone="Durotar" },
 --{ achId="Test4", title="Kill 3 Boars", level=1, tooltip="Kill 3 boars", icon=134400, points=10, requiredQuestId=nil, requiredKills = { [3098] = 3, }, faction="Horde", zone="Durotar" },
 
 -- Alliance
@@ -514,17 +514,6 @@ local Achievements = {
     targetNpcId = 1514,
     zone = "Stranglethorn Vale"
 }, {
-    achId = "Mukla",
-    title = "King of the Jungle",
-    level = 50,
-    tooltip = "Complete |cff0091e6Message in a Bottle|r before level 51",
-    icon = 132159,
-    points = 10,
-    allowSoloDouble = true,
-    requiredQuestId = 630,
-    targetNpcId = 1559,
-    zone = "Stranglethorn Vale"
-}, {
     achId = "MalletZF",
     title = string.format("%s the Keeper", GetUnitName("player")),
     level = 49,
@@ -534,16 +523,6 @@ local Achievements = {
     allowSoloDouble = true,
     customIsCompleted = function() return GetItemCount(9240, true) > 0 end,
     zone = "Hinterlands"
-}, {
-    achId = "Hakkar",
-    title = "Spirits, Tablets, and Eggs, Oh My!",
-    level = 53,
-    tooltip = "Complete |cff0091e6The God Hakkar|r before level 54",
-    icon = 132209,
-    points = 10,
-    requiredQuestId = 3528,
-    targetNpcId = nil,
-    zone = "Tanaris"
 }, {
     achId = "KimJaelIndeed",
     title = "Booty Bay Genius",
@@ -566,6 +545,27 @@ local Achievements = {
     requiredQuestId = 2681,
     targetNpcId = nil,
     zone = "Blasted Lands"
+}, {
+    achId = "Mukla",
+    title = "King of the Jungle",
+    level = 52,
+    tooltip = "Complete |cff0091e6Message in a Bottle|r before level 53",
+    icon = 132159,
+    points = 10,
+    allowSoloDouble = true,
+    requiredQuestId = 630,
+    targetNpcId = 1559,
+    zone = "Stranglethorn Vale"
+}, {
+    achId = "Hakkar",
+    title = "Spirits, Tablets, and Eggs, Oh My!",
+    level = 53,
+    tooltip = "Complete |cff0091e6The God Hakkar|r before level 54",
+    icon = 132209,
+    points = 10,
+    requiredQuestId = 3528,
+    targetNpcId = nil,
+    zone = "Tanaris"
 }, {
     achId = "ShadowLordFeldan",
     title = "Shadow’s End",
@@ -738,7 +738,7 @@ local Achievements = {
     points = 1,
     targetNpcId = {4075, 13016, 2110},
     secret = true,
-    secreTitle = "Secret Achievement",
+    secretTitle = "Secret Achievement",
     secretTooltip = "You will probably complete this achievement by accident",
     --secretIcon = 132387,
     secretPoints = 1,

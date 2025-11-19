@@ -219,12 +219,38 @@ local function HookRowSubTextUpdates(row)
     fontString._hcaSetTextWrapped = true
 end
 
+-- Helper function to check if a quest is in the player's quest log
+local function IsQuestInQuestLog(questID)
+    if not questID then return false end
+    -- Try modern API first
+    if GetQuestLogIndexByID then
+        local logIndex = GetQuestLogIndexByID(questID)
+        if logIndex and logIndex > 0 then
+            return true
+        end
+    end
+    -- Fallback: check using classic API
+    if GetNumQuestLogEntries then
+        local numEntries = GetNumQuestLogEntries()
+        for i = 1, numEntries do
+            local title, level, suggestGroup, isHeader, isCollapsed, isComplete, frequency, questIDFromLog = GetQuestLogTitle(i)
+            if not isHeader and questIDFromLog == questID then
+                return true
+            end
+        end
+    end
+    return false
+end
+
 local function IsRowOutleveled(row)
     if not row or row.completed then return false end
     if not row.maxLevel then return false end
     
+    local lvl = UnitLevel("player") or 1
+    local isOverLevel = lvl > row.maxLevel
+    
     -- Check if there's pending turn-in progress (kill completed but quest not turned in)
-    -- If so, don't mark as outleveled - player can still complete it
+    -- If so, check if quest is still in quest log - if not, mark as failed
     if row.questTracker and (row.killTracker or row.requiredKills) then
         -- Achievement requires both kill and quest
         local progress = HardcoreAchievements_GetProgress and HardcoreAchievements_GetProgress(row.id)
@@ -251,15 +277,28 @@ local function IsRowOutleveled(row)
             end
             
             local questNotTurnedIn = not progress.quest
-            -- If kills are satisfied but quest is not turned in, keep achievement available
+            -- If kills are satisfied but quest is not turned in
             if hasKill and questNotTurnedIn then
-                return false
+                -- Get quest ID from row definition
+                local questID = nil
+                if row._def and row._def.requiredQuestId then
+                    questID = row._def.requiredQuestId
+                end
+                
+                -- If player is over level and quest is not in quest log (abandoned), fail the achievement
+                if isOverLevel and questID and not IsQuestInQuestLog(questID) then
+                    return true -- Mark as outleveled/failed
+                end
+                
+                -- If quest is still in quest log, keep achievement available
+                if questID and IsQuestInQuestLog(questID) then
+                    return false
+                end
             end
         end
     end
     
-    local lvl = UnitLevel("player") or 1
-    return lvl > row.maxLevel
+    return isOverLevel
 end
 
 -- Function to update row border color based on state
@@ -1941,6 +1980,24 @@ AchievementPanel:Hide()
 AchievementPanel:EnableMouse(true)
 AchievementPanel:SetAllPoints(CharacterFrame)
 AchievementPanel:SetClipsChildren(true) -- Clip borders to stay within panel
+
+-- Create blur overlay frame for bottom blur effect
+if not AchievementPanel.BlurOverlayFrame then
+    AchievementPanel.BlurOverlayFrame = CreateFrame("Frame", nil, AchievementPanel)
+    AchievementPanel.BlurOverlayFrame:SetFrameStrata("DIALOG")
+    AchievementPanel.BlurOverlayFrame:SetFrameLevel(18)
+    AchievementPanel.BlurOverlayFrame:SetAllPoints(AchievementPanel)
+end
+
+-- Create blur overlay texture at the bottom
+if not AchievementPanel.BlurOverlay then
+    AchievementPanel.BlurOverlay = AchievementPanel.BlurOverlayFrame:CreateTexture(nil, "OVERLAY")
+    AchievementPanel.BlurOverlay:SetTexture("Interface\\AddOns\\HardcoreAchievements\\Images\\blur2.png")
+    AchievementPanel.BlurOverlay:SetBlendMode("BLEND")
+    AchievementPanel.BlurOverlay:SetTexCoord(0, 1, 0, 1)
+    AchievementPanel.BlurOverlay:SetPoint("BOTTOMLEFT", AchievementPanel.BlurOverlayFrame, "BOTTOMLEFT", 20, 80)
+    AchievementPanel.BlurOverlay:SetPoint("BOTTOMRIGHT", AchievementPanel.BlurOverlayFrame, "BOTTOMRIGHT", -60, 80)
+end
 
 local pendingCharacterFrameClose = false
 local combatCloseWatcher = CreateFrame("Frame")

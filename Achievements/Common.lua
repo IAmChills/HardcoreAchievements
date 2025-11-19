@@ -93,6 +93,30 @@ function M.registerQuestAchievement(cfg)
         return false
     end
 
+    local function isPlayerOnQuest()
+        if not REQUIRED_QUEST_ID then
+            return true -- No quest requirement means always "on quest"
+        end
+        -- Check if quest is in quest log (player is actively on the quest)
+        if GetQuestLogIndexByID then
+            local logIndex = GetQuestLogIndexByID(REQUIRED_QUEST_ID)
+            if logIndex and logIndex > 0 then
+                return true
+            end
+        end
+        -- Fallback: check using classic API (for older versions)
+        if GetNumQuestLogEntries then
+            local numEntries = GetNumQuestLogEntries()
+            for i = 1, numEntries do
+                local title, level, suggestGroup, isHeader, isCollapsed, isComplete, frequency, questID = GetQuestLogTitle(i)
+                if not isHeader and questID == REQUIRED_QUEST_ID then
+                    return true
+                end
+            end
+        end
+        return false
+    end
+
     local function topUpFromServer()
         if REQUIRED_QUEST_ID and not state.quest and serverQuestDone() then
             -- Check level before storing quest completion
@@ -550,6 +574,20 @@ function M.registerQuestAchievement(cfg)
             
             if not killValidated then
                 return false
+            end
+            
+            -- Check if player is on the quest (required for kills to count, unless award on kill is enabled)
+            if REQUIRED_QUEST_ID then
+                -- Check if award on kill is enabled
+                local awardOnKillEnabled = false
+                if type(HardcoreAchievements_IsAwardOnKillEnabled) == "function" then
+                    awardOnKillEnabled = HardcoreAchievements_IsAwardOnKillEnabled()
+                end
+                
+                -- Only allow kill tracking if player is on quest OR award on kill is enabled
+                if not awardOnKillEnabled and not isPlayerOnQuest() then
+                    return false -- Player is not on quest and award on kill is disabled, don't track kill
+                end
             end
             
             -- Check group eligibility after validating the kill matches

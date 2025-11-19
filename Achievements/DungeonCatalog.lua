@@ -25,9 +25,9 @@ local Dungeons = {
   {
     achId = "VC",
     title = DUNGEON_FLOOR_THEDEADMINES1,
-    tooltip = "Defeat the bosses of |cff0091e6"..DUNGEON_FLOOR_THEDEADMINES1.."|r before level 19 (including party members)",
+    tooltip = "Defeat the bosses of |cff0091e6"..DUNGEON_FLOOR_THEDEADMINES1.."|r before level 20 (including party members)",
     icon = 236404,
-    level = 18,
+    level = 19,
     points = 10,
     requiredQuestId = nil,
     staticPoints = false,
