@@ -381,16 +381,7 @@ local function ProcessAdminCommand(payload, sender)
         return false
     end
     
-	-- Helper to format timestamp with long localized month names
-	local function LongFormatTimestamp(timestamp)
-		if not timestamp then return "" end
-		local d = date("*t", timestamp)
-		local monthNames = {FULLDATE_MONTH_JANUARY, FULLDATE_MONTH_FEBRUARY, FULLDATE_MONTH_MARCH,
-							FULLDATE_MONTH_APRIL, FULLDATE_MONTH_MAY, FULLDATE_MONTH_JUNE,
-							FULLDATE_MONTH_JULY, FULLDATE_MONTH_AUGUST, FULLDATE_MONTH_SEPTEMBER,
-							FULLDATE_MONTH_OCTOBER, FULLDATE_MONTH_NOVEMBER, FULLDATE_MONTH_DECEMBER}
-		return string.format("%s %d, %d %02d:%02d", monthNames[d.month], d.day, d.year, d.hour, d.min)
-	end
+	-- Use shared FormatTimestamp function for consistent date formatting
 
 	-- If already completed, allow forced update when flagged
 	if achievementRow.completed then
@@ -419,7 +410,7 @@ local function ProcessAdminCommand(payload, sender)
 					achievementRow.Points:SetTextColor(0.6, 0.9, 0.6)
 				end
 				if achievementRow.TS then
-					achievementRow.TS:SetText(LongFormatTimestamp(rec.completedAt))
+					achievementRow.TS:SetText(FormatTimestamp(rec.completedAt))
 				end
 				if type(HCA_UpdateTotalPoints) == "function" then
 					HCA_UpdateTotalPoints()
@@ -556,6 +547,9 @@ local function HandleSlashCommand(msg)
                 if SetAdminSecretKey(key) then
                     print("|cff00ff00[HardcoreAchievements]|r Admin secret key set successfully")
                     print("|cffffff00[HardcoreAchievements]|r Keep this key secret! Anyone with this key can send admin commands.")
+                    if UpdateKeyStatus then
+                        UpdateKeyStatus()
+                    end
                 else
                     print("|cffff0000[HardcoreAchievements]|r Failed to set admin secret key")
                 end
@@ -575,6 +569,9 @@ local function HandleSlashCommand(msg)
             if HardcoreAchievementsDB then
                 HardcoreAchievementsDB.adminSecretKey = nil
                 print("|cff00ff00[HardcoreAchievements]|r Admin secret key cleared")
+                if UpdateKeyStatus then
+                    UpdateKeyStatus()
+                end
             end
         else
             print("|cff00ff00[HardcoreAchievements]|r Admin key commands:")
