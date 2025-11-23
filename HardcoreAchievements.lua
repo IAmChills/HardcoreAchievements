@@ -354,7 +354,7 @@ local function PositionRowBorder(row)
 end
 
 -- Format timestamp into readable date/time string (locale-aware format)
-local function FormatTimestamp(timestamp)
+function FormatTimestamp(timestamp)
     if not timestamp then return "" end
     
     local dateInfo = date("*t", timestamp)
@@ -411,6 +411,7 @@ end
 
 _G.HCA_GetFailureTimestamp = GetFailureTimestamp
 _G.HCA_EnsureFailureTimestamp = EnsureFailureTimestamp
+_G.FormatTimestamp = FormatTimestamp
 
 -- Export function for embedded UI to get total points
 function HCA_GetTotalPoints()

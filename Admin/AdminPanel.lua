@@ -364,7 +364,7 @@ local function CreateAdminPanel()
     keyStatusText:SetPoint("TOPLEFT", adminFrame, "TOPLEFT", 10, -30)
     keyStatusText:SetJustifyH("CENTER")
     
-    local function UpdateKeyStatus()
+    function UpdateKeyStatus()
         local secretKey = GetAdminSecretKey()
         if secretKey and secretKey ~= "" then
             keyStatusText:SetText("|cff00ff00Secret Key: Set|r")
@@ -479,8 +479,8 @@ local function CreateAdminPanel()
     deleteButton:SetPoint("BOTTOM", adminFrame, "BOTTOM", 0, 75)
     deleteButton:SetSize(100, 32)
     deleteButton:SetText("Delete")
-    deleteButton:SetNormalFontObject("GameFontNormalSmall")
-    deleteButton:GetFontString():SetTextColor(1, 0.3, 0.3)  -- Red tint to indicate danger
+    --deleteButton:SetNormalFontObject("GameFontNormalSmall")
+    --deleteButton:GetFontString():SetTextColor(1, 0.3, 0.3)  -- Red tint to indicate danger
     
     -- Tooltip for delete button
     deleteButton:SetScript("OnEnter", function(self)
@@ -500,16 +500,15 @@ local function CreateAdminPanel()
     clearKeyButton:SetPoint("BOTTOM", adminFrame, "BOTTOM", 110, 75)
     clearKeyButton:SetSize(100, 32)
     clearKeyButton:SetText("Clear Key")
-    clearKeyButton:SetNormalFontObject("GameFontNormalSmall")
-    clearKeyButton:GetFontString():SetTextColor(1, 0.5, 0.5)  -- Reddish tint to indicate danger
+    --clearKeyButton:SetNormalFontObject("GameFontNormalSmall")
+    --clearKeyButton:GetFontString():SetTextColor(1, 0.5, 0.5)  -- Reddish tint to indicate danger
     
     -- Tooltip for clear key button
     clearKeyButton:SetScript("OnEnter", function(self)
         GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-        GameTooltip:SetText("Clear Secret Key", 1, 1, 1)
+        GameTooltip:SetText("Clear Secret Key", 1, 0.3, 0.3)
         GameTooltip:AddLine("Remotely clears the secret key for the target player.", 1, 1, 1, true)
         GameTooltip:AddLine("Use this if you suspect the key has been compromised.", 1, 0.5, 0.5, true)
-        GameTooltip:AddLine("The player will need to set a new key afterward.", 1, 1, 1, true)
         GameTooltip:Show()
     end)
     clearKeyButton:SetScript("OnLeave", function(self)
