@@ -1,5 +1,20 @@
 -- Comprehensive dungeon achievement definitions
 local Dungeons = {
+  -- Test achievement
+  -- {
+  --   achId = "TestDungeon",
+  --   title = "Test Dungeon",
+  --   tooltip = "Test Dungeon",
+  --   icon = 134400,
+  --   level = 5,
+  --   points = 0,
+  --   requiredQuestId = nil,
+  --   requiredKills = {
+  --     [3098] = 1,
+  --     [3124] = 1,
+  --   },
+  -- },
+
   -- Ragefire Chasm (Horde, Level 13-18)
   {
     achId = "RFC",
