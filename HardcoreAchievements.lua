@@ -2666,7 +2666,7 @@ do
         }
 
         -- Damage events that include overkill information for player attacks
-        local RAT_DAMAGE_SUBEVENTS = {
+        local DAMAGE_SUBEVENTS = {
             SWING_DAMAGE = true,
             SPELL_DAMAGE = true,
             SPELL_PERIODIC_DAMAGE = true,
@@ -2679,6 +2679,40 @@ do
             end
             local _, _, _, _, _, npcId = strsplit("-", guid)
             return npcId and tonumber(npcId) or nil
+        end
+
+        -- Check if a GUID belongs to a pet and return the owner's GUID if it's the player's or party member's pet
+        -- In Classic WoW, pet GUIDs are "Creature-" and change each summon, so we check pet units directly
+        local function getPetOwnerGUID(sourceGUID)
+            if not sourceGUID then
+                return nil
+            end
+            
+            -- Check if it's the player's pet
+            if UnitExists("pet") then
+                local playerPetGUID = UnitGUID("pet")
+                if playerPetGUID and playerPetGUID == sourceGUID then
+                    return UnitGUID("player")
+                end
+            end
+            
+            -- Check if it's a party member's pet
+            if GetNumGroupMembers() > 1 then
+                for i = 1, 4 do
+                    local unit = "party" .. i
+                    if UnitExists(unit) then
+                        local partyPetUnit = unit .. "pet"
+                        if UnitExists(partyPetUnit) then
+                            local partyPetGUID = UnitGUID(partyPetUnit)
+                            if partyPetGUID and partyPetGUID == sourceGUID then
+                                return UnitGUID(unit)
+                            end
+                        end
+                    end
+                end
+            end
+            
+            return nil
         end
 
         local function processKill(destGUID)
@@ -2713,23 +2747,66 @@ do
         AchievementPanel._achEvt:RegisterEvent("PLAYER_DEAD")
         AchievementPanel._achEvt:SetScript("OnEvent", function(_, event, ...)
             if event == "COMBAT_LOG_EVENT_UNFILTERED" then
-                local _, subevent, _, sourceGUID, _, _, _, destGUID, _, _, _, param12, param13, param14, param15, param16 = CombatLogGetCurrentEventInfo()
+                local _, subevent, _, sourceGUID, _, _, _, destGUID, _, _, _, _, _, _, _, overkill = CombatLogGetCurrentEventInfo()
+                --DevTools_Dump(COMBAT_LOG_EVENT_UNFILTERED)
                 if subevent == "PARTY_KILL" then
+                    -- PARTY_KILL fires for player/party member kills
+                    -- Process it normally (if PARTY_KILL fires, it's a valid kill)
                     processKill(destGUID)
-                elseif RAT_DAMAGE_SUBEVENTS[subevent] then
+                elseif DAMAGE_SUBEVENTS[subevent] then
                     local playerGUID = UnitGUID("player")
-                    if playerGUID and sourceGUID == playerGUID and destGUID then
-                        local overkill
-                        if subevent == "SWING_DAMAGE" then
-                            overkill = param13
-                        else
-                            overkill = param16
+                    local shouldProcess = false
+                    
+                    -- Check if source is the player
+                    if playerGUID and sourceGUID == playerGUID then
+                        shouldProcess = true
+                    -- Check if source is a party member
+                    elseif sourceGUID and GetNumGroupMembers() > 1 then
+                        for i = 1, 4 do
+                            local unit = "party" .. i
+                            if UnitExists(unit) then
+                                local partyMemberGUID = UnitGUID(unit)
+                                if partyMemberGUID and sourceGUID == partyMemberGUID then
+                                    shouldProcess = true
+                                    break
+                                end
+                            end
                         end
-
+                    end
+                    
+                    -- Check if source is a pet (player's or party member's)
+                    -- This catches pet kills that don't trigger PARTY_KILL
+                    if not shouldProcess then
+                        local ownerGUID = getPetOwnerGUID(sourceGUID)
+                        if ownerGUID then
+                            shouldProcess = true
+                        end
+                    end
+                    
+                    if shouldProcess and destGUID then
+                        -- If overkill is present (>= 0), the target died from this damage
+                        -- This catches kills that don't trigger PARTY_KILL (e.g., pet kills, DoT kills)
                         if overkill and overkill >= 0 then
                             local npcId = getNpcIdFromGUID(destGUID)
+                            -- Check for Rats achievement NPCs
                             if npcId and RAT_NPC_IDS[npcId] then
                                 processKill(destGUID)
+                            -- Check if this is a tracked boss (any achievement with a killTracker)
+                            elseif npcId then
+                                -- Check if any achievement tracks this NPC
+                                local isTracked = false
+                                if AchievementPanel and AchievementPanel.achievements then
+                                    for _, row in ipairs(AchievementPanel.achievements) do
+                                        if not row.completed and type(row.killTracker) == "function" then
+                                            -- This achievement has a kill tracker, let processKill check if it matches
+                                            isTracked = true
+                                            break
+                                        end
+                                    end
+                                end
+                                if isTracked then
+                                    processKill(destGUID)
+                                end
                             end
                         end
                     end
