@@ -875,7 +875,7 @@ end
 
 local function IsEligible(def)
   -- Faction: "Alliance" / "Horde"
-  if def.faction and UnitFactionGroup("player") ~= def.faction then
+  if def.faction and select(2, UnitFactionGroup("player")) ~= def.faction then
     return false
   end
 

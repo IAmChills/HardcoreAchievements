@@ -99,7 +99,7 @@ function HCA_ShowAchievementTooltip(frame, data)
             pointsText = tostring(points)
         end
         if levelText ~= "" or pointsText ~= "" then
-            GameTooltip:AddDoubleLine(levelText, "Points: " .. pointsText, 1, 1, 1, 0.6, 0.9, 0.6)
+            GameTooltip:AddDoubleLine(levelText, ACHIEVEMENT_POINTS .. ": " .. pointsText, 1, 1, 1, 0.6, 0.9, 0.6)
         end
     end
     
@@ -139,7 +139,7 @@ function HCA_ShowAchievementTooltip(frame, data)
     if showPointsInBody then
         local pointsText = ""
         if points and points > 0 then
-            pointsText = "Points: " .. tostring(points)
+            pointsText = ACHIEVEMENT_POINTS .. ": " .. tostring(points)
             GameTooltip:AddLine(pointsText, 0.6, 0.9, 0.6)
         end
     end

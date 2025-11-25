@@ -339,7 +339,7 @@ function DungeonCommon.registerDungeonAchievement(def)
           -- Level (left) and Points (right) on one line
           -- Use self.points (calculated with multipliers) instead of raw points
           local leftText = (self.maxLevel and self.maxLevel > 0) and (LEVEL .. " " .. tostring(self.maxLevel)) or " "
-          local rightText = (self.points and tonumber(self.points) and tonumber(self.points) > 0) and ("Points: " .. tostring(self.points)) or " "
+          local rightText = (self.points and tonumber(self.points) and tonumber(self.points) > 0) and (ACHIEVEMENT_POINTS .. ": " .. tostring(self.points)) or " "
           GameTooltip:AddDoubleLine(leftText, rightText, 1, 1, 1, 0.7, 0.9, 0.7)
           -- Description in default yellow
           GameTooltip:AddLine(baseTooltip, nil, nil, nil, true)
@@ -583,7 +583,7 @@ function DungeonCommon.registerDungeonAchievement(def)
   -- Check faction eligibility
   local function IsEligible()
     -- Faction: "Alliance" / "Horde"
-    if faction and UnitFactionGroup("player") ~= faction then
+    if faction and select(2, UnitFactionGroup("player")) ~= faction then
       return false
     end
     return true

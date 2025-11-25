@@ -2747,7 +2747,7 @@ do
         AchievementPanel._achEvt:RegisterEvent("PLAYER_DEAD")
         AchievementPanel._achEvt:SetScript("OnEvent", function(_, event, ...)
             if event == "COMBAT_LOG_EVENT_UNFILTERED" then
-                local _, subevent, _, sourceGUID, _, _, _, destGUID, _, _, _, _, _, _, _, overkill = CombatLogGetCurrentEventInfo()
+                local _, subevent, _, sourceGUID, _, _, _, destGUID, _, _, _, param12, param13, param14, param15, param16 = CombatLogGetCurrentEventInfo()
                 --DevTools_Dump(COMBAT_LOG_EVENT_UNFILTERED)
                 if subevent == "PARTY_KILL" then
                     -- PARTY_KILL fires for player/party member kills
@@ -2786,6 +2786,7 @@ do
                     if shouldProcess and destGUID then
                         -- If overkill is present (>= 0), the target died from this damage
                         -- This catches kills that don't trigger PARTY_KILL (e.g., pet kills, DoT kills)
+                        local overkill = subevent == "SWING_DAMAGE" and param13 or param16
                         if overkill and overkill >= 0 then
                             local npcId = getNpcIdFromGUID(destGUID)
                             -- Check for Rats achievement NPCs
