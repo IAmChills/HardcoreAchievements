@@ -1455,6 +1455,18 @@ local function UpdateTotalPointsText()
     UHCA.PointsLabelText:SetTextColor(1, 1, 1)
   end
 
+  if UHCA.CountsText then
+    local completed, totalCount
+    if _G.HCA_AchievementCount then
+      completed, totalCount = _G.HCA_AchievementCount()
+    end
+    if completed and totalCount then
+      UHCA.CountsText:SetText(string.format(" (%d/%d)", completed or 0, totalCount or 0))
+    else
+      UHCA.CountsText:SetText("")
+    end
+  end
+
 end
 
 -- ---------- Rebuild ----------
@@ -1755,6 +1767,15 @@ local function BuildEmbedIfNeeded()
     UHCA.PlayerNameText:SetText(GetUnitName('player')) -- Will be updated by UpdatePlayerNameText
     --UHCA.PlayerNameText:SetTextColor(0.42, 0.396, 0.345)
     UHCA.PlayerNameText:SetTextColor(GetPlayerClassColor())
+  end
+
+  -- Achievement completion counter (next to player name)
+  if not UHCA.CountsText then
+    UHCA.CountsText = UHCA:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    UHCA.CountsText:SetPoint("BOTTOMLEFT", UHCA.TotalPointsText, "TOPLEFT", 0, 0)
+    UHCA.CountsText:SetText("(0/0)")
+    UHCA.CountsText:SetTextColor(0.8, 0.8, 0.8)
+    UHCA.CountsText:SetJustifyH("LEFT")
   end
 
   -- Multiplier text (below the points background)
