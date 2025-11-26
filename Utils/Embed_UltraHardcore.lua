@@ -670,7 +670,7 @@ local function CreateEmbedIcon(parent)
     end
   end)
   
-  -- Shift + Left Click to link achievement bracket into chat (matches CreateAchievementRow behavior)
+  -- Shift click to link achievement bracket into chat (matches CreateAchievementRow behavior)
   icon:SetScript("OnMouseUp", function(self, button)
     if button == "LeftButton" and IsShiftKeyDown() and self.achId then
       local iconTexture = self.Icon and self.Icon.GetTexture and self.Icon:GetTexture() or ""
@@ -1455,6 +1455,18 @@ local function UpdateTotalPointsText()
     UHCA.PointsLabelText:SetTextColor(1, 1, 1)
   end
 
+  if UHCA.CountsText then
+    local completed, totalCount
+    if _G.HCA_AchievementCount then
+      completed, totalCount = _G.HCA_AchievementCount()
+    end
+    if completed and totalCount then
+      UHCA.CountsText:SetText(string.format(" (%d/%d)", completed or 0, totalCount or 0))
+    else
+      UHCA.CountsText:SetText("")
+    end
+  end
+
 end
 
 -- ---------- Rebuild ----------
@@ -1513,7 +1525,7 @@ function EMBED:Rebuild()
       local isSelfFound = _G.IsSelfFound and _G.IsSelfFound() or false
       if isSelfFound then
         UHCA.SoloModeCheckbox:Enable()
-        UHCA.SoloModeCheckbox.tooltip = "|cffffffffSolo Self Found|r \nToggling this option on will display the total points you will receive if you complete this achievement solo (no party members within 40 yards)."
+        UHCA.SoloModeCheckbox.tooltip = "|cffffffffSolo Self Found|r \nToggling this option on will display the total points you will receive if you complete this achievement solo (no help from nearby players)."
       else
         UHCA.SoloModeCheckbox:Disable()
         UHCA.SoloModeCheckbox.Text:SetTextColor(0.5, 0.5, 0.5, 1)
@@ -1757,6 +1769,15 @@ local function BuildEmbedIfNeeded()
     UHCA.PlayerNameText:SetTextColor(GetPlayerClassColor())
   end
 
+  -- Achievement completion counter (next to player name)
+  if not UHCA.CountsText then
+    UHCA.CountsText = UHCA:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    UHCA.CountsText:SetPoint("BOTTOMLEFT", UHCA.TotalPointsText, "TOPLEFT", 0, 0)
+    UHCA.CountsText:SetText("(0/0)")
+    UHCA.CountsText:SetTextColor(0.8, 0.8, 0.8)
+    UHCA.CountsText:SetJustifyH("LEFT")
+  end
+
   -- Multiplier text (below the points background)
   if not UHCA.MultiplierText then
     UHCA.MultiplierText = UHCA:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
@@ -1826,20 +1847,8 @@ local function BuildEmbedIfNeeded()
     
     -- Click handler to open Options panel
     UHCA.SettingsButton:SetScript("OnClick", function(self)
-      -- Try to open via Settings API first
-      if Settings and Settings.OpenToCategory then
-        -- Get the addon reference
-        local addon = _G.HardcoreAchievementsAddon
-        if addon and addon.settingsCategory then
-          Settings.OpenToCategory(addon.settingsCategory:GetID())
-        elseif _G._HardcoreAchievementsOptionsCategory then
-          Settings.OpenToCategory(_G._HardcoreAchievementsOptionsCategory:GetID())
-        end
-      else
-        -- Fallback: try to show Interface Options and navigate to addon
-        if InterfaceOptionsFrame then
-          InterfaceOptionsFrame_OpenToCategory("Hardcore Achievements")
-        end
+      if _G.HardcoreAchievements_OpenOptionsPanel then
+        _G.HardcoreAchievements_OpenOptionsPanel()
       end
     end)
     

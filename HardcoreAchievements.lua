@@ -1,6 +1,7 @@
 local ADDON_NAME, addon = ...
 local playerGUID
 HCA_SELF_FOUND_BONUS = 5
+local SETTINGS_ICON_TEXTURE = "Interface\\AddOns\\HardcoreAchievements\\Images\\icon_gear.png"
 
 local EvaluateCustomCompletions
 local RefreshOutleveledAll
@@ -813,13 +814,26 @@ function HCA_MarkRowCompleted(row)
         ProfessionTracker.NotifyRowCompleted(row)
     end
     
-    -- Broadcast achievement completion to emote channel
+	-- Broadcast achievement completion to emote channel
 	local playerName = UnitName("player")
 	local achievementTitle = row.Title and row.Title:GetText() or "Unknown Achievement"
 	local broadcastMessage = string.format(ACHIEVEMENT_BROADCAST, "", achievementTitle)
 	-- Remove leading whitespace so EMOTE doesn't show a double space before 'has'
 	broadcastMessage = broadcastMessage:gsub("^%s+", "")
     SendChatMessage(broadcastMessage, "EMOTE")
+
+	-- Announce in guild chat (with hyperlink) when enabled
+	if HardcoreAchievements_ShouldAnnounceInGuildChat() and IsInGuild() then
+        local link = nil
+        local achIdForLink = row.achId or row.id
+        if achIdForLink and _G.HCA_GetAchievementHyperlink then
+            local iconTexture = row.Icon and row.Icon:GetTexture()
+            link = _G.HCA_GetAchievementBracket(achIdForLink, iconTexture)
+        end
+        local guildMessage = string.format(playerName .. ACHIEVEMENT_BROADCAST, "", link or achievementTitle)
+        guildMessage = guildMessage:gsub("^%s+", "")
+        SendChatMessage(guildMessage, "GUILD")
+    end
     
     -- Ensure hidden-until-complete rows become visible now
     if row.hiddenUntilComplete then
@@ -896,6 +910,53 @@ local function RestoreCompletionsFromDB()
     if SortAchievementRows then SortAchievementRows() end
     if HCA_UpdateTotalPoints then HCA_UpdateTotalPoints() end
     RefreshOutleveledAll()
+end
+
+local function ToggleAchievementCharacterFrameTab()
+    local isShown = CharacterFrame and CharacterFrame:IsShown() and
+                   (AchievementPanel and AchievementPanel:IsShown() or (Tab and Tab.squareFrame and Tab.squareFrame:IsShown()))
+    if isShown then
+        CharacterFrame:Hide()
+    elseif not CharacterFrame:IsShown() then
+        CharacterFrame:Show()
+        if HCA_ShowAchievementTab then
+            HCA_ShowAchievementTab()
+        end
+    else
+        if CharacterFrame:IsShown() and HCA_ShowAchievementTab then
+            HCA_ShowAchievementTab()
+        end
+    end
+end
+
+local function ShowHardcoreAchievementWindow()
+    local _, cdb = GetCharDB()
+    if cdb and cdb.settings and cdb.settings.showCustomTab then
+        ToggleAchievementCharacterFrameTab()
+    elseif type(ToggleSettings) == "function" then
+        local container = nil
+        if TabManager and TabManager.getTabContent then
+            container = TabManager.getTabContent(3)
+        end
+        if not container and _G.tabContents and _G.tabContents[3] then
+            container = _G.tabContents[3]
+        end
+        local isContainerShown = container and container.IsShown and container:IsShown()
+        if isContainerShown then
+            ToggleSettings()
+        else
+            ToggleSettings()
+            if TabManager and TabManager.switchToTab then
+                TabManager.switchToTab(3)
+            elseif type(OpenSettingsToTab) == "function" then
+                OpenSettingsToTab(3)
+            end
+        end
+    elseif type(OpenSettingsToTab) == "function" then
+        OpenSettingsToTab(3)
+    else
+        ToggleAchievementCharacterFrameTab()
+    end
 end
 
 -- =========================================================
@@ -1033,23 +1094,10 @@ local function HCA_CreateAchToast()
     -- Make the toast clickable
     f:EnableMouse(true)
     
-    -- Store achievement data for tooltip display
-    f.achId = nil
-    f.achTitle = nil
-    f.achIcon = nil
-    f.achPoints = nil
-    
-    -- Mouse button handler to show achievement tooltip (OnMouseUp for left button)
+    -- Mouse button handler opens the achievements panel (OnMouseUp for left button)
     f:SetScript("OnMouseUp", function(self, button)
-        if button == "LeftButton" and self.achId then
-            -- Generate hyperlink using the same format as chat links
-            if _G.HCA_GetAchievementHyperlink then
-                local link = _G.HCA_GetAchievementHyperlink(self.achId, self.achTitle, self.achIcon)
-                if link and ItemRefTooltip then
-                    -- Use the same tooltip mechanism as chat links
-                    ItemRefTooltip:SetHyperlink(link)
-                end
-            end
+        if button == "LeftButton" then
+            ShowHardcoreAchievementWindow()
         end
     end)
 
@@ -1288,6 +1336,21 @@ end
 -- =========================================================
 
 -- Initialize minimap button libraries
+local function OpenOptionsPanel()
+    if Settings and Settings.OpenToCategory then
+        local targetCategory = (addon and addon.settingsCategory) or _G._HardcoreAchievementsOptionsCategory
+        if targetCategory and targetCategory.GetID then
+            Settings.OpenToCategory(targetCategory:GetID())
+            return
+        end
+    end
+    if InterfaceOptionsFrame_OpenToCategory then
+        InterfaceOptionsFrame_OpenToCategory("Hardcore Achievements")
+    end
+end
+
+_G.HardcoreAchievements_OpenOptionsPanel = OpenOptionsPanel
+
 local LDB = LibStub("LibDataBroker-1.1")
 local LDBIcon = LibStub("LibDBIcon-1.0")
 
@@ -1298,69 +1361,10 @@ local minimapDataObject = LDB:NewDataObject("HardcoreAchievements", {
     icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\HardcoreAchievementsButton.png",
     OnClick = function(self, button)
         if button == "LeftButton" and not IsShiftKeyDown() then
-            local _, cdb = GetCharDB()
-            
-            -- Helper function to toggle Character Frame with achievements tab
-            local function toggleCharacterFrameTab()
-                local isShown = CharacterFrame and CharacterFrame:IsShown() and 
-                               (AchievementPanel and AchievementPanel:IsShown() or (Tab and Tab.squareFrame and Tab.squareFrame:IsShown()))
-                if isShown then
-                    --ToggleCharacter("PaperDollFrame")
-                    --ToggleCharacter("PaperDollFrame")
-                    CharacterFrame:Hide()
-                elseif not CharacterFrame:IsShown() then
-                        --ToggleCharacter("PaperDollFrame")
-                        CharacterFrame:Show()
-                    if HCA_ShowAchievementTab then
-                        HCA_ShowAchievementTab()
-                    end
-                else
-                    if CharacterFrame:IsShown() then
-                        HCA_ShowAchievementTab()
-                    end
-                end
-            end
-            
-            -- Check if using custom Character Frame tab
-            if cdb and cdb.settings and cdb.settings.showCustomTab then
-                toggleCharacterFrameTab()
-            elseif type(ToggleSettings) == "function" then
-                -- Toggle UltraHardcore settings window and switch to tab 3 when opening
-                local container = nil
-                if TabManager and TabManager.getTabContent then
-                    container = TabManager.getTabContent(3)
-                end
-                if not container and _G.tabContents and _G.tabContents[3] then
-                    container = _G.tabContents[3]
-                end
-                -- Check if the achievements tab container is currently shown
-                local isContainerShown = container and container.IsShown and container:IsShown()
-                
-                -- If the container is shown, we're on achievements tab and should just close
-                if isContainerShown then
-                    ToggleSettings()
-                else
-                    -- Container is not shown, open the settings window
-                    ToggleSettings()
-                    -- After opening, switch to tab 3
-                    if TabManager and TabManager.switchToTab then
-                        TabManager.switchToTab(3)
-                    elseif type(OpenSettingsToTab) == "function" then
-                        OpenSettingsToTab(3)
-                    end
-                end
-            elseif type(OpenSettingsToTab) == "function" then
-                -- Fallback if ToggleSettings doesn't exist but OpenSettingsToTab does
-                OpenSettingsToTab(3)
-            else
-                -- Fallback: use Character Frame method
-                toggleCharacterFrameTab()
-            end
+            ShowHardcoreAchievementWindow()
         elseif button == "RightButton" then
             -- Right-click to open options panel
-            if Settings and Settings.OpenToCategory then
-                Settings.OpenToCategory(addon.settingsCategory:GetID())
-            end
+            OpenOptionsPanel()
         elseif button == "LeftButton" and IsShiftKeyDown() then
             -- Left-click with Shift to open admin panel
             if HardcoreAchievementsAdminPanel and HardcoreAchievementsAdminPanel.Toggle then
@@ -1733,7 +1737,7 @@ do
             end
             GameTooltip:SetOwner(self, "ANCHOR_RIGHT", -30, 0)
             GameTooltip:SetText(ACHIEVEMENTS, 1, 1, 1)
-            GameTooltip:AddLine("Shift + Left Click to drag \nMust not be active", 0.5, 0.5, 0.5)
+            GameTooltip:AddLine("Shift click to drag \nMust not be active", 0.5, 0.5, 0.5)
             GameTooltip:Show()
         end)
         squareFrame:HookScript("OnLeave", function(self)
@@ -2245,6 +2249,25 @@ AchievementPanel.SoloModeCheckbox:SetScript("OnEnter", function(self)
     end
 end)
 AchievementPanel.SoloModeCheckbox:SetScript("OnLeave", function(self)
+    GameTooltip:Hide()
+end)
+
+AchievementPanel.SettingsButton = CreateFrame("Button", nil, AchievementPanel)
+AchievementPanel.SettingsButton:SetSize(14, 14)
+AchievementPanel.SettingsButton:SetPoint("BOTTOMLEFT", AchievementPanel.SoloModeCheckbox, "TOPLEFT", 6, 18)
+AchievementPanel.SettingsButton.Icon = AchievementPanel.SettingsButton:CreateTexture(nil, "ARTWORK")
+AchievementPanel.SettingsButton.Icon:SetAllPoints(AchievementPanel.SettingsButton)
+AchievementPanel.SettingsButton.Icon:SetTexture(SETTINGS_ICON_TEXTURE)
+AchievementPanel.SettingsButton.Icon:SetVertexColor(1, 0.82, 0.0)
+AchievementPanel.SettingsButton:SetScript("OnClick", function()
+    OpenOptionsPanel()
+end)
+AchievementPanel.SettingsButton:SetScript("OnEnter", function(self)
+    GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+    GameTooltip:SetText("Open Options", nil, nil, nil, nil, true)
+    GameTooltip:Show()
+end)
+AchievementPanel.SettingsButton:SetScript("OnLeave", function()
     GameTooltip:Hide()
 end)
 
@@ -3025,11 +3048,11 @@ function HCA_ShowAchievementTab()
         local isSelfFound = _G.IsSelfFound and _G.IsSelfFound() or false
         if isSelfFound then
             AchievementPanel.SoloModeCheckbox:Enable()
-            AchievementPanel.SoloModeCheckbox.tooltip = "|cffffffffSolo Self Found|r \nToggling this option on will display the total points you will receive if you complete this achievement solo (no party members within 40 yards)."
+            AchievementPanel.SoloModeCheckbox.tooltip = "|cffffffffSolo Self Found|r \nToggling this option on will display the total points you will receive if you complete this achievement solo (no help from nearby players)."
         else
             AchievementPanel.SoloModeCheckbox:Disable()
             AchievementPanel.SoloModeCheckbox.Text:SetTextColor(0.5, 0.5, 0.5, 1)
-            --AchievementPanel.SoloModeCheckbox.tooltip = "|cffffffffSolo Self Found|r \nToggling this option on will display the total points you will receive if you complete this achievement solo (no party members within 40 yards). |cffff0000(Requires Self-Found buff to enable)|r"
+            --AchievementPanel.SoloModeCheckbox.tooltip = "|cffffffffSolo Self Found|r \nToggling this option on will display the total points you will receive if you complete this achievement solo (no help from nearby players). |cffff0000(Requires Self-Found buff to enable)|r"
         end
     end
     
@@ -3052,7 +3075,7 @@ Tab:HookScript("OnEnter", function(self)
     -- Show tooltip with drag instructions
     GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
     GameTooltip:SetText(ACHIEVEMENTS, 1, 1, 1)
-    GameTooltip:AddLine("Shift + Left Click to drag \nMust not be active", 0.5, 0.5, 0.5)
+    GameTooltip:AddLine("Shift click to drag \nMust not be active", 0.5, 0.5, 0.5)
     GameTooltip:Show()
 end)
 

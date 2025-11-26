@@ -2,6 +2,8 @@
 
 ## Active Tasks
 
+- [ ] Completed at: ## information like Inspection window?
+
 - [ ] Arc Challenges
   - [ ] Unholy
   - [ ] Bloodbath
