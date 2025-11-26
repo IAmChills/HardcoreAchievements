@@ -62,6 +62,17 @@ function HardcoreAchievements_IsAwardOnKillEnabled()
     return false
 end
 
+-- Helper function to check if achievements should be announced in guild chat
+function HardcoreAchievements_ShouldAnnounceInGuildChat()
+    if type(HardcoreAchievements_GetCharDB) == "function" then
+        local _, cdb = HardcoreAchievements_GetCharDB()
+        if cdb and cdb.settings and cdb.settings.announceInGuildChat then
+            return true
+        end
+    end
+    return false
+end
+
 -- Create Discord frame (will be created on first use)
 local discordFrame = nil
 local DISCORD_LINK = "discord.gg/MMh2Cv8X" -- Replace with actual Discord invite link
@@ -158,7 +169,7 @@ local function UpdateSoloAchievementsCheckbox()
             local r, g, b = disableScreenshotsCB.Text:GetTextColor()
             soloAchievementsCB.Text:SetTextColor(r, g, b, 1)
         end
-        soloAchievementsCB.tooltip = "|cffffffffSolo Self Found|r \nToggling this option on will display the total points you will receive if you complete this achievement solo (no party members within 40 yards)."
+        soloAchievementsCB.tooltip = "|cffffffffSolo Self Found|r \nToggling this option on will display the total points you will receive if you complete this achievement solo (no help from nearby players)."
     else
         soloAchievementsCB:Disable()
         soloAchievementsCB.Text:SetTextColor(0.5, 0.5, 0.5, 1) -- Gray out the text
@@ -244,7 +255,7 @@ local function CreateOptionsPanel()
         end
     end)
     
-    local tooltipText = "|cffffffffSolo Self Found|r \nToggling this option on will display the total points you will receive if you complete this achievement solo (no party members within 40 yards)."
+    local tooltipText = "|cffffffffSolo Self Found|r \nToggling this option on will display the total points you will receive if you complete this achievement solo (no help from nearby players)."
     AddTooltipToCheckbox(soloAchievementsCB, tooltipText)
 
     -- Award on Kill checkbox
@@ -258,29 +269,22 @@ local function CreateOptionsPanel()
     end)
     AddTooltipToCheckbox(awardOnKillCB, "If enabled, achievements that require an NPC kill will be awarded immediately on kill rather than waiting for quest completion.")
 
-    -- -- Modern Rows checkbox (for embed display)
-    -- local modernRowsCB = CreateFrame("CheckButton", nil, panel, "InterfaceOptionsCheckButtonTemplate")
-    -- modernRowsCB:SetPoint("TOPLEFT", awardOnKillCB, "BOTTOMLEFT", 0, -8)
-    -- modernRowsCB.Text:SetText("Use Modern Rows (UltraHardcore Display)")
-    -- modernRowsCB:SetChecked(GetSetting("modernRows", true))
-    -- modernRowsCB:SetScript("OnClick", function(self)
-    --     local isChecked = self:GetChecked()
-    --     if _G.HCA_SetModernRowsEnabled then
-    --         _G.HCA_SetModernRowsEnabled(isChecked)
-    --     else
-    --         SetSetting("modernRows", isChecked)
-    --         if EMBED and EMBED.Rebuild then
-    --             EMBED:Rebuild()
-    --         end
-    --     end
-    -- end)
-    -- AddTooltipToCheckbox(modernRowsCB, "If enabled, the Ultra Hardcore achievements frame will display achievements as modern rows (similar to the character panel). If disabled, it will use the classic grid layout.")
+    -- Announce achievements in guild chat checkbox
+    local announceInGuildChatCB = CreateFrame("CheckButton", nil, panel, "InterfaceOptionsCheckButtonTemplate")
+    announceInGuildChatCB:SetPoint("TOPLEFT", awardOnKillCB, "BOTTOMLEFT", 0, -8)
+    announceInGuildChatCB.Text:SetText("Announce achievements in guild chat")
+    announceInGuildChatCB:SetChecked(GetSetting("announceInGuildChat", false))
+    announceInGuildChatCB:SetScript("OnClick", function(self)
+        local isChecked = self:GetChecked()
+        SetSetting("announceInGuildChat", isChecked)
+    end)
+    AddTooltipToCheckbox(announceInGuildChatCB, "If enabled, achievements will be announced in guild chat when completed.")
 
     -- =========================================================
     -- User Interface Category
     -- =========================================================
     local uiCategoryTitle = panel:CreateFontString(nil, "ARTWORK", "GameFontNormalLarge")
-    uiCategoryTitle:SetPoint("TOPLEFT", awardOnKillCB, "BOTTOMLEFT", 0, -30)
+    uiCategoryTitle:SetPoint("TOPLEFT", announceInGuildChatCB, "BOTTOMLEFT", 0, -30)
     uiCategoryTitle:SetText("|cff69adc9User Interface|r")
     
     -- Reset Achievements Tab button
@@ -345,6 +349,7 @@ local function CreateOptionsPanel()
         disableScreenshots = disableScreenshotsCB,
         soloAchievements = soloAchievementsCB,
         awardOnKill = awardOnKillCB,
+        announceInGuildChat = announceInGuildChatCB,
         modernRows = modernRowsCB,
     }
     panel.modernRows = modernRowsCB
@@ -366,6 +371,9 @@ local function CreateOptionsPanel()
         end
         if awardOnKillCB then
             awardOnKillCB:SetChecked(GetSetting("awardOnKill", false))
+        end
+        if announceInGuildChatCB then
+            announceInGuildChatCB:SetChecked(GetSetting("announceInGuildChat", false))
         end
         if modernRowsCB then
             modernRowsCB:SetChecked(GetSetting("modernRows", true))

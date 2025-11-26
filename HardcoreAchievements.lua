@@ -813,13 +813,26 @@ function HCA_MarkRowCompleted(row)
         ProfessionTracker.NotifyRowCompleted(row)
     end
     
-    -- Broadcast achievement completion to emote channel
+	-- Broadcast achievement completion to emote channel
 	local playerName = UnitName("player")
 	local achievementTitle = row.Title and row.Title:GetText() or "Unknown Achievement"
 	local broadcastMessage = string.format(ACHIEVEMENT_BROADCAST, "", achievementTitle)
 	-- Remove leading whitespace so EMOTE doesn't show a double space before 'has'
 	broadcastMessage = broadcastMessage:gsub("^%s+", "")
     SendChatMessage(broadcastMessage, "EMOTE")
+
+	-- Announce in guild chat (with hyperlink) when enabled
+	if HardcoreAchievements_ShouldAnnounceInGuildChat() and IsInGuild() then
+        local link = nil
+        local achIdForLink = row.achId or row.id
+        if achIdForLink and _G.HCA_GetAchievementHyperlink then
+            local iconTexture = row.Icon and row.Icon:GetTexture()
+            link = _G.HCA_GetAchievementBracket(achIdForLink, iconTexture)
+        end
+        local guildMessage = string.format(playerName .. ACHIEVEMENT_BROADCAST, "", link or achievementTitle)
+        guildMessage = guildMessage:gsub("^%s+", "")
+        SendChatMessage(guildMessage, "GUILD")
+    end
     
     -- Ensure hidden-until-complete rows become visible now
     if row.hiddenUntilComplete then
@@ -3002,11 +3015,11 @@ function HCA_ShowAchievementTab()
         local isSelfFound = _G.IsSelfFound and _G.IsSelfFound() or false
         if isSelfFound then
             AchievementPanel.SoloModeCheckbox:Enable()
-            AchievementPanel.SoloModeCheckbox.tooltip = "|cffffffffSolo Self Found|r \nToggling this option on will display the total points you will receive if you complete this achievement solo (no party members within 40 yards)."
+            AchievementPanel.SoloModeCheckbox.tooltip = "|cffffffffSolo Self Found|r \nToggling this option on will display the total points you will receive if you complete this achievement solo (no help from nearby players)."
         else
             AchievementPanel.SoloModeCheckbox:Disable()
             AchievementPanel.SoloModeCheckbox.Text:SetTextColor(0.5, 0.5, 0.5, 1)
-            --AchievementPanel.SoloModeCheckbox.tooltip = "|cffffffffSolo Self Found|r \nToggling this option on will display the total points you will receive if you complete this achievement solo (no party members within 40 yards). |cffff0000(Requires Self-Found buff to enable)|r"
+            --AchievementPanel.SoloModeCheckbox.tooltip = "|cffffffffSolo Self Found|r \nToggling this option on will display the total points you will receive if you complete this achievement solo (no help from nearby players). |cffff0000(Requires Self-Found buff to enable)|r"
         end
     end
     

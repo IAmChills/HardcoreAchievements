@@ -1513,7 +1513,7 @@ function EMBED:Rebuild()
       local isSelfFound = _G.IsSelfFound and _G.IsSelfFound() or false
       if isSelfFound then
         UHCA.SoloModeCheckbox:Enable()
-        UHCA.SoloModeCheckbox.tooltip = "|cffffffffSolo Self Found|r \nToggling this option on will display the total points you will receive if you complete this achievement solo (no party members within 40 yards)."
+        UHCA.SoloModeCheckbox.tooltip = "|cffffffffSolo Self Found|r \nToggling this option on will display the total points you will receive if you complete this achievement solo (no help from nearby players)."
       else
         UHCA.SoloModeCheckbox:Disable()
         UHCA.SoloModeCheckbox.Text:SetTextColor(0.5, 0.5, 0.5, 1)
