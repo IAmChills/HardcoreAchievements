@@ -670,7 +670,7 @@ local function CreateEmbedIcon(parent)
     end
   end)
   
-  -- Shift + Left Click to link achievement bracket into chat (matches CreateAchievementRow behavior)
+  -- Shift click to link achievement bracket into chat (matches CreateAchievementRow behavior)
   icon:SetScript("OnMouseUp", function(self, button)
     if button == "LeftButton" and IsShiftKeyDown() and self.achId then
       local iconTexture = self.Icon and self.Icon.GetTexture and self.Icon:GetTexture() or ""

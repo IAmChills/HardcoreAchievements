@@ -51,7 +51,7 @@ function HCA_GetAchievementHyperlink(achId, title, icon)
     local iconField = icon and tostring(icon) or ""
     -- Format: |Hhcaach:achId:icon:sender|h[Title]|h
     -- Points are looked up locally on the receiver's end
-    return string.format("|H%s:%s:%s:%s|h%s|h", HCA_LINK_PREFIX, tostring(achId), iconField, tostring(sender), display)
+    return "|cffffd100" .. string.format("|H%s:%s:%s:%s|h%s|h", HCA_LINK_PREFIX, tostring(achId), iconField, tostring(sender), display) .. "|r"
 end
 
 -- Tooltip rendering for our custom link

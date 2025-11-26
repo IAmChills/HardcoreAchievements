@@ -898,6 +898,53 @@ local function RestoreCompletionsFromDB()
     RefreshOutleveledAll()
 end
 
+local function ToggleAchievementCharacterFrameTab()
+    local isShown = CharacterFrame and CharacterFrame:IsShown() and
+                   (AchievementPanel and AchievementPanel:IsShown() or (Tab and Tab.squareFrame and Tab.squareFrame:IsShown()))
+    if isShown then
+        CharacterFrame:Hide()
+    elseif not CharacterFrame:IsShown() then
+        CharacterFrame:Show()
+        if HCA_ShowAchievementTab then
+            HCA_ShowAchievementTab()
+        end
+    else
+        if CharacterFrame:IsShown() and HCA_ShowAchievementTab then
+            HCA_ShowAchievementTab()
+        end
+    end
+end
+
+local function ShowHardcoreAchievementWindow()
+    local _, cdb = GetCharDB()
+    if cdb and cdb.settings and cdb.settings.showCustomTab then
+        ToggleAchievementCharacterFrameTab()
+    elseif type(ToggleSettings) == "function" then
+        local container = nil
+        if TabManager and TabManager.getTabContent then
+            container = TabManager.getTabContent(3)
+        end
+        if not container and _G.tabContents and _G.tabContents[3] then
+            container = _G.tabContents[3]
+        end
+        local isContainerShown = container and container.IsShown and container:IsShown()
+        if isContainerShown then
+            ToggleSettings()
+        else
+            ToggleSettings()
+            if TabManager and TabManager.switchToTab then
+                TabManager.switchToTab(3)
+            elseif type(OpenSettingsToTab) == "function" then
+                OpenSettingsToTab(3)
+            end
+        end
+    elseif type(OpenSettingsToTab) == "function" then
+        OpenSettingsToTab(3)
+    else
+        ToggleAchievementCharacterFrameTab()
+    end
+end
+
 -- =========================================================
 -- Simple Achievement Toast
 -- =========================================================
@@ -1033,23 +1080,10 @@ local function HCA_CreateAchToast()
     -- Make the toast clickable
     f:EnableMouse(true)
     
-    -- Store achievement data for tooltip display
-    f.achId = nil
-    f.achTitle = nil
-    f.achIcon = nil
-    f.achPoints = nil
-    
-    -- Mouse button handler to show achievement tooltip (OnMouseUp for left button)
+    -- Mouse button handler opens the achievements panel (OnMouseUp for left button)
     f:SetScript("OnMouseUp", function(self, button)
-        if button == "LeftButton" and self.achId then
-            -- Generate hyperlink using the same format as chat links
-            if _G.HCA_GetAchievementHyperlink then
-                local link = _G.HCA_GetAchievementHyperlink(self.achId, self.achTitle, self.achIcon)
-                if link and ItemRefTooltip then
-                    -- Use the same tooltip mechanism as chat links
-                    ItemRefTooltip:SetHyperlink(link)
-                end
-            end
+        if button == "LeftButton" then
+            ShowHardcoreAchievementWindow()
         end
     end)
 
@@ -1298,64 +1332,7 @@ local minimapDataObject = LDB:NewDataObject("HardcoreAchievements", {
     icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\HardcoreAchievementsButton.png",
     OnClick = function(self, button)
         if button == "LeftButton" and not IsShiftKeyDown() then
-            local _, cdb = GetCharDB()
-            
-            -- Helper function to toggle Character Frame with achievements tab
-            local function toggleCharacterFrameTab()
-                local isShown = CharacterFrame and CharacterFrame:IsShown() and 
-                               (AchievementPanel and AchievementPanel:IsShown() or (Tab and Tab.squareFrame and Tab.squareFrame:IsShown()))
-                if isShown then
-                    --ToggleCharacter("PaperDollFrame")
-                    --ToggleCharacter("PaperDollFrame")
-                    CharacterFrame:Hide()
-                elseif not CharacterFrame:IsShown() then
-                        --ToggleCharacter("PaperDollFrame")
-                        CharacterFrame:Show()
-                    if HCA_ShowAchievementTab then
-                        HCA_ShowAchievementTab()
-                    end
-                else
-                    if CharacterFrame:IsShown() then
-                        HCA_ShowAchievementTab()
-                    end
-                end
-            end
-            
-            -- Check if using custom Character Frame tab
-            if cdb and cdb.settings and cdb.settings.showCustomTab then
-                toggleCharacterFrameTab()
-            elseif type(ToggleSettings) == "function" then
-                -- Toggle UltraHardcore settings window and switch to tab 3 when opening
-                local container = nil
-                if TabManager and TabManager.getTabContent then
-                    container = TabManager.getTabContent(3)
-                end
-                if not container and _G.tabContents and _G.tabContents[3] then
-                    container = _G.tabContents[3]
-                end
-                -- Check if the achievements tab container is currently shown
-                local isContainerShown = container and container.IsShown and container:IsShown()
-                
-                -- If the container is shown, we're on achievements tab and should just close
-                if isContainerShown then
-                    ToggleSettings()
-                else
-                    -- Container is not shown, open the settings window
-                    ToggleSettings()
-                    -- After opening, switch to tab 3
-                    if TabManager and TabManager.switchToTab then
-                        TabManager.switchToTab(3)
-                    elseif type(OpenSettingsToTab) == "function" then
-                        OpenSettingsToTab(3)
-                    end
-                end
-            elseif type(OpenSettingsToTab) == "function" then
-                -- Fallback if ToggleSettings doesn't exist but OpenSettingsToTab does
-                OpenSettingsToTab(3)
-            else
-                -- Fallback: use Character Frame method
-                toggleCharacterFrameTab()
-            end
+            ShowHardcoreAchievementWindow()
         elseif button == "RightButton" then
             -- Right-click to open options panel
             if Settings and Settings.OpenToCategory then
@@ -1733,7 +1710,7 @@ do
             end
             GameTooltip:SetOwner(self, "ANCHOR_RIGHT", -30, 0)
             GameTooltip:SetText(ACHIEVEMENTS, 1, 1, 1)
-            GameTooltip:AddLine("Shift + Left Click to drag \nMust not be active", 0.5, 0.5, 0.5)
+            GameTooltip:AddLine("Shift click to drag \nMust not be active", 0.5, 0.5, 0.5)
             GameTooltip:Show()
         end)
         squareFrame:HookScript("OnLeave", function(self)
@@ -3052,7 +3029,7 @@ Tab:HookScript("OnEnter", function(self)
     -- Show tooltip with drag instructions
     GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
     GameTooltip:SetText(ACHIEVEMENTS, 1, 1, 1)
-    GameTooltip:AddLine("Shift + Left Click to drag \nMust not be active", 0.5, 0.5, 0.5)
+    GameTooltip:AddLine("Shift click to drag \nMust not be active", 0.5, 0.5, 0.5)
     GameTooltip:Show()
 end)
 
