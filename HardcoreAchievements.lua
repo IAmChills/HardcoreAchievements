@@ -1,6 +1,7 @@
 local ADDON_NAME, addon = ...
 local playerGUID
 HCA_SELF_FOUND_BONUS = 5
+local SETTINGS_ICON_TEXTURE = "Interface\\AddOns\\HardcoreAchievements\\Images\\icon_gear.png"
 
 local EvaluateCustomCompletions
 local RefreshOutleveledAll
@@ -1335,6 +1336,21 @@ end
 -- =========================================================
 
 -- Initialize minimap button libraries
+local function OpenOptionsPanel()
+    if Settings and Settings.OpenToCategory then
+        local targetCategory = (addon and addon.settingsCategory) or _G._HardcoreAchievementsOptionsCategory
+        if targetCategory and targetCategory.GetID then
+            Settings.OpenToCategory(targetCategory:GetID())
+            return
+        end
+    end
+    if InterfaceOptionsFrame_OpenToCategory then
+        InterfaceOptionsFrame_OpenToCategory("Hardcore Achievements")
+    end
+end
+
+_G.HardcoreAchievements_OpenOptionsPanel = OpenOptionsPanel
+
 local LDB = LibStub("LibDataBroker-1.1")
 local LDBIcon = LibStub("LibDBIcon-1.0")
 
@@ -1348,9 +1364,7 @@ local minimapDataObject = LDB:NewDataObject("HardcoreAchievements", {
             ShowHardcoreAchievementWindow()
         elseif button == "RightButton" then
             -- Right-click to open options panel
-            if Settings and Settings.OpenToCategory then
-                Settings.OpenToCategory(addon.settingsCategory:GetID())
-            end
+            OpenOptionsPanel()
         elseif button == "LeftButton" and IsShiftKeyDown() then
             -- Left-click with Shift to open admin panel
             if AdminPanel and AdminPanel.Open then
@@ -2235,6 +2249,25 @@ AchievementPanel.SoloModeCheckbox:SetScript("OnEnter", function(self)
     end
 end)
 AchievementPanel.SoloModeCheckbox:SetScript("OnLeave", function(self)
+    GameTooltip:Hide()
+end)
+
+AchievementPanel.SettingsButton = CreateFrame("Button", nil, AchievementPanel)
+AchievementPanel.SettingsButton:SetSize(14, 14)
+AchievementPanel.SettingsButton:SetPoint("BOTTOMLEFT", AchievementPanel.SoloModeCheckbox, "TOPLEFT", 6, 18)
+AchievementPanel.SettingsButton.Icon = AchievementPanel.SettingsButton:CreateTexture(nil, "ARTWORK")
+AchievementPanel.SettingsButton.Icon:SetAllPoints(AchievementPanel.SettingsButton)
+AchievementPanel.SettingsButton.Icon:SetTexture(SETTINGS_ICON_TEXTURE)
+AchievementPanel.SettingsButton.Icon:SetVertexColor(1, 0.82, 0.0)
+AchievementPanel.SettingsButton:SetScript("OnClick", function()
+    OpenOptionsPanel()
+end)
+AchievementPanel.SettingsButton:SetScript("OnEnter", function(self)
+    GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+    GameTooltip:SetText("Open Options", nil, nil, nil, nil, true)
+    GameTooltip:Show()
+end)
+AchievementPanel.SettingsButton:SetScript("OnLeave", function()
     GameTooltip:Hide()
 end)
 

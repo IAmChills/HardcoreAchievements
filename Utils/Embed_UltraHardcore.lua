@@ -1847,20 +1847,8 @@ local function BuildEmbedIfNeeded()
     
     -- Click handler to open Options panel
     UHCA.SettingsButton:SetScript("OnClick", function(self)
-      -- Try to open via Settings API first
-      if Settings and Settings.OpenToCategory then
-        -- Get the addon reference
-        local addon = _G.HardcoreAchievementsAddon
-        if addon and addon.settingsCategory then
-          Settings.OpenToCategory(addon.settingsCategory:GetID())
-        elseif _G._HardcoreAchievementsOptionsCategory then
-          Settings.OpenToCategory(_G._HardcoreAchievementsOptionsCategory:GetID())
-        end
-      else
-        -- Fallback: try to show Interface Options and navigate to addon
-        if InterfaceOptionsFrame then
-          InterfaceOptionsFrame_OpenToCategory("Hardcore Achievements")
-        end
+      if _G.HardcoreAchievements_OpenOptionsPanel then
+        _G.HardcoreAchievements_OpenOptionsPanel()
       end
     end)
     
