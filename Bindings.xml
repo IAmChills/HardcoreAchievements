@@ -1,5 +1,5 @@
 <Bindings>
-	<Binding name="HCA_TOGGLE" category = "Hardcore Achievements" default="SHIFT-A">
+	<Binding name="HCA_TOGGLE" category = "Hardcore Achievements">
 		ShowHardcoreAchievementWindow()
 	</Binding>
 </Bindings>
