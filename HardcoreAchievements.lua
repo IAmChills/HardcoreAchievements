@@ -929,7 +929,7 @@ local function ToggleAchievementCharacterFrameTab()
     end
 end
 
-local function ShowHardcoreAchievementWindow()
+function ShowHardcoreAchievementWindow()
     local _, cdb = GetCharDB()
     if cdb and cdb.settings and cdb.settings.showCustomTab then
         ToggleAchievementCharacterFrameTab()

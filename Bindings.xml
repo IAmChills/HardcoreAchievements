@@ -1,0 +1,5 @@
+<Bindings>
+	<Binding name="Toggle Achievements" category = "Hardcore Achievements">
+		ShowHardcoreAchievementWindow()
+	</Binding>
+</Bindings>
