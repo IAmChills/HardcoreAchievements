@@ -1353,6 +1353,8 @@ _G.HardcoreAchievements_OpenOptionsPanel = OpenOptionsPanel
 local LDB = LibStub("LibDataBroker-1.1")
 local LDBIcon = LibStub("LibDBIcon-1.0")
 
+BINDING_NAME_HCA_TOGGLE = "Toggle Achievements"
+
 -- Create the data object for the minimap button
 local minimapDataObject = LDB:NewDataObject("HardcoreAchievements", {
     type = "data source",
@@ -3069,10 +3071,16 @@ Tab:HookScript("OnEnter", function(self)
     if Tab.squareFrame and Tab.squareFrame:IsShown() and Tab.squareFrame.highlight then
         Tab.squareFrame.highlight:Show()
     end
-    
+    local key1, key2 = GetBindingKey("HCA_TOGGLE")
+    local keybindText = ""
+    if key1 then keybindText = "|cffffd100 (" .. key1 .. ")|r" end
     -- Show tooltip with drag instructions
     GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-    GameTooltip:SetText(ACHIEVEMENTS, 1, 1, 1)
+    if keybindText ~= "" then
+        GameTooltip:SetText(ACHIEVEMENTS .. keybindText, 1, 1, 1)
+    else
+        GameTooltip:SetText(ACHIEVEMENTS, 1, 1, 1)
+    end
     GameTooltip:AddLine("Shift click to drag \nMust not be active", 0.5, 0.5, 0.5)
     GameTooltip:Show()
 end)
