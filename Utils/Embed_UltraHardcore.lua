@@ -673,9 +673,8 @@ local function CreateEmbedIcon(parent)
   -- Shift click to link achievement bracket into chat (matches CreateAchievementRow behavior)
   icon:SetScript("OnMouseUp", function(self, button)
     if button == "LeftButton" and IsShiftKeyDown() and self.achId then
-      local iconTexture = self.Icon and self.Icon.GetTexture and self.Icon:GetTexture() or ""
-      -- Use centralized function to generate bracket format
-      local bracket = _G.HCA_GetAchievementBracket and _G.HCA_GetAchievementBracket(self.achId, iconTexture) or string.format("[HCA:(%s,%s)]", tostring(self.achId), tostring(iconTexture))
+      -- Use centralized function to generate bracket format (icon looked up client-side)
+      local bracket = _G.HCA_GetAchievementBracket and _G.HCA_GetAchievementBracket(self.achId) or string.format("[HCA:(%s)]", tostring(self.achId))
 
       local editBox = ChatEdit_GetActiveWindow()
       if not editBox or not editBox:IsVisible() then
@@ -1021,8 +1020,8 @@ local function CreateEmbedModernRow(parent, srow)
     
     row:SetScript("OnMouseUp", function(self, button)
         if button == "LeftButton" and IsShiftKeyDown() and self.achId then
-            local iconTexture = self.Icon and self.Icon.GetTexture and self.Icon:GetTexture() or ""
-            local bracket = _G.HCA_GetAchievementBracket and _G.HCA_GetAchievementBracket(self.achId, iconTexture) or string.format("[HCA:(%s,%s)]", tostring(self.achId), tostring(iconTexture))
+            -- Use centralized function to generate bracket format (icon looked up client-side)
+            local bracket = _G.HCA_GetAchievementBracket and _G.HCA_GetAchievementBracket(self.achId) or string.format("[HCA:(%s)]", tostring(self.achId))
 
             local editBox = ChatEdit_GetActiveWindow()
             if not editBox or not editBox:IsVisible() then

@@ -38,20 +38,19 @@ local function ViewerHasCompletedAchievement(achId)
 end
 
 -- Public: build a bracket format string for chat (used before chat filter converts to hyperlink)
--- Format: [HCA:(achId,icon)] - points are looked up locally on receiver's end
-function HCA_GetAchievementBracket(achId, icon)
-    local iconField = icon and tostring(icon) or ""
-    return string.format("[HCA:(%s,%s)]", tostring(achId), iconField)
+-- Format: [HCA:(achId)] - icon, points, and other data are looked up locally on receiver's end
+function HCA_GetAchievementBracket(achId)
+    return string.format("[HCA:(%s)]", tostring(achId))
 end
 
 -- Public: build a hyperlink string for an achievement id and title
-function HCA_GetAchievementHyperlink(achId, title, icon)
+-- Icon and other data are looked up locally on the receiver's end using the achId
+function HCA_GetAchievementHyperlink(achId, title)
     local sender = UnitGUID("player") or ""
     local display = string.format("[%s]", tostring(title or achId))
-    local iconField = icon and tostring(icon) or ""
-    -- Format: |Hhcaach:achId:icon:sender|h[Title]|h
-    -- Points are looked up locally on the receiver's end
-    return "|cffffd100" .. string.format("|H%s:%s:%s:%s|h%s|h", HCA_LINK_PREFIX, tostring(achId), iconField, tostring(sender), display) .. "|r"
+    -- Format: |Hhcaach:achId:sender|h[Title]|h
+    -- Icon, points, and other data are always looked up locally on the receiver's end
+    return "|cffffd100" .. string.format("|H%s:%s:%s|h%s|h", HCA_LINK_PREFIX, tostring(achId), tostring(sender), display) .. "|r"
 end
 
 -- Tooltip rendering for our custom link
@@ -61,9 +60,9 @@ if Old_ItemRef_SetHyperlink then
         local linkStr = tostring(link or "")
         -- Extract hyperlink part (between |H and |h) or use the whole string if no |H wrapper
         local hyperlinkPart = string.match(linkStr, "^%|H([^|]+)%|h") or linkStr
-        -- Parse link format: hcaach:achId:icon:sender
-        -- Points are always looked up locally, never from the link
-        local prefix, achId, iconStr, sender = string.match(hyperlinkPart, "^(%w+):([^:]+):?([^:]*):?(.*)$")
+        -- Parse link format: hcaach:achId:sender
+        -- Icon, points, and other data are always looked up locally, never from the link
+        local prefix, achId, sender = string.match(hyperlinkPart, "^(%w+):([^:]+):?(.*)$")
         if prefix == HCA_LINK_PREFIX and achId then
             ShowUIPanel(ItemRefTooltip)
 			ItemRefTooltip:SetOwner(UIParent, "ANCHOR_PRESERVE")
@@ -72,7 +71,7 @@ if Old_ItemRef_SetHyperlink then
             local rec = GetAchievementById(achId)
             local title = rec and rec.title or ("Achievement " .. tostring(achId))
             local tooltip = rec and rec.tooltip or ""
-            local icon = 136116
+            local icon = 136116  -- Default fallback icon
             local points = 0
 
             -- Per-viewer secrecy: if secret and viewer hasn't completed, show secret placeholders
@@ -85,13 +84,11 @@ if Old_ItemRef_SetHyperlink then
                 icon = (rec and rec.secretIcon) or icon
                 points = (rec and tonumber(rec.secretPoints)) or 0
                 usingSecretPoints = true
-            end
-
-            if iconStr and iconStr ~= "" then
-                local asNum = tonumber(iconStr)
-                if asNum then icon = asNum else icon = iconStr end
-            elseif rec and rec.icon then
-                icon = rec.icon
+            else
+                -- Always use icon from local achievement data (client-side lookup)
+                if rec and rec.icon then
+                    icon = rec.icon
+                end
             end
 
             -- Always use local points, ignore sender's points from the link
@@ -245,9 +242,8 @@ local function ChatFilter_HCA(chatFrame, _, msg, ...)
     local function ViewerHasCompleted(id)
         return ViewerHasCompletedAchievement(id)
     end
-    -- Extended form with icon: [HCA: Title (id,icon)]
-    msg = msg:gsub("%[HCA:%s*(.-)%s*%(([^,%)]+)%s*,%s*([^%)]+)%)%]", function(title, id, iconStr)
-        local icon = (iconStr and iconStr ~= "") and iconStr or nil
+    -- Extended form with title: [HCA: Title (id)]
+    msg = msg:gsub("%[HCA:%s*(.-)%s*%(([^%)]+)%)%]", function(title, id)
         local rec = GetAchievementById(id)
         local displayTitle
         if rec and rec.secret and not ViewerHasCompleted(id) then
@@ -255,32 +251,18 @@ local function ChatFilter_HCA(chatFrame, _, msg, ...)
         else
             displayTitle = (rec and rec.title) or title
         end
-        local link = HCA_GetAchievementHyperlink(id, displayTitle, icon)
+        local link = HCA_GetAchievementHyperlink(id, displayTitle)
         changed = true
         return link
     end)
-    -- Compact form without title: [HCA:(id,icon)]
-    msg = msg:gsub("%[HCA:%s*%(([^,%)]+)%s*,%s*([^%)]+)%)%]", function(id, iconStr)
-        local icon = (iconStr and iconStr ~= "") and iconStr or nil
+    -- Compact form without title: [HCA:(id)]
+    msg = msg:gsub("%[HCA:%s*%(([^%)]+)%)%]", function(id)
         local rec = GetAchievementById(id)
         local displayTitle
         if rec and rec.secret and not ViewerHasCompleted(id) then
             displayTitle = rec.secretTitle or "Secret"
         else
             displayTitle = (rec and rec.title) or tostring(id)
-        end
-        local link = HCA_GetAchievementHyperlink(id, displayTitle, icon)
-        changed = true
-        return link
-    end)
-    -- Simple form without extras: [HCA: Title (id)] (id can be string)
-    msg = msg:gsub("%[HCA:%s*(.-)%s*%(([^%)]*)%)%]", function(title, id)
-        local rec = GetAchievementById(id)
-        local displayTitle
-        if rec and rec.secret and not ViewerHasCompleted(id) then
-            displayTitle = rec.secretTitle or "Secret"
-        else
-            displayTitle = (rec and rec.title) or title
         end
         local link = HCA_GetAchievementHyperlink(id, displayTitle)
         changed = true

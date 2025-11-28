@@ -827,8 +827,7 @@ function HCA_MarkRowCompleted(row)
         local link = nil
         local achIdForLink = row.achId or row.id
         if achIdForLink and _G.HCA_GetAchievementHyperlink then
-            local iconTexture = row.Icon and row.Icon:GetTexture()
-            link = _G.HCA_GetAchievementBracket(achIdForLink, iconTexture)
+            link = _G.HCA_GetAchievementBracket(achIdForLink)
         end
         local guildMessage = string.format(playerName .. ACHIEVEMENT_BROADCAST, "", link or achievementTitle)
         guildMessage = guildMessage:gsub("^%s+", "")
@@ -2521,9 +2520,8 @@ function CreateAchievementRow(parent, achId, title, tooltip, icon, level, points
 
     row:SetScript("OnMouseUp", function(self, button)
         if button == "LeftButton" and IsShiftKeyDown() and row.achId then
-            local iconTexture = row.Icon and row.Icon:GetTexture() or ""
-            -- Use centralized function to generate bracket format
-            local bracket = _G.HCA_GetAchievementBracket and _G.HCA_GetAchievementBracket(row.achId, iconTexture) or string.format("[HCA:(%s,%s)]", tostring(row.achId), tostring(iconTexture))
+            -- Use centralized function to generate bracket format (icon looked up client-side)
+            local bracket = _G.HCA_GetAchievementBracket and _G.HCA_GetAchievementBracket(row.achId) or string.format("[HCA:(%s)]", tostring(row.achId))
 
             local editBox = ChatEdit_GetActiveWindow()
             -- If no chat edit box is currently active/visible, do nothing
