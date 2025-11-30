@@ -1058,8 +1058,8 @@ function CharacterInspection.CreateInspectionAchievementRow(parent, achId, title
     
     row:SetScript("OnMouseUp", function(self, button)
         if button == "LeftButton" and IsShiftKeyDown() and row.achId then
-            local iconTexture = row.Icon and row.Icon:GetTexture() or ""
-            local bracket = _G.HCA_GetAchievementBracket and _G.HCA_GetAchievementBracket(row.achId, iconTexture) or string.format("[HCA:(%s,%s)]", tostring(row.achId), tostring(iconTexture))
+            -- Use centralized function to generate bracket format (icon looked up client-side)
+            local bracket = _G.HCA_GetAchievementBracket and _G.HCA_GetAchievementBracket(row.achId) or string.format("[HCA:(%s)]", tostring(row.achId))
             
             local editBox = ChatEdit_GetActiveWindow()
             if not editBox or not editBox:IsVisible() then

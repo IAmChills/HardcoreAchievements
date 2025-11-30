@@ -3,7 +3,7 @@ local EMBED = {}
 local UHCA -- tabContents[3]
 local ICON_SIZE = 60
 local ICON_PADDING = 12
-local GRID_COLS = 7  -- Number of columns in the grid
+local GRID_COLS = 8  -- Number of columns in the grid
 local CHECKBOX_TEXTURE_NORMAL = "Interface\\AddOns\\HardcoreAchievements\\Images\\box.png"
 local CHECKBOX_TEXTURE_ACTIVE = "Interface\\AddOns\\HardcoreAchievements\\Images\\box_active.png"
 local SETTINGS_ICON_TEXTURE = "Interface\\AddOns\\HardcoreAchievements\\Images\\icon_gear.png"
@@ -673,9 +673,8 @@ local function CreateEmbedIcon(parent)
   -- Shift click to link achievement bracket into chat (matches CreateAchievementRow behavior)
   icon:SetScript("OnMouseUp", function(self, button)
     if button == "LeftButton" and IsShiftKeyDown() and self.achId then
-      local iconTexture = self.Icon and self.Icon.GetTexture and self.Icon:GetTexture() or ""
-      -- Use centralized function to generate bracket format
-      local bracket = _G.HCA_GetAchievementBracket and _G.HCA_GetAchievementBracket(self.achId, iconTexture) or string.format("[HCA:(%s,%s)]", tostring(self.achId), tostring(iconTexture))
+      -- Use centralized function to generate bracket format (icon looked up client-side)
+      local bracket = _G.HCA_GetAchievementBracket and _G.HCA_GetAchievementBracket(self.achId) or string.format("[HCA:(%s)]", tostring(self.achId))
 
       local editBox = ChatEdit_GetActiveWindow()
       if not editBox or not editBox:IsVisible() then
@@ -1021,8 +1020,8 @@ local function CreateEmbedModernRow(parent, srow)
     
     row:SetScript("OnMouseUp", function(self, button)
         if button == "LeftButton" and IsShiftKeyDown() and self.achId then
-            local iconTexture = self.Icon and self.Icon.GetTexture and self.Icon:GetTexture() or ""
-            local bracket = _G.HCA_GetAchievementBracket and _G.HCA_GetAchievementBracket(self.achId, iconTexture) or string.format("[HCA:(%s,%s)]", tostring(self.achId), tostring(iconTexture))
+            -- Use centralized function to generate bracket format (icon looked up client-side)
+            local bracket = _G.HCA_GetAchievementBracket and _G.HCA_GetAchievementBracket(self.achId) or string.format("[HCA:(%s)]", tostring(self.achId))
 
             local editBox = ChatEdit_GetActiveWindow()
             if not editBox or not editBox:IsVisible() then
@@ -1723,7 +1722,7 @@ local function BuildEmbedIfNeeded()
   -- Class icon (centered over background, with drop shadow)
   if not UHCA.ClassIcon then
     UHCA.ClassIcon = UHCA:CreateTexture(nil, "OVERLAY")
-    UHCA.ClassIcon:SetPoint("TOPRIGHT", UHCA, "TOPRIGHT", - 11, -65)
+    UHCA.ClassIcon:SetPoint("BOTTOMRIGHT", UHCA.Scroll, "TOPRIGHT", 0, 40)
     UHCA.ClassIcon:SetTexCoord(0, 1, 0, 1)
     UHCA.ClassIcon:SetSize(44, 44)
   end
@@ -1783,51 +1782,6 @@ local function BuildEmbedIfNeeded()
     UHCA.MultiplierText = UHCA:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     UHCA.MultiplierText:SetPoint("TOPLEFT", UHCA.PlayerNameText, "BOTTOMLEFT", 1, - 12) -- Positioned below with spacing
     UHCA.MultiplierText:SetText("") -- Will be set by UpdateMultiplierText
-  end
-
-  -- Solo mode checkbox
-  if not UHCA.SoloModeCheckbox then
-    UHCA.SoloModeCheckbox = CreateFrame("CheckButton", nil, UHCA, "InterfaceOptionsCheckButtonTemplate")
-    UHCA.SoloModeCheckbox:SetPoint("TOP", UHCA, "TOP", 85, -130)
-    UHCA.SoloModeCheckbox:SetSize(12, 12)
-    UHCA.SoloModeCheckbox.Text:SetText("SSF")
-    UHCA.SoloModeCheckbox.Text:SetTextColor(0.922, 0.871, 0.761)
-    UHCA.SoloModeCheckbox.Text:ClearAllPoints()
-    UHCA.SoloModeCheckbox.Text:SetPoint("LEFT", UHCA.SoloModeCheckbox, "RIGHT", 5, 0)
-    ApplyCustomCheckboxTextures(UHCA.SoloModeCheckbox)
-    UHCA.SoloModeCheckbox:SetScript("OnClick", function(self)
-      if self:IsEnabled() then
-        local isChecked = self:GetChecked()
-        if type(HardcoreAchievements_GetCharDB) == "function" then
-          local _, cdb = HardcoreAchievements_GetCharDB()
-          if cdb and cdb.settings then
-            cdb.settings.soloAchievements = isChecked
-            -- Refresh all achievement points immediately
-            if RefreshAllAchievementPoints then
-              RefreshAllAchievementPoints()
-            end
-            -- Update status text for all embed rows after solo mode toggle
-            if EMBED and EMBED.rows then
-              for _, row in ipairs(EMBED.rows) do
-                if row:IsShown() then
-                  UpdateStatusTextEmbed(row)
-                end
-              end
-            end
-          end
-        end
-      end
-    end)
-    UHCA.SoloModeCheckbox:SetScript("OnEnter", function(self)
-      if self.tooltip then
-        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-        GameTooltip:SetText(self.tooltip, nil, nil, nil, nil, true)
-        GameTooltip:Show()
-      end
-    end)
-    UHCA.SoloModeCheckbox:SetScript("OnLeave", function(self)
-      GameTooltip:Hide()
-    end)
   end
 
   -- Settings button (cogwheel icon) in bottom left of frame
@@ -1896,7 +1850,7 @@ local function BuildEmbedIfNeeded()
   if not UHCA.LayoutGridCheckbox then
     local parent = UHCA.UIOverlayFrame or UHCA
     UHCA.LayoutGridCheckbox = CreateFrame("CheckButton", nil, parent, "UICheckButtonTemplate")
-    UHCA.LayoutGridCheckbox:SetPoint("LEFT", UHCA.LayoutListCheckbox, "RIGHT", 30, 0)
+    UHCA.LayoutGridCheckbox:SetPoint("LEFT", UHCA.LayoutListCheckbox.text, "RIGHT", 6, 0)
     UHCA.LayoutGridCheckbox:SetSize(10, 10)
     UHCA.LayoutGridCheckbox:SetFrameLevel(19)
     UHCA.LayoutGridCheckbox.text:SetText("Grid")
@@ -1915,6 +1869,53 @@ local function BuildEmbedIfNeeded()
 
   UpdateLayoutCheckboxes(IsModernRowsEnabled())
 
+  -- Solo mode checkbox
+  if not UHCA.SoloModeCheckbox then
+    local parent = UHCA.UIOverlayFrame or UHCA
+    UHCA.SoloModeCheckbox = CreateFrame("CheckButton", nil, parent, "UICheckButtonTemplate")
+    UHCA.SoloModeCheckbox:SetPoint("LEFT", UHCA.LayoutGridCheckbox.text, "RIGHT", 6, 0)
+    UHCA.SoloModeCheckbox:SetSize(10, 10)
+    UHCA.SoloModeCheckbox:SetFrameLevel(19)
+    UHCA.SoloModeCheckbox.Text:SetText("SSF")
+    UHCA.SoloModeCheckbox.Text:SetTextColor(0.922, 0.871, 0.761)
+    UHCA.SoloModeCheckbox.Text:ClearAllPoints()
+    UHCA.SoloModeCheckbox.Text:SetPoint("LEFT", UHCA.SoloModeCheckbox, "RIGHT", 5, 0)
+    ApplyCustomCheckboxTextures(UHCA.SoloModeCheckbox)
+    UHCA.SoloModeCheckbox:SetScript("OnClick", function(self)
+      if self:IsEnabled() then
+        local isChecked = self:GetChecked()
+        if type(HardcoreAchievements_GetCharDB) == "function" then
+          local _, cdb = HardcoreAchievements_GetCharDB()
+          if cdb and cdb.settings then
+            cdb.settings.soloAchievements = isChecked
+            -- Refresh all achievement points immediately
+            if RefreshAllAchievementPoints then
+              RefreshAllAchievementPoints()
+            end
+            -- Update status text for all embed rows after solo mode toggle
+            if EMBED and EMBED.rows then
+              for _, row in ipairs(EMBED.rows) do
+                if row:IsShown() then
+                  UpdateStatusTextEmbed(row)
+                end
+              end
+            end
+          end
+        end
+      end
+    end)
+    UHCA.SoloModeCheckbox:SetScript("OnEnter", function(self)
+      if self.tooltip then
+        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+        GameTooltip:SetText(self.tooltip, nil, nil, nil, nil, true)
+        GameTooltip:Show()
+      end
+    end)
+    UHCA.SoloModeCheckbox:SetScript("OnLeave", function(self)
+      GameTooltip:Hide()
+    end)
+  end
+
   -- Only create filter dropdown if it doesn't exist
   local filterDropdown = UHCA.FilterDropdown
   if not filterDropdown then
@@ -1926,7 +1927,7 @@ local function BuildEmbedIfNeeded()
     bg:SetPoint("TOPLEFT", -4, 0)
     bg:SetPoint("BOTTOMRIGHT", -17, 9)
     bg:SetTexture("Interface\\AddOns\\HardcoreAchievements\\Images\\dropdown.png")
-    filterDropdown:SetPoint("LEFT", UHCA.SoloModeCheckbox, "RIGHT", 40, 0)
+    filterDropdown:SetPoint("RIGHT", UHCA.Scroll, "TOPRIGHT", 15, 10)
     UIDropDownMenu_SetWidth(filterDropdown, 87)
     UIDropDownMenu_SetText(filterDropdown, "All")
 
@@ -1974,9 +1975,17 @@ local function BuildEmbedIfNeeded()
   end
 
   if not UHCA.HideCustomTabCheckbox then
+    -- Add label for the checkbox
+    local labelParent = UHCA.UIOverlayFrame or UHCA
+    UHCA.HideCustomTabLabel = labelParent:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    UHCA.HideCustomTabLabel:SetPoint("RIGHT", UHCA.Scroll, "BOTTOMRIGHT", 0, -20)
+    UHCA.HideCustomTabLabel:SetText("Show Achievements on the Character Info Panel")
+    UHCA.HideCustomTabLabel:SetTextColor(0.922, 0.871, 0.761)
+    UHCA.HideCustomTabLabel:SetDrawLayer("OVERLAY", 10)
+
     -- Add checkbox to control custom tab visibility
     UHCA.HideCustomTabCheckbox = CreateFrame("CheckButton", nil, UHCA, "UICheckButtonTemplate")
-    UHCA.HideCustomTabCheckbox:SetPoint("BOTTOM", UHCA, "BOTTOM", 0, -40)
+    UHCA.HideCustomTabCheckbox:SetPoint("RIGHT", UHCA.HideCustomTabLabel, "LEFT", -8, 0)
     UHCA.HideCustomTabCheckbox:SetSize(10, 10)
     UHCA.HideCustomTabCheckbox:SetFrameLevel(19)
     ApplyCustomCheckboxTextures(UHCA.HideCustomTabCheckbox)
@@ -1989,14 +1998,6 @@ local function BuildEmbedIfNeeded()
       return false
     end
     UHCA.HideCustomTabCheckbox:SetChecked(GetShowCustomTabSetting()) -- Default to not showing custom tab, but respect saved state
-    
-    -- Add label for the checkbox
-    local labelParent = UHCA.UIOverlayFrame or UHCA
-    UHCA.HideCustomTabLabel = labelParent:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    UHCA.HideCustomTabLabel:SetPoint("LEFT", UHCA.HideCustomTabCheckbox, "RIGHT", 8, 0)
-    UHCA.HideCustomTabLabel:SetText("Show Achievements on the Character Info Panel")
-    UHCA.HideCustomTabLabel:SetTextColor(0.922, 0.871, 0.761)
-    UHCA.HideCustomTabLabel:SetDrawLayer("OVERLAY", 10)
     
     -- Handle checkbox changes
     UHCA.HideCustomTabCheckbox:SetScript("OnClick", function(self)

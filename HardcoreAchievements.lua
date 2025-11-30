@@ -6,6 +6,30 @@ local SETTINGS_ICON_TEXTURE = "Interface\\AddOns\\HardcoreAchievements\\Images\\
 local EvaluateCustomCompletions
 local RefreshOutleveledAll
 local ProfessionTracker = _G.HCA_ProfessionCommon
+local QuestTrackedRows = {}
+
+local function TrackRowForQuest(row, questID)
+    local qid = tonumber(questID or row and row.requiredQuestId)
+    if not qid or not row then return end
+    QuestTrackedRows[qid] = QuestTrackedRows[qid] or {}
+    table.insert(QuestTrackedRows[qid], row)
+    row.requiredQuestId = qid
+end
+
+local function UntrackRowForQuest(row)
+    if not row or not row.requiredQuestId then return end
+    local qid = row.requiredQuestId
+    local bucket = QuestTrackedRows[qid]
+    if not bucket then return end
+    for i = #bucket, 1, -1 do
+        if bucket[i] == row or not bucket[i] then
+            table.remove(bucket, i)
+        end
+    end
+    if #bucket == 0 then
+        QuestTrackedRows[qid] = nil
+    end
+end
 
 -- Create/initialize addon table and expose globally (similar to BugSack pattern)
 if not addon then
@@ -245,6 +269,16 @@ end
 
 local function IsRowOutleveled(row)
     if not row or row.completed then return false end
+    
+    -- Additional safeguard: check database to ensure completed achievements are never marked as failed
+    local achId = row.achId or row.id
+    if achId then
+        local _, cdb = GetCharDB()
+        if cdb and cdb.achievements and cdb.achievements[achId] and cdb.achievements[achId].completed then
+            return false -- Achievement is completed in database, never mark as failed
+        end
+    end
+    
     if not row.maxLevel then return false end
     
     local lvl = UnitLevel("player") or 1
@@ -717,6 +751,7 @@ end
 function HCA_MarkRowCompleted(row)
     if row.completed then return end
     row.completed = true
+    UntrackRowForQuest(row)
 
     -- Title color will be set by UpdatePointsDisplay
     
@@ -827,8 +862,7 @@ function HCA_MarkRowCompleted(row)
         local link = nil
         local achIdForLink = row.achId or row.id
         if achIdForLink and _G.HCA_GetAchievementHyperlink then
-            local iconTexture = row.Icon and row.Icon:GetTexture()
-            link = _G.HCA_GetAchievementBracket(achIdForLink, iconTexture)
+            link = _G.HCA_GetAchievementBracket(achIdForLink)
         end
         local guildMessage = string.format(playerName .. ACHIEVEMENT_BROADCAST, "", link or achievementTitle)
         guildMessage = guildMessage:gsub("^%s+", "")
@@ -929,7 +963,7 @@ local function ToggleAchievementCharacterFrameTab()
     end
 end
 
-local function ShowHardcoreAchievementWindow()
+function ShowHardcoreAchievementWindow()
     local _, cdb = GetCharDB()
     if cdb and cdb.settings and cdb.settings.showCustomTab then
         ToggleAchievementCharacterFrameTab()
@@ -1354,6 +1388,8 @@ _G.HardcoreAchievements_OpenOptionsPanel = OpenOptionsPanel
 local LDB = LibStub("LibDataBroker-1.1")
 local LDBIcon = LibStub("LibDBIcon-1.0")
 
+BINDING_NAME_HCA_TOGGLE = "Toggle Achievements"
+
 -- Create the data object for the minimap button
 local minimapDataObject = LDB:NewDataObject("HardcoreAchievements", {
     type = "data source",
@@ -1472,6 +1508,7 @@ initFrame:SetScript("OnEvent", function(self, event, ...)
         if addonName == ADDON_NAME then
             C_Timer.After(3, function()
                 ApplySelfFoundBonus()
+                RestoreCompletionsFromDB()
                 --addon:ShowWelcomeMessage()
             end)
         end
@@ -2521,9 +2558,8 @@ function CreateAchievementRow(parent, achId, title, tooltip, icon, level, points
 
     row:SetScript("OnMouseUp", function(self, button)
         if button == "LeftButton" and IsShiftKeyDown() and row.achId then
-            local iconTexture = row.Icon and row.Icon:GetTexture() or ""
-            -- Use centralized function to generate bracket format
-            local bracket = _G.HCA_GetAchievementBracket and _G.HCA_GetAchievementBracket(row.achId, iconTexture) or string.format("[HCA:(%s,%s)]", tostring(row.achId), tostring(iconTexture))
+            -- Use centralized function to generate bracket format (icon looked up client-side)
+            local bracket = _G.HCA_GetAchievementBracket and _G.HCA_GetAchievementBracket(row.achId) or string.format("[HCA:(%s)]", tostring(row.achId))
 
             local editBox = ChatEdit_GetActiveWindow()
             -- If no chat edit box is currently active/visible, do nothing
@@ -2553,6 +2589,10 @@ function CreateAchievementRow(parent, achId, title, tooltip, icon, level, points
     row.zone = zone  -- Store the zone for later access
     row.achId = achId
     
+    if def and def.requiredQuestId then
+        TrackRowForQuest(row, def.requiredQuestId)
+    end
+
     if def and def.mapID then
         row.zone = nil
     end
@@ -2762,6 +2802,7 @@ do
         
         AchievementPanel._achEvt:RegisterEvent("COMBAT_LOG_EVENT_UNFILTERED")
         AchievementPanel._achEvt:RegisterEvent("QUEST_TURNED_IN")
+        AchievementPanel._achEvt:RegisterEvent("QUEST_REMOVED")
         AchievementPanel._achEvt:RegisterEvent("UNIT_SPELLCAST_SENT")
         AchievementPanel._achEvt:RegisterEvent("UNIT_SPELLCAST_SUCCEEDED")
         AchievementPanel._achEvt:RegisterEvent("CHAT_MSG_TEXT_EMOTE")
@@ -2956,6 +2997,29 @@ do
                         end
                     end
                 end
+            elseif event == "QUEST_REMOVED" then
+                local removedQuestId = tonumber(...)
+                if removedQuestId and QuestTrackedRows[removedQuestId] then
+                    local rows = QuestTrackedRows[removedQuestId]
+                    local needsRefresh = false
+                    for i = #rows, 1, -1 do
+                        local row = rows[i]
+                        if not row or row.completed then
+                            table.remove(rows, i)
+                        else
+                            needsRefresh = true
+                        end
+                    end
+                    if #rows == 0 then
+                        QuestTrackedRows[removedQuestId] = nil
+                    end
+                    if needsRefresh then
+                        RefreshOutleveledAll()
+                        if SortAchievementRows then
+                            SortAchievementRows()
+                        end
+                    end
+                end
             elseif event == "PLAYER_DEAD" then
                 for _, row in ipairs(AchievementPanel.achievements) do
                     if not row.completed and row.id == "Secret4" then
@@ -3071,10 +3135,16 @@ Tab:HookScript("OnEnter", function(self)
     if Tab.squareFrame and Tab.squareFrame:IsShown() and Tab.squareFrame.highlight then
         Tab.squareFrame.highlight:Show()
     end
-    
+    local key1, key2 = GetBindingKey("HCA_TOGGLE")
+    local keybindText = ""
+    if key1 then keybindText = "|cffffd100 (" .. key1 .. ")|r" end
     -- Show tooltip with drag instructions
     GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-    GameTooltip:SetText(ACHIEVEMENTS, 1, 1, 1)
+    if keybindText ~= "" then
+        GameTooltip:SetText(ACHIEVEMENTS .. keybindText, 1, 1, 1)
+    else
+        GameTooltip:SetText(ACHIEVEMENTS, 1, 1, 1)
+    end
     GameTooltip:AddLine("Shift click to drag \nMust not be active", 0.5, 0.5, 0.5)
     GameTooltip:Show()
 end)
