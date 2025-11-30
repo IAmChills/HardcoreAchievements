@@ -227,7 +227,7 @@ local Achievements = {
     zone = "Thunder Bluff"
 }, {
     achId = "Gazzuz",
-    title = "Burning Shadows",
+    title = "Slayer of Gazz’uz",
     level = 12,
     tooltip = "Complete |cff0091e6Burning Shadows|r before level 13",
     icon = 134085,
