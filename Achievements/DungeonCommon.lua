@@ -23,10 +23,12 @@ function DungeonCommon.registerDungeonAchievement(def)
     tooltip = tooltip,
     icon = icon,
     points = points,
+    level = level,
     mapID = def.requiredMapId,
     mapName = def.title,
     requiredKills = requiredKills,
     bossOrder = bossOrder,  -- Store boss order for tooltip display
+    faction = faction,
   }
 
   -- State for the current achievement session only

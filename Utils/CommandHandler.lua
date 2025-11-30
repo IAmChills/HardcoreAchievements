@@ -94,7 +94,7 @@ local function ValidatePayload(payload, sender)
     if currentTime - payload.timestamp > MAX_PAYLOAD_AGE then 
         return false, "Payload too old (max 5 minutes)" 
     end
-    if payload.timestamp > currentTime + 60 then
+    if payload.timestamp > currentTime + 120 then
         return false, "Payload timestamp too far in future"
     end
     
