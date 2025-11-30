@@ -227,13 +227,13 @@ local Achievements = {
     zone = "Thunder Bluff"
 }, {
     achId = "Gazzuz",
-    title = "Burning Shadows",
+    title = "Slayer of Gazz’uz",
     level = 12,
     tooltip = "Complete |cff0091e6Burning Shadows|r before level 13",
     icon = 134085,
     points = 10,
     requiredQuestId = 832,
-    targetNpcId = 3204,
+    targetNpcId = nil,
     faction = FACTION_HORDE,
     zone = "Orgrimmar"
 }, {
