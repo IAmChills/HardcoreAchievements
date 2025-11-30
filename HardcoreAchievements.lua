@@ -2906,7 +2906,8 @@ do
                     end
                 end
             elseif event == "QUEST_TURNED_IN" then
-                local questID = ...
+                local questID = select(1, ...)
+                questID = questID and tonumber(questID) or nil
                 -- Determine the level at turn-in: if player leveled up during turn-in, use the level before
                 local currentLevel = UnitLevel("player") or 1
                 local levelAtTurnIn = currentLevel
@@ -3002,18 +3003,34 @@ do
                 if removedQuestId and QuestTrackedRows[removedQuestId] then
                     local rows = QuestTrackedRows[removedQuestId]
                     local needsRefresh = false
+                    local clearedProgress = false
+                    local playerLevel = UnitLevel("player") or 1
                     for i = #rows, 1, -1 do
                         local row = rows[i]
                         if not row or row.completed then
                             table.remove(rows, i)
                         else
                             needsRefresh = true
+                            local shouldClearProgress = false
+                            if row.maxLevel and playerLevel > row.maxLevel then
+                                shouldClearProgress = true
+                            end
+                            if shouldClearProgress then
+                                local achId = row.id or row.achId or (row.Title and row.Title:GetText())
+                                if achId then
+                                    ClearProgress(achId)
+                                    clearedProgress = true
+                                end
+                            end
                         end
                     end
                     if #rows == 0 then
                         QuestTrackedRows[removedQuestId] = nil
                     end
                     if needsRefresh then
+                        if clearedProgress and HCA_UpdateTotalPoints then
+                            HCA_UpdateTotalPoints()
+                        end
                         RefreshOutleveledAll()
                         if SortAchievementRows then
                             SortAchievementRows()
