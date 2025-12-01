@@ -3,6 +3,9 @@
 ## Active Tasks
 
 - [ ] Completed at: ## information like Inspection window?
+- [ ] Hardcore Autopsy Journal
+- [ ] Show achievement locations on map
+- [ ] Achievement tracker
 
 - [ ] Arc Challenges
   - [ ] Unholy
