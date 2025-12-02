@@ -34,7 +34,7 @@ local function GetStatusText(params)
     if hasIneligibleKill and not completed then
         -- Determine message based on whether both kill and quest are required
         if requiresBoth then
-            return "|cffff4646Pending Turn-in (ineligible kill)|r"
+            return "|cffff4646Ineligible Kill|r"
         else
             return "|cffcf7171Ineligible Kill|r"
         end

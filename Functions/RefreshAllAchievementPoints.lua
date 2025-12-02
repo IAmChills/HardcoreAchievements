@@ -163,9 +163,9 @@ function RefreshAllAchievementPoints()
                     -- Fallback if helper not available
                     if hasIneligibleKill then
                         local requiresBoth = row.questTracker and row.killTracker
-                        local message = requiresBoth and "|cffff4646Pending Turn-in (ineligible kill)|r" or "|cffcf7171Ineligible Kill|r"
+                        local message = requiresBoth and "|cffff4646Ineligible Kill|r"
                         row.Sub:SetText(levelText .. "\n" .. message)
-                    elseif hasSoloStatus and isSelfFound then
+                     elseif hasSoloStatus and isSelfFound then
                         row.Sub:SetText(levelText .. "\n|cFFac81d6Pending solo|r")
                     else
                         row.Sub:SetText(levelText)

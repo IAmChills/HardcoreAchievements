@@ -584,16 +584,23 @@ function M.registerQuestAchievement(cfg)
                     awardOnKillEnabled = HardcoreAchievements_IsAwardOnKillEnabled()
                 end
                 
-                -- Only allow kill tracking if player is on quest OR award on kill is enabled
-                if not awardOnKillEnabled and not isPlayerOnQuest() then
-                    return false -- Player is not on quest and award on kill is disabled, don't track kill
+                -- Allow kill tracking if:
+                -- 1. Player is on the quest (normal case), OR
+                -- 2. Award on kill is enabled, OR
+                -- 3. Player has quest progress (has turned in quest) - allows re-killing for eligibility
+                --    This fixes the case where player turns in quest with ineligible kill and needs to re-kill for eligibility
+                local hasQuestProgress = state.quest or (progressTable and progressTable.quest)
+                local canTrackKill = awardOnKillEnabled or isPlayerOnQuest() or hasQuestProgress
+                
+                if not canTrackKill then
+                    return false -- Player is not on quest, award on kill is disabled, and no quest progress - don't track kill
                 end
             end
             
             -- Check group eligibility after validating the kill matches
             local isGroupEligible = true
             if _G.IsGroupEligibleForAchievement then
-                isGroupEligible = _G.IsGroupEligibleForAchievement(MAX_LEVEL, ACH_ID)
+                isGroupEligible = _G.IsGroupEligibleForAchievement(MAX_LEVEL, ACH_ID, destGUID)
             end
             
             if not isGroupEligible then
@@ -610,7 +617,7 @@ function M.registerQuestAchievement(cfg)
                     return false
                 end
                 
-                print("|cff69adc9[HardcoreAchievements]|r Achievement |cffffffff" .. (ACH_ID or "Unknown") .. "|r cannot be fulfilled: An ineligible party member is nearby.")
+                print("|cff69adc9[Hardcore Achievements]|r |cffffd100Achievement " .. (ACH_ID or "Unknown") .. " cannot be fulfilled: An ineligible player contributed.|r")
                 
                 -- Track the kill progress, but mark as ineligible (don't increment eligible counts)
                 if REQUIRED_KILLS then

@@ -70,7 +70,7 @@ local function MigrateFromLeaderboardDB()
         end
         
         if migrated then
-            print("|cff00ff00[HardcoreAchievements]|r Migrated " .. migrationCount .. " character(s) achievement data from UltraHardcoreLeaderboard")
+            print("|cff00ff00[Hardcore Achievements]|r Migrated " .. migrationCount .. " character(s) achievement data from UltraHardcoreLeaderboard")
         end
         
         return migrated
@@ -92,7 +92,7 @@ local function CleanupLeaderboardAchievementData()
         end
         
         if cleaned then
-            print("|cff00ff00[HardcoreAchievements]|r Cleaned up old achievement data from UltraHardcoreLeaderboard database")
+            print("|cff00ff00[Hardcore Achievements]|r Cleaned up old achievement data from UltraHardcoreLeaderboard database")
         end
         
         return cleaned
@@ -152,7 +152,7 @@ local function CleanupIncorrectLevelAchievements()
     
     -- Log cleanup if any achievements were removed
     if cleanedCount > 0 then
-        local message = "|cff69adc9[HardcoreAchievements]|r |cfff0f000Cleaned up " .. cleanedCount .. " incorrectly completed achievement(s):|r"
+        local message = "|cff69adc9[Hardcore Achievements]|r |cfff0f000Cleaned up " .. cleanedCount .. " incorrectly completed achievement(s):|r"
         print(message)
         for _, cleaned in ipairs(cleanedAchievements) do
             print(string.format("  |cfff0f000- %s (completed at level %d, required level %d)|r", 
@@ -1349,7 +1349,7 @@ end
 function HardcoreAchievements_MigrateFromLeaderboard() 
     local migrated = MigrateFromLeaderboardDB()
     if not migrated then
-        print("|cff00ff00[HardcoreAchievements]|r No data found to migrate from UltraHardcoreLeaderboard")
+        print("|cff00ff00[Hardcore Achievements]|r No data found to migrate from UltraHardcoreLeaderboard")
     end
     return migrated
 end
@@ -2720,6 +2720,10 @@ do
                 recentKills[destGUID] = nil
             end)
         end
+        
+        -- Track NPCs the player is fighting (for achievements)
+        -- Only process kills if the player was actually fighting the NPC
+        local npcsInCombat = {}  -- [destGUID] = true when player is fighting this NPC
 
         -- Dedicated support for the Rats achievement: NPC IDs that qualify
         local RAT_NPC_IDS = {
@@ -2809,14 +2813,28 @@ do
         AchievementPanel._achEvt:RegisterEvent("PLAYER_LEVEL_CHANGED")
         AchievementPanel._achEvt:RegisterEvent("CHAT_MSG_LOOT")
         AchievementPanel._achEvt:RegisterEvent("PLAYER_DEAD")
+        AchievementPanel._achEvt:RegisterEvent("PLAYER_REGEN_ENABLED")
         AchievementPanel._achEvt:SetScript("OnEvent", function(_, event, ...)
-            if event == "COMBAT_LOG_EVENT_UNFILTERED" then
+            -- Clean up combat tracking when combat ends
+            if event == "PLAYER_REGEN_ENABLED" then
+                -- Clear combat tracking after a short delay (in case we're still processing events)
+                C_Timer.After(2, function()
+                    -- Only clear if we're not in combat anymore
+                    if not UnitAffectingCombat("player") then
+                        npcsInCombat = {}
+                    end
+                end)
+            elseif event == "COMBAT_LOG_EVENT_UNFILTERED" then
                 local _, subevent, _, sourceGUID, _, _, _, destGUID, _, _, _, param12, param13, param14, param15, param16 = CombatLogGetCurrentEventInfo()
                 --DevTools_Dump(COMBAT_LOG_EVENT_UNFILTERED)
                 if subevent == "PARTY_KILL" then
                     -- PARTY_KILL fires for player/party member kills
-                    -- Process it normally (if PARTY_KILL fires, it's a valid kill)
-                    processKill(destGUID)
+                    -- Only process if we were fighting this NPC (prevents tracking kills we had no part in)
+                    if npcsInCombat[destGUID] then
+                        processKill(destGUID)
+                        -- Clean up combat tracking
+                        npcsInCombat[destGUID] = nil
+                    end
                 elseif DAMAGE_SUBEVENTS[subevent] then
                     local playerGUID = UnitGUID("player")
                     local shouldProcess = false
@@ -2848,11 +2866,29 @@ do
                     end
                     
                     if shouldProcess and destGUID then
+                        -- Player/party member/pet damage - track that we're fighting this NPC
+                        local npcId = getNpcIdFromGUID(destGUID)
+                        if npcId then
+                            -- Check if any achievement tracks this NPC
+                            local isTracked = false
+                            if AchievementPanel and AchievementPanel.achievements then
+                                for _, row in ipairs(AchievementPanel.achievements) do
+                                    if not row.completed and type(row.killTracker) == "function" then
+                                        isTracked = true
+                                        break
+                                    end
+                                end
+                            end
+                            -- Mark that we're fighting this tracked NPC
+                            if isTracked or (npcId and RAT_NPC_IDS[npcId]) then
+                                npcsInCombat[destGUID] = true
+                            end
+                        end
+                        
                         -- If overkill is present (>= 0), the target died from this damage
                         -- This catches kills that don't trigger PARTY_KILL (e.g., pet kills, DoT kills)
                         local overkill = subevent == "SWING_DAMAGE" and param13 or param16
                         if overkill and overkill >= 0 then
-                            local npcId = getNpcIdFromGUID(destGUID)
                             -- Check for Rats achievement NPCs
                             if npcId and RAT_NPC_IDS[npcId] then
                                 processKill(destGUID)
@@ -2871,6 +2907,51 @@ do
                                 end
                                 if isTracked then
                                     processKill(destGUID)
+                                end
+                            end
+                        end
+                    elseif not shouldProcess and destGUID then
+                        -- Check if this is a kill by a non-party player
+                        -- Only process if the player was fighting this NPC
+                        if not npcsInCombat[destGUID] then
+                            -- Player wasn't fighting this NPC, ignore the kill
+                            -- (This prevents tracking kills the player had no part in)
+                        else
+                            -- If overkill is present (>= 0), the target died from this damage
+                            local overkill = subevent == "SWING_DAMAGE" and param13 or param16
+                            if overkill and overkill >= 0 then
+                                -- Check if source is a player (GUID starts with "Player-")
+                                local guidType = sourceGUID and select(1, strsplit("-", sourceGUID))
+                                local isPlayerSource = guidType == "Player"
+                                
+                                if isPlayerSource then
+                                    local npcId = getNpcIdFromGUID(destGUID)
+                                    if npcId then
+                                        -- Check if any achievement tracks this NPC
+                                        local isTracked = false
+                                        if AchievementPanel and AchievementPanel.achievements then
+                                            for _, row in ipairs(AchievementPanel.achievements) do
+                                                if not row.completed and type(row.killTracker) == "function" then
+                                                    isTracked = true
+                                                    break
+                                                end
+                                            end
+                                        end
+                                        
+                                        -- Check if this is a Rats achievement NPC
+                                        local isRatsNPC = RAT_NPC_IDS[npcId]
+                                        
+                                        if isTracked or isRatsNPC then
+                                            -- A non-party player got the kill while we were fighting this NPC
+                                            -- Process the kill - the killTracker will check eligibility
+                                            -- PlayerIsSolo tracks if non-party players helped (via threat)
+                                            -- If they helped significantly (>10% threat), it will mark as ineligible
+                                            processKill(destGUID)
+                                            
+                                            -- Clean up combat tracking
+                                            npcsInCombat[destGUID] = nil
+                                        end
+                                    end
                                 end
                             end
                         end
