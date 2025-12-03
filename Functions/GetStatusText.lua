@@ -36,7 +36,7 @@ local function GetStatusText(params)
         if requiresBoth then
             return "|cffff4646Ineligible Kill|r"
         else
-            return "|cffcf7171Ineligible Kill|r"
+            return "|cffff4646Ineligible Kill|r"
         end
     end
     
@@ -58,7 +58,7 @@ local function GetStatusText(params)
     end
     
     if not completed and isSoloMode and allowSoloDouble and not hasSoloStatus and isSelfFound then
-        return "|cFF808080Solo bonus|r"
+        return "|cff808080Solo bonus|r"
     end
     
     -- No special status

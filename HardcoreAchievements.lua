@@ -43,63 +43,6 @@ local function EnsureDB()
     return HardcoreAchievementsDB
 end
 
--- Migration function to move achievement data from UltraHardcoreLeaderboard database
-local function MigrateFromLeaderboardDB()
-    -- Check if we already have our own database
-    if HardcoreAchievementsDB and HardcoreAchievementsDB.chars and next(HardcoreAchievementsDB.chars) then
-        return false -- Already migrated or have data
-    end
-    
-    -- Check if UltraHardcoreLeaderboardDB exists and has achievement data
-    if UltraHardcoreLeaderboardDB and UltraHardcoreLeaderboardDB.chars then
-        local migrated = false
-        local migrationCount = 0
-        
-        for guid, charData in pairs(UltraHardcoreLeaderboardDB.chars) do
-            if charData.achievements and next(charData.achievements) then
-                -- Migrate this character's achievement data
-                if not HardcoreAchievementsDB.chars[guid] then
-                    HardcoreAchievementsDB.chars[guid] = {
-                        meta = charData.meta or {},
-                        achievements = charData.achievements
-                    }
-                    migrationCount = migrationCount + 1
-                    migrated = true
-                end
-            end
-        end
-        
-        if migrated then
-            print("|cff00ff00[Hardcore Achievements]|r Migrated " .. migrationCount .. " character(s) achievement data from UltraHardcoreLeaderboard")
-        end
-        
-        return migrated
-    end
-    
-    return false
-end
-
--- Optional cleanup function to remove achievement data from UltraHardcoreLeaderboard database
--- This should only be called after confirming migration was successful
-local function CleanupLeaderboardAchievementData()
-    if UltraHardcoreLeaderboardDB and UltraHardcoreLeaderboardDB.chars then
-        local cleaned = false
-        for guid, charData in pairs(UltraHardcoreLeaderboardDB.chars) do
-            if charData.achievements then
-                charData.achievements = nil
-                cleaned = true
-            end
-        end
-        
-        if cleaned then
-            print("|cff00ff00[Hardcore Achievements]|r Cleaned up old achievement data from UltraHardcoreLeaderboard database")
-        end
-        
-        return cleaned
-    end
-    return false
-end
-
 local function GetCharDB()
     local db = EnsureDB()
     if not playerGUID then return db, nil end
@@ -152,13 +95,13 @@ local function CleanupIncorrectLevelAchievements()
     
     -- Log cleanup if any achievements were removed
     if cleanedCount > 0 then
-        local message = "|cff69adc9[Hardcore Achievements]|r |cfff0f000Cleaned up " .. cleanedCount .. " incorrectly completed achievement(s):|r"
+        local message = "|cff69adc9[Hardcore Achievements]|r |cffffd100Cleaned up " .. cleanedCount .. " incorrectly completed achievement(s):|r"
         print(message)
         for _, cleaned in ipairs(cleanedAchievements) do
-            print(string.format("  |cfff0f000- %s (completed at level %d, required level %d)|r", 
+            print(string.format("  |cffffd100- %s (completed at level %d, required level %d)|r", 
                 cleaned.achId, cleaned.completionLevel, cleaned.requiredLevel))
         end
-        print("|cfff0f000I am chasing a weird bug, thank you for your patience. - |r|cff69adc9Chills|r")
+        print("|cffffd100I am chasing a weird bug, thank you for your patience. - |r|cff69adc9Chills|r")
     end
     
     return cleanedCount
@@ -1343,20 +1286,6 @@ end
 -- Exported: reload tab position (used by embedded UI)
 function HardcoreAchievements_LoadTabPosition()
     LoadTabPosition()
-end
-
--- Export migration functions for manual use
-function HardcoreAchievements_MigrateFromLeaderboard() 
-    local migrated = MigrateFromLeaderboardDB()
-    if not migrated then
-        print("|cff00ff00[Hardcore Achievements]|r No data found to migrate from UltraHardcoreLeaderboard")
-    end
-    return migrated
-end
-
-function HardcoreAchievements_CleanupOldData()
-    local cleaned = CleanupLeaderboardAchievementData()
-    return cleaned
 end
 
 function HardcoreAchievements_GetSettings()

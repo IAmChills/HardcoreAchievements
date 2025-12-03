@@ -166,7 +166,7 @@ function RefreshAllAchievementPoints()
                         local message = requiresBoth and "|cffff4646Ineligible Kill|r"
                         row.Sub:SetText(levelText .. "\n" .. message)
                      elseif hasSoloStatus and isSelfFound then
-                        row.Sub:SetText(levelText .. "\n|cFFac81d6Pending solo|r")
+                        row.Sub:SetText(levelText .. "\n|cffac81d6Pending solo|r")
                     else
                         row.Sub:SetText(levelText)
                     end

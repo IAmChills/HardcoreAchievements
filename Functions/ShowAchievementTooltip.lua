@@ -80,7 +80,7 @@ function HCA_ShowAchievementTooltip(frame, data)
     if isSoloMode and allowSoloDouble and not isSecretAchievement then
         -- Show title with "Solo bonus" on the right when SSF is enabled
         local soloText = "Solo bonus"
-        GameTooltip:AddDoubleLine(title, "|cFFac81d6" .. soloText .. "|r", 1, 1, 1, 0.5, 0.3, 0.9)
+        GameTooltip:AddDoubleLine(title, "|c" .. select(4, GetClassColor(select(2, UnitClass("player")))) .. soloText .. "|r", 1, 1, 1, 0.5, 0.3, 0.9)
     else
         GameTooltip:SetText(title, 1, 1, 1)
     end
@@ -130,7 +130,7 @@ function HCA_ShowAchievementTooltip(frame, data)
     end
     
     if isCatalogAchievement and not isSecret and not isProfessionAchievement and not isSoloModeChecked and (_G.IsLevelMilestone and not _G.IsLevelMilestone(achId)) and not requiresItemOnly then
-        tooltip = tooltip .. "|cffFFD700 (including all party members)|r"
+        tooltip = tooltip .. "|cffffd100 (including all party members)|r"
     end
     
     GameTooltip:AddLine(tooltip, nil, nil, nil, true)
