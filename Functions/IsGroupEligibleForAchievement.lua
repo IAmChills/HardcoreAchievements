@@ -7,26 +7,11 @@
 -- Parameters:
 --   MAX_LEVEL (number): The maximum level allowed for the achievement
 --   ACH_ID (string, optional): Achievement ID (for future use)
---   targetGUID (string, optional): GUID of the target being killed (to check for non-party player help)
 
 -- Configuration
 local OTHER_PLAYER_THREAT_THRESHOLD = 10  -- % threat from overleveled party members to fail (if ANY overleveled member has >10% threat, disqualify)
 
-function IsGroupEligibleForAchievement(MAX_LEVEL, ACH_ID, targetGUID)
-    -- Check if non-party players helped with this kill (if targetGUID is provided)
-    if targetGUID and _G.PlayerIsSoloForGUID then
-        local isSolo = _G.PlayerIsSoloForGUID(targetGUID)
-        if not isSolo then
-            -- Non-party players helped with this kill, mark as ineligible
-            return false
-        end
-    end
-    
-    -- If not in a group or raid, player is eligible (solo)
-    if not IsInGroup() and not IsInRaid() then
-        return true
-    end
-    
+function IsGroupEligibleForAchievement(MAX_LEVEL, ACH_ID)
     -- If in a raid, not eligible
     if IsInRaid() then
         return false
