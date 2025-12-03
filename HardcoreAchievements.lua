@@ -1385,9 +1385,6 @@ initFrame:SetScript("OnEvent", function(self, event, ...)
     if event == "PLAYER_LOGIN" then
         playerGUID = UnitGUID("player")
 
-        -- Run migration first, before setting up current character
-        MigrateFromLeaderboardDB()
-
         local db, cdb = GetCharDB()
         if cdb then
             -- Ensure settings table exists
@@ -2734,6 +2731,7 @@ do
         end
         
         AchievementPanel._achEvt:RegisterEvent("COMBAT_LOG_EVENT_UNFILTERED")
+        AchievementPanel._achEvt:RegisterEvent("QUEST_ACCEPTED")
         AchievementPanel._achEvt:RegisterEvent("QUEST_TURNED_IN")
         AchievementPanel._achEvt:RegisterEvent("QUEST_REMOVED")
         AchievementPanel._achEvt:RegisterEvent("UNIT_SPELLCAST_SENT")
@@ -2854,38 +2852,38 @@ do
                                 local isPlayerSource = guidType == "Player"
                                 
                                 if isPlayerSource then
-                                    local npcId = getNpcIdFromGUID(destGUID)
-                                    if npcId then
-                                        -- Check if any achievement tracks this NPC
-                                        local isTracked = false
-                                        if AchievementPanel and AchievementPanel.achievements then
-                                            for _, row in ipairs(AchievementPanel.achievements) do
-                                                if not row.completed and type(row.killTracker) == "function" then
-                                                    isTracked = true
-                                                    break
-                                                end
+                                local npcId = getNpcIdFromGUID(destGUID)
+                                if npcId then
+                                    -- Check if any achievement tracks this NPC
+                                    local isTracked = false
+                                    if AchievementPanel and AchievementPanel.achievements then
+                                        for _, row in ipairs(AchievementPanel.achievements) do
+                                            if not row.completed and type(row.killTracker) == "function" then
+                                                isTracked = true
+                                                break
                                             end
                                         end
-                                        
-                                        -- Check if this is a Rats achievement NPC
-                                        local isRatsNPC = RAT_NPC_IDS[npcId]
-                                        
-                                        if isTracked or isRatsNPC then
-                                            -- A non-party player got the kill while we were fighting this NPC
+                                    end
+                                    
+                                    -- Check if this is a Rats achievement NPC
+                                    local isRatsNPC = RAT_NPC_IDS[npcId]
+                                    
+                                    if isTracked or isRatsNPC then
+                                        -- A non-party player got the kill while we were fighting this NPC
                                             -- Process the kill - the killTracker will check eligibility
                                             -- PlayerIsSolo tracks if non-party players helped (via threat)
                                             -- If they helped significantly (>10% threat), it will mark as ineligible
-                                            processKill(destGUID)
-                                            
-                                            -- Clean up combat tracking
-                                            npcsInCombat[destGUID] = nil
-                                        end
+                                        processKill(destGUID)
+                                        
+                                        -- Clean up combat tracking
+                                        npcsInCombat[destGUID] = nil
                                     end
                                 end
                             end
                         end
                     end
                 end
+            end
                 
                 -- Track threat/solo status during combat for tracked NPCs
                 -- This ensures we have solo status available when PARTY_KILL fires
@@ -2915,40 +2913,48 @@ do
                         end
                     end
                 end
+            elseif event == "QUEST_ACCEPTED" then
+                -- arg2 is the QuestId
+                local questID = select(2, ...)
+                questID = questID and tonumber(questID) or nil
+                if questID and HardcoreAchievements_SetProgress then
+                    -- Store player's level when quest is accepted as a backup reference
+                    -- This helps prevent achievements from failing if player levels up between accepting and turning in
+                    local acceptLevel = UnitLevel("player") or 1
+                    for _, row in ipairs(AchievementPanel.achievements) do
+                        if not row.completed then
+                            -- Check if this achievement tracks this quest by comparing questID directly
+                            -- Don't call questTracker as it processes the quest and can complete the achievement
+                            local rowQuestId = row.requiredQuestId
+                            if rowQuestId and tonumber(rowQuestId) == questID then
+                                -- Store levelAtAccept as a backup (will be overwritten by levelAtKill or levelAtTurnIn on fulfillment)
+                                HardcoreAchievements_SetProgress(row.id, "levelAtAccept", acceptLevel)
+                            end
+                        end
+                    end
+                end
             elseif event == "QUEST_TURNED_IN" then
                 local questID = select(1, ...)
                 questID = questID and tonumber(questID) or nil
-                -- Determine the level at turn-in: if player leveled up during turn-in, use the level before
-                local currentLevel = UnitLevel("player") or 1
-                local levelAtTurnIn = currentLevel
-                -- If we have a stored level before turn-in and the level increased, use the stored level
-                if levelBeforeTurnIn and levelBeforeTurnIn < currentLevel then
-                    levelAtTurnIn = levelBeforeTurnIn
-                end
                 for _, row in ipairs(AchievementPanel.achievements) do
                     if not row.completed and type(row.questTracker) == "function" then
-                        -- Only set levelAtTurnIn if the quest tracker actually matches the quest
-                        -- Check if this achievement's quest matches before setting levelAtTurnIn
-                        local shouldSetLevelAtTurnIn = false
-                        if row.questTracker then
-                            -- Store the level at turn-in for this achievement before calling tracker
-                            -- This allows the achievement to validate against the level BEFORE the turn-in
-                            -- But only set it after we verify the quest matches (by calling tracker first with a test)
-                            -- Actually, we'll set it after the tracker confirms it matches
-                            shouldSetLevelAtTurnIn = true
-                        end
                         local questMatched = row.questTracker(questID)
-                        if questMatched and shouldSetLevelAtTurnIn and HardcoreAchievements_SetProgress then
-                            HardcoreAchievements_SetProgress(row.id, "levelAtTurnIn", levelAtTurnIn)
-                        end
                         if questMatched then
+                            -- For achievements that require kills, levelAtKill should already be stored in progress
+                            -- Only set levelAtTurnIn as a fallback if we don't have levelAtKill
+                            if HardcoreAchievements_SetProgress then
+                                local progressTable = HardcoreAchievements_GetProgress and HardcoreAchievements_GetProgress(row.id)
+                                -- Only set levelAtTurnIn if we don't have levelAtKill (for achievements without kill requirements)
+                                if not (progressTable and progressTable.levelAtKill) then
+                                    local currentLevel = UnitLevel("player") or 1
+                                    HardcoreAchievements_SetProgress(row.id, "levelAtTurnIn", currentLevel)
+                                end
+                            end
                             HCA_MarkRowCompleted(row)
                             HCA_AchToast_Show(row.Icon:GetTexture(), row.Title:GetText(), row.points, row)
                         end
                     end
                 end
-                -- Reset level tracking after processing
-                levelBeforeTurnIn = nil
             elseif event == "UNIT_SPELLCAST_SENT" then
                 -- Classic signature: unit, targetName, castGUID, spellId
                 local unit, targetName, castGUID, spellId = ...

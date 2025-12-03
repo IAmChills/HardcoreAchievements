@@ -58,12 +58,12 @@ function M.registerQuestAchievement(cfg)
     end
 
     local function belowMax()
-        -- Check stored levels: prioritize levelAtKill (when NPC was killed), then levelAtTurnIn (fallback)
+        -- Check stored levels: prioritize levelAtKill (when NPC was killed), then levelAtTurnIn, then levelAtAccept (backup)
         local progressTable = HardcoreAchievements_GetProgress and HardcoreAchievements_GetProgress(ACH_ID)
         local levelToCheck = nil
         if progressTable then
-            -- Priority: levelAtKill > levelAtTurnIn > current level
-            levelToCheck = progressTable.levelAtKill or progressTable.levelAtTurnIn
+            -- Priority: levelAtKill > levelAtTurnIn > levelAtAccept > current level
+            levelToCheck = progressTable.levelAtKill or progressTable.levelAtTurnIn or progressTable.levelAtAccept
         end
         if not levelToCheck then
             levelToCheck = UnitLevel("player") or 1
@@ -120,12 +120,12 @@ function M.registerQuestAchievement(cfg)
     local function topUpFromServer()
         if REQUIRED_QUEST_ID and not state.quest and serverQuestDone() then
             -- Check level before storing quest completion
-            -- Priority: levelAtKill (from NPC kill) > levelAtTurnIn (fallback) > current level
+            -- Priority: levelAtKill (from NPC kill) > levelAtTurnIn > levelAtAccept (backup) > current level
             local progressTable = HardcoreAchievements_GetProgress and HardcoreAchievements_GetProgress(ACH_ID)
             local levelToCheck = nil
             if progressTable then
-                -- Prefer levelAtKill if available, otherwise use levelAtTurnIn
-                levelToCheck = progressTable.levelAtKill or progressTable.levelAtTurnIn
+                -- Prefer levelAtKill if available, otherwise use levelAtTurnIn, then levelAtAccept
+                levelToCheck = progressTable.levelAtKill or progressTable.levelAtTurnIn or progressTable.levelAtAccept
             end
             if not levelToCheck then
                 levelToCheck = UnitLevel("player") or 1
@@ -690,6 +690,9 @@ function M.registerQuestAchievement(cfg)
                     end
                 end
                 
+                -- Check if all kills are already satisfied BEFORE this kill (to determine if we should update levelAtKill)
+                local allKillsAlreadySatisfied = countsSatisfied()
+                
                 -- Increment both total counts and eligible counts for this NPC (ensure numeric key for consistency)
                 state.counts[idNum] = (state.counts[idNum] or 0) + 1
                 state.eligibleCounts[idNum] = (state.eligibleCounts[idNum] or 0) + 1
@@ -697,10 +700,18 @@ function M.registerQuestAchievement(cfg)
                 setProg("counts", state.counts)
                 setProg("eligibleCounts", state.eligibleCounts)
                 
-                -- Store player's level at time of THIS kill (overwrites previous value)
-                -- This ensures levelAtKill reflects the level when ALL kills are completed
-                local killLevel = UnitLevel("player") or 1
-                setProg("levelAtKill", killLevel)
+                -- Store player's level at time of THIS kill
+                -- Always update levelAtKill while kills are not all satisfied (tracks current level, even if player levels up)
+                -- Once all kills are satisfied, levelAtKill becomes static and won't be updated anymore
+                -- This ensures if player levels up after fulfilling the achievement, they can still complete it
+                if not allKillsAlreadySatisfied then
+                    -- All kills weren't satisfied before this kill, so update levelAtKill to current level
+                    -- This includes the case where this kill satisfies all requirements (final update before becoming static)
+                    local killLevel = UnitLevel("player") or 1
+                    setProg("levelAtKill", killLevel)
+                    -- After this point, if all kills are now satisfied, levelAtKill becomes static
+                end
+                -- If allKillsAlreadySatisfied was true, levelAtKill is already static and won't be updated
                 
                 -- Solo points only apply if player is self-found
                 -- Use stored solo status from combat tracking (more accurate than checking at kill time)
