@@ -2,31 +2,22 @@
 local AchievementTracker = {}
 AchievementTracker.__index = AchievementTracker
 
--- Configuration - adjust these to match your addon's needs
+-- Configuration
 local CONFIG = {
     headerFontSize = 14,
     achievementFontSize = 12,
-    objectiveFontSize = 11,
     marginLeft = 14,
     marginRight = 30,
-    minLineWidth = 260,
-    linePoolSize = 50,
+    minWidth = 260,
     paddingBetweenAchievements = 4,
 }
 
 -- Local variables
 local trackerBaseFrame, trackerHeaderFrame, trackerContentFrame
-local linePool = {}
-local lineIndex = 0
-local lastUpdate = 0
+local achievementLines = {}
 local isInitialized = false
-
--- Tracked achievements storage (you'll need to manage this in your addon)
--- Format: trackedAchievements[achievementId] = true
-local trackedAchievements = {}
-
--- State
 local isExpanded = true
+local trackedAchievements = {}
 
 -- Initialize the tracker
 function AchievementTracker:Initialize()
@@ -39,13 +30,12 @@ function AchievementTracker:Initialize()
     trackerBaseFrame:SetClampedToScreen(true)
     trackerBaseFrame:SetFrameStrata("MEDIUM")
     trackerBaseFrame:SetFrameLevel(0)
-    trackerBaseFrame:SetSize(25, 25)
+    trackerBaseFrame:SetSize(CONFIG.minWidth, 30)
     trackerBaseFrame:EnableMouse(true)
     trackerBaseFrame:SetMovable(true)
-    trackerBaseFrame:SetResizable(true)
     trackerBaseFrame:RegisterForDrag("LeftButton")
 
-    -- Backdrop
+    -- Backdrop (keep same style)
     trackerBaseFrame:SetBackdrop({
         bgFile = "Interface\\Tooltips\\UI-Tooltip-Background",
         edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
@@ -61,26 +51,20 @@ function AchievementTracker:Initialize()
     trackerBaseFrame:SetScript("OnDragStart", function(self)
         if IsControlKeyDown() or not self.isLocked then
             self:StartMoving()
-            self.isMoving = true
         end
     end)
 
     trackerBaseFrame:SetScript("OnDragStop", function(self)
         self:StopMovingOrSizing()
-        self.isMoving = false
-        -- Save position here if needed
     end)
 
     -- Initialize header
     trackerHeaderFrame = AchievementTracker:InitializeHeader(trackerBaseFrame)
 
     -- Initialize content frame
-    trackerContentFrame = AchievementTracker:InitializeContentFrame(trackerBaseFrame, trackerHeaderFrame)
+    trackerContentFrame = AchievementTracker:InitializeContentFrame(trackerBaseFrame)
 
-    -- Initialize line pool
-    AchievementTracker:InitializeLinePool()
-
-    -- Set initial position (adjust as needed)
+    -- Set initial position
     trackerBaseFrame:SetPoint("TOPLEFT", UIParent, "TOPLEFT", 100, -100)
 
     trackerBaseFrame:Hide()
@@ -92,23 +76,21 @@ end
 -- Initialize header frame with expand/collapse
 function AchievementTracker:InitializeHeader(baseFrame)
     local headerFrame = CreateFrame("Button", "AchievementTracker_HeaderFrame", baseFrame)
-    headerFrame:SetSize(1, CONFIG.headerFontSize + 5)
-
-    -- Header label
-    local headerLabel = headerFrame:CreateFontString(nil, "ARTWORK", "GameFontNormal")
-    headerLabel:SetPoint("TOPLEFT", headerFrame, "TOPLEFT", 0, 0)
-    headerLabel:SetFont("Fonts\\FRIZQT__.TTF", CONFIG.headerFontSize, "OUTLINE")
-    headerFrame.label = headerLabel
-
-    -- Expand/collapse button
+    headerFrame:SetHeight(CONFIG.headerFontSize + 8)
     headerFrame:EnableMouse(true)
     headerFrame:RegisterForClicks("LeftButtonUp")
 
+    -- Header label
+    local headerLabel = headerFrame:CreateFontString(nil, "ARTWORK", "GameFontNormal")
+    headerLabel:SetPoint("TOPLEFT", headerFrame, "TOPLEFT", 5, -2)
+    headerLabel:SetFont("Fonts\\FRIZQT__.TTF", CONFIG.headerFontSize, "OUTLINE")
+    headerFrame.label = headerLabel
+
+    -- Click to expand/collapse
     headerFrame:SetScript("OnClick", function(self)
         if InCombatLockdown() then
             return
         end
-
         isExpanded = not isExpanded
         AchievementTracker:Update()
     end)
@@ -121,82 +103,48 @@ function AchievementTracker:InitializeHeader(baseFrame)
         self:SetAlpha(0.8)
     end)
 
+    -- Enable dragging from header
+    headerFrame:SetMovable(true)
+    headerFrame:RegisterForDrag("LeftButton")
+    headerFrame:SetScript("OnDragStart", trackerBaseFrame:GetScript("OnDragStart"))
+    headerFrame:SetScript("OnDragStop", trackerBaseFrame:GetScript("OnDragStop"))
+
     headerFrame:Hide()
     return headerFrame
 end
 
--- Initialize content frame (scrollable area)
-function AchievementTracker:InitializeContentFrame(baseFrame, headerFrame)
+-- Initialize content frame for achievement list
+function AchievementTracker:InitializeContentFrame(baseFrame)
     local contentFrame = CreateFrame("Frame", "AchievementTracker_ContentFrame", baseFrame)
-    contentFrame:SetWidth(25)
-    contentFrame:SetHeight(25)
+    contentFrame:SetWidth(CONFIG.minWidth)
+    contentFrame:SetHeight(100)
 
-    -- Enable mouse for dragging
+    -- Enable dragging from content area
     contentFrame:EnableMouse(true)
     contentFrame:SetMovable(true)
     contentFrame:RegisterForDrag("LeftButton")
     contentFrame:SetScript("OnDragStart", trackerBaseFrame:GetScript("OnDragStart"))
     contentFrame:SetScript("OnDragStop", trackerBaseFrame:GetScript("OnDragStop"))
 
-    -- Scroll frame
-    contentFrame.ScrollFrame = CreateFrame("ScrollFrame", "AchievementTracker_ScrollFrame", contentFrame, "ScrollFrameTemplate")
-    contentFrame.ScrollFrame:SetAllPoints(contentFrame)
-    contentFrame.ScrollFrame.ScrollBar:Hide()
-
-    -- Scroll child frame
-    contentFrame.ScrollChildFrame = CreateFrame("Frame", "AchievementTracker_ScrollChildFrame")
-    contentFrame.ScrollChildFrame:SetSize(contentFrame.ScrollFrame:GetWidth(), contentFrame.ScrollFrame:GetHeight())
-    contentFrame.ScrollFrame:SetScrollChild(contentFrame.ScrollChildFrame)
-
     contentFrame:Hide()
     return contentFrame
 end
 
--- Initialize line pool for displaying achievements
-function AchievementTracker:InitializeLinePool()
-    for i = 1, CONFIG.linePoolSize do
-        local line = CreateFrame("Button", "AchievementTracker_Line" .. i, trackerContentFrame.ScrollChildFrame)
-        line:SetWidth(1)
-        line:SetHeight(1)
+-- Create or get achievement line
+function AchievementTracker:GetAchievementLine(index)
+    if not achievementLines[index] then
+        local line = CreateFrame("Frame", "AchievementTracker_Line" .. index, trackerContentFrame)
+        line:SetHeight(CONFIG.achievementFontSize + 4)
 
-        -- Label for text
-        line.label = line:CreateFontString(nil, "ARTWORK", "GameFontNormal")
-        line.label:SetJustifyH("LEFT")
-        line.label:SetJustifyV("TOP")
-        line.label:SetPoint("TOPLEFT", line, "TOPLEFT", 0, 0)
-        line.label:Hide()
+        local label = line:CreateFontString(nil, "ARTWORK", "GameFontNormal")
+        label:SetPoint("TOPLEFT", line, "TOPLEFT", CONFIG.marginLeft, 0)
+        label:SetFont("Fonts\\FRIZQT__.TTF", CONFIG.achievementFontSize, "OUTLINE")
+        label:SetJustifyH("LEFT")
+        line.label = label
 
-        -- Position relative to previous line
-        if i == 1 then
-            line:SetPoint("TOPLEFT", trackerContentFrame.ScrollChildFrame, "TOPLEFT", CONFIG.marginLeft, 0)
-        else
-            line:SetPoint("TOPLEFT", linePool[i - 1], "BOTTOMLEFT", 0, 0)
-        end
-
-        line:Hide()
-        linePool[i] = line
+        achievementLines[index] = line
     end
-end
-
--- Get next available line from pool
-function AchievementTracker:GetNextLine()
-    lineIndex = lineIndex + 1
-    if lineIndex <= CONFIG.linePoolSize then
-        return linePool[lineIndex]
-    end
-    return nil
-end
-
--- Reset line pool
-function AchievementTracker:ResetLinePool()
-    for i = 1, CONFIG.linePoolSize do
-        if linePool[i] then
-            linePool[i]:Hide()
-            linePool[i].label:Hide()
-            linePool[i].achievementId = nil
-        end
-    end
-    lineIndex = 0
+    return achievementLines[index]
 end
 
 -- Update the tracker display
@@ -205,222 +153,112 @@ function AchievementTracker:Update()
         return
     end
 
-    -- Throttle updates
-    local now = GetTime()
-    if InCombatLockdown() or (now - lastUpdate) < 0.1 then
-        return
-    end
-    lastUpdate = now
-
-    -- Reset line pool
-    AchievementTracker:ResetLinePool()
-
-    -- Update header
-    AchievementTracker:UpdateHeader()
-
-    -- Update content
-    if isExpanded then
-        AchievementTracker:UpdateContent()
-    else
-        trackerContentFrame:Hide()
-    end
-
-    -- Update frame visibility and size
-    AchievementTracker:UpdateFrame()
-end
-
--- Update header display
-function AchievementTracker:UpdateHeader()
-    if not trackerHeaderFrame then
+    if InCombatLockdown() then
         return
     end
 
+    -- Count tracked achievements
     local numTracked = 0
     for _ in pairs(trackedAchievements) do
         numTracked = numTracked + 1
     end
 
+    -- Update header
     if isExpanded then
         trackerHeaderFrame.label:SetText("Achievement Tracker: " .. numTracked .. "/10")
     else
         trackerHeaderFrame.label:SetText("Achievement Tracker +")
     end
 
-    -- Size header to content
     local headerWidth = trackerHeaderFrame.label:GetUnboundedStringWidth() + 20
     trackerHeaderFrame:SetWidth(headerWidth)
-    trackerHeaderFrame:SetHeight(CONFIG.headerFontSize + 5)
     trackerHeaderFrame.label:SetWidth(headerWidth)
-
-    -- Position header
     trackerHeaderFrame:ClearAllPoints()
     trackerHeaderFrame:SetPoint("TOPLEFT", trackerBaseFrame, "TOPLEFT", 0, -5)
     trackerHeaderFrame:Show()
-end
 
--- Update content display
-function AchievementTracker:UpdateContent()
-    if not trackerContentFrame then
-        return
-    end
+    -- Update content
+    if isExpanded and numTracked > 0 then
+        trackerContentFrame:Show()
+        trackerContentFrame:ClearAllPoints()
+        trackerContentFrame:SetPoint("TOPLEFT", trackerHeaderFrame, "BOTTOMLEFT", 0, -2)
 
-    trackerContentFrame:Show()
+        local maxWidth = CONFIG.minWidth
+        local previousLine = nil
+        local lineIndex = 0
 
-    local maxWidth = 0
-    local previousLine = nil
+        -- Display each tracked achievement
+        for achievementId, _ in pairs(trackedAchievements) do
+            local achieveId, achieveName = GetAchievementInfo(achievementId)
 
-    -- Display each tracked achievement
-    for achievementId, _ in pairs(trackedAchievements) do
-        local achieveId, achieveName, _, _, _, _, _, achieveDescription, _, _, _, _, achieveComplete, _, _ = GetAchievementInfo(achievementId)
+            if achieveId and achieveName then
+                lineIndex = lineIndex + 1
+                local line = AchievementTracker:GetAchievementLine(lineIndex)
+                
+                line.label:SetText("|cFFFFFF00" .. achieveName .. "|r")
+                line.label:SetWidth(line.label:GetUnboundedStringWidth())
+                line:SetWidth(line.label:GetUnboundedStringWidth() + CONFIG.marginLeft + CONFIG.marginRight)
+                line:SetHeight(CONFIG.achievementFontSize + 4)
 
-        if achieveId and not achieveComplete then
-            -- Achievement title line
-            local line = AchievementTracker:GetNextLine()
-            if not line then break end
+                maxWidth = math.max(maxWidth, line:GetWidth())
 
-            line.achievementId = achievementId
-            line.label:SetFont("Fonts\\FRIZQT__.TTF", CONFIG.achievementFontSize, "OUTLINE")
-            line.label:SetText("|cFFFFFF00" .. achieveName .. "|r")
-            line.label:SetPoint("TOPLEFT", line, "TOPLEFT", 0, 0)
+                if previousLine then
+                    line:SetPoint("TOPLEFT", previousLine, "BOTTOMLEFT", 0, -CONFIG.paddingBetweenAchievements)
+                else
+                    line:SetPoint("TOPLEFT", trackerContentFrame, "TOPLEFT", 0, 0)
+                end
 
-            -- Size line
-            local textWidth = line.label:GetUnboundedStringWidth()
-            line.label:SetWidth(textWidth)
-            line:SetWidth(textWidth + CONFIG.marginLeft)
-            line:SetHeight(CONFIG.achievementFontSize + 2)
-
-            maxWidth = math.max(maxWidth, textWidth + CONFIG.marginLeft + CONFIG.marginRight)
-
-            -- Position line
-            if previousLine then
-                line:SetPoint("TOPLEFT", previousLine, "BOTTOMLEFT", 0, -CONFIG.paddingBetweenAchievements)
-            else
-                line:SetPoint("TOPLEFT", trackerContentFrame.ScrollChildFrame, "TOPLEFT", CONFIG.marginLeft, 0)
+                line:Show()
+                previousLine = line
             end
+        end
 
-            line:Show()
-            line.label:Show()
-            previousLine = line
+        -- Hide unused lines
+        for i = lineIndex + 1, #achievementLines do
+            if achievementLines[i] then
+                achievementLines[i]:Hide()
+            end
+        end
 
-            -- Achievement criteria (objectives)
-            local numCriteria = GetAchievementNumCriteria(achievementId)
-            if numCriteria > 0 then
-                for objCriteria = 1, numCriteria do
-                    local criteriaString, _, completed, quantityProgress, quantityNeeded, _, _, refId, quantityString = GetAchievementCriteriaInfo(achievementId, objCriteria)
-
-                    if criteriaString and criteriaString ~= "" then
-                        local objLine = AchievementTracker:GetNextLine()
-                        if not objLine then break end
-
-                        objLine.achievementId = achievementId
-                        objLine.label:SetFont("Fonts\\FRIZQT__.TTF", CONFIG.objectiveFontSize, "OUTLINE")
-
-                        -- Format objective text
-                        local objDesc = criteriaString:gsub("%.", "")
-                        local color = completed and "|cFF00FF00" or "|cFFFFFFFF"
-
-                        if quantityNeeded and quantityNeeded > 1 then
-                            local progressText = quantityString or (tostring(quantityProgress) .. "/" .. tostring(quantityNeeded))
-                            objLine.label:SetText(color .. objDesc .. ": " .. progressText .. "|r")
-                        else
-                            objLine.label:SetText(color .. objDesc .. "|r")
-                        end
-
-                        objLine.label:SetPoint("TOPLEFT", objLine, "TOPLEFT", CONFIG.achievementFontSize, 0)
-
-                        -- Size objective line
-                        local objTextWidth = objLine.label:GetUnboundedStringWidth()
-                        objLine.label:SetWidth(objTextWidth)
-                        objLine:SetWidth(objTextWidth + CONFIG.marginLeft + CONFIG.achievementFontSize)
-                        objLine:SetHeight(CONFIG.objectiveFontSize + 1)
-
-                        maxWidth = math.max(maxWidth, objTextWidth + CONFIG.marginLeft + CONFIG.marginRight + CONFIG.achievementFontSize)
-
-                        -- Position objective line
-                        objLine:SetPoint("TOPLEFT", previousLine, "BOTTOMLEFT", 0, -1)
-
-                        objLine:Show()
-                        objLine.label:Show()
-                        previousLine = objLine
-                    end
-                end
-            else
-                -- Achievement with no criteria, show description
-                if achieveDescription and achieveDescription ~= "" then
-                    local descLine = AchievementTracker:GetNextLine()
-                    if descLine then
-                        descLine.achievementId = achievementId
-                        descLine.label:SetFont("Fonts\\FRIZQT__.TTF", CONFIG.objectiveFontSize, "OUTLINE")
-                        descLine.label:SetText("|cFFC0C0C0" .. achieveDescription .. "|r")
-                        descLine.label:SetPoint("TOPLEFT", descLine, "TOPLEFT", CONFIG.achievementFontSize, 0)
-
-                        local descTextWidth = descLine.label:GetUnboundedStringWidth()
-                        descLine.label:SetWidth(descTextWidth)
-                        descLine:SetWidth(descTextWidth + CONFIG.marginLeft + CONFIG.achievementFontSize)
-                        descLine:SetHeight(CONFIG.objectiveFontSize + 1)
-
-                        maxWidth = math.max(maxWidth, descTextWidth + CONFIG.marginLeft + CONFIG.marginRight + CONFIG.achievementFontSize)
-
-                        descLine:SetPoint("TOPLEFT", previousLine, "BOTTOMLEFT", 0, -1)
-
-                        descLine:Show()
-                        descLine.label:Show()
-                        previousLine = descLine
-                    end
-                end
+        -- Update content frame size
+        if previousLine then
+            local contentHeight = previousLine:GetBottom() - trackerContentFrame:GetTop() + 5
+            trackerContentFrame:SetHeight(math.abs(contentHeight))
+            trackerContentFrame:SetWidth(maxWidth)
+        else
+            trackerContentFrame:SetHeight(50)
+            trackerContentFrame:SetWidth(CONFIG.minWidth)
+        end
+    else
+        trackerContentFrame:Hide()
+        -- Hide all lines
+        for _, line in ipairs(achievementLines) do
+            if line then
+                line:Hide()
             end
         end
     end
 
-    -- Update content frame size
-    if previousLine then
-        local contentHeight = previousLine:GetTop() - trackerContentFrame.ScrollChildFrame:GetTop() + previousLine:GetHeight() + 5
-        trackerContentFrame.ScrollChildFrame:SetHeight(math.max(contentHeight, 50))
-        trackerContentFrame.ScrollChildFrame:SetWidth(maxWidth)
-    else
-        trackerContentFrame.ScrollChildFrame:SetHeight(50)
-        trackerContentFrame.ScrollChildFrame:SetWidth(CONFIG.minLineWidth)
-    end
-end
-
--- Update frame size and visibility
-function AchievementTracker:UpdateFrame()
-    if not trackerBaseFrame then
-        return
-    end
-
-    local numTracked = 0
-    for _ in pairs(trackedAchievements) do
-        numTracked = numTracked + 1
-    end
-
-    if numTracked == 0 and not isExpanded then
-        trackerBaseFrame:Hide()
-        return
-    end
-
-    trackerBaseFrame:Show()
-
-    -- Calculate sizes
+    -- Update base frame size
     local headerWidth = trackerHeaderFrame:GetWidth()
     local headerHeight = trackerHeaderFrame:GetHeight()
 
-    if isExpanded then
-        local contentWidth = trackerContentFrame.ScrollChildFrame:GetWidth() or CONFIG.minLineWidth
-        local contentHeight = trackerContentFrame.ScrollChildFrame:GetHeight() or 50
+    if isExpanded and numTracked > 0 then
+        local contentWidth = trackerContentFrame:GetWidth() or CONFIG.minWidth
+        local contentHeight = trackerContentFrame:GetHeight() or 50
 
         trackerBaseFrame:SetWidth(math.max(headerWidth, contentWidth))
         trackerBaseFrame:SetHeight(headerHeight + contentHeight + 10)
-
-        trackerContentFrame:SetWidth(trackerBaseFrame:GetWidth())
-        trackerContentFrame:SetHeight(contentHeight)
-
-        -- Position content frame
-        trackerContentFrame:ClearAllPoints()
-        trackerContentFrame:SetPoint("TOPLEFT", trackerHeaderFrame, "BOTTOMLEFT", 0, 0)
     else
         trackerBaseFrame:SetWidth(headerWidth)
         trackerBaseFrame:SetHeight(headerHeight + 5)
+    end
+
+    -- Show/hide base frame
+    if numTracked == 0 and not isExpanded then
+        trackerBaseFrame:Hide()
+    else
+        trackerBaseFrame:Show()
     end
 end
 
@@ -511,4 +349,3 @@ function AchievementTracker:SetLocked(locked)
 end
 
 return AchievementTracker
-
