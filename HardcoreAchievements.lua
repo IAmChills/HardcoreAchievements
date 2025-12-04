@@ -8,6 +8,11 @@ local RefreshOutleveledAll
 local ProfessionTracker = _G.HCA_ProfessionCommon
 local QuestTrackedRows = {}
 
+-- Load AchievementTracker module (loaded via TOC, accessed lazily)
+local function GetAchievementTracker()
+    return _G.HardcoreAchievementsTracker
+end
+
 local function TrackRowForQuest(row, questID)
     local qid = tonumber(questID or row and row.requiredQuestId)
     if not qid or not row then return end
@@ -1428,6 +1433,14 @@ initFrame:SetScript("OnEvent", function(self, event, ...)
         if _HardcoreAchievementsOptionsPanel and _HardcoreAchievementsOptionsPanel.refresh then
             _HardcoreAchievementsOptionsPanel:refresh()
         end
+        
+        -- Initialize AchievementTracker (after it loads)
+        C_Timer.After(0.5, function()
+            local AchievementTracker = GetAchievementTracker()
+            if AchievementTracker and AchievementTracker.Initialize then
+                AchievementTracker:Initialize()
+            end
+        end)
 
     elseif event == "ADDON_LOADED" then
         local addonName = ...
@@ -2484,22 +2497,45 @@ function CreateAchievementRow(parent, achId, title, tooltip, icon, level, points
 
     row:SetScript("OnMouseUp", function(self, button)
         if button == "LeftButton" and IsShiftKeyDown() and row.achId then
-            -- Use centralized function to generate bracket format (icon looked up client-side)
-            local bracket = _G.HCA_GetAchievementBracket and _G.HCA_GetAchievementBracket(row.achId) or string.format("[HCA:(%s)]", tostring(row.achId))
-
             local editBox = ChatEdit_GetActiveWindow()
-            -- If no chat edit box is currently active/visible, do nothing
-            if not editBox or not editBox:IsVisible() then
-                return
-            end
-            local currentText = editBox and (editBox:GetText() or "") or ""
-            if currentText == "" then
-                editBox:SetText(bracket)
+            
+            -- Check if chat edit box is active/visible
+            if editBox and editBox:IsVisible() then
+                -- Chat edit box is active: link achievement (original behavior)
+                local bracket = _G.HCA_GetAchievementBracket and _G.HCA_GetAchievementBracket(row.achId) or string.format("[HCA:(%s)]", tostring(row.achId))
+                local currentText = editBox:GetText() or ""
+                if currentText == "" then
+                    editBox:SetText(bracket)
+                else
+                    editBox:SetText(currentText .. " " .. bracket)
+                end
+                editBox:SetFocus()
             else
-                editBox:SetText(currentText .. " " .. bracket)
+                -- Chat edit box is NOT active: track/untrack achievement
+                local AchievementTracker = GetAchievementTracker()
+                if not AchievementTracker then
+                    print("|cffff0000[Hardcore Achievements]|r Achievement tracker not available. Please reload your UI (/reload).")
+                    return
+                end
+                
+                local achId = row.achId or row.id
+                if not achId then
+                    return
+                end
+                
+                local title = row.Title and row.Title:GetText() or tostring(achId)
+                -- Strip color codes from title if present
+                title = title and title:gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", "") or tostring(achId)
+                local isTracked = AchievementTracker:IsTracked(achId)
+                
+                if isTracked then
+                    AchievementTracker:UntrackAchievement(achId)
+                    --print("|cff69adc9[Hardcore Achievements]|r Stopped tracking: " .. title)
+                else
+                    AchievementTracker:TrackAchievement(achId, title)
+                    --print("|cff69adc9[Hardcore Achievements]|r Now tracking: " .. title)
+                end
             end
-            editBox:SetFocus()
-            return
         end
     end)
 

@@ -5,6 +5,11 @@
 local AceComm = LibStub("AceComm-3.0")
 local AceSerialize = LibStub("AceSerializer-3.0")
 
+-- Reference to AchievementTracker (loaded via TOC, get it lazily)
+local function GetAchievementTracker()
+    return _G.HardcoreAchievementsTracker
+end
+
 local AdminCommandHandler = {}
 local COMM_PREFIX = "HCA_Admin_Cmd" -- AceComm prefix for admin commands
 local RESPONSE_PREFIX = "HCA_Admin_Resp" -- AceComm prefix for responses (max 16 chars)
@@ -579,10 +584,48 @@ local function HandleSlashCommand(msg)
             print("  |cffffff00/hca adminkey check|r - Check if admin key is set")
             print("  |cffffff00/hca adminkey clear|r - Clear admin secret key")
         end
+    elseif command == "tracker" then
+        -- Tracker commands
+        local AchievementTracker = GetAchievementTracker()
+        local subcommand = args[2] and string.lower(args[2]) or ""
+        
+        if not AchievementTracker then
+            print("|cffff0000[Hardcore Achievements]|r Achievement tracker not loaded yet. Please wait a moment and try again, or reload your UI.")
+            return
+        end
+        
+        if subcommand == "show" then
+            if AchievementTracker.Show then
+                AchievementTracker:Show()
+                print("|cff00ff00[Hardcore Achievements]|r Achievement tracker shown")
+            else
+                print("|cffff0000[Hardcore Achievements]|r Achievement tracker not initialized")
+            end
+        elseif subcommand == "hide" then
+            if AchievementTracker.Hide then
+                AchievementTracker:Hide()
+                print("|cff00ff00[Hardcore Achievements]|r Achievement tracker hidden")
+            else
+                print("|cffff0000[Hardcore Achievements]|r Achievement tracker not initialized")
+            end
+        elseif subcommand == "toggle" then
+            if AchievementTracker.Toggle then
+                AchievementTracker:Toggle()
+                print("|cff00ff00[Hardcore Achievements]|r Achievement tracker toggled")
+            else
+                print("|cffff0000[Hardcore Achievements]|r Achievement tracker not initialized")
+            end
+        else
+            print("|cff00ff00[Hardcore Achievements]|r Tracker commands:")
+            print("  |cffffff00/hca tracker show|r - Show the achievement tracker")
+            print("  |cffffff00/hca tracker hide|r - Hide the achievement tracker")
+            print("  |cffffff00/hca tracker toggle|r - Toggle the achievement tracker")
+        end
     else
         print("|cff00ff00[Hardcore Achievements]|r Available commands:")
         print("  |cffffff00/hca show|r - Enable and show the custom achievement tab")
         print("  |cffffff00/hca reset tab|r - Reset the tab position to default")
+        print("  |cffffff00/hca tracker|r - Manage the achievement tracker")
         --print("  |cffffff00/hca adminkey|r - Manage admin secret key for secure commands")
     end
 end

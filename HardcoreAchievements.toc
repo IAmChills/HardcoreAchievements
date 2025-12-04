@@ -25,6 +25,7 @@ Functions\RefreshAllAchievementPoints.lua
 Functions\ShowAchievementTooltip.lua
 Functions\ProfessionTracker.lua
 
+Utils\AchievementTracker.lua
 HardcoreAchievements.lua
 
 Achievements\Common.lua
