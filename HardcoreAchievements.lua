@@ -395,6 +395,7 @@ end
 _G.HCA_GetFailureTimestamp = GetFailureTimestamp
 _G.HCA_EnsureFailureTimestamp = EnsureFailureTimestamp
 _G.FormatTimestamp = FormatTimestamp
+_G.IsRowOutleveled = IsRowOutleveled
 
 -- Export function for embedded UI to get total points
 function HCA_GetTotalPoints()

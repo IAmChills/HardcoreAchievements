@@ -5,10 +5,6 @@
 - [ ] Completed at: ## information like Inspection window?
 - [ ] Hardcore Autopsy Journal
 - [ ] Show achievement locations on map
-- [ ] Achievement tracker
-  - [ ] Allow clicking on achievement to display frame
-  - [ ] Refresh on update (completed, failed, pending, etc)
-  - [ ] Persist points in database between sessions (per character?)
 
 - [ ] Arc Challenges
   - [ ] Unholy

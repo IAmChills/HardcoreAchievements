@@ -11,6 +11,8 @@ local CONFIG = {
     minWidth = 230,
     minHeight = 100,
     paddingBetweenAchievements = 4,
+    maxWidth = 500,
+    maxHeight = 600,
 }
 
 -- Local variables
@@ -27,6 +29,80 @@ local hasBeenResized = false  -- Track if user has manually resized
 local initialHeight = 100
 local initialWidth = 250
 local isMouseOverTracker = false  -- Track if mouse is currently over the tracker
+local hideSizerTimer = nil  -- Timer for delayed sizer hiding
+
+-- Helper functions to save/load tracker position and size from database
+local function SaveTrackerPosition()
+    if not trackerBaseFrame then return end
+    
+    -- Ensure database exists
+    if not HardcoreAchievementsDB then
+        HardcoreAchievementsDB = {}
+    end
+    HardcoreAchievementsDB.tracker = HardcoreAchievementsDB.tracker or {}
+    
+    -- Get current position (save as left/top coordinates relative to screen)
+    local left = trackerBaseFrame:GetLeft()
+    local top = trackerBaseFrame:GetTop()
+    
+    if left and top then
+        HardcoreAchievementsDB.tracker.left = left
+        HardcoreAchievementsDB.tracker.top = top
+    end
+end
+
+local function LoadTrackerPosition()
+    if not HardcoreAchievementsDB or not HardcoreAchievementsDB.tracker then
+        return nil, nil
+    end
+    
+    local trackerData = HardcoreAchievementsDB.tracker
+    if trackerData.left and trackerData.top then
+        return trackerData.left, trackerData.top
+    end
+    
+    return nil, nil
+end
+
+local function SaveTrackerSize()
+    if not trackerBaseFrame then return end
+    
+    -- Ensure database exists
+    if not HardcoreAchievementsDB then
+        HardcoreAchievementsDB = {}
+    end
+    HardcoreAchievementsDB.tracker = HardcoreAchievementsDB.tracker or {}
+    
+    -- Save current size
+    local width = trackerBaseFrame:GetWidth()
+    local height = trackerBaseFrame:GetHeight()
+    
+    if width and width >= CONFIG.minWidth then
+        HardcoreAchievementsDB.tracker.width = width
+    end
+    if height and height >= CONFIG.minHeight then
+        HardcoreAchievementsDB.tracker.height = height
+    end
+end
+
+local function LoadTrackerSize()
+    if not HardcoreAchievementsDB or not HardcoreAchievementsDB.tracker then
+        return nil, nil
+    end
+    
+    local trackerData = HardcoreAchievementsDB.tracker
+    local width = trackerData.width
+    local height = trackerData.height
+    
+    -- Validate sizes are within bounds
+    if width and width >= CONFIG.minWidth and width <= (CONFIG.maxWidth or 9999) then
+        if height and height >= CONFIG.minHeight and height <= (CONFIG.maxHeight or 9999) then
+            return width, height
+        end
+    end
+    
+    return nil, nil
+end
 
 -- Initialize the tracker
 function AchievementTracker:Initialize()
@@ -39,9 +115,18 @@ function AchievementTracker:Initialize()
     trackerBaseFrame:SetClampedToScreen(true)
     trackerBaseFrame:SetFrameStrata("MEDIUM")
     trackerBaseFrame:SetFrameLevel(0)
-    trackerBaseFrame:SetSize(initialWidth, initialHeight)
-    savedFrameHeight = initialHeight
-    savedFrameWidth = initialWidth  -- Save initial width
+    
+    -- Load saved size from database, or use initial values
+    local savedWidth, savedHeight = LoadTrackerSize()
+    if savedWidth and savedHeight then
+        trackerBaseFrame:SetSize(savedWidth, savedHeight)
+        savedFrameWidth = savedWidth
+        savedFrameHeight = savedHeight
+    else
+        trackerBaseFrame:SetSize(initialWidth, initialHeight)
+        savedFrameWidth = initialWidth
+        savedFrameHeight = initialHeight
+    end
     
     -- Set backdrop (initially transparent)
     trackerBaseFrame:SetBackdrop({
@@ -58,6 +143,7 @@ function AchievementTracker:Initialize()
     trackerBaseFrame:EnableMouse(true)
     trackerBaseFrame:SetMovable(true)
     trackerBaseFrame:SetResizable(true)
+    trackerBaseFrame:SetResizeBounds(CONFIG.minWidth, CONFIG.minHeight, CONFIG.maxWidth, CONFIG.maxHeight)
     trackerBaseFrame:RegisterForDrag("LeftButton")
 
     -- Drag handlers for the entire frame (require Shift key to drag)
@@ -75,6 +161,8 @@ function AchievementTracker:Initialize()
     trackerBaseFrame:SetScript("OnDragStop", function(self)
         if not isSizing then
             self:StopMovingOrSizing()
+            -- Save position after dragging stops
+            SaveTrackerPosition()
         end
     end)
     
@@ -87,9 +175,45 @@ function AchievementTracker:Initialize()
     -- Initialize sizer (resize handle)
     trackerSizer = AchievementTracker:InitializeSizer(trackerBaseFrame)
     
+    -- Helper function to check if a frame or any of its parents is a tracker frame
+    local function isTrackerFrameOrChild(checkFrame)
+        if not checkFrame then
+            return false
+        end
+        
+        -- Check if it's one of our tracker frames
+        if checkFrame == trackerBaseFrame or 
+           checkFrame == trackerHeaderFrame or 
+           checkFrame == trackerContentFrame or
+           checkFrame == trackerSizer then
+            return true
+        end
+        
+        -- Recursively check parents (up to UIParent)
+        -- Use pcall to safely call GetParent in case the frame doesn't support it
+        local success, parent = pcall(function() return checkFrame:GetParent() end)
+        if success and parent then
+            -- Stop at UIParent to avoid infinite recursion
+            if parent == UIParent then
+                return false
+            end
+            -- Continue checking up the parent chain
+            return isTrackerFrameOrChild(parent)
+        end
+        
+        return false
+    end
+    
     -- Helper function to show sizer on hover (defined after sizer is created)
     local function ShowSizerOnHover()
         isMouseOverTracker = true
+        
+        -- Cancel any pending hide timer
+        if hideSizerTimer then
+            hideSizerTimer:Cancel()
+            hideSizerTimer = nil
+        end
+        
         if trackerSizer and trackerSizer:IsVisible() and not isSizing then
             trackerSizer:SetAlpha(0.8)
         end
@@ -103,19 +227,76 @@ function AchievementTracker:Initialize()
         end
     end
     
+    -- Shared function to check if mouse is over tracker and hide sizer if not
+    local function CheckMouseAndHideSizer()
+        if isSizing then
+            return  -- Don't hide during resize
+        end
+        
+        -- Check if mouse is over any tracker-related frame using GetMouseFoci()
+        local mouseFoci = GetMouseFoci()
+        local isOverTracker = false
+        
+        if mouseFoci then
+            -- GetMouseFoci() returns a table where each entry may be the frame directly or a table containing the frame
+            for i = 1, #mouseFoci do
+                local entry = mouseFoci[i]
+                if entry then
+                    -- Get the frame - it might be the entry directly, or at entry[0]
+                    local frame = nil
+                    if type(entry) == "table" and entry[0] then
+                        -- Frame is stored at index [0] within the entry table
+                        frame = entry[0]
+                    else
+                        -- Entry is the frame directly (userdata)
+                        frame = entry
+                    end
+                    
+                    if frame then
+                        -- Check if this frame or any parent is a tracker frame
+                        if isTrackerFrameOrChild(frame) then
+                            isOverTracker = true
+                            break
+                        end
+                    end
+                end
+            end
+        end
+        
+        -- Only hide if mouse is not over any part of the tracker
+        if not isOverTracker then
+            HideSizerOnLeave()
+        else
+            -- Mouse is still over tracker, keep sizer visible
+            if trackerSizer and trackerSizer:IsVisible() and not isSizing then
+                trackerSizer:SetAlpha(0.8)
+            end
+        end
+    end
+    
+    -- Schedule delayed hide check with cancellation support
+    local function ScheduleHideCheck()
+        -- Cancel any existing timer
+        if hideSizerTimer then
+            hideSizerTimer:Cancel()
+            hideSizerTimer = nil
+        end
+        
+        -- Schedule new check with slightly longer delay to reduce flickering
+        hideSizerTimer = C_Timer.NewTicker(0.15, function(timer)
+            timer:Cancel()
+            hideSizerTimer = nil
+            CheckMouseAndHideSizer()
+        end, 1)  -- Only run once
+    end
+    
     -- Show sizer when mouse enters tracker frame
     trackerBaseFrame:SetScript("OnEnter", function(self)
         ShowSizerOnHover()
     end)
     trackerBaseFrame:SetScript("OnLeave", function(self)
-        -- Use a small delay to avoid hiding when moving between child frames
-        -- Child frames (header, content, sizer) will set isMouseOverTracker to true on their OnEnter
-        C_Timer.After(0.1, function()
-            -- Only hide if mouse is truly not over any part of the tracker
-            if not isMouseOverTracker and not isSizing then
-                HideSizerOnLeave()
-            end
-        end)
+        -- Schedule delayed check to avoid hiding when moving between child frames
+        ScheduleHideCheck()
     end)
     
     -- Hook into existing header OnEnter to also show sizer
@@ -128,16 +309,25 @@ function AchievementTracker:Initialize()
     -- Add OnEnter/OnLeave handlers to content frame to show sizer
     trackerContentFrame:SetScript("OnEnter", ShowSizerOnHover)
     trackerContentFrame:SetScript("OnLeave", function(self)
-        -- Don't hide immediately - check if mouse left entire tracker
-        C_Timer.After(0.1, function()
-            if not isMouseOverTracker and not isSizing then
-                HideSizerOnLeave()
-            end
-        end)
+        -- Schedule delayed check to avoid hiding when moving between child frames
+        ScheduleHideCheck()
+    end)
+    
+    -- Add OnLeave handler to header frame
+    local originalHeaderOnLeave = trackerHeaderFrame:GetScript("OnLeave")
+    trackerHeaderFrame:SetScript("OnLeave", function(self)
+        if originalHeaderOnLeave then originalHeaderOnLeave(self) end
+        -- Schedule delayed check to avoid hiding when moving between child frames
+        ScheduleHideCheck()
     end)
 
-    -- Set initial position
-    trackerBaseFrame:SetPoint("CENTER", UIParent, "CENTER")
+    -- Restore saved position from database, or use default center position
+    local savedLeft, savedTop = LoadTrackerPosition()
+    if savedLeft and savedTop then
+        trackerBaseFrame:SetPoint("TOPLEFT", UIParent, "BOTTOMLEFT", savedLeft, savedTop)
+    else
+        trackerBaseFrame:SetPoint("CENTER", UIParent, "CENTER")
+    end
 
     trackerBaseFrame:Hide()
     isInitialized = true
@@ -295,19 +485,11 @@ function AchievementTracker:InitializeSizer(baseFrame)
                 baseFrame:StartSizing("BOTTOMRIGHT")
                 
                 -- Update continuously while resizing (more frequent for responsive word wrap)
+                -- SetResizeBounds handles minimum size enforcement automatically
                 local updateTimer = C_Timer.NewTicker(0.05, function()
                     if not isSizing or InCombatLockdown() then
                         updateTimer:Cancel()
                         return
-                    end
-                    -- Enforce minimum sizes
-                    local width = baseFrame:GetWidth()
-                    local height = baseFrame:GetHeight()
-                    if width < CONFIG.minWidth then
-                        baseFrame:SetWidth(CONFIG.minWidth)
-                    end
-                    if height < CONFIG.minHeight then
-                        baseFrame:SetHeight(CONFIG.minHeight)
                     end
                     -- Update immediately to make word wrap responsive
                     AchievementTracker:Update()
@@ -336,23 +518,12 @@ function AchievementTracker:InitializeSizer(baseFrame)
             trackerBaseFrame:SetBackdropColor(0, 0, 0, 0)
             trackerBaseFrame:SetBackdropBorderColor(1, 1, 1, 0)
             
-            -- Final size enforcement and save dimensions
-            local width = baseFrame:GetWidth()
-            local height = baseFrame:GetHeight()
-            if width < CONFIG.minWidth then
-                baseFrame:SetWidth(CONFIG.minWidth)
-                savedFrameWidth = CONFIG.minWidth
-            else
-                -- Save the width when user finishes resizing
-                savedFrameWidth = width
-            end
-            if height < CONFIG.minHeight then
-                baseFrame:SetHeight(CONFIG.minHeight)
-                savedFrameHeight = CONFIG.minHeight
-            else
-                -- Save the height when user finishes resizing
-                savedFrameHeight = height
-            end
+            -- Save dimensions (SetResizeBounds already enforced minimums)
+            savedFrameWidth = baseFrame:GetWidth()
+            savedFrameHeight = baseFrame:GetHeight()
+            
+            -- Save size to database
+            SaveTrackerSize()
             
             -- Update the tracker
             AchievementTracker:Update()
@@ -413,6 +584,125 @@ local function GetAchievementDescription(achievementId)
         end
     end
     return nil
+end
+
+-- Helper function to get achievement status text and color for tracker display
+-- Returns: statusText (string like " (Completed)"), statusColor (hex string like "00FF00")
+local function GetAchievementStatus(achievementId)
+    if not achievementId then
+        return nil, nil
+    end
+    
+    -- Get achievement row if available
+    local achievementRow = nil
+    if AchievementPanel and AchievementPanel.achievements then
+        for _, row in ipairs(AchievementPanel.achievements) do
+            if (row.id == achievementId or row.achId == achievementId) then
+                achievementRow = row
+                break
+            end
+        end
+    end
+    
+    -- Check completion status - prioritize row.completed flag (set immediately) over database
+    local achIdStr = tostring(achievementId)
+    local isCompleted = false
+    
+    -- First check row.completed flag (set immediately when completed)
+    if achievementRow and achievementRow.completed then
+        isCompleted = true
+    else
+        -- Fallback to database check
+        local getCharDB = _G.HardcoreAchievements_GetCharDB
+        if type(getCharDB) == "function" then
+            local _, cdb = getCharDB()
+            if cdb and cdb.achievements and cdb.achievements[achIdStr] then
+                isCompleted = cdb.achievements[achIdStr].completed or false
+            end
+        end
+    end
+    
+    -- Check failed/outleveled status using the exported function
+    local isFailed = false
+    if not isCompleted and achievementRow and _G.IsRowOutleveled then
+        isFailed = _G.IsRowOutleveled(achievementRow)
+    elseif not isCompleted and not achievementRow then
+        -- Fallback: check if player is over level when row doesn't exist yet
+        local maxLevel = GetAchievementLevel(achievementId)
+        if maxLevel and maxLevel > 0 then
+            local playerLevel = UnitLevel("player") or 1
+            isFailed = playerLevel > maxLevel
+        end
+    end
+    
+    if isCompleted then
+        return " (Completed)", "FF00FF00"  -- Green
+    elseif isFailed then
+        return " (Failed)", "FFFF0000"  -- Red
+    else
+        -- Check for pending turn-in status
+        local isPendingTurnIn = false
+        if achievementRow and achievementRow.questTracker and (achievementRow.killTracker or achievementRow.requiredKills) then
+            -- Achievement requires both kill and quest
+            local progress = _G.HardcoreAchievements_GetProgress and _G.HardcoreAchievements_GetProgress(achievementId)
+            if progress then
+                local hasKill = false
+                
+                -- Check for required kills
+                if achievementRow.requiredKills then
+                    local countsSatisfied = true
+                    for npcId, need in pairs(achievementRow.requiredKills) do
+                        local idNum = tonumber(npcId) or npcId
+                        local current = progress.eligibleCounts and (progress.eligibleCounts[idNum] or progress.eligibleCounts[tostring(idNum)]) or (progress.counts and (progress.counts[idNum] or progress.counts[tostring(idNum)])) or 0
+                        local required = tonumber(need) or 1
+                        if current < required then
+                            countsSatisfied = false
+                            break
+                        end
+                    end
+                    hasKill = countsSatisfied
+                elseif achievementRow.killTracker then
+                    -- Single kill achievement
+                    hasKill = progress.killed or false
+                end
+                
+                local questNotTurnedIn = not progress.quest
+                
+                -- Get quest ID to check if quest is in log
+                local questID = achievementRow.requiredQuestId
+                if not questID and achievementRow._def then
+                    questID = achievementRow._def.requiredQuestId or achievementRow._def.REQUIRED_QUEST_ID
+                end
+                
+                -- Check if quest is still in quest log (not abandoned)
+                local questInLog = false
+                if questID then
+                    if GetQuestLogIndexByID then
+                        local logIndex = GetQuestLogIndexByID(questID)
+                        questInLog = (logIndex and logIndex > 0) or false
+                    elseif GetNumQuestLogEntries then
+                        local numEntries = GetNumQuestLogEntries()
+                        for i = 1, numEntries do
+                            local title, level, suggestGroup, isHeader, isCollapsed, isComplete, frequency, questIDFromLog = GetQuestLogTitle(i)
+                            if not isHeader and questIDFromLog == questID then
+                                questInLog = true
+                                break
+                            end
+                        end
+                    end
+                end
+                
+                -- Pending turn-in: kills satisfied, quest not turned in, and quest is still in quest log
+                isPendingTurnIn = hasKill and questNotTurnedIn and questInLog
+            end
+        end
+        
+        if isPendingTurnIn then
+            return " (Pending Turn-In)", select(4, GetClassColor(select(2, UnitClass("player"))))
+        end
+    end
+    
+    return nil, nil
 end
 
 -- Helper function to get title color based on player level vs required level
@@ -610,6 +900,12 @@ function AchievementTracker:Update()
                     displayTitle = "[" .. achievementLevel .. "] " .. achieveName
                 end
                 
+                -- Get achievement status (Completed, Failed, Pending Turn-In)
+                local statusText, statusColor = GetAchievementStatus(achievementId)
+                if statusText then
+                    displayTitle = displayTitle .. "|c" .. statusColor .. statusText .. "|r"
+                end
+                
                 -- Set title with color coding based on player level vs required level
                 local titleColor = GetTitleColor(achievementLevel)
                 line.label:SetText("|cff" .. titleColor .. displayTitle .. "|r")
@@ -759,16 +1055,12 @@ function AchievementTracker:Update()
         end
     end
     
-    -- Ensure minimum sizes even during resize
-    if trackerBaseFrame:GetWidth() < CONFIG.minWidth then
-        trackerBaseFrame:SetWidth(CONFIG.minWidth)
-    end
-    if trackerBaseFrame:GetHeight() < CONFIG.minHeight then
-        trackerBaseFrame:SetHeight(CONFIG.minHeight)
-    end
+    -- SetResizeBounds handles minimum size enforcement for user resizing
+    -- We still enforce minimums when programmatically setting sizes above
 
     -- Show/hide base frame
-    if numTracked == 0 and not isExpanded then
+    -- Hide if there are no tracked achievements, regardless of expanded state
+    if numTracked == 0 then
         trackerBaseFrame:Hide()
     else
         trackerBaseFrame:Show()
@@ -871,5 +1163,40 @@ end
 
 -- Export globally for use in main addon
 _G.HardcoreAchievementsTracker = AchievementTracker
+
+-- Hook into achievement refresh functions to update tracker status
+local function HookAchievementRefresh()
+    -- Store original function
+    local originalMarkCompleted = _G.HCA_MarkRowCompleted
+    
+    -- Hook into HCA_MarkRowCompleted to update tracker when achievement is completed
+    if originalMarkCompleted then
+        _G.HCA_MarkRowCompleted = function(row, ...)
+            local result = originalMarkCompleted(row, ...)
+            
+            if row then
+                -- Get achievement ID from row
+                local achId = row.achId or row.id
+                
+                -- Update tracker when any achievement is completed
+                if achId and AchievementTracker and AchievementTracker.Update then
+                    -- Update tracker immediately (row.completed is set synchronously)
+                    AchievementTracker:Update()
+                    -- Schedule another update after a delay to ensure database is updated
+                    C_Timer.After(0.3, function()
+                        if AchievementTracker and AchievementTracker.Update then
+                            AchievementTracker:Update()
+                        end
+                    end)
+                end
+            end
+            
+            return result
+        end
+    end
+end
+
+-- Set up hooks after a short delay to ensure all functions are loaded
+C_Timer.After(1.0, HookAchievementRefresh)
 
 return AchievementTracker
