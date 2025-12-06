@@ -2687,6 +2687,11 @@ do
         -- Track NPCs the player is fighting (for achievements)
         -- Only process kills if the player was actually fighting the NPC
         local npcsInCombat = {}  -- [destGUID] = true when player is fighting this NPC
+        
+        -- Track external players (non-party) that are fighting tracked NPCs
+        -- externalPlayersByNPC[destGUID] = { [playerGUID] = { lastSeen = time, threat = nil } }
+        local externalPlayersByNPC = {}
+        local EXTERNAL_PLAYER_TIMEOUT = 15  -- seconds to remember external players after last damage event
 
         -- Dedicated support for the Rats achievement: NPC IDs that qualify
         local RAT_NPC_IDS = {
@@ -2745,6 +2750,110 @@ do
             return nil
         end
 
+        -- Helper function to check if a GUID belongs to player or party member
+        local function isPlayerOrPartyMember(guid)
+            if not guid then
+                return false
+            end
+            local playerGUID = UnitGUID("player")
+            if guid == playerGUID then
+                return true
+            end
+            -- Check party members
+            if GetNumGroupMembers() > 1 then
+                for i = 1, 4 do
+                    local unit = "party" .. i
+                    if UnitExists(unit) then
+                        local partyMemberGUID = UnitGUID(unit)
+                        if partyMemberGUID and guid == partyMemberGUID then
+                            return true
+                        end
+                    end
+                end
+            end
+            return false
+        end
+        
+        -- Helper function to check if an NPC is tracked by any achievement
+        local function isNpcTrackedForAchievement(npcId)
+            if not npcId then
+                return false
+            end
+            -- Check for Rats achievement
+            if RAT_NPC_IDS[npcId] then
+                return true
+            end
+            -- Check if any achievement has a killTracker (tracks NPCs)
+            if AchievementPanel and AchievementPanel.achievements then
+                for _, row in ipairs(AchievementPanel.achievements) do
+                    if not row.completed and type(row.killTracker) == "function" then
+                        return true
+                    end
+                end
+            end
+            return false
+        end
+        
+        -- Cleanup old external player tracking entries
+        local function cleanupExternalPlayers()
+            local now = GetTime()
+            for destGUID, players in pairs(externalPlayersByNPC) do
+                local anyValid = false
+                for playerGUID, data in pairs(players) do
+                    if now - data.lastSeen > EXTERNAL_PLAYER_TIMEOUT then
+                        players[playerGUID] = nil
+                    else
+                        anyValid = true
+                    end
+                end
+                if not anyValid then
+                    externalPlayersByNPC[destGUID] = nil
+                end
+            end
+        end
+        
+        -- Update threat data for tracked external players when possible
+        local function updateExternalPlayerThreat(destGUID)
+            if not externalPlayersByNPC[destGUID] then
+                return
+            end
+            
+            -- Only update threat if the NPC is currently our target
+            if not UnitExists("target") or UnitGUID("target") ~= destGUID then
+                return
+            end
+            
+            local targetUnit = "target"
+            if not UnitCanAttack("player", targetUnit) then
+                return
+            end
+            
+            local now = GetTime()
+            for playerGUID, data in pairs(externalPlayersByNPC[destGUID]) do
+                -- Try to get unit token for this player
+                local unitToken = UnitTokenFromGUID(playerGUID)
+                if unitToken and UnitExists(unitToken) then
+                    -- Check threat for this external player
+                    local isTanking, status, scaledPct, rawPct = UnitDetailedThreatSituation(unitToken, targetUnit)
+                    if isTanking and status and status >= 2 then
+                        -- Tanking (status >= 2) means they're the primary target - definitely high threat
+                        data.threat = 100
+                        data.isTanking = true
+                    elseif scaledPct then
+                        data.threat = scaledPct
+                        data.isTanking = false
+                    elseif rawPct then
+                        data.threat = rawPct
+                        data.isTanking = false
+                    else
+                        data.threat = 0
+                        data.isTanking = false
+                    end
+                    data.lastSeen = now
+                end
+            end
+        end
+
         local function processKill(destGUID)
             if not destGUID or recentKills[destGUID] then
                 return
@@ -2765,6 +2874,24 @@ do
                     end
                 end
             end
+            
+            -- Clean up external player tracking for this NPC after kill
+            externalPlayersByNPC[destGUID] = nil
+        end
+        
+        -- Expose function to get external players for an NPC (for use by IsGroupEligibleForAchievement)
+        _G.GetExternalPlayersForNPC = function(destGUID)
+            if not destGUID then
+                return {}
+            end
+            cleanupExternalPlayers()
+            
+            -- Try to update threat data one last time before returning (if NPC is still targetable)
+            if UnitExists("target") and UnitGUID("target") == destGUID and UnitCanAttack("player", "target") then
+                updateExternalPlayerThreat(destGUID)
+            end
+            
+            return externalPlayersByNPC[destGUID] or {}
         end
         
         AchievementPanel._achEvt:RegisterEvent("COMBAT_LOG_EVENT_UNFILTERED")
@@ -2778,7 +2905,14 @@ do
         AchievementPanel._achEvt:RegisterEvent("CHAT_MSG_LOOT")
         AchievementPanel._achEvt:RegisterEvent("PLAYER_DEAD")
         AchievementPanel._achEvt:RegisterEvent("PLAYER_REGEN_ENABLED")
+        AchievementPanel._achEvt:RegisterEvent("PLAYER_ENTERING_WORLD")
         AchievementPanel._achEvt:SetScript("OnEvent", function(_, event, ...)
+            -- Clean up external player tracking on zone loads
+            if event == "PLAYER_ENTERING_WORLD" then
+                externalPlayersByNPC = {}
+                npcsInCombat = {}
+                return
+            end
             -- Clean up combat tracking when combat ends
             if event == "PLAYER_REGEN_ENABLED" then
                 -- Clear combat tracking after a short delay (in case we're still processing events)
@@ -2786,11 +2920,18 @@ do
                     -- Only clear if we're not in combat anymore
                     if not UnitAffectingCombat("player") then
                         npcsInCombat = {}
+                        -- Clean up old external player tracking (keep recent ones for a bit longer)
+                        cleanupExternalPlayers()
                     end
                 end)
             elseif event == "COMBAT_LOG_EVENT_UNFILTERED" then
                 local _, subevent, _, sourceGUID, _, _, _, destGUID, _, _, _, param12, param13, param14, param15, param16 = CombatLogGetCurrentEventInfo()
                 --DevTools_Dump(COMBAT_LOG_EVENT_UNFILTERED)
+                
+                -- Debug: Print threat situation for player when damage events occur
+                -- if DAMAGE_SUBEVENTS[subevent] and UnitExists("target") then
+                --     print("[CLEU Debug]", subevent, "| Threat:", UnitDetailedThreatSituation("player", "target"))
+                -- end
                 if subevent == "PARTY_KILL" then
                     -- PARTY_KILL fires for player/party member kills
                     -- Only process if we were fighting this NPC (prevents tracking kills we had no part in)
@@ -2846,6 +2987,8 @@ do
                             -- Mark that we're fighting this tracked NPC
                             if isTracked or (npcId and RAT_NPC_IDS[npcId]) then
                                 npcsInCombat[destGUID] = true
+                                -- Update threat for any tracked external players
+                                updateExternalPlayerThreat(destGUID)
                             end
                         end
                         
@@ -2853,6 +2996,12 @@ do
                         -- This catches kills that don't trigger PARTY_KILL (e.g., pet kills, DoT kills)
                         local overkill = subevent == "SWING_DAMAGE" and param13 or param16
                         if overkill and overkill >= 0 then
+                            -- Update threat for external players RIGHT BEFORE processing kill
+                            -- This ensures we have the most recent threat data when checking eligibility
+                            if npcsInCombat[destGUID] then
+                                updateExternalPlayerThreat(destGUID)
+                            end
+                            
                             -- Check for Rats achievement NPCs
                             if npcId and RAT_NPC_IDS[npcId] then
                                 processKill(destGUID)
@@ -2875,6 +3024,34 @@ do
                             end
                         end
                     elseif not shouldProcess and destGUID then
+                        -- This is damage from a non-player, non-party source (or external player)
+                        local npcId = getNpcIdFromGUID(destGUID)
+                        
+                        -- Check if source is an external player (not in our party)
+                        local guidType = sourceGUID and select(1, strsplit("-", sourceGUID))
+                        local isExternalPlayer = guidType == "Player" and not isPlayerOrPartyMember(sourceGUID)
+                        
+                        -- Track external players fighting tracked NPCs
+                        if isExternalPlayer and npcId and isNpcTrackedForAchievement(npcId) then
+                            local now = GetTime()
+                            if not externalPlayersByNPC[destGUID] then
+                                externalPlayersByNPC[destGUID] = {}
+                            end
+                            
+                            local playerData = externalPlayersByNPC[destGUID][sourceGUID]
+                            if not playerData then
+                                playerData = { lastSeen = now, threat = nil }
+                                externalPlayersByNPC[destGUID][sourceGUID] = playerData
+                            else
+                                playerData.lastSeen = now
+                            end
+                            
+                            -- Try to update threat if NPC is currently our target
+                            if npcsInCombat[destGUID] then
+                                updateExternalPlayerThreat(destGUID)
+                            end
+                        end
+                        
                         -- Check if this is a kill by a non-party player
                         -- Only process if the player was fighting this NPC
                         if not npcsInCombat[destGUID] then
@@ -2884,32 +3061,14 @@ do
                             -- If overkill is present (>= 0), the target died from this damage
                             local overkill = subevent == "SWING_DAMAGE" and param13 or param16
                             if overkill and overkill >= 0 then
-                                -- Check if source is a player (GUID starts with "Player-")
-                                local guidType = sourceGUID and select(1, strsplit("-", sourceGUID))
-                                local isPlayerSource = guidType == "Player"
-                                
-                                if isPlayerSource then
-                                local npcId = getNpcIdFromGUID(destGUID)
-                                if npcId then
-                                    -- Check if any achievement tracks this NPC
-                                    local isTracked = false
-                                    if AchievementPanel and AchievementPanel.achievements then
-                                        for _, row in ipairs(AchievementPanel.achievements) do
-                                            if not row.completed and type(row.killTracker) == "function" then
-                                                isTracked = true
-                                                break
-                                            end
-                                        end
-                                    end
+                                if isExternalPlayer and npcId then
+                                    local isTracked = isNpcTrackedForAchievement(npcId)
                                     
-                                    -- Check if this is a Rats achievement NPC
-                                    local isRatsNPC = RAT_NPC_IDS[npcId]
-                                    
-                                    if isTracked or isRatsNPC then
+                                    if isTracked then
                                         -- A non-party player got the kill while we were fighting this NPC
-                                            -- Process the kill - the killTracker will check eligibility
-                                            -- PlayerIsSolo tracks if non-party players helped (via threat)
-                                            -- If they helped significantly (>10% threat), it will mark as ineligible
+                                        -- Process the kill - the killTracker will check eligibility
+                                        -- PlayerIsSolo tracks if non-party players helped (via threat)
+                                        -- If they helped significantly (>10% threat), it will mark as ineligible
                                         processKill(destGUID)
                                         
                                         -- Clean up combat tracking
@@ -2919,32 +3078,34 @@ do
                             end
                         end
                     end
-                end
-            end
-                
-                -- Track threat/solo status during combat for tracked NPCs
-                -- This ensures we have solo status available when PARTY_KILL fires
-                if destGUID and sourceGUID == UnitGUID("player") then
-                    local npcId = getNpcIdFromGUID(destGUID)
-                    if npcId then
-                        -- Check if this NPC is tracked by any achievement
-                        local isTracked = false
-                        if AchievementPanel and AchievementPanel.achievements then
-                            for _, row in ipairs(AchievementPanel.achievements) do
-                                if not row.completed and type(row.killTracker) == "function" then
-                                    -- This NPC might be tracked, update solo status during combat
-                                    isTracked = true
-                                    break
-                                end
+                    
+                    -- Track threat/solo status during combat for tracked NPCs
+                    -- This ensures we have solo status available when PARTY_KILL fires
+                    -- Update for both player damage and external player damage to tracked NPCs
+                    if destGUID then
+                        local npcId = getNpcIdFromGUID(destGUID)
+                        if npcId and isNpcTrackedForAchievement(npcId) then
+                            local playerGUID = UnitGUID("player")
+                            local isPlayerDamage = sourceGUID == playerGUID
+                            local isExternalPlayerDamage = false
+                            
+                            if not isPlayerDamage and sourceGUID then
+                                local guidType = select(1, strsplit("-", sourceGUID))
+                                isExternalPlayerDamage = guidType == "Player" and not isPlayerOrPartyMember(sourceGUID)
                             end
-                        end
-                        
-                        -- Update solo status if this is a tracked NPC and we're in combat
-                        if isTracked and UnitAffectingCombat("player") then
-                            -- Check if this is our current target
-                            if UnitExists("target") and UnitGUID("target") == destGUID then
-                                if _G.PlayerIsSolo_UpdateStatusForGUID then
-                                    _G.PlayerIsSolo_UpdateStatusForGUID(destGUID)
+                            
+                            -- Update solo status if this is a tracked NPC and we're in combat
+                            if (isPlayerDamage or isExternalPlayerDamage) and UnitAffectingCombat("player") then
+                                -- Check if this is our current target
+                                if UnitExists("target") and UnitGUID("target") == destGUID then
+                                    -- Update threat for external players
+                                    if isExternalPlayerDamage then
+                                        updateExternalPlayerThreat(destGUID)
+                                    end
+                                    -- Update solo status
+                                    if _G.PlayerIsSolo_UpdateStatusForGUID then
+                                        _G.PlayerIsSolo_UpdateStatusForGUID(destGUID)
+                                    end
                                 end
                             end
                         end
