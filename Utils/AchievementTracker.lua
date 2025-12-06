@@ -35,28 +35,39 @@ local hideSizerTimer = nil  -- Timer for delayed sizer hiding
 local function SaveTrackerPosition()
     if not trackerBaseFrame then return end
     
-    -- Ensure database exists
-    if not HardcoreAchievementsDB then
-        HardcoreAchievementsDB = {}
-    end
-    HardcoreAchievementsDB.tracker = HardcoreAchievementsDB.tracker or {}
+    -- Get character-specific database
+    local getCharDB = _G.HardcoreAchievements_GetCharDB
+    if type(getCharDB) ~= "function" then return end
+    
+    local _, cdb = getCharDB()
+    if not cdb then return end
+    
+    -- Initialize tracker data structure
+    cdb.tracker = cdb.tracker or {}
     
     -- Get current position (save as left/top coordinates relative to screen)
     local left = trackerBaseFrame:GetLeft()
     local top = trackerBaseFrame:GetTop()
     
     if left and top then
-        HardcoreAchievementsDB.tracker.left = left
-        HardcoreAchievementsDB.tracker.top = top
+        cdb.tracker.left = left
+        cdb.tracker.top = top
     end
 end
 
 local function LoadTrackerPosition()
-    if not HardcoreAchievementsDB or not HardcoreAchievementsDB.tracker then
+    -- Get character-specific database
+    local getCharDB = _G.HardcoreAchievements_GetCharDB
+    if type(getCharDB) ~= "function" then
         return nil, nil
     end
     
-    local trackerData = HardcoreAchievementsDB.tracker
+    local _, cdb = getCharDB()
+    if not cdb or not cdb.tracker then
+        return nil, nil
+    end
+    
+    local trackerData = cdb.tracker
     if trackerData.left and trackerData.top then
         return trackerData.left, trackerData.top
     end
@@ -67,30 +78,41 @@ end
 local function SaveTrackerSize()
     if not trackerBaseFrame then return end
     
-    -- Ensure database exists
-    if not HardcoreAchievementsDB then
-        HardcoreAchievementsDB = {}
-    end
-    HardcoreAchievementsDB.tracker = HardcoreAchievementsDB.tracker or {}
+    -- Get character-specific database
+    local getCharDB = _G.HardcoreAchievements_GetCharDB
+    if type(getCharDB) ~= "function" then return end
+    
+    local _, cdb = getCharDB()
+    if not cdb then return end
+    
+    -- Initialize tracker data structure
+    cdb.tracker = cdb.tracker or {}
     
     -- Save current size
     local width = trackerBaseFrame:GetWidth()
     local height = trackerBaseFrame:GetHeight()
     
     if width and width >= CONFIG.minWidth then
-        HardcoreAchievementsDB.tracker.width = width
+        cdb.tracker.width = width
     end
     if height and height >= CONFIG.minHeight then
-        HardcoreAchievementsDB.tracker.height = height
+        cdb.tracker.height = height
     end
 end
 
 local function LoadTrackerSize()
-    if not HardcoreAchievementsDB or not HardcoreAchievementsDB.tracker then
+    -- Get character-specific database
+    local getCharDB = _G.HardcoreAchievements_GetCharDB
+    if type(getCharDB) ~= "function" then
         return nil, nil
     end
     
-    local trackerData = HardcoreAchievementsDB.tracker
+    local _, cdb = getCharDB()
+    if not cdb or not cdb.tracker then
+        return nil, nil
+    end
+    
+    local trackerData = cdb.tracker
     local width = trackerData.width
     local height = trackerData.height
     
@@ -102,6 +124,95 @@ local function LoadTrackerSize()
     end
     
     return nil, nil
+end
+
+-- Helper function to save tracked achievements to database
+local function SaveTrackedAchievements()
+    -- Get character-specific database
+    local getCharDB = _G.HardcoreAchievements_GetCharDB
+    if type(getCharDB) ~= "function" then return end
+    
+    local _, cdb = getCharDB()
+    if not cdb then return end
+    
+    -- Initialize tracker data structure
+    cdb.tracker = cdb.tracker or {}
+    
+    -- Convert trackedAchievements table to a serializable format
+    local savedAchievements = {}
+    for achievementId, data in pairs(trackedAchievements) do
+        local achIdStr = tostring(achievementId)
+        if type(data) == "table" and data.title then
+            -- Custom achievement with title
+            savedAchievements[achIdStr] = { title = data.title }
+        else
+            -- Standard achievement (just mark as tracked)
+            savedAchievements[achIdStr] = true
+        end
+    end
+    
+    cdb.tracker.trackedAchievements = savedAchievements
+end
+
+-- Helper function to load tracked achievements from database
+local function LoadTrackedAchievements()
+    -- Get character-specific database
+    local getCharDB = _G.HardcoreAchievements_GetCharDB
+    if type(getCharDB) ~= "function" then
+        return {}
+    end
+    
+    local _, cdb = getCharDB()
+    if not cdb or not cdb.tracker then
+        return {}
+    end
+    
+    local trackerData = cdb.tracker
+    if not trackerData.trackedAchievements then
+        return {}
+    end
+    
+    -- Return a copy of the saved achievements
+    local loadedAchievements = {}
+    for achievementId, data in pairs(trackerData.trackedAchievements) do
+        if type(data) == "table" and data.title then
+            loadedAchievements[achievementId] = { title = data.title }
+        else
+            loadedAchievements[achievementId] = true
+        end
+    end
+    
+    return loadedAchievements
+end
+
+-- Function to restore tracked achievements from database (called on login/reload)
+local function RestoreTrackedAchievements()
+    if not isInitialized then
+        return
+    end
+    
+    local savedAchievements = LoadTrackedAchievements()
+    if not savedAchievements or next(savedAchievements) == nil then
+        return  -- No saved achievements to restore
+    end
+    
+    -- Clear current tracked achievements
+    trackedAchievements = {}
+    
+    -- Restore each saved achievement
+    for achievementId, data in pairs(savedAchievements) do
+        -- Convert string ID back to number if possible
+        local achId = tonumber(achievementId) or achievementId
+        
+        if type(data) == "table" and data.title then
+            trackedAchievements[achId] = { title = data.title }
+        else
+            trackedAchievements[achId] = true
+        end
+    end
+    
+    -- Update the tracker display
+    AchievementTracker:Update()
 end
 
 -- Initialize the tracker
@@ -729,8 +840,12 @@ end
 -- Create or get achievement line
 function AchievementTracker:GetAchievementLine(index)
     if not achievementLines[index] then
-        local line = CreateFrame("Frame", "AchievementTracker_Line" .. index, trackerContentFrame)
+        -- Create as Button to enable clicking on entire line (title + description)
+        local line = CreateFrame("Button", "AchievementTracker_Line" .. index, trackerContentFrame)
         line:SetHeight(CONFIG.achievementFontSize + 4)
+        line:EnableMouse(true)
+        line:RegisterForClicks("LeftButtonUp")
+        line:RegisterForDrag("LeftButton")
 
         -- Title label (with word wrap support)
         local label = line:CreateFontString(nil, "ARTWORK", "GameFontNormal")
@@ -750,6 +865,56 @@ function AchievementTracker:GetAchievementLine(index)
         descriptionLabel:SetWordWrap(true)
         descriptionLabel:SetTextColor(1, 1, 1)
         line.descriptionLabel = descriptionLabel
+
+        -- Track if a drag occurred to prevent click handler from firing after drag
+        local wasDragging = false
+        
+        -- Click handler: Left click = toggle panel, Shift+Click = untrack or link
+        line:SetScript("OnClick", function(self, button)
+            if button == "LeftButton" and not InCombatLockdown() and not wasDragging then
+                if IsShiftKeyDown() then
+                    -- Shift+Click: Check if chat is open, otherwise untrack
+                    local editBox = ChatEdit_GetActiveWindow()
+                    if editBox and editBox:IsVisible() then
+                        -- Chat edit box is active: link achievement
+                        local achId = line.achievementId
+                        if achId then
+                            local bracket = _G.HCA_GetAchievementBracket and _G.HCA_GetAchievementBracket(achId) or string.format("[HCA:(%s)]", tostring(achId))
+                            local currentText = editBox:GetText() or ""
+                            if currentText == "" then
+                                editBox:SetText(bracket)
+                            else
+                                editBox:SetText(currentText .. " " .. bracket)
+                            end
+                        end
+                    else
+                        -- No chat open: Untrack achievement
+                        local achId = line.achievementId
+                        if achId then
+                            AchievementTracker:UntrackAchievement(achId)
+                        end
+                    end
+                else
+                    -- Regular Click: Open HardcoreAchievementWindow
+                    ShowHardcoreAchievementWindow()
+                end
+            end
+            wasDragging = false  -- Reset flag
+        end)
+        
+        -- Forward drag events to base frame (for Shift+drag functionality)
+        line:SetScript("OnDragStart", function(self)
+            -- Only forward if Shift is held (matching base frame behavior)
+            if IsShiftKeyDown() and trackerBaseFrame then
+                wasDragging = true  -- Mark that dragging occurred
+                trackerBaseFrame:GetScript("OnDragStart")(trackerBaseFrame)
+            end
+        end)
+        line:SetScript("OnDragStop", function(self)
+            if trackerBaseFrame then
+                trackerBaseFrame:GetScript("OnDragStop")(trackerBaseFrame)
+            end
+        end)
 
         achievementLines[index] = line
     end
@@ -892,6 +1057,9 @@ function AchievementTracker:Update()
             if achieveName then
                 lineIndex = lineIndex + 1
                 local line = AchievementTracker:GetAchievementLine(lineIndex)
+                
+                -- Store achievement ID on the line for click handler
+                line.achievementId = achievementId
                 
                 -- Get achievement level and format title with level prefix
                 local achievementLevel = GetAchievementLevel(achievementId)
@@ -1093,6 +1261,9 @@ function AchievementTracker:TrackAchievement(achievementId, title)
         trackedAchievements[achievementId] = true
     end
     
+    -- Save to database
+    SaveTrackedAchievements()
+    
     AchievementTracker:Update()
 end
 
@@ -1100,6 +1271,8 @@ end
 function AchievementTracker:UntrackAchievement(achievementId)
     if trackedAchievements[achievementId] then
         trackedAchievements[achievementId] = nil
+        -- Save to database
+        SaveTrackedAchievements()
         AchievementTracker:Update()
     end
 end
@@ -1198,5 +1371,29 @@ end
 
 -- Set up hooks after a short delay to ensure all functions are loaded
 C_Timer.After(1.0, HookAchievementRefresh)
+
+-- Restore tracked achievements on login/reload (with 3 second delay to ensure all data is loaded)
+local function RestoreOnLogin()
+    -- Wait 3 seconds after login to ensure all achievement data is loaded
+    C_Timer.After(3.0, function()
+        if AchievementTracker and AchievementTracker.Initialize then
+            -- Ensure tracker is initialized first
+            if not isInitialized then
+                AchievementTracker:Initialize()
+            end
+            -- Restore tracked achievements
+            RestoreTrackedAchievements()
+        end
+    end)
+end
+
+-- Register for PLAYER_LOGIN event to restore tracked achievements
+local restoreFrame = CreateFrame("Frame")
+restoreFrame:RegisterEvent("PLAYER_LOGIN")
+restoreFrame:SetScript("OnEvent", function(self, event)
+    if event == "PLAYER_LOGIN" then
+        RestoreOnLogin()
+    end
+end)
 
 return AchievementTracker
