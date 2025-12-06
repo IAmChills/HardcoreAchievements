@@ -1,9 +1,9 @@
 local Achievements = {
 
-{ achId="Test",  title="Boar Test",  level=4, tooltip="Kill |cff0091e6a boar", icon=134400, points=10, requiredQuestId=nil, targetNpcId=3098, faction="Horde", zone="Durotar" },
-{ achId="Test2", title="Easy Quest Test", level=2, tooltip="Orc starter quest", icon=134400, points=10, requiredQuestId=4641, targetNpcId=nil, faction="Horde", zone="Durotar" },
-{ achId="Test3", title="Kill + Quest", level=2, tooltip="Kill a boar and complete the orc starter quest", icon=134400, points=10, requiredQuestId=788, targetNpcId=3098, faction="Horde", zone="Durotar" },
-{ achId="Test4", title="Kill 3 Boars", level=2, tooltip="Kill 3 boars", icon=134400, points=10, requiredQuestId=nil, requiredKills = { [3098] = 3, }, faction="Horde", zone="Durotar" },
+--{ achId="Test",  title="Boar Test",  level=4, tooltip="Kill |cff0091e6a boar", icon=134400, points=10, requiredQuestId=nil, targetNpcId=3098, faction="Horde", zone="Durotar" },
+--{ achId="Test2", title="Easy Quest Test", level=2, tooltip="Orc starter quest", icon=134400, points=10, requiredQuestId=4641, targetNpcId=nil, faction="Horde", zone="Durotar" },
+--{ achId="Test3", title="Kill + Quest", level=2, tooltip="Kill a boar and complete the orc starter quest", icon=134400, points=10, requiredQuestId=788, targetNpcId=3098, faction="Horde", zone="Durotar" },
+--{ achId="Test4", title="Kill 3 Boars", level=2, tooltip="Kill 3 boars", icon=134400, points=10, requiredQuestId=nil, requiredKills = { [3098] = 3, }, faction="Horde", zone="Durotar" },
 
 -- Alliance
 {
