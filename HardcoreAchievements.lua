@@ -8,6 +8,11 @@ local RefreshOutleveledAll
 local ProfessionTracker = _G.HCA_ProfessionCommon
 local QuestTrackedRows = {}
 
+-- Load AchievementTracker module (loaded via TOC, accessed lazily)
+local function GetAchievementTracker()
+    return _G.HardcoreAchievementsTracker
+end
+
 local function TrackRowForQuest(row, questID)
     local qid = tonumber(questID or row and row.requiredQuestId)
     if not qid or not row then return end
@@ -41,63 +46,6 @@ local function EnsureDB()
     HardcoreAchievementsDB = HardcoreAchievementsDB or {}
     HardcoreAchievementsDB.chars = HardcoreAchievementsDB.chars or {}
     return HardcoreAchievementsDB
-end
-
--- Migration function to move achievement data from UltraHardcoreLeaderboard database
-local function MigrateFromLeaderboardDB()
-    -- Check if we already have our own database
-    if HardcoreAchievementsDB and HardcoreAchievementsDB.chars and next(HardcoreAchievementsDB.chars) then
-        return false -- Already migrated or have data
-    end
-    
-    -- Check if UltraHardcoreLeaderboardDB exists and has achievement data
-    if UltraHardcoreLeaderboardDB and UltraHardcoreLeaderboardDB.chars then
-        local migrated = false
-        local migrationCount = 0
-        
-        for guid, charData in pairs(UltraHardcoreLeaderboardDB.chars) do
-            if charData.achievements and next(charData.achievements) then
-                -- Migrate this character's achievement data
-                if not HardcoreAchievementsDB.chars[guid] then
-                    HardcoreAchievementsDB.chars[guid] = {
-                        meta = charData.meta or {},
-                        achievements = charData.achievements
-                    }
-                    migrationCount = migrationCount + 1
-                    migrated = true
-                end
-            end
-        end
-        
-        if migrated then
-            print("|cff00ff00[HardcoreAchievements]|r Migrated " .. migrationCount .. " character(s) achievement data from UltraHardcoreLeaderboard")
-        end
-        
-        return migrated
-    end
-    
-    return false
-end
-
--- Optional cleanup function to remove achievement data from UltraHardcoreLeaderboard database
--- This should only be called after confirming migration was successful
-local function CleanupLeaderboardAchievementData()
-    if UltraHardcoreLeaderboardDB and UltraHardcoreLeaderboardDB.chars then
-        local cleaned = false
-        for guid, charData in pairs(UltraHardcoreLeaderboardDB.chars) do
-            if charData.achievements then
-                charData.achievements = nil
-                cleaned = true
-            end
-        end
-        
-        if cleaned then
-            print("|cff00ff00[HardcoreAchievements]|r Cleaned up old achievement data from UltraHardcoreLeaderboard database")
-        end
-        
-        return cleaned
-    end
-    return false
 end
 
 local function GetCharDB()
@@ -152,13 +100,13 @@ local function CleanupIncorrectLevelAchievements()
     
     -- Log cleanup if any achievements were removed
     if cleanedCount > 0 then
-        local message = "|cff69adc9[HardcoreAchievements]|r |cfff0f000Cleaned up " .. cleanedCount .. " incorrectly completed achievement(s):|r"
+        local message = "|cff69adc9[Hardcore Achievements]|r |cffffd100Cleaned up " .. cleanedCount .. " incorrectly completed achievement(s):|r"
         print(message)
         for _, cleaned in ipairs(cleanedAchievements) do
-            print(string.format("  |cfff0f000- %s (completed at level %d, required level %d)|r", 
+            print(string.format("  |cffffd100- %s (completed at level %d, required level %d)|r", 
                 cleaned.achId, cleaned.completionLevel, cleaned.requiredLevel))
         end
-        print("|cfff0f000I am chasing a weird bug, thank you for your patience. - |r|cff69adc9Chills|r")
+        print("|cffffd100I am chasing a weird bug, thank you for your patience. - |r|cff69adc9Chills|r")
     end
     
     return cleanedCount
@@ -447,6 +395,7 @@ end
 _G.HCA_GetFailureTimestamp = GetFailureTimestamp
 _G.HCA_EnsureFailureTimestamp = EnsureFailureTimestamp
 _G.FormatTimestamp = FormatTimestamp
+_G.IsRowOutleveled = IsRowOutleveled
 
 -- Export function for embedded UI to get total points
 function HCA_GetTotalPoints()
@@ -1345,20 +1294,6 @@ function HardcoreAchievements_LoadTabPosition()
     LoadTabPosition()
 end
 
--- Export migration functions for manual use
-function HardcoreAchievements_MigrateFromLeaderboard() 
-    local migrated = MigrateFromLeaderboardDB()
-    if not migrated then
-        print("|cff00ff00[HardcoreAchievements]|r No data found to migrate from UltraHardcoreLeaderboard")
-    end
-    return migrated
-end
-
-function HardcoreAchievements_CleanupOldData()
-    local cleaned = CleanupLeaderboardAchievementData()
-    return cleaned
-end
-
 function HardcoreAchievements_GetSettings()
     local _, cdb = GetCharDB()
     if not cdb then return {} end
@@ -1456,9 +1391,6 @@ initFrame:SetScript("OnEvent", function(self, event, ...)
     if event == "PLAYER_LOGIN" then
         playerGUID = UnitGUID("player")
 
-        -- Run migration first, before setting up current character
-        MigrateFromLeaderboardDB()
-
         local db, cdb = GetCharDB()
         if cdb then
             -- Ensure settings table exists
@@ -1502,6 +1434,14 @@ initFrame:SetScript("OnEvent", function(self, event, ...)
         if _HardcoreAchievementsOptionsPanel and _HardcoreAchievementsOptionsPanel.refresh then
             _HardcoreAchievementsOptionsPanel:refresh()
         end
+        
+        -- Initialize AchievementTracker (after it loads)
+        C_Timer.After(0.5, function()
+            local AchievementTracker = GetAchievementTracker()
+            if AchievementTracker and AchievementTracker.Initialize then
+                AchievementTracker:Initialize()
+            end
+        end)
 
     elseif event == "ADDON_LOADED" then
         local addonName = ...
@@ -2558,22 +2498,45 @@ function CreateAchievementRow(parent, achId, title, tooltip, icon, level, points
 
     row:SetScript("OnMouseUp", function(self, button)
         if button == "LeftButton" and IsShiftKeyDown() and row.achId then
-            -- Use centralized function to generate bracket format (icon looked up client-side)
-            local bracket = _G.HCA_GetAchievementBracket and _G.HCA_GetAchievementBracket(row.achId) or string.format("[HCA:(%s)]", tostring(row.achId))
-
             local editBox = ChatEdit_GetActiveWindow()
-            -- If no chat edit box is currently active/visible, do nothing
-            if not editBox or not editBox:IsVisible() then
-                return
-            end
-            local currentText = editBox and (editBox:GetText() or "") or ""
-            if currentText == "" then
-                editBox:SetText(bracket)
+            
+            -- Check if chat edit box is active/visible
+            if editBox and editBox:IsVisible() then
+                -- Chat edit box is active: link achievement (original behavior)
+                local bracket = _G.HCA_GetAchievementBracket and _G.HCA_GetAchievementBracket(row.achId) or string.format("[HCA:(%s)]", tostring(row.achId))
+                local currentText = editBox:GetText() or ""
+                if currentText == "" then
+                    editBox:SetText(bracket)
+                else
+                    editBox:SetText(currentText .. " " .. bracket)
+                end
+                editBox:SetFocus()
             else
-                editBox:SetText(currentText .. " " .. bracket)
+                -- Chat edit box is NOT active: track/untrack achievement
+                local AchievementTracker = GetAchievementTracker()
+                if not AchievementTracker then
+                    print("|cffff0000[Hardcore Achievements]|r Achievement tracker not available. Please reload your UI (/reload).")
+                    return
+                end
+                
+                local achId = row.achId or row.id
+                if not achId then
+                    return
+                end
+                
+                local title = row.Title and row.Title:GetText() or tostring(achId)
+                -- Strip color codes from title if present
+                title = title and title:gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", "") or tostring(achId)
+                local isTracked = AchievementTracker:IsTracked(achId)
+                
+                if isTracked then
+                    AchievementTracker:UntrackAchievement(achId)
+                    --print("|cff69adc9[Hardcore Achievements]|r Stopped tracking: " .. title)
+                else
+                    AchievementTracker:TrackAchievement(achId, title)
+                    --print("|cff69adc9[Hardcore Achievements]|r Now tracking: " .. title)
+                end
             end
-            editBox:SetFocus()
-            return
         end
     end)
 
@@ -2720,6 +2683,15 @@ do
                 recentKills[destGUID] = nil
             end)
         end
+        
+        -- Track NPCs the player is fighting (for achievements)
+        -- Only process kills if the player was actually fighting the NPC
+        local npcsInCombat = {}  -- [destGUID] = true when player is fighting this NPC
+        
+        -- Track external players (non-party) that are fighting tracked NPCs
+        -- externalPlayersByNPC[destGUID] = { [playerGUID] = { lastSeen = time, threat = nil } }
+        local externalPlayersByNPC = {}
+        local EXTERNAL_PLAYER_TIMEOUT = 15  -- seconds to remember external players after last damage event
 
         -- Dedicated support for the Rats achievement: NPC IDs that qualify
         local RAT_NPC_IDS = {
@@ -2778,6 +2750,110 @@ do
             return nil
         end
 
+        -- Helper function to check if a GUID belongs to player or party member
+        local function isPlayerOrPartyMember(guid)
+            if not guid then
+                return false
+            end
+            local playerGUID = UnitGUID("player")
+            if guid == playerGUID then
+                return true
+            end
+            -- Check party members
+            if GetNumGroupMembers() > 1 then
+                for i = 1, 4 do
+                    local unit = "party" .. i
+                    if UnitExists(unit) then
+                        local partyMemberGUID = UnitGUID(unit)
+                        if partyMemberGUID and guid == partyMemberGUID then
+                            return true
+                        end
+                    end
+                end
+            end
+            return false
+        end
+        
+        -- Helper function to check if an NPC is tracked by any achievement
+        local function isNpcTrackedForAchievement(npcId)
+            if not npcId then
+                return false
+            end
+            -- Check for Rats achievement
+            if RAT_NPC_IDS[npcId] then
+                return true
+            end
+            -- Check if any achievement has a killTracker (tracks NPCs)
+            if AchievementPanel and AchievementPanel.achievements then
+                for _, row in ipairs(AchievementPanel.achievements) do
+                    if not row.completed and type(row.killTracker) == "function" then
+                        return true
+                    end
+                end
+            end
+            return false
+        end
+        
+        -- Cleanup old external player tracking entries
+        local function cleanupExternalPlayers()
+            local now = GetTime()
+            for destGUID, players in pairs(externalPlayersByNPC) do
+                local anyValid = false
+                for playerGUID, data in pairs(players) do
+                    if now - data.lastSeen > EXTERNAL_PLAYER_TIMEOUT then
+                        players[playerGUID] = nil
+                    else
+                        anyValid = true
+                    end
+                end
+                if not anyValid then
+                    externalPlayersByNPC[destGUID] = nil
+                end
+            end
+        end
+        
+        -- Update threat data for tracked external players when possible
+        local function updateExternalPlayerThreat(destGUID)
+            if not externalPlayersByNPC[destGUID] then
+                return
+            end
+            
+            -- Only update threat if the NPC is currently our target
+            if not UnitExists("target") or UnitGUID("target") ~= destGUID then
+                return
+            end
+            
+            local targetUnit = "target"
+            if not UnitCanAttack("player", targetUnit) then
+                return
+            end
+            
+            local now = GetTime()
+            for playerGUID, data in pairs(externalPlayersByNPC[destGUID]) do
+                -- Try to get unit token for this player
+                local unitToken = UnitTokenFromGUID(playerGUID)
+                if unitToken and UnitExists(unitToken) then
+                    -- Check threat for this external player
+                    local isTanking, status, scaledPct, rawPct = UnitDetailedThreatSituation(unitToken, targetUnit)
+                    if isTanking and status and status >= 2 then
+                        -- Tanking (status >= 2) means they're the primary target - definitely high threat
+                        data.threat = 100
+                        data.isTanking = true
+                    elseif scaledPct then
+                        data.threat = scaledPct
+                        data.isTanking = false
+                    elseif rawPct then
+                        data.threat = rawPct
+                        data.isTanking = false
+                    else
+                        data.threat = 0
+                        data.isTanking = false
+                    end
+                    data.lastSeen = now
+                end
+            end
+        end
+
         local function processKill(destGUID)
             if not destGUID or recentKills[destGUID] then
                 return
@@ -2798,9 +2874,28 @@ do
                     end
                 end
             end
+            
+            -- Clean up external player tracking for this NPC after kill
+            externalPlayersByNPC[destGUID] = nil
+        end
+        
+        -- Expose function to get external players for an NPC (for use by IsGroupEligibleForAchievement)
+        _G.GetExternalPlayersForNPC = function(destGUID)
+            if not destGUID then
+                return {}
+            end
+            cleanupExternalPlayers()
+            
+            -- Try to update threat data one last time before returning (if NPC is still targetable)
+            if UnitExists("target") and UnitGUID("target") == destGUID and UnitCanAttack("player", "target") then
+                updateExternalPlayerThreat(destGUID)
+            end
+            
+            return externalPlayersByNPC[destGUID] or {}
         end
         
         AchievementPanel._achEvt:RegisterEvent("COMBAT_LOG_EVENT_UNFILTERED")
+        AchievementPanel._achEvt:RegisterEvent("QUEST_ACCEPTED")
         AchievementPanel._achEvt:RegisterEvent("QUEST_TURNED_IN")
         AchievementPanel._achEvt:RegisterEvent("QUEST_REMOVED")
         AchievementPanel._achEvt:RegisterEvent("UNIT_SPELLCAST_SENT")
@@ -2809,14 +2904,42 @@ do
         AchievementPanel._achEvt:RegisterEvent("PLAYER_LEVEL_CHANGED")
         AchievementPanel._achEvt:RegisterEvent("CHAT_MSG_LOOT")
         AchievementPanel._achEvt:RegisterEvent("PLAYER_DEAD")
+        AchievementPanel._achEvt:RegisterEvent("PLAYER_REGEN_ENABLED")
+        AchievementPanel._achEvt:RegisterEvent("PLAYER_ENTERING_WORLD")
         AchievementPanel._achEvt:SetScript("OnEvent", function(_, event, ...)
-            if event == "COMBAT_LOG_EVENT_UNFILTERED" then
+            -- Clean up external player tracking on zone loads
+            if event == "PLAYER_ENTERING_WORLD" then
+                externalPlayersByNPC = {}
+                npcsInCombat = {}
+                return
+            end
+            -- Clean up combat tracking when combat ends
+            if event == "PLAYER_REGEN_ENABLED" then
+                -- Clear combat tracking after a short delay (in case we're still processing events)
+                C_Timer.After(2, function()
+                    -- Only clear if we're not in combat anymore
+                    if not UnitAffectingCombat("player") then
+                        npcsInCombat = {}
+                        -- Clean up old external player tracking (keep recent ones for a bit longer)
+                        cleanupExternalPlayers()
+                    end
+                end)
+            elseif event == "COMBAT_LOG_EVENT_UNFILTERED" then
                 local _, subevent, _, sourceGUID, _, _, _, destGUID, _, _, _, param12, param13, param14, param15, param16 = CombatLogGetCurrentEventInfo()
                 --DevTools_Dump(COMBAT_LOG_EVENT_UNFILTERED)
+                
+                -- Debug: Print threat situation for player when damage events occur
+                -- if DAMAGE_SUBEVENTS[subevent] and UnitExists("target") then
+                --     print("[CLEU Debug]", subevent, "| Threat:", UnitDetailedThreatSituation("player", "target"))
+                -- end
                 if subevent == "PARTY_KILL" then
                     -- PARTY_KILL fires for player/party member kills
-                    -- Process it normally (if PARTY_KILL fires, it's a valid kill)
-                    processKill(destGUID)
+                    -- Only process if we were fighting this NPC (prevents tracking kills we had no part in)
+                    if npcsInCombat[destGUID] then
+                        processKill(destGUID)
+                        -- Clean up combat tracking
+                        npcsInCombat[destGUID] = nil
+                    end
                 elseif DAMAGE_SUBEVENTS[subevent] then
                     local playerGUID = UnitGUID("player")
                     local shouldProcess = false
@@ -2848,11 +2971,37 @@ do
                     end
                     
                     if shouldProcess and destGUID then
+                        -- Player/party member/pet damage - track that we're fighting this NPC
+                        local npcId = getNpcIdFromGUID(destGUID)
+                        if npcId then
+                            -- Check if any achievement tracks this NPC
+                            local isTracked = false
+                            if AchievementPanel and AchievementPanel.achievements then
+                                for _, row in ipairs(AchievementPanel.achievements) do
+                                    if not row.completed and type(row.killTracker) == "function" then
+                                        isTracked = true
+                                        break
+                                    end
+                                end
+                            end
+                            -- Mark that we're fighting this tracked NPC
+                            if isTracked or (npcId and RAT_NPC_IDS[npcId]) then
+                                npcsInCombat[destGUID] = true
+                                -- Update threat for any tracked external players
+                                updateExternalPlayerThreat(destGUID)
+                            end
+                        end
+                        
                         -- If overkill is present (>= 0), the target died from this damage
                         -- This catches kills that don't trigger PARTY_KILL (e.g., pet kills, DoT kills)
                         local overkill = subevent == "SWING_DAMAGE" and param13 or param16
                         if overkill and overkill >= 0 then
-                            local npcId = getNpcIdFromGUID(destGUID)
+                            -- Update threat for external players RIGHT BEFORE processing kill
+                            -- This ensures we have the most recent threat data when checking eligibility
+                            if npcsInCombat[destGUID] then
+                                updateExternalPlayerThreat(destGUID)
+                            end
+                            
                             -- Check for Rats achievement NPCs
                             if npcId and RAT_NPC_IDS[npcId] then
                                 processKill(destGUID)
@@ -2874,33 +3023,110 @@ do
                                 end
                             end
                         end
-                    end
-                end
-                
-                -- Track threat/solo status during combat for tracked NPCs
-                -- This ensures we have solo status available when PARTY_KILL fires
-                if destGUID and sourceGUID == UnitGUID("player") then
-                    local npcId = getNpcIdFromGUID(destGUID)
-                    if npcId then
-                        -- Check if this NPC is tracked by any achievement
-                        local isTracked = false
-                        if AchievementPanel and AchievementPanel.achievements then
-                            for _, row in ipairs(AchievementPanel.achievements) do
-                                if not row.completed and type(row.killTracker) == "function" then
-                                    -- This NPC might be tracked, update solo status during combat
-                                    isTracked = true
-                                    break
-                                end
+                    elseif not shouldProcess and destGUID then
+                        -- This is damage from a non-player, non-party source (or external player)
+                        local npcId = getNpcIdFromGUID(destGUID)
+                        
+                        -- Check if source is an external player (not in our party)
+                        local guidType = sourceGUID and select(1, strsplit("-", sourceGUID))
+                        local isExternalPlayer = guidType == "Player" and not isPlayerOrPartyMember(sourceGUID)
+                        
+                        -- Track external players fighting tracked NPCs
+                        if isExternalPlayer and npcId and isNpcTrackedForAchievement(npcId) then
+                            local now = GetTime()
+                            if not externalPlayersByNPC[destGUID] then
+                                externalPlayersByNPC[destGUID] = {}
+                            end
+                            
+                            local playerData = externalPlayersByNPC[destGUID][sourceGUID]
+                            if not playerData then
+                                playerData = { lastSeen = now, threat = nil }
+                                externalPlayersByNPC[destGUID][sourceGUID] = playerData
+                            else
+                                playerData.lastSeen = now
+                            end
+                            
+                            -- Try to update threat if NPC is currently our target
+                            if npcsInCombat[destGUID] then
+                                updateExternalPlayerThreat(destGUID)
                             end
                         end
                         
-                        -- Update solo status if this is a tracked NPC and we're in combat
-                        if isTracked and UnitAffectingCombat("player") then
-                            -- Check if this is our current target
-                            if UnitExists("target") and UnitGUID("target") == destGUID then
-                                if _G.PlayerIsSolo_UpdateStatusForGUID then
-                                    _G.PlayerIsSolo_UpdateStatusForGUID(destGUID)
+                        -- Check if this is a kill by a non-party player
+                        -- Only process if the player was fighting this NPC
+                        if not npcsInCombat[destGUID] then
+                            -- Player wasn't fighting this NPC, ignore the kill
+                            -- (This prevents tracking kills the player had no part in)
+                        else
+                            -- If overkill is present (>= 0), the target died from this damage
+                            local overkill = subevent == "SWING_DAMAGE" and param13 or param16
+                            if overkill and overkill >= 0 then
+                                if isExternalPlayer and npcId then
+                                    local isTracked = isNpcTrackedForAchievement(npcId)
+                                    
+                                    if isTracked then
+                                        -- A non-party player got the kill while we were fighting this NPC
+                                        -- Process the kill - the killTracker will check eligibility
+                                        -- PlayerIsSolo tracks if non-party players helped (via threat)
+                                        -- If they helped significantly (>10% threat), it will mark as ineligible
+                                        processKill(destGUID)
+                                        
+                                        -- Clean up combat tracking
+                                        npcsInCombat[destGUID] = nil
+                                    end
                                 end
+                            end
+                        end
+                    end
+                    
+                    -- Track threat/solo status during combat for tracked NPCs
+                    -- This ensures we have solo status available when PARTY_KILL fires
+                    -- Update for both player damage and external player damage to tracked NPCs
+                    if destGUID then
+                        local npcId = getNpcIdFromGUID(destGUID)
+                        if npcId and isNpcTrackedForAchievement(npcId) then
+                            local playerGUID = UnitGUID("player")
+                            local isPlayerDamage = sourceGUID == playerGUID
+                            local isExternalPlayerDamage = false
+                            
+                            if not isPlayerDamage and sourceGUID then
+                                local guidType = select(1, strsplit("-", sourceGUID))
+                                isExternalPlayerDamage = guidType == "Player" and not isPlayerOrPartyMember(sourceGUID)
+                            end
+                            
+                            -- Update solo status if this is a tracked NPC and we're in combat
+                            if (isPlayerDamage or isExternalPlayerDamage) and UnitAffectingCombat("player") then
+                                -- Check if this is our current target
+                                if UnitExists("target") and UnitGUID("target") == destGUID then
+                                    -- Update threat for external players
+                                    if isExternalPlayerDamage then
+                                        updateExternalPlayerThreat(destGUID)
+                                    end
+                                    -- Update solo status
+                                    if _G.PlayerIsSolo_UpdateStatusForGUID then
+                                        _G.PlayerIsSolo_UpdateStatusForGUID(destGUID)
+                                    end
+                                end
+                            end
+                        end
+                    end
+                end
+            elseif event == "QUEST_ACCEPTED" then
+                -- arg2 is the QuestId
+                local questID = select(2, ...)
+                questID = questID and tonumber(questID) or nil
+                if questID and HardcoreAchievements_SetProgress then
+                    -- Store player's level when quest is accepted as a backup reference
+                    -- This helps prevent achievements from failing if player levels up between accepting and turning in
+                    local acceptLevel = UnitLevel("player") or 1
+                    for _, row in ipairs(AchievementPanel.achievements) do
+                        if not row.completed then
+                            -- Check if this achievement tracks this quest by comparing questID directly
+                            -- Don't call questTracker as it processes the quest and can complete the achievement
+                            local rowQuestId = row.requiredQuestId
+                            if rowQuestId and tonumber(rowQuestId) == questID then
+                                -- Store levelAtAccept as a backup (will be overwritten by levelAtKill or levelAtTurnIn on fulfillment)
+                                HardcoreAchievements_SetProgress(row.id, "levelAtAccept", acceptLevel)
                             end
                         end
                     end
@@ -2908,37 +3134,25 @@ do
             elseif event == "QUEST_TURNED_IN" then
                 local questID = select(1, ...)
                 questID = questID and tonumber(questID) or nil
-                -- Determine the level at turn-in: if player leveled up during turn-in, use the level before
-                local currentLevel = UnitLevel("player") or 1
-                local levelAtTurnIn = currentLevel
-                -- If we have a stored level before turn-in and the level increased, use the stored level
-                if levelBeforeTurnIn and levelBeforeTurnIn < currentLevel then
-                    levelAtTurnIn = levelBeforeTurnIn
-                end
                 for _, row in ipairs(AchievementPanel.achievements) do
                     if not row.completed and type(row.questTracker) == "function" then
-                        -- Only set levelAtTurnIn if the quest tracker actually matches the quest
-                        -- Check if this achievement's quest matches before setting levelAtTurnIn
-                        local shouldSetLevelAtTurnIn = false
-                        if row.questTracker then
-                            -- Store the level at turn-in for this achievement before calling tracker
-                            -- This allows the achievement to validate against the level BEFORE the turn-in
-                            -- But only set it after we verify the quest matches (by calling tracker first with a test)
-                            -- Actually, we'll set it after the tracker confirms it matches
-                            shouldSetLevelAtTurnIn = true
-                        end
                         local questMatched = row.questTracker(questID)
-                        if questMatched and shouldSetLevelAtTurnIn and HardcoreAchievements_SetProgress then
-                            HardcoreAchievements_SetProgress(row.id, "levelAtTurnIn", levelAtTurnIn)
-                        end
                         if questMatched then
+                            -- For achievements that require kills, levelAtKill should already be stored in progress
+                            -- Only set levelAtTurnIn as a fallback if we don't have levelAtKill
+                            if HardcoreAchievements_SetProgress then
+                                local progressTable = HardcoreAchievements_GetProgress and HardcoreAchievements_GetProgress(row.id)
+                                -- Only set levelAtTurnIn if we don't have levelAtKill (for achievements without kill requirements)
+                                if not (progressTable and progressTable.levelAtKill) then
+                                    local currentLevel = UnitLevel("player") or 1
+                                    HardcoreAchievements_SetProgress(row.id, "levelAtTurnIn", currentLevel)
+                                end
+                            end
                             HCA_MarkRowCompleted(row)
                             HCA_AchToast_Show(row.Icon:GetTexture(), row.Title:GetText(), row.points, row)
                         end
                     end
                 end
-                -- Reset level tracking after processing
-                levelBeforeTurnIn = nil
             elseif event == "UNIT_SPELLCAST_SENT" then
                 -- Classic signature: unit, targetName, castGUID, spellId
                 local unit, targetName, castGUID, spellId = ...

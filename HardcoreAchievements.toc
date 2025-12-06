@@ -1,7 +1,7 @@
 ﻿## Interface: 11508
 ## Title: HardcoreAchievements
 ## Author: Chills
-## Version: 1.3.6
+## Version: 1.3.7
 ## Notes: Hardcore achievements system
 ## SavedVariables: HardcoreAchievementsDB
 ## IconTexture: Interface\AddOns\HardcoreAchievements\Images\Logo
@@ -25,6 +25,7 @@ Functions\RefreshAllAchievementPoints.lua
 Functions\ShowAchievementTooltip.lua
 Functions\ProfessionTracker.lua
 
+Utils\AchievementTracker.lua
 HardcoreAchievements.lua
 
 Achievements\Common.lua
@@ -39,3 +40,6 @@ Utils\CommandHandler.lua
 Utils\AchievementLinks.lua
 Utils\OptionsPanel.lua
 Utils\CharacterInspection.lua
+
+Admin\AdminPanel.lua
+Admin\AdminPanelTest.lua

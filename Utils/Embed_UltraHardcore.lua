@@ -670,24 +670,56 @@ local function CreateEmbedIcon(parent)
     end
   end)
   
-  -- Shift click to link achievement bracket into chat (matches CreateAchievementRow behavior)
+  -- Shift click to link achievement bracket into chat or track/untrack (matches CreateAchievementRow behavior)
   icon:SetScript("OnMouseUp", function(self, button)
     if button == "LeftButton" and IsShiftKeyDown() and self.achId then
-      -- Use centralized function to generate bracket format (icon looked up client-side)
-      local bracket = _G.HCA_GetAchievementBracket and _G.HCA_GetAchievementBracket(self.achId) or string.format("[HCA:(%s)]", tostring(self.achId))
-
       local editBox = ChatEdit_GetActiveWindow()
-      if not editBox or not editBox:IsVisible() then
-        return
-      end
-      local currentText = editBox and (editBox:GetText() or "") or ""
-      if currentText == "" then
-        editBox:SetText(bracket)
+      
+      -- Check if chat edit box is active/visible
+      if editBox and editBox:IsVisible() then
+        -- Chat edit box is active: link achievement (original behavior)
+        local bracket = _G.HCA_GetAchievementBracket and _G.HCA_GetAchievementBracket(self.achId) or string.format("[HCA:(%s)]", tostring(self.achId))
+        local currentText = editBox:GetText() or ""
+        if currentText == "" then
+          editBox:SetText(bracket)
+        else
+          editBox:SetText(currentText .. " " .. bracket)
+        end
+        editBox:SetFocus()
       else
-        editBox:SetText(currentText .. " " .. bracket)
+        -- Chat edit box is NOT active: track/untrack achievement
+        local AchievementTracker = _G.HardcoreAchievementsTracker
+        if not AchievementTracker then
+          print("|cffff0000[Hardcore Achievements]|r Achievement tracker not available. Please reload your UI (/reload).")
+          return
+        end
+        
+        local achId = self.achId
+        if not achId then
+          return
+        end
+        
+        -- Get title from source row if available
+        local title = nil
+        if self.sourceRow and self.sourceRow.Title and self.sourceRow.Title.GetText then
+          title = self.sourceRow.Title:GetText()
+        end
+        
+        -- Strip color codes from title if present
+        if title then
+          title = title:gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", "")
+        else
+          title = tostring(achId)
+        end
+        
+        local isTracked = AchievementTracker:IsTracked(achId)
+        
+        if isTracked then
+          AchievementTracker:UntrackAchievement(achId)
+        else
+          AchievementTracker:TrackAchievement(achId, title)
+        end
       end
-      editBox:SetFocus()
-      return
     end
   end)
   icon:SetScript("OnLeave", function(self)
@@ -1020,20 +1052,55 @@ local function CreateEmbedModernRow(parent, srow)
     
     row:SetScript("OnMouseUp", function(self, button)
         if button == "LeftButton" and IsShiftKeyDown() and self.achId then
-            -- Use centralized function to generate bracket format (icon looked up client-side)
-            local bracket = _G.HCA_GetAchievementBracket and _G.HCA_GetAchievementBracket(self.achId) or string.format("[HCA:(%s)]", tostring(self.achId))
-
             local editBox = ChatEdit_GetActiveWindow()
-            if not editBox or not editBox:IsVisible() then
-                return
-            end
-            local currentText = editBox and (editBox:GetText() or "") or ""
-            if currentText == "" then
-                editBox:SetText(bracket)
+            
+            -- Check if chat edit box is active/visible
+            if editBox and editBox:IsVisible() then
+                -- Chat edit box is active: link achievement (original behavior)
+                local bracket = _G.HCA_GetAchievementBracket and _G.HCA_GetAchievementBracket(self.achId) or string.format("[HCA:(%s)]", tostring(self.achId))
+                local currentText = editBox:GetText() or ""
+                if currentText == "" then
+                    editBox:SetText(bracket)
+                else
+                    editBox:SetText(currentText .. " " .. bracket)
+                end
+                editBox:SetFocus()
             else
-                editBox:SetText(currentText .. " " .. bracket)
+                -- Chat edit box is NOT active: track/untrack achievement
+                local AchievementTracker = _G.HardcoreAchievementsTracker
+                if not AchievementTracker then
+                    print("|cffff0000[Hardcore Achievements]|r Achievement tracker not available. Please reload your UI (/reload).")
+                    return
+                end
+                
+                local achId = self.achId or self.id
+                if not achId then
+                    return
+                end
+                
+                -- Get title from row Title or source row
+                local title = nil
+                if self.Title and self.Title.GetText then
+                    title = self.Title:GetText()
+                elseif self.sourceRow and self.sourceRow.Title and self.sourceRow.Title.GetText then
+                    title = self.sourceRow.Title:GetText()
+                end
+                
+                -- Strip color codes from title if present
+                if title then
+                    title = title:gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", "")
+                else
+                    title = tostring(achId)
+                end
+                
+                local isTracked = AchievementTracker:IsTracked(achId)
+                
+                if isTracked then
+                    AchievementTracker:UntrackAchievement(achId)
+                else
+                    AchievementTracker:TrackAchievement(achId, title)
+                end
             end
-            editBox:SetFocus()
         end
     end)
     
@@ -2168,7 +2235,7 @@ local function HandleUltraHardcoreMissing()
   if EMBED._uhcMissingHandled then return end
   EMBED._uhcMissingHandled = true
 
-  --print("|cff00ff00[HardcoreAchievements]|r UltraHardcore addon not detected")
+  --print("|cff00ff00[Hardcore Achievements]|r UltraHardcore addon not detected")
 
   if type(HardcoreAchievements_GetCharDB) == "function" then
     local _, cdb = HardcoreAchievements_GetCharDB()
@@ -2207,7 +2274,7 @@ local function HandleUltraHardcoreDetected(addonName)
   if EMBED._uhcDetected then return end
   EMBED._uhcDetected = true
 
-  --print(string.format("|cff00ff00[HardcoreAchievements]|r %s addon detected", addonName or "UltraHardcore"))
+  --print(string.format("|cff00ff00[Hardcore Achievements]|r %s addon detected", addonName or "UltraHardcore"))
 
   HookTabManager()
   HookSourceSignals()

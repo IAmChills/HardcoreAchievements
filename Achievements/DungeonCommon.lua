@@ -411,7 +411,7 @@ function DungeonCommon.registerDungeonAchievement(def)
             end
           end
           -- Hint for linking the achievement in chat
-          GameTooltip:AddLine("\nShift click to link in chat", 0.5, 0.5, 0.5)
+          GameTooltip:AddLine("\nShift click to link in chat\nor add to tracking list", 0.5, 0.5, 0.5)
           
           GameTooltip:Show()
         end
@@ -537,11 +537,11 @@ function DungeonCommon.registerDungeonAchievement(def)
           
           SaveProgress() -- Save progress after each eligible kill
           UpdateTooltip() -- Update tooltip to show progress
-          print("|cff69adc9[HardcoreAchievements]|r " .. HCA_GetBossName(npcId) .. " killed as part of achievement: " .. title)
+          print("|cff69adc9[Hardcore Achievements]|r |cffffd100" .. HCA_GetBossName(npcId) .. " killed as part of achievement: " .. title .. "|r")
         else
           -- Group is ineligible - don't count this kill
           -- Player can return later with an eligible group to kill this boss
-          print("|cff69adc9[HardcoreAchievements]|r " .. HCA_GetBossName(npcId) .. " killed but group is ineligible - kill not counted for achievement: " .. title)
+          print("|cff69adc9[Hardcore Achievements]|r |cffffd100" .. HCA_GetBossName(npcId) .. " killed but group is ineligible - kill not counted for achievement: " .. title .. "|r")
         end
       end
     end

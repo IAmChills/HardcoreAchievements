@@ -5,6 +5,11 @@
 local AceComm = LibStub("AceComm-3.0")
 local AceSerialize = LibStub("AceSerializer-3.0")
 
+-- Reference to AchievementTracker (loaded via TOC, get it lazily)
+local function GetAchievementTracker()
+    return _G.HardcoreAchievementsTracker
+end
+
 local AdminCommandHandler = {}
 local COMM_PREFIX = "HCA_Admin_Cmd" -- AceComm prefix for admin commands
 local RESPONSE_PREFIX = "HCA_Admin_Resp" -- AceComm prefix for responses (max 16 chars)
@@ -164,20 +169,20 @@ local function ProcessDeleteAchievementCommand(payload, sender)
     -- Check if target character matches current player
     local currentCharacter = UnitName("player")
     if payload.targetCharacter ~= currentCharacter then
-        SendResponseToAdmin(sender, "|cffff0000[HardcoreAchievements]|r Delete achievement command rejected: Target character mismatch")
+        SendResponseToAdmin(sender, "|cffff0000[Hardcore Achievements]|r Delete achievement command rejected: Target character mismatch")
         return false
     end
     
     -- Find the achievement row
     local achievementRow = FindAchievementRow(payload.achievementId)
     if not achievementRow then
-        SendResponseToAdmin(sender, "|cffff0000[HardcoreAchievements]|r Delete achievement command rejected: Achievement not found")
+        SendResponseToAdmin(sender, "|cffff0000[Hardcore Achievements]|r Delete achievement command rejected: Achievement not found")
         return false
     end
     
     local _, cdb = HardcoreAchievements_GetCharDB()
     if not cdb then
-        SendResponseToAdmin(sender, "|cffff0000[HardcoreAchievements]|r Failed to delete achievement: Database not initialized")
+        SendResponseToAdmin(sender, "|cffff0000[Hardcore Achievements]|r Failed to delete achievement: Database not initialized")
         return false
     end
     
@@ -261,10 +266,10 @@ local function ProcessDeleteAchievementCommand(payload, sender)
     end
     
     if hadAchievement then
-        SendResponseToAdmin(sender, "|cff00ff00[HardcoreAchievements]|r Achievement '" .. payload.achievementId .. "' deleted successfully for " .. currentCharacter)
-        print("|cffff0000[HardcoreAchievements]|r Achievement '" .. payload.achievementId .. "' has been deleted by admin")
+        SendResponseToAdmin(sender, "|cff00ff00[Hardcore Achievements]|r Achievement '" .. payload.achievementId .. "' deleted successfully for " .. currentCharacter)
+        print("|cffff0000[Hardcore Achievements]|r Achievement '" .. payload.achievementId .. "' has been deleted by admin")
     else
-        SendResponseToAdmin(sender, "|cffffff00[HardcoreAchievements]|r Achievement '" .. payload.achievementId .. "' was not in database for " .. currentCharacter .. " (already deleted)")
+        SendResponseToAdmin(sender, "|cffffff00[Hardcore Achievements]|r Achievement '" .. payload.achievementId .. "' was not in database for " .. currentCharacter .. " (already deleted)")
     end
     
     return true
@@ -276,7 +281,7 @@ local function ProcessClearSecretKeyCommand(payload, sender)
     -- Check if target character matches current player
     local currentCharacter = UnitName("player")
     if payload.targetCharacter ~= currentCharacter then
-        SendResponseToAdmin(sender, "|cffff0000[HardcoreAchievements]|r Clear key command rejected: Target character mismatch")
+        SendResponseToAdmin(sender, "|cffff0000[Hardcore Achievements]|r Clear key command rejected: Target character mismatch")
         return false
     end
     
@@ -312,14 +317,14 @@ local function ProcessClearSecretKeyCommand(payload, sender)
         end
         
         if hadKey then
-            SendResponseToAdmin(sender, "|cff00ff00[HardcoreAchievements]|r Secret key cleared successfully for " .. currentCharacter)
-            print("|cffff0000[HardcoreAchievements]|r Your admin secret key has been cleared by the admin. This is intentional, to prevent you from receiving admin commands unless you set another key.")
+            SendResponseToAdmin(sender, "|cff00ff00[Hardcore Achievements]|r Secret key cleared successfully for " .. currentCharacter)
+            print("|cffff0000[Hardcore Achievements]|r Your admin secret key has been cleared by the admin. This is intentional, to prevent you from receiving admin commands unless you set another key.")
         else
-            SendResponseToAdmin(sender, "|cffffff00[HardcoreAchievements]|r Secret key was not set for " .. currentCharacter .. " (already cleared)")
+            SendResponseToAdmin(sender, "|cffffff00[Hardcore Achievements]|r Secret key was not set for " .. currentCharacter .. " (already cleared)")
         end
         return true
     else
-        SendResponseToAdmin(sender, "|cffff0000[HardcoreAchievements]|r Failed to clear secret key: Database not initialized")
+        SendResponseToAdmin(sender, "|cffff0000[Hardcore Achievements]|r Failed to clear secret key: Database not initialized")
         return false
     end
 end
@@ -330,7 +335,7 @@ local function ProcessAdminCommand(payload, sender)
         -- Validate the payload (includes secret key verification)
         local isValid, reason = ValidatePayload(payload, sender)
         if not isValid then
-            SendResponseToAdmin(sender, "|cffff0000[HardcoreAchievements]|r Delete achievement command rejected: " .. reason)
+            SendResponseToAdmin(sender, "|cffff0000[Hardcore Achievements]|r Delete achievement command rejected: " .. reason)
             return false
         end
         
@@ -348,10 +353,10 @@ local function ProcessAdminCommand(payload, sender)
             -- But if it fails for other reasons (invalid hash, etc.), reject it
             if reason == "Admin secret key not configured" then
                 -- Key is already cleared, return success (idempotent operation)
-                SendResponseToAdmin(sender, "|cffffff00[HardcoreAchievements]|r Secret key was already cleared for " .. payload.targetCharacter)
+                SendResponseToAdmin(sender, "|cffffff00[Hardcore Achievements]|r Secret key was already cleared for " .. payload.targetCharacter)
                 return true
             else
-                SendResponseToAdmin(sender, "|cffff0000[HardcoreAchievements]|r Clear key command rejected: " .. reason)
+                SendResponseToAdmin(sender, "|cffff0000[Hardcore Achievements]|r Clear key command rejected: " .. reason)
                 return false
             end
         end
@@ -363,21 +368,21 @@ local function ProcessAdminCommand(payload, sender)
     -- SECURITY: Validate the payload (includes secret key verification)
     local isValid, reason = ValidatePayload(payload, sender)
     if not isValid then
-        SendResponseToAdmin(sender, "|cffff0000[HardcoreAchievements]|r Admin command rejected: " .. reason)
+        SendResponseToAdmin(sender, "|cffff0000[Hardcore Achievements]|r Admin command rejected: " .. reason)
         return false
     end
     
     -- Check if target character matches current player
     local currentCharacter = UnitName("player")
     if payload.targetCharacter ~= currentCharacter then
-        SendResponseToAdmin(sender, "|cffff0000[HardcoreAchievements]|r Admin command rejected: Target character mismatch")
+        SendResponseToAdmin(sender, "|cffff0000[Hardcore Achievements]|r Admin command rejected: Target character mismatch")
         return false
     end
     
     -- Find the achievement row
     local achievementRow = FindAchievementRow(payload.achievementId)
     if not achievementRow then
-        SendResponseToAdmin(sender, "|cffff0000[HardcoreAchievements]|r Admin command rejected: Achievement not found")
+        SendResponseToAdmin(sender, "|cffff0000[Hardcore Achievements]|r Admin command rejected: Achievement not found")
         return false
     end
     
@@ -417,11 +422,11 @@ local function ProcessAdminCommand(payload, sender)
 				end
 				-- Toast to indicate update
 				HCA_AchToast_Show(achievementRow.Icon:GetTexture(), achievementRow.Title:GetText(), newPoints)
-				SendResponseToAdmin(sender, "|cff00ff00[HardcoreAchievements]|r Achievement '" .. payload.achievementId .. "' updated via admin command")
+				SendResponseToAdmin(sender, "|cff00ff00[Hardcore Achievements]|r Achievement '" .. payload.achievementId .. "' updated via admin command")
 				return true
 			end
 		else
-			SendResponseToAdmin(sender, "|cffff0000[HardcoreAchievements]|r Admin command rejected: Achievement already completed")
+			SendResponseToAdmin(sender, "|cffff0000[Hardcore Achievements]|r Admin command rejected: Achievement already completed")
 			return false
 		end
 	end
@@ -460,7 +465,7 @@ local function ProcessAdminCommand(payload, sender)
 	-- Show achievement toast
 	HCA_AchToast_Show(achievementRow.Icon:GetTexture(), achievementRow.Title:GetText(), achievementRow.points)
 	
-	SendResponseToAdmin(sender, "|cff00ff00[HardcoreAchievements]|r Achievement '" .. payload.achievementId .. "' completed via admin command")
+	SendResponseToAdmin(sender, "|cff00ff00[Hardcore Achievements]|r Achievement '" .. payload.achievementId .. "' completed via admin command")
     
     -- Log the admin command (for audit trail)
     if not HardcoreAchievementsDB.adminCommands then HardcoreAchievementsDB.adminCommands = {} end
@@ -490,7 +495,7 @@ local function OnCommReceived(prefix, message, distribution, sender)
     -- Deserialize the payload
     local success, payload = AceSerialize:Deserialize(message)
     if not success then
-        SendResponseToAdmin(sender, "|cffff0000[HardcoreAchievements]|r Failed to deserialize admin command")
+        SendResponseToAdmin(sender, "|cffff0000[Hardcore Achievements]|r Failed to deserialize admin command")
         return
     end
     
@@ -528,16 +533,16 @@ local function HandleSlashCommand(msg)
                     HCA_ShowAchievementTab()
                 end
             end)
-            print("|cff00ff00[HardcoreAchievements]|r Custom achievement tab enabled and shown")
+            print("|cff00ff00[Hardcore Achievements]|r Custom achievement tab enabled and shown")
         else
-            print("|cffff0000[HardcoreAchievements]|r Custom achievement tab not found")
+            print("|cffff0000[Hardcore Achievements]|r Custom achievement tab not found")
         end
     elseif command == "reset" and args[2] == "tab" then
         if ResetTabPosition then
             ResetTabPosition()
-            print("|cff00ff00[HardcoreAchievements]|r Tab position reset to default")
+            print("|cff00ff00[Hardcore Achievements]|r Tab position reset to default")
         else
-            print("|cffff0000[HardcoreAchievements]|r ResetTabPosition function not found")
+            print("|cffff0000[Hardcore Achievements]|r ResetTabPosition function not found")
         end
     elseif command == "adminkey" then
         -- SECURITY: Set admin secret key for secure command authentication
@@ -545,44 +550,82 @@ local function HandleSlashCommand(msg)
             local key = args[3]
             if #key >= 16 then
                 if SetAdminSecretKey(key) then
-                    print("|cff00ff00[HardcoreAchievements]|r Admin secret key set successfully")
-                    print("|cffffff00[HardcoreAchievements]|r Keep this key secret! Anyone with this key can send admin commands.")
+                    print("|cff00ff00[Hardcore Achievements]|r Admin secret key set successfully")
+                    print("|cffffff00[Hardcore Achievements]|r Keep this key secret! Anyone with this key can send admin commands.")
                     if UpdateKeyStatus then
                         UpdateKeyStatus()
                     end
                 else
-                    print("|cffff0000[HardcoreAchievements]|r Failed to set admin secret key")
+                    print("|cffff0000[Hardcore Achievements]|r Failed to set admin secret key")
                 end
             else
-                print("|cffff0000[HardcoreAchievements]|r Admin secret key must be at least 16 characters long")
+                print("|cffff0000[Hardcore Achievements]|r Admin secret key must be at least 16 characters long")
             end
         elseif args[2] == "check" then
             local key = GetAdminSecretKey()
             if key and key ~= "" then
-                print("|cff00ff00[HardcoreAchievements]|r Admin secret key is set (length: " .. #key .. ")")
+                print("|cff00ff00[Hardcore Achievements]|r Admin secret key is set (length: " .. #key .. ")")
             else
-                print("|cffff0000[HardcoreAchievements]|r Admin secret key is NOT set")
-                print("|cffffff00[HardcoreAchievements]|r Use: /hca adminkey set <your-secret-key-here>")
-                print("|cffffff00[HardcoreAchievements]|r Key must be at least 16 characters long")
+                print("|cffff0000[Hardcore Achievements]|r Admin secret key is NOT set")
+                print("|cffffff00[Hardcore Achievements]|r Use: /hca adminkey set <your-secret-key-here>")
+                print("|cffffff00[Hardcore Achievements]|r Key must be at least 16 characters long")
             end
         elseif args[2] == "clear" then
             if HardcoreAchievementsDB then
                 HardcoreAchievementsDB.adminSecretKey = nil
-                print("|cff00ff00[HardcoreAchievements]|r Admin secret key cleared")
+                print("|cff00ff00[Hardcore Achievements]|r Admin secret key cleared")
                 if UpdateKeyStatus then
                     UpdateKeyStatus()
                 end
             end
         else
-            print("|cff00ff00[HardcoreAchievements]|r Admin key commands:")
+            print("|cff00ff00[Hardcore Achievements]|r Admin key commands:")
             print("  |cffffff00/hca adminkey set <key>|r - Set admin secret key (min 16 chars)")
             print("  |cffffff00/hca adminkey check|r - Check if admin key is set")
             print("  |cffffff00/hca adminkey clear|r - Clear admin secret key")
         end
+    elseif command == "tracker" then
+        -- Tracker commands
+        local AchievementTracker = GetAchievementTracker()
+        local subcommand = args[2] and string.lower(args[2]) or ""
+        
+        if not AchievementTracker then
+            print("|cffff0000[Hardcore Achievements]|r Achievement tracker not loaded yet. Please wait a moment and try again, or reload your UI.")
+            return
+        end
+        
+        if subcommand == "show" then
+            if AchievementTracker.Show then
+                AchievementTracker:Show()
+                print("|cff00ff00[Hardcore Achievements]|r Achievement tracker shown")
+            else
+                print("|cffff0000[Hardcore Achievements]|r Achievement tracker not initialized")
+            end
+        elseif subcommand == "hide" then
+            if AchievementTracker.Hide then
+                AchievementTracker:Hide()
+                print("|cff00ff00[Hardcore Achievements]|r Achievement tracker hidden")
+            else
+                print("|cffff0000[Hardcore Achievements]|r Achievement tracker not initialized")
+            end
+        elseif subcommand == "toggle" then
+            if AchievementTracker.Toggle then
+                AchievementTracker:Toggle()
+                print("|cff00ff00[Hardcore Achievements]|r Achievement tracker toggled")
+            else
+                print("|cffff0000[Hardcore Achievements]|r Achievement tracker not initialized")
+            end
+        else
+            print("|cff00ff00[Hardcore Achievements]|r Tracker commands:")
+            print("  |cffffff00/hca tracker show|r - Show the achievement tracker")
+            print("  |cffffff00/hca tracker hide|r - Hide the achievement tracker")
+            print("  |cffffff00/hca tracker toggle|r - Toggle the achievement tracker")
+        end
     else
-        print("|cff00ff00[HardcoreAchievements]|r Available commands:")
+        print("|cff00ff00[Hardcore Achievements]|r Available commands:")
         print("  |cffffff00/hca show|r - Enable and show the custom achievement tab")
         print("  |cffffff00/hca reset tab|r - Reset the tab position to default")
+        print("  |cffffff00/hca tracker|r - Manage the achievement tracker")
         --print("  |cffffff00/hca adminkey|r - Manage admin secret key for secure commands")
     end
 end

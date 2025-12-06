@@ -58,12 +58,12 @@ function M.registerQuestAchievement(cfg)
     end
 
     local function belowMax()
-        -- Check stored levels: prioritize levelAtKill (when NPC was killed), then levelAtTurnIn (fallback)
+        -- Check stored levels: prioritize levelAtKill (when NPC was killed), then levelAtTurnIn, then levelAtAccept (backup)
         local progressTable = HardcoreAchievements_GetProgress and HardcoreAchievements_GetProgress(ACH_ID)
         local levelToCheck = nil
         if progressTable then
-            -- Priority: levelAtKill > levelAtTurnIn > current level
-            levelToCheck = progressTable.levelAtKill or progressTable.levelAtTurnIn
+            -- Priority: levelAtKill > levelAtTurnIn > levelAtAccept > current level
+            levelToCheck = progressTable.levelAtKill or progressTable.levelAtTurnIn or progressTable.levelAtAccept
         end
         if not levelToCheck then
             levelToCheck = UnitLevel("player") or 1
@@ -120,12 +120,12 @@ function M.registerQuestAchievement(cfg)
     local function topUpFromServer()
         if REQUIRED_QUEST_ID and not state.quest and serverQuestDone() then
             -- Check level before storing quest completion
-            -- Priority: levelAtKill (from NPC kill) > levelAtTurnIn (fallback) > current level
+            -- Priority: levelAtKill (from NPC kill) > levelAtTurnIn > levelAtAccept (backup) > current level
             local progressTable = HardcoreAchievements_GetProgress and HardcoreAchievements_GetProgress(ACH_ID)
             local levelToCheck = nil
             if progressTable then
-                -- Prefer levelAtKill if available, otherwise use levelAtTurnIn
-                levelToCheck = progressTable.levelAtKill or progressTable.levelAtTurnIn
+                -- Prefer levelAtKill if available, otherwise use levelAtTurnIn, then levelAtAccept
+                levelToCheck = progressTable.levelAtKill or progressTable.levelAtTurnIn or progressTable.levelAtAccept
             end
             if not levelToCheck then
                 levelToCheck = UnitLevel("player") or 1
@@ -584,16 +584,23 @@ function M.registerQuestAchievement(cfg)
                     awardOnKillEnabled = HardcoreAchievements_IsAwardOnKillEnabled()
                 end
                 
-                -- Only allow kill tracking if player is on quest OR award on kill is enabled
-                if not awardOnKillEnabled and not isPlayerOnQuest() then
-                    return false -- Player is not on quest and award on kill is disabled, don't track kill
+                -- Allow kill tracking if:
+                -- 1. Player is on the quest (normal case), OR
+                -- 2. Award on kill is enabled, OR
+                -- 3. Player has quest progress (has turned in quest) - allows re-killing for eligibility
+                --    This fixes the case where player turns in quest with ineligible kill and needs to re-kill for eligibility
+                local hasQuestProgress = state.quest or (progressTable and progressTable.quest)
+                local canTrackKill = awardOnKillEnabled or isPlayerOnQuest() or hasQuestProgress
+                
+                if not canTrackKill then
+                    return false -- Player is not on quest, award on kill is disabled, and no quest progress - don't track kill
                 end
             end
             
             -- Check group eligibility after validating the kill matches
             local isGroupEligible = true
             if _G.IsGroupEligibleForAchievement then
-                isGroupEligible = _G.IsGroupEligibleForAchievement(MAX_LEVEL, ACH_ID)
+                isGroupEligible = _G.IsGroupEligibleForAchievement(MAX_LEVEL, ACH_ID, destGUID)
             end
             
             if not isGroupEligible then
@@ -610,7 +617,7 @@ function M.registerQuestAchievement(cfg)
                     return false
                 end
                 
-                print("|cff69adc9[HardcoreAchievements]|r Achievement |cffffffff" .. (ACH_ID or "Unknown") .. "|r cannot be fulfilled: An ineligible party member is nearby.")
+                print("|cff69adc9[Hardcore Achievements]|r |cffffd100Achievement " .. (ACH_ID or "Unknown") .. " cannot be fulfilled: An ineligible player contributed.|r")
                 
                 -- Track the kill progress, but mark as ineligible (don't increment eligible counts)
                 if REQUIRED_KILLS then
@@ -683,6 +690,9 @@ function M.registerQuestAchievement(cfg)
                     end
                 end
                 
+                -- Check if all kills are already satisfied BEFORE this kill (to determine if we should update levelAtKill)
+                local allKillsAlreadySatisfied = countsSatisfied()
+                
                 -- Increment both total counts and eligible counts for this NPC (ensure numeric key for consistency)
                 state.counts[idNum] = (state.counts[idNum] or 0) + 1
                 state.eligibleCounts[idNum] = (state.eligibleCounts[idNum] or 0) + 1
@@ -690,10 +700,18 @@ function M.registerQuestAchievement(cfg)
                 setProg("counts", state.counts)
                 setProg("eligibleCounts", state.eligibleCounts)
                 
-                -- Store player's level at time of THIS kill (overwrites previous value)
-                -- This ensures levelAtKill reflects the level when ALL kills are completed
-                local killLevel = UnitLevel("player") or 1
-                setProg("levelAtKill", killLevel)
+                -- Store player's level at time of THIS kill
+                -- Always update levelAtKill while kills are not all satisfied (tracks current level, even if player levels up)
+                -- Once all kills are satisfied, levelAtKill becomes static and won't be updated anymore
+                -- This ensures if player levels up after fulfilling the achievement, they can still complete it
+                if not allKillsAlreadySatisfied then
+                    -- All kills weren't satisfied before this kill, so update levelAtKill to current level
+                    -- This includes the case where this kill satisfies all requirements (final update before becoming static)
+                    local killLevel = UnitLevel("player") or 1
+                    setProg("levelAtKill", killLevel)
+                    -- After this point, if all kills are now satisfied, levelAtKill becomes static
+                end
+                -- If allKillsAlreadySatisfied was true, levelAtKill is already static and won't be updated
                 
                 -- Solo points only apply if player is self-found
                 -- Use stored solo status from combat tracking (more accurate than checking at kill time)
