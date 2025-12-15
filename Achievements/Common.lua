@@ -1021,10 +1021,18 @@ function M.registerQuestAchievement(cfg)
 
     if REQUIRED_QUEST_ID then
         _G[ACH_ID .. "_Quest"] = function(questID)
-            if state.completed or not belowMax() then
+            if state.completed then
                 return false
             end
-            if questID ~= REQUIRED_QUEST_ID then
+            -- Check questID match first (language-independent, fast check)
+            -- Ensure both are numbers for reliable comparison
+            local questIDNum = tonumber(questID)
+            local requiredQuestIDNum = tonumber(REQUIRED_QUEST_ID)
+            if not questIDNum or not requiredQuestIDNum or questIDNum ~= requiredQuestIDNum then
+                return false
+            end
+            -- Now check level requirements after confirming quest match
+            if not belowMax() then
                 return false
             end
             
