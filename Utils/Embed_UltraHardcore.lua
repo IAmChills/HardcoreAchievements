@@ -998,7 +998,7 @@ local function CreateEmbedModernRow(parent, srow)
     -- Set size (width, height) and position (x, y offsets from center)
     row.PointsFrame.VariationOverlay:SetSize(58, 51)  -- Width, Height (matches PointsFrame size)
     row.PointsFrame.VariationOverlay:SetPoint("CENTER", row.PointsFrame, "CENTER", -8, 1)  -- X offset, Y offset
-    row.PointsFrame.VariationOverlay:SetAlpha(0.8)
+    row.PointsFrame.VariationOverlay:SetAlpha(1)
     row.PointsFrame.VariationOverlay:Hide()
     
     row.Points = row.PointsFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
@@ -1013,7 +1013,7 @@ local function CreateEmbedModernRow(parent, srow)
     
     -- timestamp
     row.TS = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    row.TS:SetPoint("RIGHT", row.PointsFrame, "LEFT", -5, -2)
+    row.TS:SetPoint("RIGHT", row.PointsFrame, "LEFT", -15, -2)
     row.TS:SetJustifyH("RIGHT")
     row.TS:SetJustifyV("TOP")
     row.TS:SetText("")
