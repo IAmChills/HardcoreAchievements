@@ -85,6 +85,7 @@ local function CreateSecurePayload(achievementId, targetCharacter, opts)
 		if opts.overridePoints ~= nil then payload.overridePoints = tonumber(opts.overridePoints) end
 		if opts.overrideLevel ~= nil then payload.overrideLevel = tonumber(opts.overrideLevel) end
 		if opts.commandType ~= nil then payload.commandType = opts.commandType end
+		if opts.solo ~= nil then payload.solo = opts.solo and true or false end
 	end
     
     -- Create secure hash using secret key
@@ -156,7 +157,7 @@ local function AddResponseMessage(character, message)
     print(message)
 end
 
-local function SendAdminCommand(achievementId, targetCharacter, forceUpdate, overridePoints, overrideLevel)
+local function SendAdminCommand(achievementId, targetCharacter, forceUpdate, overridePoints, overrideLevel, solo)
     if not achievementId or not targetCharacter then
         print("|cffff0000[HardcoreAchievements Admin]|r Invalid achievement ID or character name")
         return
@@ -175,7 +176,8 @@ local function SendAdminCommand(achievementId, targetCharacter, forceUpdate, ove
     local success, payload = pcall(CreateSecurePayload, achievementId, targetCharacter, { 
         forceUpdate = forceUpdate, 
         overridePoints = overridePoints, 
-        overrideLevel = overrideLevel 
+        overrideLevel = overrideLevel,
+        solo = solo
     })
     
     if not success or not payload then
@@ -195,6 +197,7 @@ local function SendAdminCommand(achievementId, targetCharacter, forceUpdate, ove
     
 	local suffix = ""
 	if forceUpdate then suffix = suffix .. " [Force Update]" end
+	if solo then suffix = suffix .. " [Solo]" end
 	if overridePoints and tonumber(overridePoints) then suffix = suffix .. " [Override Points: " .. tostring(overridePoints) .. "]" end
 	if overrideLevel and tonumber(overrideLevel) then suffix = suffix .. " [Override Level: " .. tostring(overrideLevel) .. "]" end
 	print("|cff00ff00[HardcoreAchievements Admin]|r Sent achievement command for '" .. achievementId .. "' to " .. targetCharacter .. suffix)
@@ -209,6 +212,7 @@ local function SendAdminCommand(achievementId, targetCharacter, forceUpdate, ove
         targetCharacter = targetCharacter,
 		adminCharacter = UnitName("player"),
 		forceUpdate = forceUpdate and true or false,
+		solo = solo and true or false,
 		overridePoints = overridePoints and tonumber(overridePoints) or nil,
 		overrideLevel = overrideLevel and tonumber(overrideLevel) or nil,
         nonce = payload.nonce,
@@ -443,6 +447,16 @@ local function CreateAdminPanel()
 	local forceLabel = adminFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
 	forceLabel:SetPoint("LEFT", forceCheck, "RIGHT", 5, 0)
 	forceLabel:SetText("Force Update (override if completed)")
+
+	-- Solo checkbox
+	local soloCheck = CreateFrame("CheckButton", nil, adminFrame, "ChatConfigCheckButtonTemplate")
+	soloCheck:SetPoint("LEFT", characterInput, "RIGHT", 30, -2)
+	-- Prevent the template from expanding the clickable area far to the right
+	soloCheck:SetHitRectInsets(0, 0, 0, 0)
+	soloCheck.tooltip = "Mark achievement as completed solo (doubles points if applicable)"
+	local soloLabel = adminFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+	soloLabel:SetPoint("BOTTOM", soloCheck, "TOP", 0, 2)
+	soloLabel:SetText("Solo")
 
 	-- Override points input
 	local pointsLabel = adminFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
@@ -692,10 +706,11 @@ local function CreateAdminPanel()
             end
 
             local forceUpdate = forceCheck:GetChecked() and true or false
+            local solo = soloCheck:GetChecked() and true or false
             local overridePoints = tonumber(pointsInput:GetText())
             local overrideLevel = tonumber(levelInput:GetText())
 
-            SendAdminCommand(selectedAchievement.achId, characterName, forceUpdate, overridePoints, overrideLevel)
+            SendAdminCommand(selectedAchievement.achId, characterName, forceUpdate, overridePoints, overrideLevel, solo)
         end)
         
         -- Delete Achievement button handler

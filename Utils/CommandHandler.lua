@@ -401,12 +401,22 @@ local function ProcessAdminCommand(payload, sender)
 				if not rec.completedAt then
 					rec.completedAt = time()
 				end
-				-- Use overridePoints if provided, otherwise keep existing or row.points
+				
+				-- Handle solo flag
+				if payload.solo then
+					rec.wasSolo = true
+				end
+				
+				-- Use overridePoints if provided, otherwise keep existing points
 				local newPoints = tonumber(payload.overridePoints) or rec.points or achievementRow.points or 0
+				
 				rec.points = newPoints
 				-- Use overrideLevel if provided, otherwise keep existing or UnitLevel("player")
 				local newLevel = tonumber(payload.overrideLevel) or rec.level or (UnitLevel("player") or nil)
 				rec.level = newLevel
+				-- Clear failed status when manually awarding achievement
+				rec.failed = nil
+				rec.failedAt = nil
 				cdb.achievements[id] = rec
 				-- Reflect in UI
 				achievementRow.points = newPoints
@@ -416,6 +426,13 @@ local function ProcessAdminCommand(payload, sender)
 				end
 				if achievementRow.TS then
 					achievementRow.TS:SetText(FormatTimestamp(rec.completedAt))
+				end
+				-- Update solo status in UI if applicable
+				if payload.solo and achievementRow.Sub then
+					local isSelfFound = _G.IsSelfFound and _G.IsSelfFound() or false
+					if isSelfFound then
+						achievementRow.Sub:SetText(AUCTION_TIME_LEFT0 .. "\n|c" .. select(4, GetClassColor(select(2, UnitClass("player")))) .. "Solo|r")
+					end
 				end
 				if type(HCA_UpdateTotalPoints) == "function" then
 					HCA_UpdateTotalPoints()
@@ -434,7 +451,7 @@ local function ProcessAdminCommand(payload, sender)
 	-- Not completed yet: optionally override points before completion
 	if payload.overridePoints then
 		local p = tonumber(payload.overridePoints)
-		if p then
+		if p and p > 0 then
 			achievementRow.points = p
 			if achievementRow.Points then
 				achievementRow.Points:SetText(tostring(p))
@@ -442,8 +459,58 @@ local function ProcessAdminCommand(payload, sender)
 		end
 	end
 
+	-- If solo flag is set, we need to set up progress data before completion
+	-- This ensures HCA_MarkRowCompleted recognizes it as solo and doubles points if applicable
+	if payload.solo then
+		local _, cdb = HardcoreAchievements_GetCharDB()
+		if cdb then
+			cdb.progress = cdb.progress or {}
+			local id = achievementRow.id
+			local progress = cdb.progress[id] or {}
+			
+			-- Set solo status in progress (this is what HCA_MarkRowCompleted checks)
+			progress.soloKill = true
+			progress.soloQuest = true
+			
+			-- If override points provided, use those (don't double even if solo)
+			local overridePts = tonumber(payload.overridePoints)
+			if overridePts and overridePts > 0 then
+				local isSelfFound = _G.IsSelfFound and _G.IsSelfFound() or false
+				if isSelfFound and not achievementRow.isSecretAchievement then
+					overridePts = overridePts - (_G.HCA_SELF_FOUND_BONUS or 0)
+				end
+				progress.pointsAtKill = overridePts
+			-- Otherwise, if achievement allows solo doubling, calculate and store pointsAtKill
+			elseif achievementRow.allowSoloDouble and not achievementRow.staticPoints then
+				local basePoints = tonumber(achievementRow.originalPoints) or tonumber(achievementRow.points) or 0
+				-- Apply preset multiplier if not static
+				if not achievementRow.staticPoints then
+					local preset = _G.GetPlayerPresetFromSettings and _G.GetPlayerPresetFromSettings() or nil
+					local multiplier = _G.GetPresetMultiplier and _G.GetPresetMultiplier(preset) or 1.0
+					basePoints = basePoints + math.floor((basePoints) * (multiplier - 1) + 0.5)
+				end
+				-- Double for solo (pointsAtKill stores without self-found bonus)
+				progress.pointsAtKill = basePoints * 2
+			end
+			
+			cdb.progress[id] = progress
+		end
+	end
+
 	-- Complete the achievement
 	HCA_MarkRowCompleted(achievementRow)
+	
+	-- Clear failed status when manually awarding achievement
+	local _, cdb = HardcoreAchievements_GetCharDB()
+	if cdb then
+		cdb.achievements = cdb.achievements or {}
+		local id = achievementRow.id
+		local rec = cdb.achievements[id]
+		if rec then
+			rec.failed = nil
+			rec.failedAt = nil
+		end
+	end
 	
 	-- Optionally override level after completion (if provided)
 	if payload.overrideLevel then
@@ -476,7 +543,8 @@ local function ProcessAdminCommand(payload, sender)
         sender = sender,
         targetCharacter = payload.targetCharacter,
         nonce = payload.nonce,
-        payloadHash = payload.validationHash
+        payloadHash = payload.validationHash,
+        solo = payload.solo and true or false
     })
     
     -- Keep only last 100 commands to prevent database bloat
