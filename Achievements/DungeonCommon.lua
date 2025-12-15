@@ -1,5 +1,62 @@
 local DungeonCommon = {}
 
+-- Variation definitions
+local VARIATIONS = {
+    {
+        suffix = "_Trio",
+        label = "Trio",
+        levelOffset = 3,
+        pointMultiplier = 2,
+        maxPartySize = 3,
+    },
+    {
+        suffix = "_Duo",
+        label = "Duo",
+        levelOffset = 4,
+        pointMultiplier = 3,
+        maxPartySize = 2,
+    },
+    {
+        suffix = "_Solo",
+        label = "Solo",
+        levelOffset = 5,
+        pointMultiplier = 4,
+        maxPartySize = 1,
+    },
+}
+
+-- Generate a variation achievement from a base dungeon achievement
+local function CreateVariation(baseDef, variation)
+    local variationDef = {}
+    
+    -- Copy all base properties
+    for k, v in pairs(baseDef) do
+        variationDef[k] = v
+    end
+    
+    -- Modify for variation
+    variationDef.achId = baseDef.achId .. variation.suffix
+    variationDef.level = baseDef.level + variation.levelOffset
+    variationDef.points = baseDef.points * variation.pointMultiplier
+    variationDef.maxPartySize = variation.maxPartySize
+    
+    -- Update title to include variation type in parentheses
+    variationDef.title = baseDef.title .. " (" .. variation.label .. ")"
+    
+    -- Update tooltip to reflect variation (clean, without "Variation" suffix)
+    local partySizeText = variation.maxPartySize == 1 and "yourself only" or 
+                          (variation.maxPartySize == 2 and "up to 2 party members" or "up to 3 party members")
+    variationDef.tooltip = "Defeat the bosses of |cff0091e6" .. baseDef.title .. "|r before level " .. variationDef.level .. 
+                          " (" .. partySizeText .. ")"
+    
+    -- Mark as variation
+    variationDef.isVariation = true
+    variationDef.baseAchId = baseDef.achId
+    variationDef.variationType = variation.label
+    
+    return variationDef
+end
+
 -- Register a dungeon achievement with the given definition
 function DungeonCommon.registerDungeonAchievement(def)
   local achId = def.achId
@@ -430,7 +487,10 @@ function DungeonCommon.registerDungeonAchievement(def)
   local function IsGroupEligible()
     if IsInRaid() then return false end
     local members = GetNumGroupMembers()
-    if members > 5 then return false end
+    
+    -- Check max party size (from variation or default to 5)
+    local maxPartySize = def.maxPartySize or 5
+    if members > maxPartySize then return false end
 
     local function overLeveled(unit)
       local lvl = UnitLevel(unit)
@@ -598,6 +658,8 @@ function DungeonCommon.registerDungeonAchievement(def)
     
     -- Check if player is eligible for this achievement
     if not IsEligible() then return end
+    
+    -- Note: Variations are always registered, but filtered in ApplyFilter based on checkbox states
 
     -- Load progress from database
     LoadProgress()
@@ -654,6 +716,65 @@ function DungeonCommon.registerDungeonAchievement(def)
       LoadProgress() -- Load progress when character frame is shown
       _G[registerFuncName]()
     end)
+  end
+end
+
+-- Function to register dungeon variations
+-- Note: Variations are always registered, but filtered in ApplyFilter based on checkbox states
+function DungeonCommon.registerDungeonVariations(baseDef)
+  -- Only create variations for dungeons up to ST (level 54)
+  if baseDef.level > 54 then
+    return
+  end
+  
+  -- Always register all variations (they will be filtered in display logic based on checkbox states)
+  local trioDef = CreateVariation(baseDef, VARIATIONS[1])
+  DungeonCommon.registerDungeonAchievement(trioDef)
+  
+  local duoDef = CreateVariation(baseDef, VARIATIONS[2])
+  DungeonCommon.registerDungeonAchievement(duoDef)
+  
+  local soloDef = CreateVariation(baseDef, VARIATIONS[3])
+  DungeonCommon.registerDungeonAchievement(soloDef)
+end
+
+-- Function to refresh variation registrations (for when checkboxes change)
+-- This forces re-registration of variation achievements by clearing their row variables
+function DungeonCommon.refreshDungeonVariations()
+  if not _G.HCA_AchievementDefs then return end
+  
+  -- Get all base dungeon IDs (those without variation suffixes)
+  local baseDungeonIds = {}
+  for achId, def in pairs(_G.HCA_AchievementDefs) do
+    if not def.isVariation and def.mapID then  -- Dungeons have mapID
+      table.insert(baseDungeonIds, achId)
+    end
+  end
+  
+  -- Re-register variations for each base dungeon
+  -- First, clear existing variation rows so they can be re-registered
+  for _, baseId in ipairs(baseDungeonIds) do
+    for _, variation in ipairs(VARIATIONS) do
+      local variationId = baseId .. variation.suffix
+      local rowVarName = variationId .. "_Row"
+      if _G[rowVarName] then
+        -- Hide and clear the row so it can be re-registered
+        _G[rowVarName]:Hide()
+        _G[rowVarName] = nil
+      end
+    end
+  end
+  
+  -- Re-trigger registration by calling register functions
+  -- This will check checkbox states and register accordingly
+  for _, baseId in ipairs(baseDungeonIds) do
+    for _, variation in ipairs(VARIATIONS) do
+      local variationId = baseId .. variation.suffix
+      local registerFuncName = "HCA_Register" .. variationId
+      if _G[registerFuncName] and type(_G[registerFuncName]) == "function" then
+        _G[registerFuncName]()
+      end
+    end
   end
 end
 

@@ -572,6 +572,25 @@ local function UpdatePointsDisplay(row)
         row.PointsFrame.Texture:SetAlpha(1)
     end
     
+    -- Show/hide variation overlay based on achievement state
+    if row.PointsFrame.VariationOverlay and row._def and row._def.isVariation then
+        if row.completed then
+            -- Completed: use gold texture
+            row.PointsFrame.VariationOverlay:SetTexture("Interface\\AddOns\\HardcoreAchievements\\Images\\dragon_gold.png")
+            row.PointsFrame.VariationOverlay:Show()
+        elseif IsRowOutleveled(row) then
+            -- Failed/overleveled: use failed texture
+            row.PointsFrame.VariationOverlay:SetTexture("Interface\\AddOns\\HardcoreAchievements\\Images\\dragon_failed.png")
+            row.PointsFrame.VariationOverlay:Show()
+        else
+            -- Available (not completed, not failed): use disabled texture
+            row.PointsFrame.VariationOverlay:SetTexture("Interface\\AddOns\\HardcoreAchievements\\Images\\dragon_disabled.png")
+            row.PointsFrame.VariationOverlay:Show()
+        end
+    elseif row.PointsFrame.VariationOverlay then
+        row.PointsFrame.VariationOverlay:Hide()
+    end
+    
     if row.completed then
         -- Completed: hide points text (make transparent), show green checkmark
         if row.Points then
@@ -2098,27 +2117,13 @@ AchievementPanel:HookScript("OnHide", function(self)
     end
 end)
 
--- Filter dropdown
-local filterDropdown = CreateFrame("Frame", nil, AchievementPanel, "UIDropDownMenuTemplate")
-filterDropdown:SetPoint("TOPRIGHT", AchievementPanel, "TOPRIGHT", -17, -50)
-UIDropDownMenu_SetWidth(filterDropdown, 90)
-UIDropDownMenu_SetText(filterDropdown, "All")
-
-local currentFilter = "all"
-
-local function PopulateFilterDropdown()
-    local filterList = {
-        { text = ACHIEVEMENTFRAME_FILTER_ALL, value = "all" },
-        { text = ACHIEVEMENTFRAME_FILTER_COMPLETED, value = "completed" },
-        { text = ACHIEVEMENTFRAME_FILTER_INCOMPLETE, value = "not_completed" },
-        { text = FAILED, value = "failed" },
-    }
-    return filterList
-end
+-- Filter dropdown - using shared FilterDropdown module
 
 -- Function to apply the current filter to all achievement rows
 local function ApplyFilter()
     if not AchievementPanel or not AchievementPanel.achievements then return end
+    
+    local currentFilter = FilterDropdown:GetCurrentFilter(AchievementPanel.filterDropdown)
     
     for _, row in ipairs(AchievementPanel.achievements) do
         local shouldShow = false
@@ -2141,6 +2146,33 @@ local function ApplyFilter()
             shouldShow = false
         end
         
+        -- Hide/show variation achievements based on checkbox states
+        if row._def and row._def.isVariation then
+            local checkboxStates = { false, false, false }
+            if type(HardcoreAchievements_GetCharDB) == "function" then
+                local _, cdb = HardcoreAchievements_GetCharDB()
+                if cdb and cdb.settings and cdb.settings.filterCheckboxes then
+                    local states = cdb.settings.filterCheckboxes
+                    if type(states) == "table" then
+                        checkboxStates = {
+                            states[1] == true,  -- Trio
+                            states[2] == true,  -- Duo
+                            states[3] == true,  -- Solo
+                        }
+                    end
+                end
+            end
+            
+            local variationType = row._def.variationType
+            if variationType == FRONT_END_LOBBY_TRIOS and not checkboxStates[1] then
+                shouldShow = false
+            elseif variationType == FRONT_END_LOBBY_DUOS and not checkboxStates[2] then
+                shouldShow = false
+            elseif variationType == FRONT_END_LOBBY_SOLO and not checkboxStates[3] then
+                shouldShow = false
+            end
+        end
+        
         if shouldShow then
             row:Show()
         else
@@ -2154,24 +2186,24 @@ end
 
 _G.HCA_ApplyFilter = ApplyFilter
 
-UIDropDownMenu_Initialize(filterDropdown, function(self, level)
-    if level == 1 then
-        for _, filter in ipairs(PopulateFilterDropdown()) do
-            local info = UIDropDownMenu_CreateInfo()
-            info.text = filter.text
-            info.value = filter.value
-            info.func = function()
-                UIDropDownMenu_SetSelectedValue(filterDropdown, filter.value)
-                UIDropDownMenu_SetText(filterDropdown, filter.text)
-                currentFilter = filter.value
-                ApplyFilter()
-            end
-            UIDropDownMenu_AddButton(info)
-        end
-    end
-end)
-UIDropDownMenu_SetSelectedValue(filterDropdown, "all")
-UIDropDownMenu_SetText(filterDropdown, ACHIEVEMENTFRAME_FILTER_ALL)
+-- Create and initialize the filter dropdown
+local filterDropdown = FilterDropdown:CreateDropdown(AchievementPanel, "TOPRIGHT", AchievementPanel, -18, -52, 60)
+AchievementPanel.filterDropdown = filterDropdown
+
+FilterDropdown:InitializeDropdown(filterDropdown, {
+    currentFilter = "all",
+    -- checkboxStates will be loaded from database automatically
+    checkboxLabels = { "Show Dungeon Trios", "Show Dungeon Duos", "Show Dungeon Solos" },
+    onFilterChange = function(filterValue)
+        ApplyFilter()
+    end,
+    onCheckboxChange = function(checkboxIndex, newState)
+        -- Checkbox state is automatically saved to database in FilterDropdown
+        -- Variations are always registered but filtered based on checkbox states
+        -- Re-apply filter to show/hide variations when checkbox changes
+        ApplyFilter()
+    end,
+})
 
 --AchievementPanel.Text = AchievementPanel:CreateFontString(nil, "OVERLAY", "GameFontNormal")
 --AchievementPanel.Text:SetPoint("TOP", 5, -45)
@@ -2426,6 +2458,14 @@ function CreateAchievementRow(parent, achId, title, tooltip, icon, level, points
     row.PointsFrame.Texture:SetAllPoints(row.PointsFrame)
     row.PointsFrame.Texture:SetAlpha(1)
     
+    -- Variation overlay texture (solo/duo/trio) - appears on top of ring texture
+    row.PointsFrame.VariationOverlay = row.PointsFrame:CreateTexture(nil, "OVERLAY", nil, 1)
+    -- Set size (width, height) and position (x, y offsets from center)
+    row.PointsFrame.VariationOverlay:SetSize(44, 37)  -- Width, Height
+    row.PointsFrame.VariationOverlay:SetPoint("CENTER", row.PointsFrame, "CENTER", -6, 1)  -- X offset, Y offset
+    row.PointsFrame.VariationOverlay:SetAlpha(0.8)
+    row.PointsFrame.VariationOverlay:Hide()
+    
     -- Points text (number only, no "pts")
     row.Points = row.PointsFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     row.Points:SetPoint("CENTER", row.PointsFrame, "CENTER", 0, 0)
@@ -2551,6 +2591,7 @@ function CreateAchievementRow(parent, achId, title, tooltip, icon, level, points
     row.tooltip = tooltip  -- Store the tooltip for later access
     row.zone = zone  -- Store the zone for later access
     row.achId = achId
+    row._def = def  -- Store def for filtering variations and other checks
     
     if def and def.requiredQuestId then
         TrackRowForQuest(row, def.requiredQuestId)
