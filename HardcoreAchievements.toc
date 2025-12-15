@@ -3,6 +3,7 @@
 ## Author: Chills
 ## Version: 1.3.7
 ## Notes: Hardcore achievements system
+## OptionalDeps: Ace3, CallbackHandler-1.0, HereBeDragons, LibDataBroker-1.1, LibDBIcon-1.0, LibStub, LibUIDropDownMenu
 ## SavedVariables: HardcoreAchievementsDB
 ## IconTexture: Interface\AddOns\HardcoreAchievements\Images\Logo
 ## X-Category: Achievements
@@ -17,6 +18,9 @@ Libs\AceSerializer-3.0\AceSerializer-3.0.xml
 Libs\LibDataBroker-1.1\LibDataBroker-1.1.lua
 Libs\LibDBIcon-1.0\LibDBIcon-1.0.lua
 
+# Required Libraries for context menu
+Libs\LibUIDropDownMenu\LibUIDropDownMenu.xml
+
 Functions\GetUHCPreset.lua
 Functions\PlayerIsSolo.lua
 Functions\IsGroupEligibleForAchievement.lua
@@ -26,6 +30,7 @@ Functions\ShowAchievementTooltip.lua
 Functions\ProfessionTracker.lua
 
 Utils\AchievementTracker.lua
+Utils\FilterDropdown.lua
 HardcoreAchievements.lua
 
 Achievements\Common.lua

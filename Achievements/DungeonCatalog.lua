@@ -523,7 +523,12 @@ local Dungeons = {
   }
 }
 
--- Register all dungeon achievements
+-- Register all dungeon achievements and their variations
 for _, dungeon in ipairs(Dungeons) do
+  -- Register base dungeon achievement
   DungeonCommon.registerDungeonAchievement(dungeon)
+  -- Register variations (if checkboxes are enabled)
+  if DungeonCommon.registerDungeonVariations then
+    DungeonCommon.registerDungeonVariations(dungeon)
+  end
 end

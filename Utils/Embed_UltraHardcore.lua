@@ -464,6 +464,25 @@ end
 local function UpdatePointsDisplayEmbed(row)
     if not row or not row.PointsFrame then return end
     
+    -- Show/hide variation overlay based on achievement state
+    if row.PointsFrame.VariationOverlay and row._def and row._def.isVariation then
+        if row.completed then
+            -- Completed: use gold texture
+            row.PointsFrame.VariationOverlay:SetTexture("Interface\\AddOns\\HardcoreAchievements\\Images\\dragon_gold.png")
+            row.PointsFrame.VariationOverlay:Show()
+        elseif IsRowOutleveled(row) then
+            -- Failed/overleveled: use failed texture
+            row.PointsFrame.VariationOverlay:SetTexture("Interface\\AddOns\\HardcoreAchievements\\Images\\dragon_failed.png")
+            row.PointsFrame.VariationOverlay:Show()
+        else
+            -- Available (not completed, not failed): use disabled texture
+            row.PointsFrame.VariationOverlay:SetTexture("Interface\\AddOns\\HardcoreAchievements\\Images\\dragon_disabled.png")
+            row.PointsFrame.VariationOverlay:Show()
+        end
+    elseif row.PointsFrame.VariationOverlay then
+        row.PointsFrame.VariationOverlay:Hide()
+    end
+    
     if row.completed then
         if row.Points then row.Points:SetAlpha(0) end
         if row.PointsFrame.Checkmark then
@@ -554,16 +573,6 @@ end
 
 -- ---------- Filter Functions ----------
 -- (IsRowOutleveled moved above to be available for helper functions)
-
-local function PopulateFilterDropdown()
-  local filterList = {
-    { text = ACHIEVEMENTFRAME_FILTER_ALL, value = "all" },
-    { text = ACHIEVEMENTFRAME_FILTER_COMPLETED, value = "completed" },
-    { text = ACHIEVEMENTFRAME_FILTER_INCOMPLETE, value = "not_completed" },
-    { text = FAILED, value = "failed" },
-  }
-  return filterList
-end
 
 -- Function to apply the current filter (similar to main file)
 local function ApplyFilter()
@@ -984,6 +993,14 @@ local function CreateEmbedModernRow(parent, srow)
     row.PointsFrame.Texture:SetTexture("Interface\\AddOns\\HardcoreAchievements\\Images\\ring_disabled.png")
     row.PointsFrame.Texture:SetAllPoints(row.PointsFrame)
     
+    -- Variation overlay texture (solo/duo/trio) - appears on top of ring texture
+    row.PointsFrame.VariationOverlay = row.PointsFrame:CreateTexture(nil, "OVERLAY", nil, 1)
+    -- Set size (width, height) and position (x, y offsets from center)
+    row.PointsFrame.VariationOverlay:SetSize(58, 51)  -- Width, Height (matches PointsFrame size)
+    row.PointsFrame.VariationOverlay:SetPoint("CENTER", row.PointsFrame, "CENTER", -8, 1)  -- X offset, Y offset
+    row.PointsFrame.VariationOverlay:SetAlpha(0.8)
+    row.PointsFrame.VariationOverlay:Hide()
+    
     row.Points = row.PointsFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     row.Points:SetPoint("CENTER", row.PointsFrame, "CENTER", 0, 0)
     row.Points:SetText(tostring(points))
@@ -1107,6 +1124,7 @@ local function CreateEmbedModernRow(parent, srow)
     -- Store reference to source row
     row._achId = achId
     row._title = title
+    row._def = def or (srow and srow._def) or (_G.HCA_AchievementDefs and _G.HCA_AchievementDefs[achId])
     row._tooltip = tooltip
     row._zone = zone
     row._def = def
@@ -1314,6 +1332,33 @@ function EMBED:BuildModernRows(srcRows)
       end
       if data.hiddenUntilComplete and not data.completed then
         shouldShow = false
+      end
+      
+      -- Hide/show variation achievements based on checkbox states
+      if srow._def and srow._def.isVariation then
+        local checkboxStates = { false, false, false }
+        if type(HardcoreAchievements_GetCharDB) == "function" then
+          local _, cdb = HardcoreAchievements_GetCharDB()
+          if cdb and cdb.settings and cdb.settings.filterCheckboxes then
+            local states = cdb.settings.filterCheckboxes
+            if type(states) == "table" then
+              checkboxStates = {
+                states[1] == true,  -- Trio
+                states[2] == true,  -- Duo
+                states[3] == true,  -- Solo
+              }
+            end
+          end
+        end
+        
+        local variationType = srow._def.variationType
+        if variationType == "Trios" and not checkboxStates[1] then
+          shouldShow = false
+        elseif variationType == "Duos" and not checkboxStates[2] then
+          shouldShow = false
+        elseif variationType == "Solos" and not checkboxStates[3] then
+          shouldShow = false
+        end
       end
       
       if shouldShow then
@@ -1986,59 +2031,25 @@ local function BuildEmbedIfNeeded()
   -- Only create filter dropdown if it doesn't exist
   local filterDropdown = UHCA.FilterDropdown
   if not filterDropdown then
-    filterDropdown = CreateFrame("Frame", nil, UHCA, "UIDropDownMenuTemplate")
-    filterDropdown.Left:Hide()
-    filterDropdown.Middle:Hide()
-    filterDropdown.Right:Hide()
-    local bg = filterDropdown:CreateTexture(nil, "BACKGROUND")
-    bg:SetPoint("TOPLEFT", -4, 0)
-    bg:SetPoint("BOTTOMRIGHT", -17, 9)
-    bg:SetTexture("Interface\\AddOns\\HardcoreAchievements\\Images\\dropdown.png")
-    filterDropdown:SetPoint("RIGHT", UHCA.Scroll, "TOPRIGHT", 15, 10)
-    UIDropDownMenu_SetWidth(filterDropdown, 87)
-    UIDropDownMenu_SetText(filterDropdown, "All")
-
-    local button = filterDropdown.Button
-    button:ClearAllPoints()
-    button:SetPoint("RIGHT", filterDropdown, "RIGHT", -16, 4)
-    button:SetNormalTexture("Interface\\AddOns\\HardcoreAchievements\\Images\\dropdown_arrow_down.png")
-    button:SetPushedTexture("Interface\\AddOns\\HardcoreAchievements\\Images\\dropdown_arrow_down.png")
-    button:SetDisabledTexture("Interface\\AddOns\\HardcoreAchievements\\Images\\dropdown_arrow_down.png")
-
-    local normalTexture = button:GetNormalTexture()
-    local pushedTexture = button:GetPushedTexture()
-    local disabledTexture = button:GetDisabledTexture()
-
-    local arrowR, arrowG, arrowB = GetPlayerClassColor()
-
-    for _, tex in ipairs({ normalTexture, pushedTexture, disabledTexture }) do
-      if tex then
-        tex:ClearAllPoints()
-        tex:SetPoint("CENTER", button, "CENTER", 0, 0)
-        tex:SetSize(20, 20)
-        tex:SetVertexColor(arrowR, arrowG, arrowB)
-      end
-    end
+    -- Create and style the dropdown using shared FilterDropdown module
+    filterDropdown = FilterDropdown:CreateDropdown(UHCA, "TOP", UHCA.ClassIcon, -30, -55, 87)
+    UHCA.FilterDropdown = filterDropdown
     
     -- Initialize filter dropdown
-    UIDropDownMenu_Initialize(filterDropdown, function(self, level)
-      if level == 1 then
-        for _, filter in ipairs(PopulateFilterDropdown()) do
-          local info = UIDropDownMenu_CreateInfo()
-          info.text = filter.text
-          info.value = filter.value
-          info.func = function()
-            UIDropDownMenu_SetSelectedValue(filterDropdown, filter.value)
-            UIDropDownMenu_SetText(filterDropdown, filter.text)
-            currentFilter = filter.value
-            ApplyFilter()
-          end
-          UIDropDownMenu_AddButton(info)
-        end
-      end
-    end)
-    UIDropDownMenu_SetSelectedValue(filterDropdown, "all")
-    UIDropDownMenu_SetText(filterDropdown, ACHIEVEMENTFRAME_FILTER_ALL)
+    FilterDropdown:InitializeDropdown(filterDropdown, {
+      currentFilter = currentFilter,
+      -- checkboxStates will be loaded from database automatically
+      checkboxLabels = { "Show Dungeon Trios", "Show Dungeon Duos", "Show Dungeon Solos" },
+      onFilterChange = function(filterValue)
+        currentFilter = filterValue
+        ApplyFilter()
+      end,
+      onCheckboxChange = function(checkboxIndex, newState)
+        -- Checkbox state is automatically saved to database in FilterDropdown
+        -- Handle any additional logic if needed
+        ApplyFilter()  -- Re-apply filter when checkbox changes
+      end,
+    })
   end
 
   if not UHCA.HideCustomTabCheckbox then
