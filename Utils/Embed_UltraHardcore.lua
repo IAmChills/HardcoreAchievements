@@ -2032,7 +2032,7 @@ local function BuildEmbedIfNeeded()
   local filterDropdown = UHCA.FilterDropdown
   if not filterDropdown then
     -- Create and style the dropdown using shared FilterDropdown module
-    filterDropdown = FilterDropdown:CreateDropdown(UHCA, "TOP", UHCA.ClassIcon, -30, -55, 87)
+    filterDropdown = FilterDropdown:CreateDropdown(UHCA, "TOP", UHCA.ClassIcon, -30, -58, 87)
     UHCA.FilterDropdown = filterDropdown
     
     -- Initialize filter dropdown
