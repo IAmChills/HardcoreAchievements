@@ -2153,29 +2153,42 @@ local function ApplyFilter()
         end
         
         -- Hide/show variation achievements based on checkbox states
+        -- Completed variations always show when "all" or "completed" filter is selected
         if row._def and row._def.isVariation then
-            local checkboxStates = { false, false, false }
-            if type(HardcoreAchievements_GetCharDB) == "function" then
-                local _, cdb = HardcoreAchievements_GetCharDB()
-                if cdb and cdb.settings and cdb.settings.filterCheckboxes then
-                    local states = cdb.settings.filterCheckboxes
-                    if type(states) == "table" then
-                        checkboxStates = {
-                            states[1] == true,  -- Trio
-                            states[2] == true,  -- Duo
-                            states[3] == true,  -- Solo
-                        }
-                    end
-                end
+            -- Only check checkbox state for non-completed variations
+            -- Completed variations always show with "all" or "completed" filter
+            local isCompleted = row.completed == true
+            local shouldCheckCheckbox = true
+            
+            if isCompleted and (currentFilter == "all" or currentFilter == "completed") then
+                -- Completed variations always show with these filters, skip checkbox check
+                shouldCheckCheckbox = false
             end
             
-            local variationType = row._def.variationType
-            if variationType == FRONT_END_LOBBY_TRIOS and not checkboxStates[1] then
-                shouldShow = false
-            elseif variationType == FRONT_END_LOBBY_DUOS and not checkboxStates[2] then
-                shouldShow = false
-            elseif variationType == FRONT_END_LOBBY_SOLO and not checkboxStates[3] then
-                shouldShow = false
+            if shouldCheckCheckbox then
+                local checkboxStates = { false, false, false }
+                if type(HardcoreAchievements_GetCharDB) == "function" then
+                    local _, cdb = HardcoreAchievements_GetCharDB()
+                    if cdb and cdb.settings and cdb.settings.filterCheckboxes then
+                        local states = cdb.settings.filterCheckboxes
+                        if type(states) == "table" then
+                            checkboxStates = {
+                                states[1] == true,  -- Trio
+                                states[2] == true,  -- Duo
+                                states[3] == true,  -- Solo
+                            }
+                        end
+                    end
+                end
+                
+                local variationType = row._def.variationType
+                if variationType == "Trio" and not checkboxStates[1] then
+                    shouldShow = false
+                elseif variationType == "Duo" and not checkboxStates[2] then
+                    shouldShow = false
+                elseif variationType == "Solo" and not checkboxStates[3] then
+                    shouldShow = false
+                end
             end
         end
         
@@ -2467,7 +2480,7 @@ function CreateAchievementRow(parent, achId, title, tooltip, icon, level, points
     -- Variation overlay texture (solo/duo/trio) - appears on top of ring texture
     row.PointsFrame.VariationOverlay = row.PointsFrame:CreateTexture(nil, "OVERLAY", nil, 1)
     -- Set size (width, height) and position (x, y offsets from center)
-    row.PointsFrame.VariationOverlay:SetSize(44, 37)  -- Width, Height
+    row.PointsFrame.VariationOverlay:SetSize(44, 38)  -- Width, Height
     row.PointsFrame.VariationOverlay:SetPoint("CENTER", row.PointsFrame, "CENTER", -6, 1)  -- X offset, Y offset
     row.PointsFrame.VariationOverlay:SetAlpha(0.8)
     row.PointsFrame.VariationOverlay:Hide()

@@ -817,6 +817,46 @@ function EMBED:BuildClassicGrid(srcRows)
         shouldShow = false
       end
       
+      -- Hide/show variation achievements based on checkbox states
+      -- Completed variations always show when "all" or "completed" filter is selected
+      if srow._def and srow._def.isVariation then
+        -- Only check checkbox state for non-completed variations
+        -- Completed variations always show with "all" or "completed" filter
+        local isCompleted = data.completed == true
+        local shouldCheckCheckbox = true
+        
+        if isCompleted and (currentFilter == "all" or currentFilter == "completed") then
+          -- Completed variations always show with these filters, skip checkbox check
+          shouldCheckCheckbox = false
+        end
+        
+        if shouldCheckCheckbox then
+          local checkboxStates = { false, false, false }
+          if type(HardcoreAchievements_GetCharDB) == "function" then
+            local _, cdb = HardcoreAchievements_GetCharDB()
+            if cdb and cdb.settings and cdb.settings.filterCheckboxes then
+              local states = cdb.settings.filterCheckboxes
+              if type(states) == "table" then
+                checkboxStates = {
+                  states[1] == true,  -- Trio
+                  states[2] == true,  -- Duo
+                  states[3] == true,  -- Solo
+                }
+              end
+            end
+          end
+          
+          local variationType = srow._def.variationType
+          if variationType == "Trio" and not checkboxStates[1] then
+            shouldShow = false
+          elseif variationType == "Duo" and not checkboxStates[2] then
+            shouldShow = false
+          elseif variationType == "Solo" and not checkboxStates[3] then
+            shouldShow = false
+          end
+        end
+      end
+      
       if shouldShow then
         needed = needed + 1
         local icon = self.icons[needed]
@@ -1335,29 +1375,42 @@ function EMBED:BuildModernRows(srcRows)
       end
       
       -- Hide/show variation achievements based on checkbox states
+      -- Completed variations always show when "all" or "completed" filter is selected
       if srow._def and srow._def.isVariation then
-        local checkboxStates = { false, false, false }
-        if type(HardcoreAchievements_GetCharDB) == "function" then
-          local _, cdb = HardcoreAchievements_GetCharDB()
-          if cdb and cdb.settings and cdb.settings.filterCheckboxes then
-            local states = cdb.settings.filterCheckboxes
-            if type(states) == "table" then
-              checkboxStates = {
-                states[1] == true,  -- Trio
-                states[2] == true,  -- Duo
-                states[3] == true,  -- Solo
-              }
-            end
-          end
+        -- Only check checkbox state for non-completed variations
+        -- Completed variations always show with "all" or "completed" filter
+        local isCompleted = data.completed == true
+        local shouldCheckCheckbox = true
+        
+        if isCompleted and (currentFilter == "all" or currentFilter == "completed") then
+          -- Completed variations always show with these filters, skip checkbox check
+          shouldCheckCheckbox = false
         end
         
-        local variationType = srow._def.variationType
-        if variationType == "Trios" and not checkboxStates[1] then
-          shouldShow = false
-        elseif variationType == "Duos" and not checkboxStates[2] then
-          shouldShow = false
-        elseif variationType == "Solos" and not checkboxStates[3] then
-          shouldShow = false
+        if shouldCheckCheckbox then
+          local checkboxStates = { false, false, false }
+          if type(HardcoreAchievements_GetCharDB) == "function" then
+            local _, cdb = HardcoreAchievements_GetCharDB()
+            if cdb and cdb.settings and cdb.settings.filterCheckboxes then
+              local states = cdb.settings.filterCheckboxes
+              if type(states) == "table" then
+                checkboxStates = {
+                  states[1] == true,  -- Trio
+                  states[2] == true,  -- Duo
+                  states[3] == true,  -- Solo
+                }
+              end
+            end
+          end
+          
+          local variationType = srow._def.variationType
+          if variationType == "Trio" and not checkboxStates[1] then
+            shouldShow = false
+          elseif variationType == "Duo" and not checkboxStates[2] then
+            shouldShow = false
+          elseif variationType == "Solo" and not checkboxStates[3] then
+            shouldShow = false
+          end
         end
       end
       
