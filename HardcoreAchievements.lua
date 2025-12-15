@@ -2193,7 +2193,7 @@ end
 _G.HCA_ApplyFilter = ApplyFilter
 
 -- Create and initialize the filter dropdown
-local filterDropdown = FilterDropdown:CreateDropdown(AchievementPanel, "TOPRIGHT", AchievementPanel, -18, -52, 60)
+local filterDropdown = FilterDropdown:CreateDropdown(AchievementPanel, "TOPRIGHT", AchievementPanel, -20, -52, 60)
 AchievementPanel.filterDropdown = filterDropdown
 
 FilterDropdown:InitializeDropdown(filterDropdown, {

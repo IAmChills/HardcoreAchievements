@@ -74,7 +74,7 @@ function FilterDropdown:CreateDropdown(parent, anchorPoint, anchorTo, xOffset, y
     
     -- Position the dropdown
     dropdown:SetPoint(anchorPoint or "TOPRIGHT", anchorTo or parent, anchorPoint or "TOPRIGHT", xOffset or -17, yOffset or -50)
-    UIDropDownMenu_SetWidth(dropdown, width or 87)
+    UIDropDownMenu_SetWidth(dropdown, width or 85)
     UIDropDownMenu_SetText(dropdown, ACHIEVEMENTFRAME_FILTER_ALL)
     
     -- Style the button with custom arrow
