@@ -420,7 +420,13 @@ function HCA_AchievementCount()
             local hiddenByProfession = row.hiddenByProfession
             local hiddenUntilComplete = row.hiddenUntilComplete and not row.completed
             
-            if not hiddenByProfession and not hiddenUntilComplete then
+            -- Exclude variation achievements from the count UNLESS they are completed
+            -- This prevents incomplete variations from inflating the total, but includes
+            -- completed variations so the completed count doesn't exceed the total
+            local isVariation = row._def and row._def.isVariation
+            local shouldCount = not hiddenByProfession and not hiddenUntilComplete and (not isVariation or row.completed)
+            
+            if shouldCount then
                 total = total + 1
                 if row.completed then
                     completed = completed + 1
@@ -2480,7 +2486,7 @@ function CreateAchievementRow(parent, achId, title, tooltip, icon, level, points
 
     -- timestamp
     row.TS = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    row.TS:SetPoint("RIGHT", row.PointsFrame, "LEFT", -5, 0)
+    row.TS:SetPoint("RIGHT", row.PointsFrame, "LEFT", -10, 0)
     row.TS:SetJustifyH("RIGHT")
     row.TS:SetJustifyV("TOP")
     row.TS:SetText("")
