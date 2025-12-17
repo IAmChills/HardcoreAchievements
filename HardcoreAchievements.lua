@@ -1167,7 +1167,7 @@ function HCA_AchToast_Show(iconTex, title, pts, achIdOrRow)
         f.points:Hide()
         if f.shieldIcon then
             f.shieldIcon:SetTexture("Interface\\AchievementFrame\\UI-Achievement-Shields-Nopoints")
-            f.shieldIcon:SetTexCoord(0, 1, 0, 1)
+            f.shieldIcon:SetTexCoord(0, 0.5, 0, 0.45)
         end
     else
         f.points:SetText(tostring(finalPoints))
