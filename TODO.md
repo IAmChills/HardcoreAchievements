@@ -7,6 +7,7 @@
 - [ ] Show achievement locations on map
 - [ ] Achievements for reputations?
   - [ ] Introduce tabs to split out profs, reps, dungeons, etc?
+- [ ] Achievements for gear sets
 
 - [ ] Arc Challenges
   - [ ] Unholy

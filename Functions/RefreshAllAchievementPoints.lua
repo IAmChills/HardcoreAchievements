@@ -13,35 +13,43 @@ function RefreshAllAchievementPoints()
         -- Check both row.id and row.achId (dungeon achievements use achId)
         local rowId = row.id or row.achId
         if rowId and not row.completed then
-            -- Start from original points
-            local originalPoints = row.originalPoints or row.points or 0
-            local staticPoints = row.staticPoints or false
-            local finalPoints = originalPoints
-            
-            if not staticPoints then
-                -- Apply preset multiplier
-                local multiplier = (_G.GetPresetMultiplier and _G.GetPresetMultiplier(preset)) or 1.0
-                finalPoints = math.floor(originalPoints * multiplier + 0.5)
-                
-                -- Visual preview: if solo mode toggle is on and no stored points, show doubled points
-                -- This is just a preview - actual points are determined at kill/quest time
-                -- Solo preview only applies if player is self-found
-                local progress = HardcoreAchievements_GetProgress and HardcoreAchievements_GetProgress(rowId)
-                if isSoloMode and row.allowSoloDouble and isSelfFound and not (progress and progress.pointsAtKill) then
-                    finalPoints = finalPoints * 2
+            -- For secret achievements that are not completed, use secretPoints instead of actual points
+            if row.isSecretAchievement and row.secretPoints ~= nil then
+                row.points = row.secretPoints
+                if row.Points then
+                    row.Points:SetText(tostring(row.secretPoints))
                 end
-            end
-            
-            -- Apply self-found bonus (always, except for secret achievements)
-            if isSelfFound and not row.isSecretAchievement then
-                finalPoints = finalPoints + HCA_SELF_FOUND_BONUS
-            end
-            
-            row.points = finalPoints
-            if row.Points then
-                row.Points:SetText(tostring(finalPoints))
-            end
-            
+                -- Skip the rest of the point calculation for secret achievements
+            else
+                -- Start from original points
+                local originalPoints = row.originalPoints or row.points or 0
+                local staticPoints = row.staticPoints or false
+                local finalPoints = originalPoints
+                
+                if not staticPoints then
+                    -- Apply preset multiplier
+                    local multiplier = (_G.GetPresetMultiplier and _G.GetPresetMultiplier(preset)) or 1.0
+                    finalPoints = math.floor(originalPoints * multiplier + 0.5)
+                    
+                    -- Visual preview: if solo mode toggle is on and no stored points, show doubled points
+                    -- This is just a preview - actual points are determined at kill/quest time
+                    -- Solo preview only applies if player is self-found
+                    local progress = HardcoreAchievements_GetProgress and HardcoreAchievements_GetProgress(rowId)
+                    if isSoloMode and row.allowSoloDouble and isSelfFound and not (progress and progress.pointsAtKill) then
+                        finalPoints = finalPoints * 2
+                    end
+                end
+                
+                -- Apply self-found bonus (always, except for secret achievements)
+                if isSelfFound and not row.isSecretAchievement then
+                    finalPoints = finalPoints + HCA_SELF_FOUND_BONUS
+                end
+                
+                row.points = finalPoints
+                if row.Points then
+                    row.Points:SetText(tostring(finalPoints))
+                end
+                
                 -- Update Sub text - check if we have stored solo status or ineligible status from previous kills/quests
                 -- Only update Sub text for incomplete achievements to preserve completed achievement solo indicators
                 if not row.completed and row.Sub and row.maxLevel and row.maxLevel > 0 then
@@ -170,6 +178,7 @@ function RefreshAllAchievementPoints()
                     else
                         row.Sub:SetText(levelText)
                     end
+                end
                 end
             end
         end

@@ -72,6 +72,25 @@ function HCA_ShowAchievementTooltip(frame, data)
         end
     end
     
+    -- For secret achievements that are not completed, use secretPoints instead of actual points
+    if isSecretAchievement and not achievementCompleted then
+        -- Try to get secretPoints from row data first
+        if type(data) == "table" and data.secretPoints ~= nil then
+            points = data.secretPoints
+        -- Otherwise try to get it from the definition
+        elseif def and def.secretPoints ~= nil then
+            points = tonumber(def.secretPoints) or 0
+        -- Fallback: look up from catalog if achId is available
+        elseif achId and _G.Achievements then
+            for _, achievementDef in ipairs(_G.Achievements) do
+                if achievementDef.achId == achId and achievementDef.secretPoints ~= nil then
+                    points = tonumber(achievementDef.secretPoints) or 0
+                    break
+                end
+            end
+        end
+    end
+    
     GameTooltip:SetOwner(frame, "ANCHOR_RIGHT")
     
     -- Check if SSF mode is enabled and this achievement supports it
