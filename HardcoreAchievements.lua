@@ -1042,6 +1042,7 @@ local function HCA_CreateAchToast()
     shieldIcon:SetSize(56, 52)
     shieldIcon:SetPoint("TOPRIGHT", 1, 0)
     shieldIcon:SetTexCoord(0, 0.5, 0, 0.45)
+    f.shieldIcon = shieldIcon
 
     local points = shield:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     points:SetPoint("CENTER", 4, 5)
@@ -1159,7 +1160,23 @@ function HCA_AchToast_Show(iconTex, title, pts, achIdOrRow)
     -- these exist because we exposed them in the factory
     f.icon:SetTexture(tex)
     f.name:SetText(title or "")
-    f.points:SetText(finalPoints and tostring(finalPoints) or "")
+    
+    -- Show shield icon for 0-point achievements, otherwise show points text
+    if finalPoints == 0 then
+        f.points:SetText("")
+        f.points:Hide()
+        if f.shieldIcon then
+            f.shieldIcon:SetTexture("Interface\\AchievementFrame\\UI-Achievement-Shields-Nopoints")
+            f.shieldIcon:SetTexCoord(0, 0.5, 0, 0.45)
+        end
+    else
+        f.points:SetText(tostring(finalPoints))
+        f.points:Show()
+        if f.shieldIcon then
+            f.shieldIcon:SetTexture("Interface\\AchievementFrame\\UI-Achievement-Shields")
+            f.shieldIcon:SetTexCoord(0, 0.5, 0, 0.45)
+        end
+    end
 
     -- Store achievement data for click handler
     f.achId = achId
@@ -2960,6 +2977,7 @@ do
         AchievementPanel._achEvt:RegisterEvent("QUEST_REMOVED")
         AchievementPanel._achEvt:RegisterEvent("UNIT_SPELLCAST_SENT")
         AchievementPanel._achEvt:RegisterEvent("UNIT_SPELLCAST_SUCCEEDED")
+        AchievementPanel._achEvt:RegisterEvent("UNIT_INVENTORY_CHANGED")
         AchievementPanel._achEvt:RegisterEvent("CHAT_MSG_TEXT_EMOTE")
         AchievementPanel._achEvt:RegisterEvent("PLAYER_LEVEL_CHANGED")
         AchievementPanel._achEvt:RegisterEvent("CHAT_MSG_LOOT")
@@ -3235,6 +3253,19 @@ do
                 -- Only check MalletZF achievement for this specific spell
                 for _, row in ipairs(AchievementPanel.achievements) do
                     if not row.completed and (row.id == "MalletZF" or row.achId == "MalletZF") then
+                        HCA_MarkRowCompleted(row)
+                        HCA_AchToast_Show(row.Icon:GetTexture(), row.Title:GetText(), row.points, row)
+                    end
+                end
+            elseif event == "UNIT_INVENTORY_CHANGED" then
+                local unit = ...
+                if unit ~= "player" then return end
+                local _, classFile = UnitClass("player")
+                if classFile ~= "ROGUE" then return end
+                local headSlotItemId = GetInventoryItemID("player", 1)
+                if headSlotItemId ~= 7997 then return end
+                for _, row in ipairs(AchievementPanel.achievements) do
+                    if not row.completed and (row.id == "DefiasMask" or row.achId == "DefiasMask") then
                         HCA_MarkRowCompleted(row)
                         HCA_AchToast_Show(row.Icon:GetTexture(), row.Title:GetText(), row.points, row)
                     end

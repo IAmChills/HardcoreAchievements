@@ -2,7 +2,7 @@ local Achievements = {
 
 --{ achId="Test",  title="Boar Test",  level=4, tooltip="Kill |cff0091e6a boar", icon=134400, points=10, requiredQuestId=nil, targetNpcId=3098, faction="Horde", zone="Durotar" },
 --{ achId="Test2", title="Easy Quest Test", level=2, tooltip="Orc starter quest", icon=134400, points=10, requiredQuestId=4641, targetNpcId=nil, faction="Horde", zone="Durotar" },
---{ achId="Test3", title="Kill + Quest", level=2, tooltip="Kill a boar and complete the orc starter quest", icon=134400, points=10, requiredQuestId=788, targetNpcId=3098, faction="Horde", zone="Durotar" },
+--{ achId="Test3", title="Kill + Quest", level=2, tooltip="Kill a boar and complete the orc starter quest", icon=134400, points=10, requiredQuestId=4641, targetNpcId=3098, faction="Horde", zone="Durotar" },
 --{ achId="Test4", title="Kill 3 Boars", level=2, tooltip="Kill 3 boars", icon=134400, points=10, requiredQuestId=nil, requiredKills = { [3098] = 3, }, faction="Horde", zone="Durotar" },
 
 -- Alliance
@@ -155,7 +155,7 @@ local Achievements = {
     achId = "ThogrunAlliance",
     title = "Tremors Beneath",
     level = 40,
-    tooltip = "Complete |cff0091e6Tremors of the Earth|r before level 41",
+    tooltip = "Complete |cff0091e6Tremors of the Earth Pt. 1|r before level 41",
     icon = 254093,
     points = 10,
     requiredQuestId = 732,
@@ -340,7 +340,7 @@ local Achievements = {
     achId = "ThogrunHorde",
     title = "Sign of the Earth",
     level = 40,
-    tooltip = "Complete |cff0091e6Broken Alliances|r before level 41",
+    tooltip = "Complete |cff0091e6Broken Alliances Pt. 1|r before level 41",
     icon = 254093,
     points = 10,
     requiredQuestId = 782,
@@ -651,6 +651,16 @@ local Achievements = {
     faction = FACTION_HORDE,
     class = "ROGUE",
     zone = "Barrens"
+}, {
+    achId = "DefiasMask",
+    title = "One of Us! |cfffff468[Rogue]|r",
+    level = nil,
+    tooltip = "Equip a |cff0091e6Red Defias Mask|r and join the ranks of the Defias Brotherhood",
+    icon = 133694,
+    points = 0,
+    customIsCompleted = function() return GetItemCount(7997, true) > 0 end,
+    class = "ROGUE",
+    staticPoints = true,
 },
 
 -- Mage
@@ -735,13 +745,13 @@ local Achievements = {
     level = nil,
     tooltip = "You have completed the secret achievement: |cff0091e6Kill a rat|r",
     icon = 294480,
-    points = 1,
+    points = 0,
     targetNpcId = {4075, 13016, 2110},
     secret = true,
     secretTitle = "Secret Achievement",
     secretTooltip = "You will probably complete this achievement by accident",
     --secretIcon = 132387,
-    secretPoints = 1,
+    secretPoints = 0,
     staticPoints = true,
 }, {
     achId = "Secret2",
@@ -749,7 +759,7 @@ local Achievements = {
     level = nil,
     tooltip = "You have completed the secret achievement: |cff0091e6Drink some Noggenfogger|r",
     icon = 134863,
-    points = 1,
+    points = 0,
     customIsCompleted = function() return false end,
     customSpell = function(spellId, targetName)
         if spellId == 16589 then
@@ -761,7 +771,7 @@ local Achievements = {
     secretTitle = "Secret Achievement",
     secretTooltip = "You will probably complete this achievement by accident",
     --secretIcon = 132387,
-    secretPoints = 1,
+    secretPoints = 0,
     staticPoints = true,
 }, {
     achId = "Secret3",
@@ -769,7 +779,7 @@ local Achievements = {
     level = nil,
     tooltip = "You have completed the secret achievement: |cff0091e6Pet Spot the Wolf|r",
     icon = 132203,
-    points = 1,
+    points = 0,
     faction = FACTION_ALLIANCE,
     customIsCompleted = function() return false end,
     customEmote = function(token)
@@ -790,7 +800,7 @@ local Achievements = {
     secretTitle = "Secret Achievement",
     secretTooltip = "I spot a good boy!",
     --secretIcon = 132387,
-    secretPoints = 1,
+    secretPoints = 0,
     staticPoints = true,
 }, {
     achId = "Secret4",
@@ -809,7 +819,7 @@ local Achievements = {
     level = nil,
     tooltip = "You have completed the secret achievement: |cffff8000Obtain the Black Qiraji Resonating Crystal|r",
     icon = 134399,
-    points = 100,
+    points = 0,
     customIsCompleted = function() return GetItemCount(21176, true) > 0 end,
     -- Secret presentation before completion
     secret = true,

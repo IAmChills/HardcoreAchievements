@@ -72,6 +72,25 @@ function HCA_ShowAchievementTooltip(frame, data)
         end
     end
     
+    -- For secret achievements that are not completed, use secretPoints instead of actual points
+    if isSecretAchievement and not achievementCompleted then
+        -- Try to get secretPoints from row data first
+        if type(data) == "table" and data.secretPoints ~= nil then
+            points = data.secretPoints
+        -- Otherwise try to get it from the definition
+        elseif def and def.secretPoints ~= nil then
+            points = tonumber(def.secretPoints) or 0
+        -- Fallback: look up from catalog if achId is available
+        elseif achId and _G.Achievements then
+            for _, achievementDef in ipairs(_G.Achievements) do
+                if achievementDef.achId == achId and achievementDef.secretPoints ~= nil then
+                    points = tonumber(achievementDef.secretPoints) or 0
+                    break
+                end
+            end
+        end
+    end
+    
     GameTooltip:SetOwner(frame, "ANCHOR_RIGHT")
     
     -- Check if SSF mode is enabled and this achievement supports it
@@ -85,9 +104,10 @@ function HCA_ShowAchievementTooltip(frame, data)
         GameTooltip:SetText(title, 1, 1, 1)
     end
     
-    -- Show level and points for non-secret achievements (right-aligned below title, before description)
-    -- Secret achievements show points below the description instead
-    local showPointsInBody = isSecretAchievement or isProfessionAchievement
+    -- Show level and points for achievements with level requirements (right-aligned below title, before description)
+    -- Achievements without level requirements show points below the description instead
+    local hasLevelRequirement = maxLevel and maxLevel > 0
+    local showPointsInBody = isSecretAchievement or isProfessionAchievement or not hasLevelRequirement
 
     if not showPointsInBody then
         local levelText = ""
@@ -135,10 +155,10 @@ function HCA_ShowAchievementTooltip(frame, data)
     
     GameTooltip:AddLine(tooltip, nil, nil, nil, true)
     
-    -- For secret and profession achievements, show points below the description instead of with level
+    -- For achievements without level requirements (secret, profession, or no level), show points below the description
     if showPointsInBody then
         local pointsText = ""
-        if points and points > 0 then
+        if points and points >= 0 then
             pointsText = ACHIEVEMENT_POINTS .. ": " .. tostring(points)
             GameTooltip:AddLine(pointsText, 0.6, 0.9, 0.6)
         end
