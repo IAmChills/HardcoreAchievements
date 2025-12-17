@@ -751,7 +751,7 @@ local Achievements = {
     secretTitle = "Secret Achievement",
     secretTooltip = "You will probably complete this achievement by accident",
     --secretIcon = 132387,
-    secretPoints = 1,
+    secretPoints = 0,
     staticPoints = true,
 }, {
     achId = "Secret2",
@@ -759,7 +759,7 @@ local Achievements = {
     level = nil,
     tooltip = "You have completed the secret achievement: |cff0091e6Drink some Noggenfogger|r",
     icon = 134863,
-    points = 1,
+    points = 0,
     customIsCompleted = function() return false end,
     customSpell = function(spellId, targetName)
         if spellId == 16589 then
@@ -771,7 +771,7 @@ local Achievements = {
     secretTitle = "Secret Achievement",
     secretTooltip = "You will probably complete this achievement by accident",
     --secretIcon = 132387,
-    secretPoints = 1,
+    secretPoints = 0,
     staticPoints = true,
 }, {
     achId = "Secret3",
@@ -779,7 +779,7 @@ local Achievements = {
     level = nil,
     tooltip = "You have completed the secret achievement: |cff0091e6Pet Spot the Wolf|r",
     icon = 132203,
-    points = 1,
+    points = 0,
     faction = FACTION_ALLIANCE,
     customIsCompleted = function() return false end,
     customEmote = function(token)
@@ -800,7 +800,7 @@ local Achievements = {
     secretTitle = "Secret Achievement",
     secretTooltip = "I spot a good boy!",
     --secretIcon = 132387,
-    secretPoints = 1,
+    secretPoints = 0,
     staticPoints = true,
 }, {
     achId = "Secret4",
@@ -819,7 +819,7 @@ local Achievements = {
     level = nil,
     tooltip = "You have completed the secret achievement: |cffff8000Obtain the Black Qiraji Resonating Crystal|r",
     icon = 134399,
-    points = 100,
+    points = 0,
     customIsCompleted = function() return GetItemCount(21176, true) > 0 end,
     -- Secret presentation before completion
     secret = true,
