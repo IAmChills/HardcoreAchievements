@@ -2,7 +2,7 @@ local Achievements = {
 
 --{ achId="Test",  title="Boar Test",  level=4, tooltip="Kill |cff0091e6a boar", icon=134400, points=10, requiredQuestId=nil, targetNpcId=3098, faction="Horde", zone="Durotar" },
 --{ achId="Test2", title="Easy Quest Test", level=2, tooltip="Orc starter quest", icon=134400, points=10, requiredQuestId=4641, targetNpcId=nil, faction="Horde", zone="Durotar" },
---{ achId="Test3", title="Kill + Quest", level=2, tooltip="Kill a boar and complete the orc starter quest", icon=134400, points=10, requiredQuestId=788, targetNpcId=3098, faction="Horde", zone="Durotar" },
+--{ achId="Test3", title="Kill + Quest", level=2, tooltip="Kill a boar and complete the orc starter quest", icon=134400, points=10, requiredQuestId=4641, targetNpcId=3098, faction="Horde", zone="Durotar" },
 --{ achId="Test4", title="Kill 3 Boars", level=2, tooltip="Kill 3 boars", icon=134400, points=10, requiredQuestId=nil, requiredKills = { [3098] = 3, }, faction="Horde", zone="Durotar" },
 
 -- Alliance
@@ -651,6 +651,16 @@ local Achievements = {
     faction = FACTION_HORDE,
     class = "ROGUE",
     zone = "Barrens"
+}, {
+    achId = "DefiasMask",
+    title = "One of Us! |cfffff468[Rogue]|r",
+    level = nil,
+    tooltip = "Equip a |cff0091e6Red Defias Mask|r and join the ranks of the Defias Brotherhood",
+    icon = 133694,
+    points = 0,
+    customIsCompleted = function() return GetItemCount(7997, true) > 0 end,
+    class = "ROGUE",
+    staticPoints = true,
 },
 
 -- Mage

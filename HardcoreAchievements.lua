@@ -2960,6 +2960,7 @@ do
         AchievementPanel._achEvt:RegisterEvent("QUEST_REMOVED")
         AchievementPanel._achEvt:RegisterEvent("UNIT_SPELLCAST_SENT")
         AchievementPanel._achEvt:RegisterEvent("UNIT_SPELLCAST_SUCCEEDED")
+        AchievementPanel._achEvt:RegisterEvent("UNIT_INVENTORY_CHANGED")
         AchievementPanel._achEvt:RegisterEvent("CHAT_MSG_TEXT_EMOTE")
         AchievementPanel._achEvt:RegisterEvent("PLAYER_LEVEL_CHANGED")
         AchievementPanel._achEvt:RegisterEvent("CHAT_MSG_LOOT")
@@ -3235,6 +3236,19 @@ do
                 -- Only check MalletZF achievement for this specific spell
                 for _, row in ipairs(AchievementPanel.achievements) do
                     if not row.completed and (row.id == "MalletZF" or row.achId == "MalletZF") then
+                        HCA_MarkRowCompleted(row)
+                        HCA_AchToast_Show(row.Icon:GetTexture(), row.Title:GetText(), row.points, row)
+                    end
+                end
+            elseif event == "UNIT_INVENTORY_CHANGED" then
+                local unit = ...
+                if unit ~= "player" then return end
+                local _, classFile = UnitClass("player")
+                if classFile ~= "ROGUE" then return end
+                local headSlotItemId = GetInventoryItemID("player", 1)
+                if headSlotItemId ~= 7997 then return end
+                for _, row in ipairs(AchievementPanel.achievements) do
+                    if not row.completed and (row.id == "DefiasMask" or row.achId == "DefiasMask") then
                         HCA_MarkRowCompleted(row)
                         HCA_AchToast_Show(row.Icon:GetTexture(), row.Title:GetText(), row.points, row)
                     end
