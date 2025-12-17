@@ -1042,6 +1042,7 @@ local function HCA_CreateAchToast()
     shieldIcon:SetSize(56, 52)
     shieldIcon:SetPoint("TOPRIGHT", 1, 0)
     shieldIcon:SetTexCoord(0, 0.5, 0, 0.45)
+    f.shieldIcon = shieldIcon
 
     local points = shield:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     points:SetPoint("CENTER", 4, 5)
@@ -1159,7 +1160,23 @@ function HCA_AchToast_Show(iconTex, title, pts, achIdOrRow)
     -- these exist because we exposed them in the factory
     f.icon:SetTexture(tex)
     f.name:SetText(title or "")
-    f.points:SetText(finalPoints and tostring(finalPoints) or "")
+    
+    -- Show shield icon for 0-point achievements, otherwise show points text
+    if finalPoints == 0 then
+        f.points:SetText("")
+        f.points:Hide()
+        if f.shieldIcon then
+            f.shieldIcon:SetTexture("Interface\\AchievementFrame\\UI-Achievement-Shields-Nopoints")
+            f.shieldIcon:SetTexCoord(0, 1, 0, 1)
+        end
+    else
+        f.points:SetText(tostring(finalPoints))
+        f.points:Show()
+        if f.shieldIcon then
+            f.shieldIcon:SetTexture("Interface\\AchievementFrame\\UI-Achievement-Shields")
+            f.shieldIcon:SetTexCoord(0, 0.5, 0, 0.45)
+        end
+    end
 
     -- Store achievement data for click handler
     f.achId = achId
