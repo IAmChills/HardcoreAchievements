@@ -85,9 +85,10 @@ function HCA_ShowAchievementTooltip(frame, data)
         GameTooltip:SetText(title, 1, 1, 1)
     end
     
-    -- Show level and points for non-secret achievements (right-aligned below title, before description)
-    -- Secret achievements show points below the description instead
-    local showPointsInBody = isSecretAchievement or isProfessionAchievement
+    -- Show level and points for achievements with level requirements (right-aligned below title, before description)
+    -- Achievements without level requirements show points below the description instead
+    local hasLevelRequirement = maxLevel and maxLevel > 0
+    local showPointsInBody = isSecretAchievement or isProfessionAchievement or not hasLevelRequirement
 
     if not showPointsInBody then
         local levelText = ""
@@ -135,10 +136,10 @@ function HCA_ShowAchievementTooltip(frame, data)
     
     GameTooltip:AddLine(tooltip, nil, nil, nil, true)
     
-    -- For secret and profession achievements, show points below the description instead of with level
+    -- For achievements without level requirements (secret, profession, or no level), show points below the description
     if showPointsInBody then
         local pointsText = ""
-        if points and points > 0 then
+        if points and points >= 0 then
             pointsText = ACHIEVEMENT_POINTS .. ": " .. tostring(points)
             GameTooltip:AddLine(pointsText, 0.6, 0.9, 0.6)
         end
