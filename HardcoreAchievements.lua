@@ -423,8 +423,10 @@ function HCA_AchievementCount()
             -- Exclude variation achievements from the count UNLESS they are completed
             -- This prevents incomplete variations from inflating the total, but includes
             -- completed variations so the completed count doesn't exceed the total
+            -- Same logic applies to dungeon set achievements
             local isVariation = row._def and row._def.isVariation
-            local shouldCount = not hiddenByProfession and not hiddenUntilComplete and (not isVariation or row.completed)
+            local isDungeonSet = row._def and row._def.isDungeonSet
+            local shouldCount = not hiddenByProfession and not hiddenUntilComplete and (not isVariation or row.completed) and (not isDungeonSet or row.completed)
             
             if shouldCount then
                 total = total + 1
@@ -2209,6 +2211,41 @@ local function ApplyFilter()
             end
         end
         
+        -- Hide/show dungeon set achievements based on checkbox state
+        -- Completed dungeon sets always show when "all" or "completed" filter is selected
+        if row._def and row._def.isDungeonSet then
+            local isCompleted = row.completed == true
+            local shouldCheckCheckbox = true
+            
+            if isCompleted and (currentFilter == "all" or currentFilter == "completed") then
+                -- Completed dungeon sets always show with these filters, skip checkbox check
+                shouldCheckCheckbox = false
+            end
+            
+            if shouldCheckCheckbox then
+                local checkboxStates = { false, false, false, false }
+                if type(HardcoreAchievements_GetCharDB) == "function" then
+                    local _, cdb = HardcoreAchievements_GetCharDB()
+                    if cdb and cdb.settings and cdb.settings.filterCheckboxes then
+                        local states = cdb.settings.filterCheckboxes
+                        if type(states) == "table" then
+                            checkboxStates = {
+                                states[1] == true,  -- Trio
+                                states[2] == true,  -- Duo
+                                states[3] == true,  -- Solo
+                                states[4] == true,  -- Dungeon Sets
+                            }
+                        end
+                    end
+                end
+                
+                -- Check if "Show Dungeon Sets" checkbox (index 4) is enabled
+                if not checkboxStates[4] then
+                    shouldShow = false
+                end
+            end
+        end
+        
         if shouldShow then
             row:Show()
         else
@@ -2229,7 +2266,7 @@ AchievementPanel.filterDropdown = filterDropdown
 FilterDropdown:InitializeDropdown(filterDropdown, {
     currentFilter = "all",
     -- checkboxStates will be loaded from database automatically
-    checkboxLabels = { "Show Dungeon Trios", "Show Dungeon Duos", "Show Dungeon Solos" },
+    checkboxLabels = { "Show Dungeon Trios", "Show Dungeon Duos", "Show Dungeon Solos", "Show Dungeon Sets" },
     onFilterChange = function(filterValue)
         ApplyFilter()
     end,
@@ -3260,14 +3297,40 @@ do
             elseif event == "UNIT_INVENTORY_CHANGED" then
                 local unit = ...
                 if unit ~= "player" then return end
+                
+                -- Handle DefiasMask achievement (specific item check)
                 local _, classFile = UnitClass("player")
-                if classFile ~= "ROGUE" then return end
-                local headSlotItemId = GetInventoryItemID("player", 1)
-                if headSlotItemId ~= 7997 then return end
+                if classFile == "ROGUE" then
+                    local headSlotItemId = GetInventoryItemID("player", 1)
+                    if headSlotItemId == 7997 then
+                        for _, row in ipairs(AchievementPanel.achievements) do
+                            if not row.completed and (row.id == "DefiasMask" or row.achId == "DefiasMask") then
+                                HCA_MarkRowCompleted(row)
+                                HCA_AchToast_Show(row.Icon:GetTexture(), row.Title:GetText(), row.points, row)
+                            end
+                        end
+                    end
+                end
+                
+                -- Call item tracker functions for dungeon set achievements
+                -- The tracker checks if ALL required items are owned, so we call it for all incomplete sets
+                -- This is efficient because GetItemCount is fast and the tracker only completes when ALL items are owned
                 for _, row in ipairs(AchievementPanel.achievements) do
-                    if not row.completed and (row.id == "DefiasMask" or row.achId == "DefiasMask") then
-                        HCA_MarkRowCompleted(row)
-                        HCA_AchToast_Show(row.Icon:GetTexture(), row.Title:GetText(), row.points, row)
+                    if not row.completed and row._def and row._def.isDungeonSet then
+                        local achId = row.achId or row.id
+                        if achId then
+                            -- Check if this achievement has an item tracker function (dungeon sets)
+                            local trackerFn = _G[achId]
+                            if type(trackerFn) == "function" then
+                                -- The tracker function checks all required items and only returns true
+                                -- when ALL items are owned, so it's safe to call on every inventory change
+                                local ok, shouldComplete = pcall(trackerFn)
+                                if ok and shouldComplete == true then
+                                    HCA_MarkRowCompleted(row)
+                                    HCA_AchToast_Show(row.Icon:GetTexture(), row.Title:GetText(), row.points, row)
+                                end
+                            end
+                        end
                     end
                 end
             elseif event == "CHAT_MSG_TEXT_EMOTE" then

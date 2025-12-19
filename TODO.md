@@ -6,17 +6,7 @@
 - [ ] Hardcore Autopsy Journal
 - [ ] Show achievement locations on map
 - [ ] Achievements for reputations?
-  - [ ] Introduce tabs to split out profs, reps, dungeons, etc?
-- [ ] Achievements for gear sets
-
-- [ ] Arc Challenges
-  - [ ] Unholy
-  - [ ] Bloodbath
-  - [ ] Assassin
-  - [ ] etc.
-
-- [ ] New Achievements
-  - [ ] No profession achievement for all points
+  - [ ] Introduce tabs to split out profs, reps, dungeons, etc? Perhaps just filter out like we do variations
 
 - [ ] Bugs
   - [ ] 

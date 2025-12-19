@@ -35,9 +35,11 @@ HardcoreAchievements.lua
 
 Achievements\Common.lua
 Achievements\DungeonCommon.lua
+Achievements\DungeonSetCommon.lua
 Achievements\ProfessionCatalog.lua
 Achievements\Catalog.lua
 Achievements\DungeonCatalog.lua
+Achievements\DungeonSetCatalog.lua
 Achievements\FourCandles.lua
 
 Utils\Embed_UltraHardcore.lua

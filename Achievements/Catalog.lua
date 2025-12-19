@@ -814,6 +814,18 @@ local Achievements = {
     staticPoints = true,
     hiddenUntilComplete = true,
 }, {
+    achId = "Secret97",
+    title = "Scarlet Crusade",
+    level = nil,
+    tooltip = "You have completed the secret achievement: |cffff8000Obtain the Tabard of the Scarlet Crusade|r",
+    icon = 133770,
+    points = 0,
+    customIsCompleted = function() return GetItemCount(23192, true) > 0 end,
+    -- Secret presentation before completion
+    secret = true,
+    staticPoints = true,
+    hiddenUntilComplete = true,
+}, {
     achId = "Secret98",
     title = "Legendary Resonance",
     level = nil,
