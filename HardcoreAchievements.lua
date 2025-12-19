@@ -426,7 +426,8 @@ function HCA_AchievementCount()
             -- Same logic applies to dungeon set achievements
             local isVariation = row._def and row._def.isVariation
             local isDungeonSet = row._def and row._def.isDungeonSet
-            local shouldCount = not hiddenByProfession and not hiddenUntilComplete and (not isVariation or row.completed) and (not isDungeonSet or row.completed)
+            local isReputation = row._def and row._def.isReputation
+            local shouldCount = not hiddenByProfession and not hiddenUntilComplete and (not isVariation or row.completed) and (not isDungeonSet or row.completed) and (not isReputation or row.completed)
             
             if shouldCount then
                 total = total + 1
@@ -2223,7 +2224,7 @@ local function ApplyFilter()
             end
             
             if shouldCheckCheckbox then
-                local checkboxStates = { false, false, false, false }
+                local checkboxStates = { false, false, false, false, false }
                 if type(HardcoreAchievements_GetCharDB) == "function" then
                     local _, cdb = HardcoreAchievements_GetCharDB()
                     if cdb and cdb.settings and cdb.settings.filterCheckboxes then
@@ -2234,6 +2235,7 @@ local function ApplyFilter()
                                 states[2] == true,  -- Duo
                                 states[3] == true,  -- Solo
                                 states[4] == true,  -- Dungeon Sets
+                                states[5] == true,  -- Reputations
                             }
                         end
                     end
@@ -2241,6 +2243,42 @@ local function ApplyFilter()
                 
                 -- Check if "Show Dungeon Sets" checkbox (index 4) is enabled
                 if not checkboxStates[4] then
+                    shouldShow = false
+                end
+            end
+        end
+        
+        -- Hide/show reputation achievements based on checkbox state
+        -- Completed reputation achievements always show when "all" or "completed" filter is selected
+        if row._def and row._def.isReputation then
+            local isCompleted = row.completed == true
+            local shouldCheckCheckbox = true
+            
+            if isCompleted and (currentFilter == "all" or currentFilter == "completed") then
+                -- Completed reputation achievements always show with these filters, skip checkbox check
+                shouldCheckCheckbox = false
+            end
+            
+            if shouldCheckCheckbox then
+                local checkboxStates = { false, false, false, false, false }
+                if type(HardcoreAchievements_GetCharDB) == "function" then
+                    local _, cdb = HardcoreAchievements_GetCharDB()
+                    if cdb and cdb.settings and cdb.settings.filterCheckboxes then
+                        local states = cdb.settings.filterCheckboxes
+                        if type(states) == "table" then
+                            checkboxStates = {
+                                states[1] == true,  -- Trio
+                                states[2] == true,  -- Duo
+                                states[3] == true,  -- Solo
+                                states[4] == true,  -- Dungeon Sets
+                                states[5] == true,  -- Reputations
+                            }
+                        end
+                    end
+                end
+                
+                -- Check if "Show Reputations" checkbox (index 5) is enabled
+                if not checkboxStates[5] then
                     shouldShow = false
                 end
             end
@@ -2266,7 +2304,7 @@ AchievementPanel.filterDropdown = filterDropdown
 FilterDropdown:InitializeDropdown(filterDropdown, {
     currentFilter = "all",
     -- checkboxStates will be loaded from database automatically
-    checkboxLabels = { "Show Dungeon Trios", "Show Dungeon Duos", "Show Dungeon Solos", "Show Dungeon Sets" },
+    checkboxLabels = { "Show Dungeon Trios", "Show Dungeon Duos", "Show Dungeon Solos", "Show Dungeon Sets", "Show Reputations" },
     onFilterChange = function(filterValue)
         ApplyFilter()
     end,
@@ -3021,6 +3059,7 @@ do
         AchievementPanel._achEvt:RegisterEvent("PLAYER_DEAD")
         AchievementPanel._achEvt:RegisterEvent("PLAYER_REGEN_ENABLED")
         AchievementPanel._achEvt:RegisterEvent("PLAYER_ENTERING_WORLD")
+        AchievementPanel._achEvt:RegisterEvent("UPDATE_FACTION")
         AchievementPanel._achEvt:SetScript("OnEvent", function(_, event, ...)
             -- Clean up external player tracking on zone loads
             if event == "PLAYER_ENTERING_WORLD" then
@@ -3363,6 +3402,25 @@ do
                         if not row.completed and row.id == "Secret99" then
                             HCA_MarkRowCompleted(row)
                             HCA_AchToast_Show(row.Icon:GetTexture(), row.Title:GetText(), row.points, row)
+                        end
+                    end
+                end
+            elseif event == "UPDATE_FACTION" then
+                -- Handle reputation achievement completion
+                for _, row in ipairs(AchievementPanel.achievements) do
+                    if not row.completed and row._def and row._def.isReputation then
+                        local achId = row.achId or row.id
+                        if achId then
+                            -- Check if this achievement has a reputation tracker function
+                            local trackerFn = _G[achId]
+                            if type(trackerFn) == "function" then
+                                -- The tracker function checks if the player is exalted with the faction
+                                local ok, shouldComplete = pcall(trackerFn)
+                                if ok and shouldComplete == true then
+                                    HCA_MarkRowCompleted(row)
+                                    HCA_AchToast_Show(row.Icon:GetTexture(), row.Title:GetText(), row.points, row)
+                                end
+                            end
                         end
                     end
                 end

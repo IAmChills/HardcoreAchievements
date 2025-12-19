@@ -1428,7 +1428,7 @@ function EMBED:BuildModernRows(srcRows)
         end
         
         if shouldCheckCheckbox then
-          local checkboxStates = { false, false, false, false }
+          local checkboxStates = { false, false, false, false, false }
           if type(HardcoreAchievements_GetCharDB) == "function" then
             local _, cdb = HardcoreAchievements_GetCharDB()
             if cdb and cdb.settings and cdb.settings.filterCheckboxes then
@@ -1439,6 +1439,7 @@ function EMBED:BuildModernRows(srcRows)
                   states[2] == true,  -- Duo
                   states[3] == true,  -- Solo
                   states[4] == true,  -- Dungeon Sets
+                  states[5] == true,  -- Reputations
                 }
               end
             end
@@ -1446,6 +1447,42 @@ function EMBED:BuildModernRows(srcRows)
           
           -- Check if "Show Dungeon Sets" checkbox (index 4) is enabled
           if not checkboxStates[4] then
+            shouldShow = false
+          end
+        end
+      end
+      
+      -- Hide/show reputation achievements based on checkbox state
+      -- Completed reputation achievements always show when "all" or "completed" filter is selected
+      if srow._def and srow._def.isReputation then
+        local isCompleted = data.completed == true
+        local shouldCheckCheckbox = true
+        
+        if isCompleted and (currentFilter == "all" or currentFilter == "completed") then
+          -- Completed reputation achievements always show with these filters, skip checkbox check
+          shouldCheckCheckbox = false
+        end
+        
+        if shouldCheckCheckbox then
+          local checkboxStates = { false, false, false, false, false }
+          if type(HardcoreAchievements_GetCharDB) == "function" then
+            local _, cdb = HardcoreAchievements_GetCharDB()
+            if cdb and cdb.settings and cdb.settings.filterCheckboxes then
+              local states = cdb.settings.filterCheckboxes
+              if type(states) == "table" then
+                checkboxStates = {
+                  states[1] == true,  -- Trio
+                  states[2] == true,  -- Duo
+                  states[3] == true,  -- Solo
+                  states[4] == true,  -- Dungeon Sets
+                  states[5] == true,  -- Reputations
+                }
+              end
+            end
+          end
+          
+          -- Check if "Show Reputations" checkbox (index 5) is enabled
+          if not checkboxStates[5] then
             shouldShow = false
           end
         end
@@ -2129,7 +2166,7 @@ local function BuildEmbedIfNeeded()
     FilterDropdown:InitializeDropdown(filterDropdown, {
       currentFilter = currentFilter,
       -- checkboxStates will be loaded from database automatically
-      checkboxLabels = { "Show Dungeon Trios", "Show Dungeon Duos", "Show Dungeon Solos", "Show Dungeon Sets" },
+      checkboxLabels = { "Show Dungeon Trios", "Show Dungeon Duos", "Show Dungeon Solos", "Show Dungeon Sets", "Show Reputations" },
       onFilterChange = function(filterValue)
         currentFilter = filterValue
         ApplyFilter()

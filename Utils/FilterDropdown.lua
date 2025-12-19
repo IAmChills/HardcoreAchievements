@@ -8,19 +8,21 @@ local function GetCheckboxStatesFromDB()
     if type(HardcoreAchievements_GetCharDB) == "function" then
         local _, cdb = HardcoreAchievements_GetCharDB()
         if cdb and cdb.settings and cdb.settings.filterCheckboxes then
-            -- Ensure we have a table with 3 boolean values
+            -- Ensure we have a table with up to 5 boolean values
             local states = cdb.settings.filterCheckboxes
             if type(states) == "table" then
                 return {
                     states[1] == true,
                     states[2] == true,
                     states[3] == true,
+                    states[4] == true,
+                    states[5] == true,
                 }
             end
         end
     end
     -- Default: all unchecked
-    return { false, false, false }
+    return { false, false, false, false, false }
 end
 
 -- Helper function to save checkbox states to character database
@@ -33,6 +35,8 @@ local function SaveCheckboxStatesToDB(checkboxStates)
                 checkboxStates[1] == true,
                 checkboxStates[2] == true,
                 checkboxStates[3] == true,
+                checkboxStates[4] == true,
+                checkboxStates[5] == true,
             }
         end
     end
