@@ -423,8 +423,11 @@ function HCA_AchievementCount()
             -- Exclude variation achievements from the count UNLESS they are completed
             -- This prevents incomplete variations from inflating the total, but includes
             -- completed variations so the completed count doesn't exceed the total
+            -- Same logic applies to dungeon set achievements
             local isVariation = row._def and row._def.isVariation
-            local shouldCount = not hiddenByProfession and not hiddenUntilComplete and (not isVariation or row.completed)
+            local isDungeonSet = row._def and row._def.isDungeonSet
+            local isReputation = row._def and row._def.isReputation
+            local shouldCount = not hiddenByProfession and not hiddenUntilComplete and (not isVariation or row.completed) and (not isDungeonSet or row.completed) and (not isReputation or row.completed)
             
             if shouldCount then
                 total = total + 1
@@ -758,7 +761,9 @@ function HCA_MarkRowCompleted(row)
             usePointsAtKill = true
             -- Add self-found bonus if applicable (pointsAtKill doesn't include it)
             local isSelfFound = _G.IsSelfFound and _G.IsSelfFound() or false
-            if isSelfFound and not row.isSecretAchievement then
+            local isDungeonSet = row._def and row._def.isDungeonSet
+            local isReputation = row._def and row._def.isReputation
+            if isSelfFound and not row.isSecretAchievement and not isDungeonSet and not isReputation then
                 finalPoints = finalPoints + HCA_SELF_FOUND_BONUS
                 -- Mark that we've already applied self-found bonus so ApplySelfFoundBonus doesn't add it again
                 rec.SFMod = true
@@ -832,7 +837,7 @@ function HCA_MarkRowCompleted(row)
     SendChatMessage(broadcastMessage, "EMOTE")
 
 	-- Announce in guild chat (with hyperlink) when enabled
-	if HardcoreAchievements_ShouldAnnounceInGuildChat() and IsInGuild() then
+	if type(HardcoreAchievements_ShouldAnnounceInGuildChat) == "function" and HardcoreAchievements_ShouldAnnounceInGuildChat() and IsInGuild() then
         local link = nil
         local achIdForLink = row.achId or row.id
         if achIdForLink and _G.HCA_GetAchievementHyperlink then
@@ -1151,7 +1156,9 @@ function HCA_AchToast_Show(iconTex, title, pts, achIdOrRow)
             -- Add self-found bonus if applicable (pointsAtKill doesn't include it)
             local isSelfFound = _G.IsSelfFound and _G.IsSelfFound() or false
             local isSecretAchievement = row and row.isSecretAchievement or false
-            if isSelfFound and not isSecretAchievement then
+            local isDungeonSet = row and row._def and row._def.isDungeonSet
+            local isReputation = row and row._def and row._def.isReputation
+            if isSelfFound and not isSecretAchievement and not isDungeonSet and not isReputation then
                 finalPoints = finalPoints + HCA_SELF_FOUND_BONUS
             end
         end
@@ -1256,10 +1263,22 @@ local function ApplySelfFoundBonus()
         return false
     end
 
+    local function isDungeonSetOrReputation(achId)
+        if not AchievementPanel or not AchievementPanel.achievements then return false end
+        for _, row in ipairs(AchievementPanel.achievements) do
+            if row.id == achId and row._def then
+                if row._def.isDungeonSet or row._def.isReputation then
+                    return true
+                end
+            end
+        end
+        return false
+    end
+
     local updatedCount = 0
     for achId, ach in pairs(charData.achievements) do
         if ach.completed and not ach.SFMod then
-            if isSecretAch(achId) then
+            if isSecretAch(achId) or isDungeonSetOrReputation(achId) then
                 ach.SFMod = true -- mark so we don't try again later
             else
             ach.points = (ach.points or 0) + HCA_SELF_FOUND_BONUS
@@ -2209,6 +2228,78 @@ local function ApplyFilter()
             end
         end
         
+        -- Hide/show dungeon set achievements based on checkbox state
+        -- Completed dungeon sets always show when "all" or "completed" filter is selected
+        if row._def and row._def.isDungeonSet then
+            local isCompleted = row.completed == true
+            local shouldCheckCheckbox = true
+            
+            if isCompleted and (currentFilter == "all" or currentFilter == "completed") then
+                -- Completed dungeon sets always show with these filters, skip checkbox check
+                shouldCheckCheckbox = false
+            end
+            
+            if shouldCheckCheckbox then
+                local checkboxStates = { false, false, false, false, false }
+                if type(HardcoreAchievements_GetCharDB) == "function" then
+                    local _, cdb = HardcoreAchievements_GetCharDB()
+                    if cdb and cdb.settings and cdb.settings.filterCheckboxes then
+                        local states = cdb.settings.filterCheckboxes
+                        if type(states) == "table" then
+                            checkboxStates = {
+                                states[1] == true,  -- Trio
+                                states[2] == true,  -- Duo
+                                states[3] == true,  -- Solo
+                                states[4] == true,  -- Dungeon Sets
+                                states[5] == true,  -- Reputations
+                            }
+                        end
+                    end
+                end
+                
+                -- Check if "Show Dungeon Sets" checkbox (index 4) is enabled
+                if not checkboxStates[4] then
+                    shouldShow = false
+                end
+            end
+        end
+        
+        -- Hide/show reputation achievements based on checkbox state
+        -- Completed reputation achievements always show when "all" or "completed" filter is selected
+        if row._def and row._def.isReputation then
+            local isCompleted = row.completed == true
+            local shouldCheckCheckbox = true
+            
+            if isCompleted and (currentFilter == "all" or currentFilter == "completed") then
+                -- Completed reputation achievements always show with these filters, skip checkbox check
+                shouldCheckCheckbox = false
+            end
+            
+            if shouldCheckCheckbox then
+                local checkboxStates = { false, false, false, false, false }
+                if type(HardcoreAchievements_GetCharDB) == "function" then
+                    local _, cdb = HardcoreAchievements_GetCharDB()
+                    if cdb and cdb.settings and cdb.settings.filterCheckboxes then
+                        local states = cdb.settings.filterCheckboxes
+                        if type(states) == "table" then
+                            checkboxStates = {
+                                states[1] == true,  -- Trio
+                                states[2] == true,  -- Duo
+                                states[3] == true,  -- Solo
+                                states[4] == true,  -- Dungeon Sets
+                                states[5] == true,  -- Reputations
+                            }
+                        end
+                    end
+                end
+                
+                -- Check if "Show Reputations" checkbox (index 5) is enabled
+                if not checkboxStates[5] then
+                    shouldShow = false
+                end
+            end
+        end
+        
         if shouldShow then
             row:Show()
         else
@@ -2229,7 +2320,7 @@ AchievementPanel.filterDropdown = filterDropdown
 FilterDropdown:InitializeDropdown(filterDropdown, {
     currentFilter = "all",
     -- checkboxStates will be loaded from database automatically
-    checkboxLabels = { "Show Dungeon Trios", "Show Dungeon Duos", "Show Dungeon Solos" },
+    checkboxLabels = { "Show Dungeon Trios", "Show Dungeon Duos", "Show Dungeon Solos", "Show Dungeon Sets", "Show Reputations" },
     onFilterChange = function(filterValue)
         ApplyFilter()
     end,
@@ -2769,6 +2860,11 @@ do
         -- externalPlayersByNPC[destGUID] = { [playerGUID] = { lastSeen = time, threat = nil } }
         local externalPlayersByNPC = {}
         local EXTERNAL_PLAYER_TIMEOUT = 15  -- seconds to remember external players after last damage event
+        
+        -- Cache recent level-ups to handle event ordering issues with quest turn-ins
+        -- Stores the previous level when player levels up, so we can use it if a quest turn-in happens shortly after
+        local recentLevelUpCache = nil  -- { previousLevel = number, timestamp = number }
+        local LEVEL_UP_WINDOW = 1.0  -- seconds - window to consider a level-up as quest-related
 
         -- Dedicated support for the Rats achievement: NPC IDs that qualify
         local RAT_NPC_IDS = {
@@ -2984,6 +3080,7 @@ do
         AchievementPanel._achEvt:RegisterEvent("PLAYER_DEAD")
         AchievementPanel._achEvt:RegisterEvent("PLAYER_REGEN_ENABLED")
         AchievementPanel._achEvt:RegisterEvent("PLAYER_ENTERING_WORLD")
+        AchievementPanel._achEvt:RegisterEvent("UPDATE_FACTION")
         AchievementPanel._achEvt:SetScript("OnEvent", function(_, event, ...)
             -- Clean up external player tracking on zone loads
             if event == "PLAYER_ENTERING_WORLD" then
@@ -3212,25 +3309,47 @@ do
             elseif event == "QUEST_TURNED_IN" then
                 local questID = select(1, ...)
                 questID = questID and tonumber(questID) or nil
+                local currentTime = GetTime()
+                
                 for _, row in ipairs(AchievementPanel.achievements) do
                     if not row.completed and type(row.questTracker) == "function" then
+                        -- Before calling questTracker, ensure we have a level stored for validation
+                        -- Check if player just leveled up within the window - if so, use the previous level
+                        if HardcoreAchievements_SetProgress then
+                            local progressTable = HardcoreAchievements_GetProgress and HardcoreAchievements_GetProgress(row.id)
+                            -- Only set levelAtTurnIn if we don't already have levelAtKill (for achievements without kill requirements)
+                            if not (progressTable and progressTable.levelAtKill) then
+                                local currentLevel = UnitLevel("player") or 1
+                                local levelToStore = currentLevel
+                                
+                                -- Check if there was a recent level-up within the time window
+                                if recentLevelUpCache and (currentTime - recentLevelUpCache.timestamp) <= LEVEL_UP_WINDOW then
+                                    -- Player leveled up recently - use the previous level as the "true" turn-in level
+                                    -- This handles the case where the quest XP causes the level-up
+                                    levelToStore = recentLevelUpCache.previousLevel
+                                else
+                                    -- No recent level-up, or it was outside the window - check if levelAtAccept might be better
+                                    -- Only use levelAtAccept if current level matches (player hasn't leveled since accept)
+                                    local levelAtAccept = progressTable and progressTable.levelAtAccept
+                                    if levelAtAccept and currentLevel == levelAtAccept then
+                                        levelToStore = levelAtAccept
+                                    end
+                                end
+                                
+                                HardcoreAchievements_SetProgress(row.id, "levelAtTurnIn", levelToStore)
+                            end
+                        end
+                        
                         local questMatched = row.questTracker(questID)
                         if questMatched then
-                            -- For achievements that require kills, levelAtKill should already be stored in progress
-                            -- Only set levelAtTurnIn as a fallback if we don't have levelAtKill
-                            if HardcoreAchievements_SetProgress then
-                                local progressTable = HardcoreAchievements_GetProgress and HardcoreAchievements_GetProgress(row.id)
-                                -- Only set levelAtTurnIn if we don't have levelAtKill (for achievements without kill requirements)
-                                if not (progressTable and progressTable.levelAtKill) then
-                                    local currentLevel = UnitLevel("player") or 1
-                                    HardcoreAchievements_SetProgress(row.id, "levelAtTurnIn", currentLevel)
-                                end
-                            end
                             HCA_MarkRowCompleted(row)
                             HCA_AchToast_Show(row.Icon:GetTexture(), row.Title:GetText(), row.points, row)
                         end
                     end
                 end
+                
+                -- Clear the level-up cache after processing quest turn-in
+                recentLevelUpCache = nil
             elseif event == "UNIT_SPELLCAST_SENT" then
                 -- Classic signature: unit, targetName, castGUID, spellId
                 local unit, targetName, castGUID, spellId = ...
@@ -3260,14 +3379,40 @@ do
             elseif event == "UNIT_INVENTORY_CHANGED" then
                 local unit = ...
                 if unit ~= "player" then return end
+                
+                -- Handle DefiasMask achievement (specific item check)
                 local _, classFile = UnitClass("player")
-                if classFile ~= "ROGUE" then return end
-                local headSlotItemId = GetInventoryItemID("player", 1)
-                if headSlotItemId ~= 7997 then return end
+                if classFile == "ROGUE" then
+                    local headSlotItemId = GetInventoryItemID("player", 1)
+                    if headSlotItemId == 7997 then
+                        for _, row in ipairs(AchievementPanel.achievements) do
+                            if not row.completed and (row.id == "DefiasMask" or row.achId == "DefiasMask") then
+                                HCA_MarkRowCompleted(row)
+                                HCA_AchToast_Show(row.Icon:GetTexture(), row.Title:GetText(), row.points, row)
+                            end
+                        end
+                    end
+                end
+                
+                -- Call item tracker functions for dungeon set achievements
+                -- The tracker checks if ALL required items are owned, so we call it for all incomplete sets
+                -- This is efficient because GetItemCount is fast and the tracker only completes when ALL items are owned
                 for _, row in ipairs(AchievementPanel.achievements) do
-                    if not row.completed and (row.id == "DefiasMask" or row.achId == "DefiasMask") then
-                        HCA_MarkRowCompleted(row)
-                        HCA_AchToast_Show(row.Icon:GetTexture(), row.Title:GetText(), row.points, row)
+                    if not row.completed and row._def and row._def.isDungeonSet then
+                        local achId = row.achId or row.id
+                        if achId then
+                            -- Check if this achievement has an item tracker function (dungeon sets)
+                            local trackerFn = _G[achId]
+                            if type(trackerFn) == "function" then
+                                -- The tracker function checks all required items and only returns true
+                                -- when ALL items are owned, so it's safe to call on every inventory change
+                                local ok, shouldComplete = pcall(trackerFn)
+                                if ok and shouldComplete == true then
+                                    HCA_MarkRowCompleted(row)
+                                    HCA_AchToast_Show(row.Icon:GetTexture(), row.Title:GetText(), row.points, row)
+                                end
+                            end
+                        end
                     end
                 end
             elseif event == "CHAT_MSG_TEXT_EMOTE" then
@@ -3283,7 +3428,18 @@ do
                     end
                 end
             elseif event == "PLAYER_LEVEL_CHANGED" then
+                -- arg1 is previous level, arg2 is new level
+                local previousLevel = tonumber(select(1, ...))
                 local newLevel = tonumber(select(2, ...))
+                
+                -- Cache the level-up info with timestamp for quest turn-in validation
+                if previousLevel and newLevel then
+                    recentLevelUpCache = {
+                        previousLevel = previousLevel,
+                        timestamp = GetTime()
+                    }
+                end
+                
                 EvaluateCustomCompletions(newLevel)
                 RefreshOutleveledAll()
             elseif event == "CHAT_MSG_LOOT" then
@@ -3300,6 +3456,25 @@ do
                         if not row.completed and row.id == "Secret99" then
                             HCA_MarkRowCompleted(row)
                             HCA_AchToast_Show(row.Icon:GetTexture(), row.Title:GetText(), row.points, row)
+                        end
+                    end
+                end
+            elseif event == "UPDATE_FACTION" then
+                -- Handle reputation achievement completion
+                for _, row in ipairs(AchievementPanel.achievements) do
+                    if not row.completed and row._def and row._def.isReputation then
+                        local achId = row.achId or row.id
+                        if achId then
+                            -- Check if this achievement has a reputation tracker function
+                            local trackerFn = _G[achId]
+                            if type(trackerFn) == "function" then
+                                -- The tracker function checks if the player is exalted with the faction
+                                local ok, shouldComplete = pcall(trackerFn)
+                                if ok and shouldComplete == true then
+                                    HCA_MarkRowCompleted(row)
+                                    HCA_AchToast_Show(row.Icon:GetTexture(), row.Title:GetText(), row.points, row)
+                                end
+                            end
                         end
                     end
                 end

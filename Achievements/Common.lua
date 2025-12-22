@@ -185,7 +185,9 @@ function M.registerQuestAchievement(cfg)
                                     pointsToStore = basePoints * 2
                                     -- Update points display to show doubled value (including self-found bonus for display)
                                     local displayPoints = pointsToStore
-                                    if isSelfFound and not row.isSecretAchievement then
+                                    local isDungeonSet = row._def and row._def.isDungeonSet
+                                    local isReputation = row._def and row._def.isReputation
+                                    if isSelfFound and not row.isSecretAchievement and not isDungeonSet and not isReputation then
                                         displayPoints = displayPoints + HCA_SELF_FOUND_BONUS
                                     end
                                     row.points = displayPoints
@@ -943,7 +945,9 @@ function M.registerQuestAchievement(cfg)
                             if effectiveSoloKill then
                                 -- Update points display to show doubled value (including self-found bonus for display)
                                 local displayPoints = effectivePoints
-                                if isSelfFound and not row.isSecretAchievement then
+                                local isDungeonSet = row._def and row._def.isDungeonSet
+                                local isReputation = row._def and row._def.isReputation
+                                if isSelfFound and not row.isSecretAchievement and not isDungeonSet and not isReputation then
                                     displayPoints = displayPoints + HCA_SELF_FOUND_BONUS
                                 end
                                 row.points = displayPoints
@@ -1171,7 +1175,9 @@ function M.registerQuestAchievement(cfg)
                                 pointsToStore = basePoints * 2
                                 -- Update points display to show doubled value (including self-found bonus for display)
                                 local displayPoints = pointsToStore
-                                if isSelfFound and not row.isSecretAchievement then
+                                local isDungeonSet = row._def and row._def.isDungeonSet
+                                local isReputation = row._def and row._def.isReputation
+                                if isSelfFound and not row.isSecretAchievement and not isDungeonSet and not isReputation then
                                     displayPoints = displayPoints + HCA_SELF_FOUND_BONUS
                                 end
                                 row.points = displayPoints
@@ -1228,7 +1234,9 @@ function M.registerQuestAchievement(cfg)
                                 if progressTable and progressTable.pointsAtKill then
                                     local storedPoints = tonumber(progressTable.pointsAtKill) or row.points
                                     local isSelfFound = _G.IsSelfFound and _G.IsSelfFound() or false
-                                    if isSelfFound and not row.isSecretAchievement then
+                                    local isDungeonSet = row._def and row._def.isDungeonSet
+                                    local isReputation = row._def and row._def.isReputation
+                                    if isSelfFound and not row.isSecretAchievement and not isDungeonSet and not isReputation then
                                         storedPoints = storedPoints + HCA_SELF_FOUND_BONUS
                                     end
                                     row.points = storedPoints

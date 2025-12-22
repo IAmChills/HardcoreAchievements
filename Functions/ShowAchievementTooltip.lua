@@ -180,8 +180,10 @@ function HCA_ShowAchievementTooltip(frame, data)
     -- Check if this is a dungeon achievement (has requiredKills) and show boss requirements
     local requiredKills = nil
     local bossOrder = nil
+    local requiredItems = nil
+    local itemOrder = nil
     
-    -- Try to get requiredKills from the row object or data table
+    -- Try to get requiredKills and requiredItems from the row object or data table
     if type(data) == "table" then
         if data.Title and data.Title.GetText then
             -- It's a row object
@@ -189,11 +191,27 @@ function HCA_ShowAchievementTooltip(frame, data)
             if not requiredKills and data.sourceRow and data.sourceRow.requiredKills then
                 requiredKills = data.sourceRow.requiredKills
             end
+            requiredItems = data.requiredItems
+            if not requiredItems and data.sourceRow and data.sourceRow.requiredItems then
+                requiredItems = data.sourceRow.requiredItems
+            end
+            itemOrder = data.itemOrder
+            if not itemOrder and data.sourceRow and data.sourceRow.itemOrder then
+                itemOrder = data.sourceRow.itemOrder
+            end
         else
             -- It's a data table
             requiredKills = data.requiredKills
             if not requiredKills and data.sourceRow and data.sourceRow.requiredKills then
                 requiredKills = data.sourceRow.requiredKills
+            end
+            requiredItems = data.requiredItems
+            if not requiredItems and data.sourceRow and data.sourceRow.requiredItems then
+                requiredItems = data.sourceRow.requiredItems
+            end
+            itemOrder = data.itemOrder
+            if not itemOrder and data.sourceRow and data.sourceRow.itemOrder then
+                itemOrder = data.sourceRow.itemOrder
             end
         end
     end
@@ -208,6 +226,21 @@ function HCA_ShowAchievementTooltip(frame, data)
                 requiredKills = achDef.requiredKills
             end
         end
+        -- Check for requiredItems in HCA_AchievementDefs (for dungeon sets)
+        if achDef and achDef.requiredItems then
+            requiredItems = achDef.requiredItems
+        end
+        if achDef and achDef.itemOrder then
+            itemOrder = achDef.itemOrder
+        end
+    end
+    
+    -- Also check def for requiredItems
+    if def and def.requiredItems then
+        requiredItems = def.requiredItems
+    end
+    if def and def.itemOrder then
+        itemOrder = def.itemOrder
     end
     
     -- If we have requiredKills, show boss requirements
@@ -276,6 +309,32 @@ function HCA_ShowAchievementTooltip(frame, data)
         else
             for npcId, need in pairs(requiredKills) do
                 processBossEntry(npcId, need)
+            end
+        end
+    end
+    
+    -- If we have requiredItems, show item requirements (for dungeon sets)
+    if requiredItems and type(requiredItems) == "table" and #requiredItems > 0 then
+        GameTooltip:AddLine("\nRequired Items:", 0, 1, 0) -- Green header
+        
+        -- Use itemOrder if available, otherwise use requiredItems order
+        local itemsToShow = itemOrder or requiredItems
+        
+        for _, itemId in ipairs(itemsToShow) do
+            local itemName, itemLink = GetItemInfo(itemId)
+            if not itemName then
+                -- Item not cached, use fallback
+                itemName = "Item " .. tostring(itemId)
+            end
+            
+            -- Check if player has the item
+            local hasItem = GetItemCount(itemId, true) > 0
+            local done = achievementCompleted or hasItem
+            
+            if done then
+                GameTooltip:AddLine(itemName or itemLink or ("Item " .. tostring(itemId)), 1, 1, 1) -- White for completed
+            else
+                GameTooltip:AddLine(itemName or itemLink or ("Item " .. tostring(itemId)), 0.5, 0.5, 0.5) -- Gray for not completed
             end
         end
     end

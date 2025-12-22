@@ -1,7 +1,7 @@
 ﻿## Interface: 11508
 ## Title: HardcoreAchievements
 ## Author: Chills
-## Version: 1.3.9
+## Version: 1.4.0
 ## Notes: Hardcore achievements system
 ## OptionalDeps: Ace3, CallbackHandler-1.0, HereBeDragons, LibDataBroker-1.1, LibDBIcon-1.0, LibStub, LibUIDropDownMenu
 ## SavedVariables: HardcoreAchievementsDB
@@ -35,9 +35,13 @@ HardcoreAchievements.lua
 
 Achievements\Common.lua
 Achievements\DungeonCommon.lua
+Achievements\DungeonSetCommon.lua
+Achievements\ReputationCommon.lua
 Achievements\ProfessionCatalog.lua
 Achievements\Catalog.lua
 Achievements\DungeonCatalog.lua
+Achievements\DungeonSetCatalog.lua
+Achievements\ReputationCatalog.lua
 Achievements\FourCandles.lua
 
 Utils\Embed_UltraHardcore.lua
