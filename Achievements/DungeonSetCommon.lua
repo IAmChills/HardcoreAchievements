@@ -517,10 +517,26 @@ function DungeonSetCommon.registerDungeonSetAchievement(def)
     end
     
     -- Class: use class file tokens ("MAGE","WARRIOR",...)
+    -- Support both single class (string) and multiple classes (array)
     if class then
       local _, classFile = UnitClass("player")
-      if classFile ~= class then
-        return false
+      if type(class) == "table" then
+        -- Array of classes - check if player's class is in the array
+        local found = false
+        for _, allowedClass in ipairs(class) do
+          if classFile == allowedClass then
+            found = true
+            break
+          end
+        end
+        if not found then
+          return false
+        end
+      else
+        -- Single class string
+        if classFile ~= class then
+          return false
+        end
       end
     end
     

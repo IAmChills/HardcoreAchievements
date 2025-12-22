@@ -761,7 +761,9 @@ function HCA_MarkRowCompleted(row)
             usePointsAtKill = true
             -- Add self-found bonus if applicable (pointsAtKill doesn't include it)
             local isSelfFound = _G.IsSelfFound and _G.IsSelfFound() or false
-            if isSelfFound and not row.isSecretAchievement then
+            local isDungeonSet = row._def and row._def.isDungeonSet
+            local isReputation = row._def and row._def.isReputation
+            if isSelfFound and not row.isSecretAchievement and not isDungeonSet and not isReputation then
                 finalPoints = finalPoints + HCA_SELF_FOUND_BONUS
                 -- Mark that we've already applied self-found bonus so ApplySelfFoundBonus doesn't add it again
                 rec.SFMod = true
@@ -835,7 +837,7 @@ function HCA_MarkRowCompleted(row)
     SendChatMessage(broadcastMessage, "EMOTE")
 
 	-- Announce in guild chat (with hyperlink) when enabled
-	if HardcoreAchievements_ShouldAnnounceInGuildChat() and IsInGuild() then
+	if type(HardcoreAchievements_ShouldAnnounceInGuildChat) == "function" and HardcoreAchievements_ShouldAnnounceInGuildChat() and IsInGuild() then
         local link = nil
         local achIdForLink = row.achId or row.id
         if achIdForLink and _G.HCA_GetAchievementHyperlink then
@@ -1154,7 +1156,9 @@ function HCA_AchToast_Show(iconTex, title, pts, achIdOrRow)
             -- Add self-found bonus if applicable (pointsAtKill doesn't include it)
             local isSelfFound = _G.IsSelfFound and _G.IsSelfFound() or false
             local isSecretAchievement = row and row.isSecretAchievement or false
-            if isSelfFound and not isSecretAchievement then
+            local isDungeonSet = row and row._def and row._def.isDungeonSet
+            local isReputation = row and row._def and row._def.isReputation
+            if isSelfFound and not isSecretAchievement and not isDungeonSet and not isReputation then
                 finalPoints = finalPoints + HCA_SELF_FOUND_BONUS
             end
         end
@@ -1259,10 +1263,22 @@ local function ApplySelfFoundBonus()
         return false
     end
 
+    local function isDungeonSetOrReputation(achId)
+        if not AchievementPanel or not AchievementPanel.achievements then return false end
+        for _, row in ipairs(AchievementPanel.achievements) do
+            if row.id == achId and row._def then
+                if row._def.isDungeonSet or row._def.isReputation then
+                    return true
+                end
+            end
+        end
+        return false
+    end
+
     local updatedCount = 0
     for achId, ach in pairs(charData.achievements) do
         if ach.completed and not ach.SFMod then
-            if isSecretAch(achId) then
+            if isSecretAch(achId) or isDungeonSetOrReputation(achId) then
                 ach.SFMod = true -- mark so we don't try again later
             else
             ach.points = (ach.points or 0) + HCA_SELF_FOUND_BONUS

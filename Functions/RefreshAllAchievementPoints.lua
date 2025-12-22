@@ -40,8 +40,10 @@ function RefreshAllAchievementPoints()
                     end
                 end
                 
-                -- Apply self-found bonus (always, except for secret achievements)
-                if isSelfFound and not row.isSecretAchievement then
+                -- Apply self-found bonus (always, except for secret achievements, dungeon sets, and reputation achievements)
+                local isDungeonSet = row._def and row._def.isDungeonSet
+                local isReputation = row._def and row._def.isReputation
+                if isSelfFound and not row.isSecretAchievement and not isDungeonSet and not isReputation then
                     finalPoints = finalPoints + HCA_SELF_FOUND_BONUS
                 end
                 
@@ -64,7 +66,9 @@ function RefreshAllAchievementPoints()
                 if progress and progress.pointsAtKill then
                     finalPoints = tonumber(progress.pointsAtKill) or finalPoints
                     -- Add self-found bonus if applicable (pointsAtKill doesn't include it)
-                    if isSelfFound and not row.isSecretAchievement then
+                    local isDungeonSet = row._def and row._def.isDungeonSet
+                    local isReputation = row._def and row._def.isReputation
+                    if isSelfFound and not row.isSecretAchievement and not isDungeonSet and not isReputation then
                         finalPoints = finalPoints + HCA_SELF_FOUND_BONUS
                     end
                     row.points = finalPoints

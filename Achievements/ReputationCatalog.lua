@@ -79,7 +79,7 @@ local Reputations = {
     title = "Exalted with Booty Bay",
     tooltip = "Reach Exalted reputation with |cff0091e6Booty Bay|r",
     icon = 236681,
-    points = 100,
+    points = 200,
     factionId = 21,
     staticPoints = true,
   }, {
@@ -87,7 +87,7 @@ local Reputations = {
     title = "Exalted with Ratchet",
     tooltip = "Reach Exalted reputation with |cff0091e6Ratchet|r",
     icon = 236681,
-    points = 100,
+    points = 200,
     factionId = 470,
     staticPoints = true,
   }, {
@@ -95,7 +95,7 @@ local Reputations = {
     title = "Exalted with Everlook",
     tooltip = "Reach Exalted reputation with |cff0091e6Everlook|r",
     icon = 236681,
-    points = 100,
+    points = 200,
     factionId = 577,
     staticPoints = true,
   }, {
@@ -103,7 +103,7 @@ local Reputations = {
     title = "Exalted with Gadgetzan",
     tooltip = "Reach Exalted reputation with |cff0091e6Gadgetzan|r",
     icon = 236681,
-    points = 100,
+    points = 200,
     factionId = 369,
     staticPoints = true,
   }, {
@@ -111,7 +111,7 @@ local Reputations = {
     title = "Exalted with Argent Dawn",
     tooltip = "Reach Exalted reputation with |cff0091e6Argent Dawn|r",
     icon = 236681,
-    points = 100,
+    points = 150,
     factionId = 529,
     staticPoints = true,
   }, {
@@ -119,7 +119,7 @@ local Reputations = {
     title = "Exalted with Timbermaw Hold",
     tooltip = "Reach Exalted reputation with |cff0091e6Timbermaw Hold|r",
     icon = 236681,
-    points = 100,
+    points = 200,
     factionId = 576,
     staticPoints = true,
   }, {
@@ -127,7 +127,7 @@ local Reputations = {
     title = "Exalted with Cenarion Circle",
     tooltip = "Reach Exalted reputation with |cff0091e6Cenarion Circle|r",
     icon = 236681,
-    points = 100,
+    points = 150,
     factionId = 609,
     staticPoints = true,
   }, {
@@ -135,7 +135,7 @@ local Reputations = {
     title = "Exalted with Thorium Brotherhood",
     tooltip = "Reach Exalted reputation with |cff0091e6Thorium Brotherhood|r",
     icon = 236681,
-    points = 100,
+    points = 150,
     factionId = 59,
     staticPoints = true,
   }, {
@@ -143,7 +143,7 @@ local Reputations = {
     title = "Exalted with Hydraxian Waterlords",
     tooltip = "Reach Exalted reputation with |cff0091e6Hydraxian Waterlords|r",
     icon = 236681,
-    points = 100,
+    points = 150,
     factionId = 749,
     staticPoints = true,
   }, {
@@ -151,7 +151,7 @@ local Reputations = {
     title = "Exalted with Zandalar Tribe",
     tooltip = "Reach Exalted reputation with |cff0091e6Zandalar Tribe|r",
     icon = 236681,
-    points = 100,
+    points = 150,
     factionId = 270,
     staticPoints = true,
   }, {
@@ -159,7 +159,7 @@ local Reputations = {
     title = "Exalted with Brood of Nozdormu",
     tooltip = "Reach Exalted reputation with |cff0091e6Brood of Nozdormu|r",
     icon = 236681,
-    points = 100,
+    points = 150,
     factionId = 910,
     staticPoints = true,
   },
@@ -170,7 +170,7 @@ local Reputations = {
     title = "Exalted with Bloodsail Buccaneers",
     tooltip = "Reach Exalted reputation with |cff0091e6Bloodsail Buccaneers|r",
     icon = 236681,
-    points = 100,
+    points = 200,
     factionId = 87,
     staticPoints = true,
   },
@@ -181,7 +181,7 @@ local Reputations = {
     title = "Exalted with Ravenholdt |cfffff468[Rogue]|r",
     tooltip = "Reach Exalted reputation with |cff0091e6Ravenholdt|r",
     icon = 236681,
-    points = 100,
+    points = 200,
     factionId = 349,
     staticPoints = true,
     class = "ROGUE",

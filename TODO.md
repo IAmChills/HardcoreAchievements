@@ -5,9 +5,6 @@
 - [ ] Completed at: ## information like Inspection window?
 - [ ] Hardcore Autopsy Journal
 - [ ] Show achievement locations on map
-- [ ] Achievements for reputations?
-  - [ ] Introduce tabs to split out profs, reps, dungeons, etc? Perhaps just filter out like we do variations
-
 - [ ] Bugs
   - [ ] 
 

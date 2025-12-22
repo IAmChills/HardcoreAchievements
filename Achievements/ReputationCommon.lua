@@ -18,11 +18,10 @@ function ReputationCommon.registerReputationAchievement(def)
   -- Check if player has the faction and is exalted
   -- Uses factionId to check standing via C_Reputation.GetFactionDataByID()
   local function IsExalted()
-    if C_Reputation and C_Reputation.GetFactionDataByID then
-      local factionData = C_Reputation.GetFactionDataByID(factionId)
-      if factionData then
-        -- factionData[4] is the reaction/standing (8 = Exalted)
-        if factionData[4] == 8 then
+    if GetFactionInfoByID then
+      local standing = select(4, GetFactionInfoByID(factionId))
+      if standing then
+        if standing == 8 then
           return true
         end
         return false -- Faction exists but not exalted
@@ -110,6 +109,12 @@ function ReputationCommon.registerReputationAchievement(def)
   
   -- Check if achievement should be completed (no progress saving - just check directly)
   local function CheckCompletion()
+    -- First check database to see if achievement was previously completed
+    local _, cdb = HardcoreAchievements_GetCharDB and HardcoreAchievements_GetCharDB() or (function() return nil, nil end)()
+    if cdb and cdb.achievements and cdb.achievements[achId] and cdb.achievements[achId].completed then
+      return true
+    end
+    
     -- Check if row is already marked as completed
     local row = _G[rowVarName]
     if row and row.completed then
@@ -128,10 +133,18 @@ function ReputationCommon.registerReputationAchievement(def)
   local function ReputationTracker()
     -- Check if achievement should be completed
     if CheckCompletion() then
+      -- Check if it was already completed in database (to avoid showing toast on login)
+      local _, cdb = HardcoreAchievements_GetCharDB and HardcoreAchievements_GetCharDB() or (function() return nil, nil end)()
+      local wasAlreadyCompleted = cdb and cdb.achievements and cdb.achievements[achId] and cdb.achievements[achId].completed
+      
       -- Mark achievement as completed in the row if it exists
       local row = _G[rowVarName]
       if row and _G.HCA_MarkRowCompleted then
         _G.HCA_MarkRowCompleted(row)
+        -- Only show toast if this is a new completion (not loading from database)
+        if not wasAlreadyCompleted and _G.HCA_AchToast_Show then
+          _G.HCA_AchToast_Show(row.Icon:GetTexture(), row.Title:GetText(), row.points, row)
+        end
       end
       UpdateTooltip()
       return true
@@ -196,10 +209,18 @@ function ReputationCommon.registerReputationAchievement(def)
     -- Store faction ID on the row for easy access
     _G[rowVarName].factionId = factionId
     
-    -- Check completion status on registration
-    if CheckCompletion() then
+    -- Load completion status from database on registration
+    local _, cdb = HardcoreAchievements_GetCharDB and HardcoreAchievements_GetCharDB() or (function() return nil, nil end)()
+    if cdb and cdb.achievements and cdb.achievements[achId] and cdb.achievements[achId].completed then
+      -- Achievement was previously completed - mark row as completed without showing toast
       if _G.HCA_MarkRowCompleted then
         _G.HCA_MarkRowCompleted(_G[rowVarName])
+      end
+    elseif CheckCompletion() then
+      -- Achievement should be completed now (player is exalted) - mark and show toast
+      if _G.HCA_MarkRowCompleted then
+        _G.HCA_MarkRowCompleted(_G[rowVarName])
+        HCA_AchToast_Show(_G[rowVarName].Icon:GetTexture(), _G[rowVarName].Title:GetText(), _G[rowVarName].points, _G[rowVarName])
       end
     end
     
@@ -221,9 +242,17 @@ function ReputationCommon.registerReputationAchievement(def)
     if event == "UPDATE_FACTION" then
       -- Check completion when reputation updates
       if CheckCompletion() then
+        -- Check if it was already completed in database (to avoid showing toast on login)
+        local _, cdb = HardcoreAchievements_GetCharDB and HardcoreAchievements_GetCharDB() or (function() return nil, nil end)()
+        local wasAlreadyCompleted = cdb and cdb.achievements and cdb.achievements[achId] and cdb.achievements[achId].completed
+        
         local row = _G[rowVarName]
         if row and _G.HCA_MarkRowCompleted then
           _G.HCA_MarkRowCompleted(row)
+          -- Only show toast if this is a new completion (not loading from database)
+          if not wasAlreadyCompleted and _G.HCA_AchToast_Show then
+            _G.HCA_AchToast_Show(row.Icon:GetTexture(), row.Title:GetText(), row.points, row)
+          end
         end
       end
     end
