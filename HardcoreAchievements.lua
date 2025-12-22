@@ -2844,6 +2844,11 @@ do
         -- externalPlayersByNPC[destGUID] = { [playerGUID] = { lastSeen = time, threat = nil } }
         local externalPlayersByNPC = {}
         local EXTERNAL_PLAYER_TIMEOUT = 15  -- seconds to remember external players after last damage event
+        
+        -- Cache recent level-ups to handle event ordering issues with quest turn-ins
+        -- Stores the previous level when player levels up, so we can use it if a quest turn-in happens shortly after
+        local recentLevelUpCache = nil  -- { previousLevel = number, timestamp = number }
+        local LEVEL_UP_WINDOW = 1.0  -- seconds - window to consider a level-up as quest-related
 
         -- Dedicated support for the Rats achievement: NPC IDs that qualify
         local RAT_NPC_IDS = {
@@ -3288,25 +3293,47 @@ do
             elseif event == "QUEST_TURNED_IN" then
                 local questID = select(1, ...)
                 questID = questID and tonumber(questID) or nil
+                local currentTime = GetTime()
+                
                 for _, row in ipairs(AchievementPanel.achievements) do
                     if not row.completed and type(row.questTracker) == "function" then
+                        -- Before calling questTracker, ensure we have a level stored for validation
+                        -- Check if player just leveled up within the window - if so, use the previous level
+                        if HardcoreAchievements_SetProgress then
+                            local progressTable = HardcoreAchievements_GetProgress and HardcoreAchievements_GetProgress(row.id)
+                            -- Only set levelAtTurnIn if we don't already have levelAtKill (for achievements without kill requirements)
+                            if not (progressTable and progressTable.levelAtKill) then
+                                local currentLevel = UnitLevel("player") or 1
+                                local levelToStore = currentLevel
+                                
+                                -- Check if there was a recent level-up within the time window
+                                if recentLevelUpCache and (currentTime - recentLevelUpCache.timestamp) <= LEVEL_UP_WINDOW then
+                                    -- Player leveled up recently - use the previous level as the "true" turn-in level
+                                    -- This handles the case where the quest XP causes the level-up
+                                    levelToStore = recentLevelUpCache.previousLevel
+                                else
+                                    -- No recent level-up, or it was outside the window - check if levelAtAccept might be better
+                                    -- Only use levelAtAccept if current level matches (player hasn't leveled since accept)
+                                    local levelAtAccept = progressTable and progressTable.levelAtAccept
+                                    if levelAtAccept and currentLevel == levelAtAccept then
+                                        levelToStore = levelAtAccept
+                                    end
+                                end
+                                
+                                HardcoreAchievements_SetProgress(row.id, "levelAtTurnIn", levelToStore)
+                            end
+                        end
+                        
                         local questMatched = row.questTracker(questID)
                         if questMatched then
-                            -- For achievements that require kills, levelAtKill should already be stored in progress
-                            -- Only set levelAtTurnIn as a fallback if we don't have levelAtKill
-                            if HardcoreAchievements_SetProgress then
-                                local progressTable = HardcoreAchievements_GetProgress and HardcoreAchievements_GetProgress(row.id)
-                                -- Only set levelAtTurnIn if we don't have levelAtKill (for achievements without kill requirements)
-                                if not (progressTable and progressTable.levelAtKill) then
-                                    local currentLevel = UnitLevel("player") or 1
-                                    HardcoreAchievements_SetProgress(row.id, "levelAtTurnIn", currentLevel)
-                                end
-                            end
                             HCA_MarkRowCompleted(row)
                             HCA_AchToast_Show(row.Icon:GetTexture(), row.Title:GetText(), row.points, row)
                         end
                     end
                 end
+                
+                -- Clear the level-up cache after processing quest turn-in
+                recentLevelUpCache = nil
             elseif event == "UNIT_SPELLCAST_SENT" then
                 -- Classic signature: unit, targetName, castGUID, spellId
                 local unit, targetName, castGUID, spellId = ...
@@ -3385,7 +3412,18 @@ do
                     end
                 end
             elseif event == "PLAYER_LEVEL_CHANGED" then
+                -- arg1 is previous level, arg2 is new level
+                local previousLevel = tonumber(select(1, ...))
                 local newLevel = tonumber(select(2, ...))
+                
+                -- Cache the level-up info with timestamp for quest turn-in validation
+                if previousLevel and newLevel then
+                    recentLevelUpCache = {
+                        previousLevel = previousLevel,
+                        timestamp = GetTime()
+                    }
+                end
+                
                 EvaluateCustomCompletions(newLevel)
                 RefreshOutleveledAll()
             elseif event == "CHAT_MSG_LOOT" then
