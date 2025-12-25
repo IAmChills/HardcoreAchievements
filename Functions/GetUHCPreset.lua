@@ -19,6 +19,8 @@ local settingsCheckboxOptions = {
     { id = 21, name = "Route Planner", dbSettingsValueName = "routePlanner"},
     { id = 22, name = "Hide Quest UI", dbSettingsValueName = "completelyRemovePlayerFrame"},
     { id = 23, name = "Hide Action Bars when not resting", dbSettingsValueName = "completelyRemoveTargetFrame"},
+    { id = 24, name = "Hide Player Cast Bar", dbSettingsValueName = "hidePlayerCastBar"},
+    { id = 25, name = "Open World Health Indicators", dbSettingsValueName = "showWildAllyHealthIndicator"},
 }
 
 local presets = {
@@ -72,6 +74,8 @@ local presets = {
         routePlanner = true,
         completelyRemovePlayerFrame = true,
         completelyRemoveTargetFrame = true,
+        hidePlayerCastBar = true,
+        showWildAllyHealthIndicator = true,
     }
 }
 
