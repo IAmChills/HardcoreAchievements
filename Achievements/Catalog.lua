@@ -692,6 +692,20 @@ local Achievements = {
     zone = "Stormwind City"
 }, 
 
+-- Warrior
+{
+    achId = "Whirlwind",
+    title = "Cyclonian's Collapse |cffc69b6d[Warrior]|r",
+    level = 38,
+    tooltip = "Complete |cff0091e6The Summoning|r before level 39",
+    icon = 134131,
+    points = 10,
+    requiredQuestId = 1713,
+    targetNpcId = 6239,
+    class = "WARRIOR",
+    zone = "Alterac Mountains"
+},
+
 -- Secret Achievements
 {
     achId = "SnowballHorde",
@@ -810,6 +824,18 @@ local Achievements = {
     icon = 237542,
     points = 0,
     customIsCompleted = function() return UnitIsDeadOrGhost("player") end,
+    secret = true,
+    staticPoints = true,
+    hiddenUntilComplete = true,
+}, {
+    achId = "Secret96",
+    title = "The Warlord of the Rings",
+    level = nil,
+    tooltip = "You have completed the secret achievement: |cffff8000Obtain The 1 Ring|r",
+    icon = 133345,
+    points = 0,
+    customIsCompleted = function() return GetItemCount(8350, true) > 0 end,
+    -- Secret presentation before completion
     secret = true,
     staticPoints = true,
     hiddenUntilComplete = true,
