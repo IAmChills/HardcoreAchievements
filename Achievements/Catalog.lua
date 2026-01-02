@@ -828,6 +828,27 @@ local Achievements = {
     staticPoints = true,
     hiddenUntilComplete = true,
 }, {
+    achId = "Secret95",
+    title = "Mak'gora",
+    level = nil,
+    tooltip = "Obtain an ear by winning a |cff0091e6Mak'gora|r",
+    icon = 133854,
+    points = 0,
+    customIsCompleted = function() return false end,
+    customAura = function()
+        for i = 1, 40 do
+            local name, _, _, _, _, _, _, _, _, spellId = UnitBuff("player", i)
+            if not name then break end
+            if spellId == 419126 or name == "String of Ears" then
+                return true
+            end
+        end
+        return false
+    end,
+    secret = true,
+    staticPoints = true,
+    hiddenUntilComplete = true,
+}, {
     achId = "Secret96",
     title = "The Warlord of the Rings",
     level = nil,

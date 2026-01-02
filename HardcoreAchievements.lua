@@ -2744,6 +2744,9 @@ function CreateAchievementRow(parent, achId, title, tooltip, icon, level, points
     if def and type(def.customSpell) == "function" then
         row.spellTracker = def.customSpell
     end
+    if def and type(def.customAura) == "function" then
+        row.auraTracker = def.customAura
+    end
     if def and type(def.customChat) == "function" then
         row.chatTracker = def.customChat
     end
@@ -3081,6 +3084,7 @@ do
         AchievementPanel._achEvt:RegisterEvent("PLAYER_REGEN_ENABLED")
         AchievementPanel._achEvt:RegisterEvent("PLAYER_ENTERING_WORLD")
         AchievementPanel._achEvt:RegisterEvent("UPDATE_FACTION")
+        AchievementPanel._achEvt:RegisterEvent("UNIT_AURA")
         AchievementPanel._achEvt:SetScript("OnEvent", function(_, event, ...)
             -- Clean up external player tracking on zone loads
             if event == "PLAYER_ENTERING_WORLD" then
@@ -3374,6 +3378,19 @@ do
                     if not row.completed and (row.id == "MalletZF" or row.achId == "MalletZF") then
                         HCA_MarkRowCompleted(row)
                         HCA_AchToast_Show(row.Icon:GetTexture(), row.Title:GetText(), row.points, row)
+                    end
+                end
+            elseif event == "UNIT_AURA" then
+                local unit = select(1, ...)
+                if unit ~= "player" then return end
+                for _, row in ipairs(AchievementPanel.achievements) do
+                    if not row.completed and type(row.auraTracker) == "function" then
+                        local ok, shouldComplete = pcall(row.auraTracker)
+                        if ok and shouldComplete == true then
+                            HCA_MarkRowCompleted(row)
+                            HCA_AchToast_Show(row.Icon:GetTexture(), row.Title:GetText(), row.points, row)
+                            break -- Achievement completed, no need to check others
+                        end
                     end
                 end
             elseif event == "UNIT_INVENTORY_CHANGED" then
