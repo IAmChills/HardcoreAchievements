@@ -3077,6 +3077,7 @@ do
         AchievementPanel._achEvt:RegisterEvent("UNIT_SPELLCAST_SENT")
         AchievementPanel._achEvt:RegisterEvent("UNIT_SPELLCAST_SUCCEEDED")
         AchievementPanel._achEvt:RegisterEvent("UNIT_INVENTORY_CHANGED")
+        AchievementPanel._achEvt:RegisterEvent("BAG_UPDATE")
         AchievementPanel._achEvt:RegisterEvent("CHAT_MSG_TEXT_EMOTE")
         AchievementPanel._achEvt:RegisterEvent("PLAYER_LEVEL_CHANGED")
         AchievementPanel._achEvt:RegisterEvent("CHAT_MSG_LOOT")
@@ -3429,6 +3430,19 @@ do
                                     HCA_AchToast_Show(row.Icon:GetTexture(), row.Title:GetText(), row.points, row)
                                 end
                             end
+                        end
+                    end
+                end
+            elseif event == "BAG_UPDATE" then
+                -- Check customIsCompleted functions when bag contents change
+                -- This handles achievements that check for items in bags (GetItemCount checks bags)
+                for _, row in ipairs(AchievementPanel.achievements) do
+                    if not row.completed and type(row.customIsCompleted) == "function" then
+                        local ok, shouldComplete = pcall(row.customIsCompleted)
+                        if ok and shouldComplete == true then
+                            HCA_MarkRowCompleted(row)
+                            HCA_AchToast_Show(row.Icon:GetTexture(), row.Title:GetText(), row.points, row)
+                            break -- Achievement completed, no need to check others
                         end
                     end
                 end
