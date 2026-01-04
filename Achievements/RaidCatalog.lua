@@ -1,11 +1,31 @@
 -- Comprehensive raid achievement definitions
 local Raids = {
+  -- Lower Blackrock Spire (Level 60)
+  {
+    achId = "LBRS",
+    title = "Lower Blackrock Spire",
+    tooltip = "Defeat the bosses of |cff0091e6Lower Blackrock Spire|r",
+    icon = 254648,
+    points = 50,
+    requiredQuestId = nil,
+    staticPoints = false,
+    requiredMapId = 229,
+    requiredKills = {
+      [9816] = 1,  -- Pyroguard Emberseer
+      [10429] = 1, -- Warchief Rend Blackhand
+      [10339] = 1, -- Gyth
+      [10430] = 1, -- The Beast
+      [10363] = 1, -- General Drakkisath
+    },
+    bossOrder = {9816, 10429, 10339, 10430, 10363}
+  },
+  
   -- Molten Core (Level 60)
   {
     achId = "MC",
     title = "Molten Core",
     tooltip = "Defeat the bosses of |cff0091e6Molten Core|r",
-    icon = 136025,
+    icon = 254652,
     points = 50,
     requiredQuestId = nil,
     staticPoints = false,
@@ -30,7 +50,7 @@ local Raids = {
     achId = "ONY",
     title = "Onyxia's Lair",
     tooltip = "Defeat |cff0091e6Onyxia|r",
-    icon = 132225,
+    icon = 254650,
     points = 50,
     requiredQuestId = nil,
     staticPoints = false,
@@ -46,7 +66,7 @@ local Raids = {
     achId = "BWL",
     title = "Blackwing Lair",
     tooltip = "Defeat the bosses of |cff0091e6Blackwing Lair|r",
-    icon = 136025,
+    icon = 254649,
     points = 50,
     requiredQuestId = nil,
     staticPoints = false,
@@ -69,7 +89,7 @@ local Raids = {
     achId = "ZG",
     title = "Zul'Gurub",
     tooltip = "Defeat the bosses of |cff0091e6Zul'Gurub|r",
-    icon = 136025,
+    icon = 236413,
     points = 50,
     requiredQuestId = nil,
     staticPoints = false,
@@ -94,7 +114,7 @@ local Raids = {
     achId = "AQ20",
     title = "Ruins of Ahn'Qiraj",
     tooltip = "Defeat the bosses of |cff0091e6Ruins of Ahn'Qiraj|r",
-    icon = 136025,
+    icon = 236428,
     points = 50,
     requiredQuestId = nil,
     staticPoints = false,
@@ -115,7 +135,7 @@ local Raids = {
     achId = "AQ40",
     title = "Temple of Ahn'Qiraj",
     tooltip = "Defeat the bosses of |cff0091e6Temple of Ahn'Qiraj|r",
-    icon = 136025,
+    icon = 236407,
     points = 50,
     requiredQuestId = nil,
     staticPoints = false,
@@ -142,11 +162,11 @@ local Raids = {
     achId = "NAXX",
     title = "Naxxramas",
     tooltip = "Defeat the bosses of |cff0091e6Naxxramas|r",
-    icon = 136025,
+    icon = 254100,
     points = 50,
     requiredQuestId = nil,
     staticPoints = false,
-    requiredMapId = 530,
+    requiredMapId = 533,
     requiredKills = {
       [15956] = 1,  -- Anub'Rekhan
       [15953] = 1,  -- Grand Widow Faerlina

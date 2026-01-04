@@ -107,6 +107,12 @@ function RaidCommon.registerRaidAchievement(def)
   -- Export globally so tooltip function can use it
   function HCA_GetRaidBossName(npcId)
     local bossNames = {
+      -- Lower Blackrock Spire
+      [9816] = "Pyroguard Emberseer",
+      [10429] = "Warchief Rend Blackhand",
+      [10339] = "Gyth",
+      [10430] = "The Beast",
+      [10363] = "General Drakkisath",
       -- Molten Core
       [12118] = "Lucifron",
       [11982] = "Magmadar",
