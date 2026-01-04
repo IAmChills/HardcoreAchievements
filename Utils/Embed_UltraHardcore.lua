@@ -2270,11 +2270,13 @@ local function BuildEmbedIfNeeded()
     local function GetShowCustomTabSetting()
       if type(HardcoreAchievements_GetCharDB) == "function" then
         local _, cdb = HardcoreAchievements_GetCharDB()
-        return cdb and cdb.settings and cdb.settings.showCustomTab == true
+        if cdb and cdb.settings and cdb.settings.showCustomTab ~= nil then
+          return cdb.settings.showCustomTab == true
+        end
       end
-      return false
+      return true -- Default to showing custom tab
     end
-    UHCA.HideCustomTabCheckbox:SetChecked(GetShowCustomTabSetting()) -- Default to not showing custom tab, but respect saved state
+    UHCA.HideCustomTabCheckbox:SetChecked(GetShowCustomTabSetting()) -- Default to showing custom tab, but respect saved state
     
     -- Handle checkbox changes
     UHCA.HideCustomTabCheckbox:SetScript("OnClick", function(self)
