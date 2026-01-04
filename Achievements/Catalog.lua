@@ -858,7 +858,7 @@ local Achievements = {
     icon = 133345,
     points = 0,
     customIsCompleted = function() return false end,
-    customItem = function() return GetItemCount(2320, true) > 0 end,
+    customItem = function() return GetItemCount(8350, true) > 0 end,
     -- Secret presentation before completion
     secret = true,
     staticPoints = true,
