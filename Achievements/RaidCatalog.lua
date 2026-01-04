@@ -81,16 +81,12 @@ local Raids = {
       [14509] = 1,  -- High Priest Thekal
       [14515] = 1,  -- High Priestess Arlokk
       [11382] = 1,  -- Bloodlord Mandokir
-      [15082] = 1,  -- Gri'lek
-      [15083] = 1,  -- Hazza'rah
-      [15084] = 1,  -- Renataki
-      [15085] = 1,  -- Wushoolay
+      ["Edge of Madness"] = {15082, 15083, 15084, 15085},  -- Edge of Madness (any one of the four)
       [15114] = 1,  -- Gahz'ranka
-      [14506] = 1,  -- Lord Kazak
       [11380] = 1,  -- Jin'do the Hexxer
       [14834] = 1,  -- Hakkar
     },
-    bossOrder = {14517, 14507, 14510, 14509, 14515, 11382, 15082, 15083, 15084, 15085, 15114, 14506, 11380, 14834}
+    bossOrder = {14517, 14507, 14510, 14509, 14515, 11382, "Edge of Madness", 15114, 11380, 14834}
   },
 
   -- Ruins of Ahn'Qiraj (Level 60)
@@ -127,15 +123,48 @@ local Raids = {
     requiredKills = {
       [15263] = 1,  -- The Prophet Skeram
       [15511] = 1,  -- Lord Kri
-      [15510] = 1,  -- Vem
-      [15509] = 1,  -- Princess Yauj
+      [15544] = 1,  -- Vem
+      [15543] = 1,  -- Princess Yauj
       [15516] = 1,  -- Battleguard Sartura
-      [15543] = 1,  -- Princess Huhuran
+      [15510] = 1,  -- Fankriss the Unyielding
+      [15509] = 1,  -- Princess Huhuran
+      [15276] = 1,  -- Twin Emperors (Vek'lor)
+      [15275] = 1,  -- Twin Emperors (Vek'nilash)
       [15299] = 1,  -- Viscidus
       [15517] = 1,  -- Ouro
       [15727] = 1,  -- C'Thun
     },
-    bossOrder = {15263, 15511, 15510, 15509, 15516, 15543, 15299, 15517, 15727}
+    bossOrder = {15263, 15511, 15544, 15543, 15516, 15510, 15509, 15276, 15275, 15299, 15517, 15727}
+  },
+
+  -- Naxxramas (Level 60)
+  {
+    achId = "NAXX",
+    title = "Naxxramas",
+    tooltip = "Defeat the bosses of |cff0091e6Naxxramas|r",
+    icon = 136025,
+    points = 50,
+    requiredQuestId = nil,
+    staticPoints = false,
+    requiredMapId = 530,
+    requiredKills = {
+      [15956] = 1,  -- Anub'Rekhan
+      [15953] = 1,  -- Grand Widow Faerlina
+      [15952] = 1,  -- Maexxna
+      [15954] = 1,  -- Noth the Plaguebringer
+      [15936] = 1,  -- Heigan the Unclean
+      [16011] = 1,  -- Loatheb
+      [16061] = 1,  -- Instructor Razuvious
+      [16060] = 1,  -- Gothik the Harvester
+      ["Four Horsemen"] = {16064, 16065, 16062, 16063},  -- Four Horsemen (any one of the four)
+      [16028] = 1,  -- Patchwerk
+      [15931] = 1,  -- Grobbulus
+      [15932] = 1,  -- Gluth
+      [15928] = 1,  -- Thaddius
+      [15989] = 1,  -- Sapphiron
+      [15990] = 1,  -- Kel'Thuzad
+    },
+    bossOrder = {15956, 15953, 15952, 15954, 15936, 16011, 16061, 16060, "Four Horsemen", 16028, 15931, 15932, 15928, 15989, 15990}
   },
 }
 

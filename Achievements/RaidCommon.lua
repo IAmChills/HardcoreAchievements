@@ -136,12 +136,13 @@ function RaidCommon.registerRaidAchievement(def)
       [14509] = "High Priest Thekal",
       [14515] = "High Priestess Arlokk",
       [11382] = "Bloodlord Mandokir",
+      -- Edge of Madness
       [15082] = "Gri'lek",
       [15083] = "Hazza'rah",
       [15084] = "Renataki",
       [15085] = "Wushoolay",
+      -- Edge of Madness
       [15114] = "Gahz'ranka",
-      [14506] = "Lord Kazak",
       [11380] = "Jin'do the Hexxer",
       [14834] = "Hakkar",
       -- Ruins of Ahn'Qiraj
@@ -154,13 +155,37 @@ function RaidCommon.registerRaidAchievement(def)
       -- Temple of Ahn'Qiraj
       [15263] = "The Prophet Skeram",
       [15511] = "Lord Kri",
-      [15510] = "Vem",
-      [15509] = "Princess Yauj",
+      [15544] = "Vem",
+      [15543] = "Princess Yauj",
       [15516] = "Battleguard Sartura",
-      [15543] = "Princess Huhuran",
+      [15510] = "Fankriss the Unyielding",
+      [15509] = "Princess Huhuran",
+      [15276] = "Emperor Vek'lor",
+      [15275] = "Emperor Vek'nilash",
       [15299] = "Viscidus",
       [15517] = "Ouro",
       [15727] = "C'Thun",
+      -- Naxxramas
+      [15956] = "Anub'Rekhan",
+      [15953] = "Grand Widow Faerlina",
+      [15952] = "Maexxna",
+      [15954] = "Noth the Plaguebringer",
+      [15936] = "Heigan the Unclean",
+      [16011] = "Loatheb",
+      [16061] = "Instructor Razuvious",
+      [16060] = "Gothik the Harvester",
+      -- Four Horsemen
+      [16064] = "Thane Korth'azz",
+      [16065] = "Lady Blaumeux",
+      [16062] = "Highlord Mograine",
+      [16063] = "Sir Zeliek",
+      -- Four Horsemen
+      [16028] = "Patchwerk",
+      [15931] = "Grobbulus",
+      [15932] = "Gluth",
+      [15928] = "Thaddius",
+      [15989] = "Sapphiron",
+      [15990] = "Kel'Thuzad",
     }
     return bossNames[npcId] or ("Boss " .. npcId)
   end
