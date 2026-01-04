@@ -736,7 +736,7 @@ function HCA_MarkRowCompleted(row)
     local _, cdb = GetCharDB()
     local wasSolo = false
     if cdb then
-        local id = row.id or (row.Title and row.Title:GetText()) or ("row"..tostring(row))
+        local id = row.id or row.achId or (row.Title and row.Title:GetText()) or ("row"..tostring(row))
         cdb.progress = cdb.progress or {}
         local progress = cdb.progress[id]
         
@@ -879,7 +879,7 @@ local function RestoreCompletionsFromDB()
     if not cdb or not AchievementPanel or not AchievementPanel.achievements then return end
 
     for _, row in ipairs(AchievementPanel.achievements) do
-        local id = row.id or (row.Title and row.Title:GetText())
+        local id = row.id or row.achId or (row.Title and row.Title:GetText())
         local rec = id and cdb.achievements and cdb.achievements[id]
         if rec and rec.completed then
             row.completed = true
@@ -2721,6 +2721,9 @@ function CreateAchievementRow(parent, achId, title, tooltip, icon, level, points
     if def and type(def.customIsCompleted) == "function" then
         row.customIsCompleted = def.customIsCompleted
     end
+    if def and type(def.customItem) == "function" then
+        row.itemTracker = def.customItem
+    end
     if def and def.hiddenUntilComplete == true then
         row.hiddenUntilComplete = true
         -- Hide initially; filter logic will show it after completion
@@ -3040,7 +3043,6 @@ do
         AchievementPanel._achEvt:RegisterEvent("QUEST_TURNED_IN")
         AchievementPanel._achEvt:RegisterEvent("QUEST_REMOVED")
         AchievementPanel._achEvt:RegisterEvent("UNIT_SPELLCAST_SENT")
-        AchievementPanel._achEvt:RegisterEvent("UNIT_SPELLCAST_SUCCEEDED")
         AchievementPanel._achEvt:RegisterEvent("UNIT_INVENTORY_CHANGED")
         AchievementPanel._achEvt:RegisterEvent("BAG_UPDATE")
         AchievementPanel._achEvt:RegisterEvent("CHAT_MSG_TEXT_EMOTE")
@@ -3335,17 +3337,6 @@ do
                         end
                     end
                 end
-            elseif event == "UNIT_SPELLCAST_SUCCEEDED" then
-                local unit, castGUID, spellId = ...
-                if unit ~= "player" then return end
-                if spellId ~= 11435 then return end
-                -- Only check MalletZF achievement for this specific spell
-                for _, row in ipairs(AchievementPanel.achievements) do
-                    if not row.completed and (row.id == "MalletZF" or row.achId == "MalletZF") then
-                        HCA_MarkRowCompleted(row)
-                        HCA_AchToast_Show(row.Icon:GetTexture(), row.Title:GetText(), row.points, row)
-                    end
-                end
             elseif event == "UNIT_AURA" then
                 local unit = select(1, ...)
                 if unit ~= "player" then return end
@@ -3399,15 +3390,28 @@ do
                     end
                 end
             elseif event == "BAG_UPDATE" then
-                -- Check customIsCompleted functions when bag contents change
+                -- Check customItem functions when bag contents change
                 -- This handles achievements that check for items in bags (GetItemCount checks bags)
+                -- Item-based achievements use customItem (stored as row.itemTracker), not customIsCompleted
+                local _, cdb = GetCharDB()
                 for _, row in ipairs(AchievementPanel.achievements) do
-                    if not row.completed and type(row.customIsCompleted) == "function" then
-                        local ok, shouldComplete = pcall(row.customIsCompleted)
-                        if ok and shouldComplete == true then
-                            HCA_MarkRowCompleted(row)
-                            HCA_AchToast_Show(row.Icon:GetTexture(), row.Title:GetText(), row.points, row)
-                            break -- Achievement completed, no need to check others
+                    if type(row.itemTracker) == "function" then
+                        local achId = row.achId or row.id
+                        -- Check if achievement is already completed in database - if so, skip entirely
+                        if achId and cdb and cdb.achievements and cdb.achievements[achId] and cdb.achievements[achId].completed then
+                            -- Already completed in DB, restore state without re-completing (if not already set)
+                            if not row.completed then
+                                row.completed = true
+                                ApplyOutleveledStyle(row)
+                            end
+                        elseif not row.completed then
+                            -- Only check itemTracker if not already completed (in DB or in UI)
+                            local ok, shouldComplete = pcall(row.itemTracker)
+                            if ok and shouldComplete == true then
+                                HCA_MarkRowCompleted(row)
+                                HCA_AchToast_Show(row.Icon:GetTexture(), row.Title:GetText(), row.points, row)
+                                break -- Achievement completed, no need to check others
+                            end
                         end
                     end
                 end

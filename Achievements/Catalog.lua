@@ -521,7 +521,8 @@ local Achievements = {
     icon = 134559,
     points = 10,
     allowSoloDouble = true,
-    customIsCompleted = function() return GetItemCount(9240, true) > 0 end,
+    customIsCompleted = function() return false end,
+    customItem = function() return GetItemCount(9240, true) > 0 end,
     zone = "Hinterlands"
 }, {
     achId = "KimJaelIndeed",
@@ -658,7 +659,8 @@ local Achievements = {
     tooltip = "Equip a |cff0091e6Red Defias Mask|r and join the ranks of the Defias Brotherhood",
     icon = 133694,
     points = 0,
-    customIsCompleted = function() return GetItemCount(7997, true) > 0 end,
+    customIsCompleted = function() return false end,
+    customItem = function() return GetItemCount(7997, true) > 0 end,
     class = "ROGUE",
     staticPoints = true,
 },
@@ -855,7 +857,8 @@ local Achievements = {
     tooltip = "You have completed the secret achievement: |cffff8000Obtain The 1 Ring|r",
     icon = 133345,
     points = 0,
-    customIsCompleted = function() return GetItemCount(8350, true) > 0 end,
+    customIsCompleted = function() return false end,
+    customItem = function() return GetItemCount(2320, true) > 0 end,
     -- Secret presentation before completion
     secret = true,
     staticPoints = true,
@@ -867,7 +870,8 @@ local Achievements = {
     tooltip = "You have completed the secret achievement: |cffff8000Obtain the Tabard of the Scarlet Crusade|r",
     icon = 133770,
     points = 0,
-    customIsCompleted = function() return GetItemCount(23192, true) > 0 end,
+    customIsCompleted = function() return false end,
+    customItem = function() return GetItemCount(23192, true) > 0 end,
     -- Secret presentation before completion
     secret = true,
     staticPoints = true,
@@ -879,7 +883,8 @@ local Achievements = {
     tooltip = "You have completed the secret achievement: |cffff8000Obtain the Black Qiraji Resonating Crystal|r",
     icon = 134399,
     points = 0,
-    customIsCompleted = function() return GetItemCount(21176, true) > 0 end,
+    customIsCompleted = function() return false end,
+    customItem = function() return GetItemCount(21176, true) > 0 end,
     -- Secret presentation before completion
     secret = true,
     staticPoints = true,
@@ -891,7 +896,8 @@ local Achievements = {
     tooltip = "You have completed the secret achievement: |cff0091e6Obtain the Forest Leather Belt|r",
     icon = 132492,
     points = 0,
-    customIsCompleted = function() return GetItemCount(6382, true) > 0 end,
+    customIsCompleted = function() return false end,
+    customItem = function() return GetItemCount(6382, true) > 0 end,
     -- Secret presentation before completion
     secret = true,
     staticPoints = true,
