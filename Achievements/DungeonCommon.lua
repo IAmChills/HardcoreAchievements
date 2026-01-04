@@ -601,7 +601,10 @@ function DungeonCommon.registerDungeonAchievement(def)
         else
           -- Group is ineligible - don't count this kill
           -- Player can return later with an eligible group to kill this boss
-          print("|cff69adc9[Hardcore Achievements]|r |cffffd100" .. HCA_GetBossName(npcId) .. " killed but group is ineligible - kill not counted for achievement: " .. title .. "|r")
+          -- Only print message if the achievement is visible (not filtered out)
+          if _G.HCA_IsAchievementVisible and _G.HCA_IsAchievementVisible(achId) then
+            print("|cff69adc9[Hardcore Achievements]|r |cffffd100" .. HCA_GetBossName(npcId) .. " killed but group is ineligible - kill not counted for achievement: " .. title .. "|r")
+          end
         end
       end
     end

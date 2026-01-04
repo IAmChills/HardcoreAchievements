@@ -13,6 +13,26 @@ local function getNpcIdFromGUID(guid)
     return npcId and tonumber(npcId) or nil
 end
 
+-- Helper function to check if an achievement is visible (not filtered out)
+-- Made global so it can be used in other achievement files
+function _G.HCA_IsAchievementVisible(achId)
+    if not achId or not _G.AchievementPanel or not _G.AchievementPanel.achievements then
+        return false
+    end
+    
+    for _, row in ipairs(_G.AchievementPanel.achievements) do
+        local rowId = row.id or row.achId
+        if rowId and tostring(rowId) == tostring(achId) then
+            -- Check if row is visible (shown and not hidden by filters)
+            return row:IsShown() and not row.hiddenByProfession and not (row.hiddenUntilComplete and not row.completed)
+        end
+    end
+    
+    return false
+end
+
+local isAchievementVisible = _G.HCA_IsAchievementVisible
+
 function M.registerQuestAchievement(cfg)
     assert(type(cfg.achId) == "string", "achId required")
     local ACH_ID = cfg.achId
@@ -619,7 +639,10 @@ function M.registerQuestAchievement(cfg)
                     return false
                 end
                 
-                print("|cff69adc9[Hardcore Achievements]|r |cffffd100Achievement " .. (ACH_ID or "Unknown") .. " cannot be fulfilled: An ineligible player contributed.|r")
+                -- Only print message if the achievement is visible (not filtered out)
+                if isAchievementVisible(ACH_ID) then
+                    print("|cff69adc9[Hardcore Achievements]|r |cffffd100Achievement " .. (ACH_ID or "Unknown") .. " cannot be fulfilled: An ineligible player contributed.|r")
+                end
                 
                 -- Track the kill progress, but mark as ineligible (don't increment eligible counts)
                 if REQUIRED_KILLS then
