@@ -427,7 +427,8 @@ function HCA_AchievementCount()
             local isVariation = row._def and row._def.isVariation
             local isDungeonSet = row._def and row._def.isDungeonSet
             local isReputation = row._def and row._def.isReputation
-            local shouldCount = not hiddenByProfession and not hiddenUntilComplete and (not isVariation or row.completed) and (not isDungeonSet or row.completed) and (not isReputation or row.completed)
+            local isRaid = row._def and row._def.isRaid
+            local shouldCount = not hiddenByProfession and not hiddenUntilComplete and (not isVariation or row.completed) and (not isDungeonSet or row.completed) and (not isReputation or row.completed) and (not isRaid or row.completed)
             
             if shouldCount then
                 total = total + 1
@@ -763,7 +764,8 @@ function HCA_MarkRowCompleted(row)
             local isSelfFound = _G.IsSelfFound and _G.IsSelfFound() or false
             local isDungeonSet = row._def and row._def.isDungeonSet
             local isReputation = row._def and row._def.isReputation
-            if isSelfFound and not row.isSecretAchievement and not isDungeonSet and not isReputation then
+            local isRaid = row._def and row._def.isRaid
+            if isSelfFound and not row.isSecretAchievement and not isDungeonSet and not isReputation and not isRaid then
                 finalPoints = finalPoints + HCA_SELF_FOUND_BONUS
                 -- Mark that we've already applied self-found bonus so ApplySelfFoundBonus doesn't add it again
                 rec.SFMod = true
@@ -2161,6 +2163,53 @@ end)
 
 -- Filter dropdown - using shared FilterDropdown module
 
+-- Helper function to check if achievement should be shown based on checkbox filter
+-- Returns true if should show, false if should hide
+local function ShouldShowByCheckboxFilter(def, isCompleted, currentFilter, checkboxIndex, variationType)
+    -- Completed achievements always show when "all" or "completed" filter is selected
+    if isCompleted and (currentFilter == "all" or currentFilter == "completed") then
+        return true
+    end
+    
+    -- Load checkbox states from database
+    local checkboxStates = { false, false, false, false, false, false }
+    if type(HardcoreAchievements_GetCharDB) == "function" then
+        local _, cdb = HardcoreAchievements_GetCharDB()
+        if cdb and cdb.settings and cdb.settings.filterCheckboxes then
+            local states = cdb.settings.filterCheckboxes
+            if type(states) == "table" then
+                checkboxStates = {
+                    states[1] == true,  -- Trio
+                    states[2] == true,  -- Duo
+                    states[3] == true,  -- Solo
+                    states[4] == true,  -- Dungeon Sets
+                    states[5] == true,  -- Reputations
+                    states[6] == true,  -- Raids
+                }
+            end
+        end
+    end
+    
+    -- For variations, check based on variation type
+    if variationType then
+        if variationType == "Trio" then
+            return checkboxStates[1]
+        elseif variationType == "Duo" then
+            return checkboxStates[2]
+        elseif variationType == "Solo" then
+            return checkboxStates[3]
+        end
+        return false
+    end
+    
+    -- For other types, check the specified checkbox index
+    if checkboxIndex then
+        return checkboxStates[checkboxIndex]
+    end
+    
+    return true -- Default to showing if no checkbox specified
+end
+
 -- Function to apply the current filter to all achievement rows
 local function ApplyFilter()
     if not AchievementPanel or not AchievementPanel.achievements then return end
@@ -2188,113 +2237,29 @@ local function ApplyFilter()
             shouldShow = false
         end
         
-        -- Hide/show variation achievements based on checkbox states
-        -- Completed variations always show when "all" or "completed" filter is selected
-        if row._def and row._def.isVariation then
-            -- Only check checkbox state for non-completed variations
-            -- Completed variations always show with "all" or "completed" filter
+        -- Hide/show achievements based on checkbox filter
+        if row._def then
             local isCompleted = row.completed == true
-            local shouldCheckCheckbox = true
+            local def = row._def
             
-            if isCompleted and (currentFilter == "all" or currentFilter == "completed") then
-                -- Completed variations always show with these filters, skip checkbox check
-                shouldCheckCheckbox = false
-            end
-            
-            if shouldCheckCheckbox then
-                local checkboxStates = { false, false, false }
-                if type(HardcoreAchievements_GetCharDB) == "function" then
-                    local _, cdb = HardcoreAchievements_GetCharDB()
-                    if cdb and cdb.settings and cdb.settings.filterCheckboxes then
-                        local states = cdb.settings.filterCheckboxes
-                        if type(states) == "table" then
-                            checkboxStates = {
-                                states[1] == true,  -- Trio
-                                states[2] == true,  -- Duo
-                                states[3] == true,  -- Solo
-                            }
-                        end
-                    end
-                end
-                
-                local variationType = row._def.variationType
-                if variationType == "Trio" and not checkboxStates[1] then
-                    shouldShow = false
-                elseif variationType == "Duo" and not checkboxStates[2] then
-                    shouldShow = false
-                elseif variationType == "Solo" and not checkboxStates[3] then
+            if def.isVariation then
+                -- Variations: check based on variation type
+                if not ShouldShowByCheckboxFilter(def, isCompleted, currentFilter, nil, def.variationType) then
                     shouldShow = false
                 end
-            end
-        end
-        
-        -- Hide/show dungeon set achievements based on checkbox state
-        -- Completed dungeon sets always show when "all" or "completed" filter is selected
-        if row._def and row._def.isDungeonSet then
-            local isCompleted = row.completed == true
-            local shouldCheckCheckbox = true
-            
-            if isCompleted and (currentFilter == "all" or currentFilter == "completed") then
-                -- Completed dungeon sets always show with these filters, skip checkbox check
-                shouldCheckCheckbox = false
-            end
-            
-            if shouldCheckCheckbox then
-                local checkboxStates = { false, false, false, false, false }
-                if type(HardcoreAchievements_GetCharDB) == "function" then
-                    local _, cdb = HardcoreAchievements_GetCharDB()
-                    if cdb and cdb.settings and cdb.settings.filterCheckboxes then
-                        local states = cdb.settings.filterCheckboxes
-                        if type(states) == "table" then
-                            checkboxStates = {
-                                states[1] == true,  -- Trio
-                                states[2] == true,  -- Duo
-                                states[3] == true,  -- Solo
-                                states[4] == true,  -- Dungeon Sets
-                                states[5] == true,  -- Reputations
-                            }
-                        end
-                    end
-                end
-                
-                -- Check if "Show Dungeon Sets" checkbox (index 4) is enabled
-                if not checkboxStates[4] then
+            elseif def.isDungeonSet then
+                -- Dungeon Sets: check index 4
+                if not ShouldShowByCheckboxFilter(def, isCompleted, currentFilter, 4, nil) then
                     shouldShow = false
                 end
-            end
-        end
-        
-        -- Hide/show reputation achievements based on checkbox state
-        -- Completed reputation achievements always show when "all" or "completed" filter is selected
-        if row._def and row._def.isReputation then
-            local isCompleted = row.completed == true
-            local shouldCheckCheckbox = true
-            
-            if isCompleted and (currentFilter == "all" or currentFilter == "completed") then
-                -- Completed reputation achievements always show with these filters, skip checkbox check
-                shouldCheckCheckbox = false
-            end
-            
-            if shouldCheckCheckbox then
-                local checkboxStates = { false, false, false, false, false }
-                if type(HardcoreAchievements_GetCharDB) == "function" then
-                    local _, cdb = HardcoreAchievements_GetCharDB()
-                    if cdb and cdb.settings and cdb.settings.filterCheckboxes then
-                        local states = cdb.settings.filterCheckboxes
-                        if type(states) == "table" then
-                            checkboxStates = {
-                                states[1] == true,  -- Trio
-                                states[2] == true,  -- Duo
-                                states[3] == true,  -- Solo
-                                states[4] == true,  -- Dungeon Sets
-                                states[5] == true,  -- Reputations
-                            }
-                        end
-                    end
+            elseif def.isReputation then
+                -- Reputations: check index 5
+                if not ShouldShowByCheckboxFilter(def, isCompleted, currentFilter, 5, nil) then
+                    shouldShow = false
                 end
-                
-                -- Check if "Show Reputations" checkbox (index 5) is enabled
-                if not checkboxStates[5] then
+            elseif def.isRaid then
+                -- Raids: check index 6
+                if not ShouldShowByCheckboxFilter(def, isCompleted, currentFilter, 6, nil) then
                     shouldShow = false
                 end
             end
@@ -2320,7 +2285,7 @@ AchievementPanel.filterDropdown = filterDropdown
 FilterDropdown:InitializeDropdown(filterDropdown, {
     currentFilter = "all",
     -- checkboxStates will be loaded from database automatically
-    checkboxLabels = { "Show Dungeon Trios", "Show Dungeon Duos", "Show Dungeon Solos", "Show Dungeon Sets", "Show Reputations" },
+    checkboxLabels = { "Show Dungeon Trios", "Show Dungeon Duos", "Show Dungeon Solos", "Show Dungeon Sets", "Show Reputations", "Show Raids" },
     onFilterChange = function(filterValue)
         ApplyFilter()
     end,
