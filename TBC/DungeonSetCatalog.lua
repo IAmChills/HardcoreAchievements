@@ -1,4 +1,5 @@
 -- Dungeon Set achievement definitions
+-- https://www.wowhead.com/tbc/item-sets
 local DungeonSets = {
   -- DEADMINES
   {
