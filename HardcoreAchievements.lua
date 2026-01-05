@@ -2850,6 +2850,9 @@ EvaluateCustomCompletions = function(newLevel)
     end
 end
 
+-- Expose EvaluateCustomCompletions globally for use by other modules
+_G.EvaluateCustomCompletions = EvaluateCustomCompletions
+
 -- =========================================================
 -- Event bridge: forward PARTY_KILL to any rows with a tracker
 -- =========================================================
