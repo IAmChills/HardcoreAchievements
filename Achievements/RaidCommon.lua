@@ -61,46 +61,93 @@ function RaidCommon.registerRaidAchievement(def)
   local registerFuncName = "HCA_Register" .. achId
   local rowVarName       = achId .. "_Row"
 
-  -- Helpers
-  local function GetNpcIdFromGUID(guid)
-    if not guid then return nil end
-    local npcId = select(6, strsplit("-", guid))
-    npcId = npcId and tonumber(npcId) or nil
-    return npcId
-  end
+  -- Mapping from encounter IDs (as reported by BOSS_KILL event) to NPC IDs
+  -- This allows us to track boss kills even when the kill is delivered by someone outside your party
+  local ENCOUNTER_ID_TO_NPC_IDS = {
+    -- Lower Blackrock Spire
+    [276] = {9816},   -- Pyroguard Emberseer
+    [278] = {10429, 10339},  -- Warchief Rend Blackhand / Gyth (both use 278)
+    [279] = {10430},  -- The Beast
+    [280] = {10363},  -- General Drakkisath
+    
+    -- Molten Core
+    [663] = {12118},  -- Lucifron
+    [664] = {11982},  -- Magmadar
+    [665] = {12259},  -- Gehennas
+    [666] = {12057},  -- Garr
+    [667] = {12264},  -- Shazzrah
+    [668] = {12056},  -- Baron Geddon
+    [669] = {12098},  -- Sulfuron Harbinger
+    [670] = {11988},  -- Golemagg the Incinerator
+    [671] = {12018},  -- Majordomo Executus
+    [672] = {11502},  -- Ragnaros
+    
+    -- Onyxia's Lair
+    [1084] = {10184}, -- Onyxia
+    
+    -- Blackwing Lair
+    [610] = {12435},  -- Razorgore the Untamed
+    [611] = {13020},  -- Vaelastrasz the Corrupt
+    [612] = {12017},  -- Broodlord Lashlayer
+    [613] = {11983},  -- Firemaw
+    [614] = {14601},  -- Ebonroc
+    [615] = {11981},  -- Flamegor
+    [616] = {14020},  -- Chromaggus
+    [617] = {11583},  -- Nefarian
+    
+    -- Zul'Gurub
+    [784] = {14507},  -- High Priest Venoxis
+    [785] = {14517},  -- High Priestess Jeklik
+    [786] = {14510},  -- High Priestess Mar'li
+    [787] = {11382},  -- Bloodlord Mandokir
+    [788] = {15082, 15083, 15084, 15085},  -- Edge of Madness (Gri'lek, Hazza'rah, Renataki, Wushoolay)
+    [789] = {14509},  -- High Priest Thekal
+    [790] = {15114},  -- Gahz'ranka
+    [791] = {14515},  -- High Priestess Arlokk
+    [792] = {11380},  -- Jin'do the Hexxer
+    [793] = {14834},  -- Hakkar
+    
+    -- Ruins of Ahn'Qiraj
+    [718] = {15348},  -- Kurinnaxx
+    [719] = {15341},  -- General Rajaxx
+    [720] = {15340},  -- Moam
+    [721] = {15370},  -- Buru the Gorger
+    [722] = {15369},  -- Ayamiss the Hunter
+    [723] = {15339},  -- Ossirian the Unscarred
+    
+    -- Temple of Ahn'Qiraj
+    [709] = {15263},  -- The Prophet Skeram
+    [710] = {15511, 15544, 15543},  -- Silithid Royalty (Lord Kri, Vem, Princess Yauj)
+    [711] = {15516},  -- Battleguard Sartura
+    [712] = {15510},  -- Fankriss the Unyielding
+    [713] = {15299},  -- Viscidus
+    [714] = {15509},  -- Princess Huhuran
+    [715] = {15276, 15275},  -- Twin Emperors (Vek'lor, Vek'nilash)
+    [716] = {15517},  -- Ouro
+    [717] = {15727},  -- C'Thun
+    
+    -- Naxxramas
+    [1107] = {15956}, -- Anub'Rekhan
+    [1108] = {15932}, -- Gluth
+    [1109] = {16060}, -- Gothik the Harvester
+    [1110] = {15953}, -- Grand Widow Faerlina
+    [1111] = {15931}, -- Grobbulus
+    [1112] = {15936}, -- Heigan the Unclean
+    [1113] = {16061}, -- Instructor Razuvious
+    [1114] = {15990}, -- Kel'Thuzad
+    [1115] = {16011}, -- Loatheb
+    [1116] = {15952}, -- Maexxna
+    [1117] = {15954}, -- Noth the Plaguebringer
+    [1118] = {16028}, -- Patchwerk
+    [1119] = {15989}, -- Sapphiron
+    [1120] = {15928}, -- Thaddius
+    [1121] = {16064, 16065, 16062, 16063},  -- The Four Horsemen (Thane Korth'azz, Lady Blaumeux, Highlord Mograine, Sir Zeliek)
+  }
 
-  local function IsOnRequiredMap()
-    -- If no map restriction, allow anywhere
-    if requiredMapId == nil then
-      return true
-    end
-    local mapId = select(8, GetInstanceInfo())
-    return mapId == requiredMapId
-  end
-
-  local function CountsSatisfied()
-    for npcId, need in pairs(requiredKills) do
-      -- Support both single NPC IDs and arrays of NPC IDs
-      local isSatisfied = false
-      if type(need) == "table" then
-        -- Array of NPC IDs - check if any of them has been killed
-        for _, id in pairs(need) do
-          if (state.counts[id] or 0) >= 1 then
-            isSatisfied = true
-            break
-          end
-        end
-      else
-        -- Single NPC ID
-        if (state.counts[npcId] or 0) >= need then
-          isSatisfied = true
-        end
-      end
-      if not isSatisfied then
-        return false
-      end
-    end
-    return true
+  -- Helper function to get NPC IDs from encounter ID
+  local function GetNpcIdsFromEncounterID(encounterID)
+    if not encounterID then return nil end
+    return ENCOUNTER_ID_TO_NPC_IDS[encounterID]
   end
 
   -- Get boss names from NPC IDs
@@ -193,7 +240,49 @@ function RaidCommon.registerRaidAchievement(def)
       [15989] = "Sapphiron",
       [15990] = "Kel'Thuzad",
     }
-    return bossNames[npcId] or ("Boss " .. npcId)
+    return bossNames[npcId] or ("Boss " .. tostring(npcId))
+  end
+
+  -- Helpers
+  local function GetNpcIdFromGUID(guid)
+    if not guid then return nil end
+    local npcId = select(6, strsplit("-", guid))
+    npcId = npcId and tonumber(npcId) or nil
+    return npcId
+  end
+
+  local function IsOnRequiredMap()
+    -- If no map restriction, allow anywhere
+    if requiredMapId == nil then
+      return true
+    end
+    local mapId = select(8, GetInstanceInfo())
+    return mapId == requiredMapId
+  end
+
+  local function CountsSatisfied()
+    for npcId, need in pairs(requiredKills) do
+      -- Support both single NPC IDs and arrays of NPC IDs
+      local isSatisfied = false
+      if type(need) == "table" then
+        -- Array of NPC IDs - check if any of them has been killed
+        for _, id in pairs(need) do
+          if (state.counts[id] or 0) >= 1 then
+            isSatisfied = true
+            break
+          end
+        end
+      else
+        -- Single NPC ID
+        if (state.counts[npcId] or 0) >= need then
+          isSatisfied = true
+        end
+      end
+      if not isSatisfied then
+        return false
+      end
+    end
+    return true
   end
 
   -- Update tooltip when progress changes (local; closes over the local generator)
@@ -293,14 +382,27 @@ function RaidCommon.registerRaidAchievement(def)
                   processBossEntry(npcId, need)
                 end
               end
+              
+              -- Also check for any bosses not in bossOrder (shouldn't happen, but just in case)
+              for npcId, need in pairs(requiredKills) do
+                local found = false
+                for _, orderedId in ipairs(bossOrder) do
+                  if orderedId == npcId then
+                    found = true
+                    break
+                  end
+                end
+                if not found then
+                  processBossEntry(npcId, need)
+                end
+              end
             else
+              -- No boss order - just iterate through pairs
               for npcId, need in pairs(requiredKills) do
                 processBossEntry(npcId, need)
               end
             end
           end
-          -- Hint for linking the achievement in chat
-          GameTooltip:AddLine("\nShift click to link in chat\nor add to tracking list", 0.5, 0.5, 0.5)
           
           GameTooltip:Show()
         end
@@ -316,29 +418,28 @@ function RaidCommon.registerRaidAchievement(def)
     end
   end
 
-  -- Raids allow any group size (solo, party, or raid)
-  -- No level requirement
-  local function IsGroupEligible()
-    -- Always eligible - no restrictions on group size or level for raids
-    return true
-  end
-
-  -- Create the tracker function dynamically
-  local function KillTracker(destGUID)
-    if not IsOnRequiredMap() then 
-      return false 
+  -- Helper function to process a boss kill from BOSS_KILL event (by encounter ID)
+  -- This is called when BOSS_KILL fires, providing encounterID
+  local function ProcessBossKillByEncounterID(encounterID)
+    if not IsOnRequiredMap() then
+      return false
     end
 
-    if state.completed then 
-      return false 
+    if state.completed then
+      return false
     end
 
-    local npcId = GetNpcIdFromGUID(destGUID)
-    
-    if npcId then
-      -- Check if this is a required boss first
+    -- Get NPC IDs for this encounter
+    local npcIds = GetNpcIdsFromEncounterID(encounterID)
+    if not npcIds then
+      return false
+    end
+
+    -- Process each NPC ID that matches this encounter
+    local anyKilled = false
+    for _, npcId in ipairs(npcIds) do
+      -- Check if this NPC ID is in our requiredKills
       local isRequiredBoss = false
-      -- Support both single NPC IDs and arrays of NPC IDs
       if requiredKills[npcId] then
         isRequiredBoss = true
       else
@@ -351,90 +452,62 @@ function RaidCommon.registerRaidAchievement(def)
                 break
               end
             end
-            if isRequiredBoss then break end
+            if isRequiredBoss then break
           end
         end
       end
-      
+
       if isRequiredBoss then
-        -- Check group eligibility (always returns true for raids, but keeping for consistency)
-        local isEligible = IsGroupEligible()
-        if isEligible then
-          -- Group is eligible - count this kill
-          if requiredKills[npcId] then
-            -- Direct lookup for single NPC ID
-            if type(requiredKills[npcId]) == "table" then
-              -- This is an array entry - increment the actual killed NPC ID
-              state.counts[npcId] = (state.counts[npcId] or 0) + 1
-            else
-              -- Single NPC ID with count requirement
-              state.counts[npcId] = (state.counts[npcId] or 0) + 1
+        -- Count this kill (always eligible for raids)
+        state.counts[npcId] = (state.counts[npcId] or 0) + 1
+        anyKilled = true
+
+        -- Store the level when this boss was killed (for tracking purposes)
+        local killLevel = UnitLevel("player") or 1
+        HardcoreAchievements_SetProgress(achId, "levelAtKill", killLevel)
+
+        -- Store points (raids do not support solo doubling)
+        if AchievementPanel and AchievementPanel.achievements then
+          local rowVarName = achId .. "_Row"
+          local row = _G[rowVarName]
+          if row and row.points then
+            local basePoints = tonumber(row.points) or 0
+            local isSelfFound = _G.IsSelfFound and _G.IsSelfFound() or false
+            if isSelfFound and not row.isSecretAchievement then
+              basePoints = basePoints - HCA_SELF_FOUND_BONUS
             end
-          else
-            -- Check if this NPC ID is in any array
-            for key, value in pairs(requiredKills) do
-              if type(value) == "table" then
-                for _, id in pairs(value) do
-                  if id == npcId then
-                    state.counts[npcId] = (state.counts[npcId] or 0) + 1
-                    break
-                  end
-                end
-              end
-            end
+            local pointsToStore = basePoints
+            HardcoreAchievements_SetProgress(achId, "pointsAtKill", pointsToStore)
           end
-          
-          -- Store the level when this boss was killed (for tracking purposes)
-          local killLevel = UnitLevel("player") or 1
-          HardcoreAchievements_SetProgress(achId, "levelAtKill", killLevel)
-          
-          -- Store points (raids do not support solo doubling)
-          if AchievementPanel and AchievementPanel.achievements then
-            local rowVarName = achId .. "_Row"
-            local row = _G[rowVarName]
-            if row and row.points then
-              -- Calculate base points (row.points includes self-found bonus, subtract it)
-              -- Self-found bonus will be added at completion time
-              local basePoints = tonumber(row.points) or 0
-              local isSelfFound = _G.IsSelfFound and _G.IsSelfFound() or false
-              if isSelfFound and not row.isSecretAchievement then
-                basePoints = basePoints - HCA_SELF_FOUND_BONUS
-              end
-              
-              -- Store regular points (no solo doubling for raids)
-              local pointsToStore = basePoints
-              HardcoreAchievements_SetProgress(achId, "pointsAtKill", pointsToStore)
-            end
-          end
-          
-          SaveProgress() -- Save progress after each eligible kill
-          UpdateTooltip() -- Update tooltip to show progress
-          print("|cff69adc9[Hardcore Achievements]|r |cffffd100" .. HCA_GetRaidBossName(npcId) .. " killed as part of achievement: " .. title .. "|r")
         end
+
+        print("|cff69adc9[Hardcore Achievements]|r |cffffd100" .. HCA_GetRaidBossName(npcId) .. " killed as part of achievement: " .. title .. "|r")
       end
     end
 
-    -- Check if achievement should be completed
-    local progress = HardcoreAchievements_GetProgress(achId)
-    if progress and progress.completed then
-      state.completed = true
-      return true
-    end
-    
-    -- Check if all bosses are killed
-    if CountsSatisfied() then
-      -- Since raids have no level requirement, complete immediately when all bosses are killed
-      state.completed = true
-      HardcoreAchievements_SetProgress(achId, "completed", true)
-      return true
+    if anyKilled then
+      SaveProgress() -- Save progress after each eligible kill
+      UpdateTooltip() -- Update tooltip to show progress
+
+      -- Check if achievement should be completed
+      local progress = HardcoreAchievements_GetProgress(achId)
+      if progress and progress.completed then
+        state.completed = true
+        return true
+      end
+
+      -- Check if all bosses are killed
+      if CountsSatisfied() then
+        state.completed = true
+        HardcoreAchievements_SetProgress(achId, "completed", true)
+        return true
+      end
     end
 
     return false
   end
 
-  -- Store the tracker function globally for the main system
-  _G[achId] = KillTracker
-
+  -- No global tracker function for raids - we use BOSS_KILL event with encounter IDs instead
   _G[achId .. "_IsCompleted"] = function() return state.completed end
 
   -- Check faction eligibility
@@ -471,7 +544,7 @@ function RaidCommon.registerRaidAchievement(def)
       icon,
       nil,  -- No level requirement for raids
       points,
-      KillTracker,
+      nil,  -- No KillTracker for raids - we use BOSS_KILL event with encounter IDs instead
       requiredQuestId,
       staticPoints,
       nil,
@@ -482,6 +555,9 @@ function RaidCommon.registerRaidAchievement(def)
     if requiredKills and next(requiredKills) then
       _G[rowVarName].requiredKills = requiredKills
     end
+    
+    -- Store the ProcessBossKillByEncounterID function on the row for BOSS_KILL event handler
+    _G[rowVarName].processBossKillByEncounterID = ProcessBossKillByEncounterID
     
     -- Refresh points with multipliers after creation
     if RefreshAllAchievementPoints then
@@ -516,4 +592,3 @@ end
 
 -- Export to global scope
 _G.RaidCommon = RaidCommon
-

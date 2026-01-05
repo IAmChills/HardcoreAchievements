@@ -2,9 +2,9 @@
 local Raids = {
   -- Lower Blackrock Spire (Level 60)
   {
-    achId = "LBRS",
-    title = "Lower Blackrock Spire",
-    tooltip = "Defeat the bosses of |cff0091e6Lower Blackrock Spire|r",
+    achId = "UBRS",
+    title = "Upper Blackrock Spire",
+    tooltip = "Defeat the bosses of |cff0091e6Upper Blackrock Spire|r",
     icon = 254648,
     points = 50,
     requiredQuestId = nil,
@@ -176,7 +176,10 @@ local Raids = {
       [16011] = 1,  -- Loatheb
       [16061] = 1,  -- Instructor Razuvious
       [16060] = 1,  -- Gothik the Harvester
-      ["Four Horsemen"] = {16064, 16065, 16062, 16063},  -- Four Horsemen (any one of the four)
+      [16064] = 1,  -- Thane Korth'azz (Four Horsemen)
+      [16065] = 1,  -- Lady Blaumeux (Four Horsemen)
+      [16062] = 1,  -- Highlord Mograine (Four Horsemen)
+      [16063] = 1,  -- Sir Zeliek (Four Horsemen)
       [16028] = 1,  -- Patchwerk
       [15931] = 1,  -- Grobbulus
       [15932] = 1,  -- Gluth
@@ -184,7 +187,7 @@ local Raids = {
       [15989] = 1,  -- Sapphiron
       [15990] = 1,  -- Kel'Thuzad
     },
-    bossOrder = {15956, 15953, 15952, 15954, 15936, 16011, 16061, 16060, "Four Horsemen", 16028, 15931, 15932, 15928, 15989, 15990}
+    bossOrder = {15956, 15953, 15952, 15954, 15936, 16011, 16061, 16060, 16064, 16065, 16062, 16063, 16028, 15931, 15932, 15928, 15989, 15990}
   },
 }
 

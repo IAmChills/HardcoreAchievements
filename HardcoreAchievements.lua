@@ -3041,6 +3041,7 @@ do
         end
         
         AchievementPanel._achEvt:RegisterEvent("COMBAT_LOG_EVENT_UNFILTERED")
+        AchievementPanel._achEvt:RegisterEvent("BOSS_KILL")
         AchievementPanel._achEvt:RegisterEvent("QUEST_ACCEPTED")
         AchievementPanel._achEvt:RegisterEvent("QUEST_TURNED_IN")
         AchievementPanel._achEvt:RegisterEvent("QUEST_REMOVED")
@@ -3060,6 +3061,19 @@ do
             if event == "PLAYER_ENTERING_WORLD" then
                 externalPlayersByNPC = {}
                 npcsInCombat = {}
+                return
+            end
+            -- Handle BOSS_KILL event for raid achievements (fires regardless of who delivered final blow)
+            if event == "BOSS_KILL" then
+                local encounterID, encounterName = ...
+                if encounterID and AchievementPanel and AchievementPanel.achievements then
+                    -- Process boss kill for all raid achievements that have processBossKillByEncounterID function
+                    for _, row in ipairs(AchievementPanel.achievements) do
+                        if not row.completed and type(row.processBossKillByEncounterID) == "function" then
+                            row.processBossKillByEncounterID(encounterID)
+                        end
+                    end
+                end
                 return
             end
             -- Clean up combat tracking when combat ends
