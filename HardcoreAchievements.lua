@@ -1,12 +1,25 @@
 local ADDON_NAME, addon = ...
 local playerGUID
-HCA_SELF_FOUND_BONUS = 5
+-- Legacy constant (historically a flat +5). Kept for backwards-compat, but no longer used in point math.
+HCA_SELF_FOUND_BONUS = HCA_SELF_FOUND_BONUS or 5
 local SETTINGS_ICON_TEXTURE = "Interface\\AddOns\\HardcoreAchievements\\Images\\icon_gear.png"
 
 local EvaluateCustomCompletions
 local RefreshOutleveledAll
 local ProfessionTracker = _G.HCA_ProfessionCommon
 local QuestTrackedRows = {}
+
+-- =========================================================
+-- Self-Found points bonus
+-- =========================================================
+-- New rule: bonus = +0.5x the achievement's BASE points (before multipliers/solo doubling), rounded to nearest integer.
+local function GetSelfFoundBonus(basePoints)
+    local bp = tonumber(basePoints) or 0
+    if bp <= 0 then return 0 end
+    return math.floor((bp * 0.5) + 0.5)
+end
+
+_G.HCA_GetSelfFoundBonus = GetSelfFoundBonus
 
 -- Load AchievementTracker module (loaded via TOC, accessed lazily)
 local function GetAchievementTracker()
@@ -417,7 +430,9 @@ function HCA_AchievementCount()
     
     if AchievementPanel and AchievementPanel.achievements then
         for _, row in ipairs(AchievementPanel.achievements) do
-            local hiddenByProfession = row.hiddenByProfession
+            -- `hiddenByProfession` is used to "overwrite" profession milestone tiers (e.g. show 150, hide 75).
+            -- Even when hidden, COMPLETED profession milestones should still count toward the totals.
+            local hiddenByProfession = row.hiddenByProfession and not row.completed
             local hiddenUntilComplete = row.hiddenUntilComplete and not row.completed
             
             -- Exclude variation achievements from the count UNLESS they are completed
@@ -674,7 +689,8 @@ local function ApplyOutleveledStyle(row)
     local isOutleveled = IsRowOutleveled(row)
     
     if row.Icon and row.Icon.SetDesaturated then
-        if row.completed or isOutleveled then
+        -- Completed achievements are full color; failed/outleveled should remain desaturated
+        if row.completed then
             row.Icon:SetDesaturated(false)
         else
             row.Icon:SetDesaturated(true)
@@ -765,10 +781,10 @@ function HCA_MarkRowCompleted(row, cdbParam)
             -- Add self-found bonus if applicable (pointsAtKill doesn't include it)
             local isSelfFound = _G.IsSelfFound and _G.IsSelfFound() or false
             local isDungeonSet = row._def and row._def.isDungeonSet
-            local isReputation = row._def and row._def.isReputation
-            local isRaid = row._def and row._def.isRaid
-            if isSelfFound and not row.isSecretAchievement and not isDungeonSet and not isReputation and not isRaid then
-                finalPoints = finalPoints + HCA_SELF_FOUND_BONUS
+            -- Reputation achievements SHOULD receive the self-found bonus.
+            if isSelfFound and not row.isSecretAchievement and not isDungeonSet then
+                local baseForBonus = row.originalPoints or row.revealPointsBase or row.points or 0
+                finalPoints = finalPoints + GetSelfFoundBonus(baseForBonus)
                 -- Mark that we've already applied self-found bonus so ApplySelfFoundBonus doesn't add it again
                 rec.SFMod = true
             end
@@ -1161,9 +1177,21 @@ function HCA_AchToast_Show(iconTex, title, pts, achIdOrRow)
             local isSelfFound = _G.IsSelfFound and _G.IsSelfFound() or false
             local isSecretAchievement = row and row.isSecretAchievement or false
             local isDungeonSet = row and row._def and row._def.isDungeonSet
-            local isReputation = row and row._def and row._def.isReputation
-            if isSelfFound and not isSecretAchievement and not isDungeonSet and not isReputation then
-                finalPoints = finalPoints + HCA_SELF_FOUND_BONUS
+            -- Reputation achievements SHOULD receive the self-found bonus.
+            if isSelfFound and not isSecretAchievement and not isDungeonSet then
+                -- Bonus is based on the base points (originalPoints) even though it's applied after multipliers
+                local baseForBonus = 0
+                if row and row.originalPoints then
+                    baseForBonus = row.originalPoints
+                elseif AchievementPanel and AchievementPanel.achievements and achId then
+                    for _, r in ipairs(AchievementPanel.achievements) do
+                        if r and (r.id == achId or r.achId == achId) then
+                            baseForBonus = r.originalPoints or r.points or 0
+                            break
+                        end
+                    end
+                end
+                finalPoints = finalPoints + GetSelfFoundBonus(baseForBonus)
             end
         end
     end
@@ -1271,12 +1299,23 @@ local function ApplySelfFoundBonus()
         if not AchievementPanel or not AchievementPanel.achievements then return false end
         for _, row in ipairs(AchievementPanel.achievements) do
             if row.id == achId and row._def then
-                if row._def.isDungeonSet or row._def.isReputation then
+                -- Reputation achievements SHOULD receive the self-found bonus.
+                if row._def.isDungeonSet then
                     return true
                 end
             end
         end
         return false
+    end
+
+    local function getBasePointsForAch(achId)
+        if not AchievementPanel or not AchievementPanel.achievements then return 0 end
+        for _, row in ipairs(AchievementPanel.achievements) do
+            if row and (row.id == achId or row.achId == achId) then
+                return tonumber(row.originalPoints) or tonumber(row.points) or 0
+            end
+        end
+        return 0
     end
 
     local updatedCount = 0
@@ -1285,7 +1324,8 @@ local function ApplySelfFoundBonus()
             if isSecretAch(achId) or isDungeonSetOrReputation(achId) then
                 ach.SFMod = true -- mark so we don't try again later
             else
-            ach.points = (ach.points or 0) + HCA_SELF_FOUND_BONUS
+            local baseForBonus = getBasePointsForAch(achId)
+            ach.points = (ach.points or 0) + GetSelfFoundBonus(baseForBonus)
             ach.SFMod = true
             updatedCount = updatedCount + 1
             end

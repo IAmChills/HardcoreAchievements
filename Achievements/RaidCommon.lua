@@ -1,5 +1,88 @@
 local RaidCommon = {}
 
+-- Mapping from encounter IDs (as reported by BOSS_KILL event) to NPC IDs
+-- This allows us to track boss kills even when the kill is delivered by someone outside your party
+local ENCOUNTER_ID_TO_NPC_IDS = {
+  -- Lower Blackrock Spire
+  [276] = {9816},   -- Pyroguard Emberseer
+  [278] = {10429, 10339},  -- Warchief Rend Blackhand / Gyth (both use 278)
+  [279] = {10430},  -- The Beast
+  [280] = {10363},  -- General Drakkisath
+  
+  -- Molten Core
+  [663] = {12118},  -- Lucifron
+  [664] = {11982},  -- Magmadar
+  [665] = {12259},  -- Gehennas
+  [666] = {12057},  -- Garr
+  [667] = {12264},  -- Shazzrah
+  [668] = {12056},  -- Baron Geddon
+  [669] = {12098},  -- Sulfuron Harbinger
+  [670] = {11988},  -- Golemagg the Incinerator
+  [671] = {12018},  -- Majordomo Executus
+  [672] = {11502},  -- Ragnaros
+  
+  -- Onyxia's Lair
+  [1084] = {10184}, -- Onyxia
+  
+  -- Blackwing Lair
+  [610] = {12435},  -- Razorgore the Untamed
+  [611] = {13020},  -- Vaelastrasz the Corrupt
+  [612] = {12017},  -- Broodlord Lashlayer
+  [613] = {11983},  -- Firemaw
+  [614] = {14601},  -- Ebonroc
+  [615] = {11981},  -- Flamegor
+  [616] = {14020},  -- Chromaggus
+  [617] = {11583},  -- Nefarian
+  
+  -- Zul'Gurub
+  [784] = {14507},  -- High Priest Venoxis
+  [785] = {14517},  -- High Priestess Jeklik
+  [786] = {14510},  -- High Priestess Mar'li
+  [787] = {11382},  -- Bloodlord Mandokir
+  [788] = {15082, 15083, 15084, 15085},  -- Edge of Madness (Gri'lek, Hazza'rah, Renataki, Wushoolay)
+  [789] = {14509},  -- High Priest Thekal
+  [790] = {15114},  -- Gahz'ranka
+  [791] = {14515},  -- High Priestess Arlokk
+  [792] = {11380},  -- Jin'do the Hexxer
+  [793] = {14834},  -- Hakkar
+  
+  -- Ruins of Ahn'Qiraj
+  [718] = {15348},  -- Kurinnaxx
+  [719] = {15341},  -- General Rajaxx
+  [720] = {15340},  -- Moam
+  [721] = {15370},  -- Buru the Gorger
+  [722] = {15369},  -- Ayamiss the Hunter
+  [723] = {15339},  -- Ossirian the Unscarred
+  
+  -- Temple of Ahn'Qiraj
+  [709] = {15263},  -- The Prophet Skeram
+  [710] = {15511, 15544, 15543},  -- Silithid Royalty (Lord Kri, Vem, Princess Yauj)
+  [711] = {15516},  -- Battleguard Sartura
+  [712] = {15510},  -- Fankriss the Unyielding
+  [713] = {15299},  -- Viscidus
+  [714] = {15509},  -- Princess Huhuran
+  [715] = {15276, 15275},  -- Twin Emperors (Vek'lor, Vek'nilash)
+  [716] = {15517},  -- Ouro
+  [717] = {15727},  -- C'Thun
+  
+  -- Naxxramas
+  [1107] = {15956}, -- Anub'Rekhan
+  [1108] = {15932}, -- Gluth
+  [1109] = {16060}, -- Gothik the Harvester
+  [1110] = {15953}, -- Grand Widow Faerlina
+  [1111] = {15931}, -- Grobbulus
+  [1112] = {15936}, -- Heigan the Unclean
+  [1113] = {16061}, -- Instructor Razuvious
+  [1114] = {15990}, -- Kel'Thuzad
+  [1115] = {16011}, -- Loatheb
+  [1116] = {15952}, -- Maexxna
+  [1117] = {15954}, -- Noth the Plaguebringer
+  [1118] = {16028}, -- Patchwerk
+  [1119] = {15989}, -- Sapphiron
+  [1120] = {15928}, -- Thaddius
+  [1121] = {16064, 16065, 16062, 16063},  -- The Four Horsemen (Thane Korth'azz, Lady Blaumeux, Highlord Mograine, Sir Zeliek)
+}
+
 -- Register a raid achievement with the given definition
 function RaidCommon.registerRaidAchievement(def)
   local achId = def.achId
@@ -60,89 +143,6 @@ function RaidCommon.registerRaidAchievement(def)
   -- Dynamic names first so functions capture these locals
   local registerFuncName = "HCA_Register" .. achId
   local rowVarName       = achId .. "_Row"
-
-  -- Mapping from encounter IDs (as reported by BOSS_KILL event) to NPC IDs
-  -- This allows us to track boss kills even when the kill is delivered by someone outside your party
-  local ENCOUNTER_ID_TO_NPC_IDS = {
-    -- Lower Blackrock Spire
-    [276] = {9816},   -- Pyroguard Emberseer
-    [278] = {10429, 10339},  -- Warchief Rend Blackhand / Gyth (both use 278)
-    [279] = {10430},  -- The Beast
-    [280] = {10363},  -- General Drakkisath
-    
-    -- Molten Core
-    [663] = {12118},  -- Lucifron
-    [664] = {11982},  -- Magmadar
-    [665] = {12259},  -- Gehennas
-    [666] = {12057},  -- Garr
-    [667] = {12264},  -- Shazzrah
-    [668] = {12056},  -- Baron Geddon
-    [669] = {12098},  -- Sulfuron Harbinger
-    [670] = {11988},  -- Golemagg the Incinerator
-    [671] = {12018},  -- Majordomo Executus
-    [672] = {11502},  -- Ragnaros
-    
-    -- Onyxia's Lair
-    [1084] = {10184}, -- Onyxia
-    
-    -- Blackwing Lair
-    [610] = {12435},  -- Razorgore the Untamed
-    [611] = {13020},  -- Vaelastrasz the Corrupt
-    [612] = {12017},  -- Broodlord Lashlayer
-    [613] = {11983},  -- Firemaw
-    [614] = {14601},  -- Ebonroc
-    [615] = {11981},  -- Flamegor
-    [616] = {14020},  -- Chromaggus
-    [617] = {11583},  -- Nefarian
-    
-    -- Zul'Gurub
-    [784] = {14507},  -- High Priest Venoxis
-    [785] = {14517},  -- High Priestess Jeklik
-    [786] = {14510},  -- High Priestess Mar'li
-    [787] = {11382},  -- Bloodlord Mandokir
-    [788] = {15082, 15083, 15084, 15085},  -- Edge of Madness (Gri'lek, Hazza'rah, Renataki, Wushoolay)
-    [789] = {14509},  -- High Priest Thekal
-    [790] = {15114},  -- Gahz'ranka
-    [791] = {14515},  -- High Priestess Arlokk
-    [792] = {11380},  -- Jin'do the Hexxer
-    [793] = {14834},  -- Hakkar
-    
-    -- Ruins of Ahn'Qiraj
-    [718] = {15348},  -- Kurinnaxx
-    [719] = {15341},  -- General Rajaxx
-    [720] = {15340},  -- Moam
-    [721] = {15370},  -- Buru the Gorger
-    [722] = {15369},  -- Ayamiss the Hunter
-    [723] = {15339},  -- Ossirian the Unscarred
-    
-    -- Temple of Ahn'Qiraj
-    [709] = {15263},  -- The Prophet Skeram
-    [710] = {15511, 15544, 15543},  -- Silithid Royalty (Lord Kri, Vem, Princess Yauj)
-    [711] = {15516},  -- Battleguard Sartura
-    [712] = {15510},  -- Fankriss the Unyielding
-    [713] = {15299},  -- Viscidus
-    [714] = {15509},  -- Princess Huhuran
-    [715] = {15276, 15275},  -- Twin Emperors (Vek'lor, Vek'nilash)
-    [716] = {15517},  -- Ouro
-    [717] = {15727},  -- C'Thun
-    
-    -- Naxxramas
-    [1107] = {15956}, -- Anub'Rekhan
-    [1108] = {15932}, -- Gluth
-    [1109] = {16060}, -- Gothik the Harvester
-    [1110] = {15953}, -- Grand Widow Faerlina
-    [1111] = {15931}, -- Grobbulus
-    [1112] = {15936}, -- Heigan the Unclean
-    [1113] = {16061}, -- Instructor Razuvious
-    [1114] = {15990}, -- Kel'Thuzad
-    [1115] = {16011}, -- Loatheb
-    [1116] = {15952}, -- Maexxna
-    [1117] = {15954}, -- Noth the Plaguebringer
-    [1118] = {16028}, -- Patchwerk
-    [1119] = {15989}, -- Sapphiron
-    [1120] = {15928}, -- Thaddius
-    [1121] = {16064, 16065, 16062, 16063},  -- The Four Horsemen (Thane Korth'azz, Lady Blaumeux, Highlord Mograine, Sir Zeliek)
-  }
 
   -- Helper function to get NPC IDs from encounter ID
   local function GetNpcIdsFromEncounterID(encounterID)
@@ -452,7 +452,9 @@ function RaidCommon.registerRaidAchievement(def)
                 break
               end
             end
-            if isRequiredBoss then break
+            if isRequiredBoss then
+              break
+            end
           end
         end
       end
@@ -471,12 +473,15 @@ function RaidCommon.registerRaidAchievement(def)
           local rowVarName = achId .. "_Row"
           local row = _G[rowVarName]
           if row and row.points then
-            local basePoints = tonumber(row.points) or 0
-            local isSelfFound = _G.IsSelfFound and _G.IsSelfFound() or false
-            if isSelfFound and not row.isSecretAchievement then
-              basePoints = basePoints - HCA_SELF_FOUND_BONUS
+            -- Store pointsAtKill WITHOUT the self-found bonus.
+            -- Recompute from base/original points so we don't rely on subtracting a (now dynamic) bonus.
+            local base = tonumber(row.originalPoints) or tonumber(row.points) or 0
+            local pointsToStore = base
+            if not row.staticPoints then
+              local preset = _G.GetPlayerPresetFromSettings and _G.GetPlayerPresetFromSettings() or nil
+              local multiplier = _G.GetPresetMultiplier and _G.GetPresetMultiplier(preset) or 1.0
+              pointsToStore = math.floor(base * multiplier + 0.5)
             end
-            local pointsToStore = basePoints
             HardcoreAchievements_SetProgress(achId, "pointsAtKill", pointsToStore)
           end
         end

@@ -15,6 +15,27 @@ local function GetAchievementById(achId)
 	if _G.HCA_AchievementDefs and _G.HCA_AchievementDefs[tostring(achId)] then
 		return _G.HCA_AchievementDefs[tostring(achId)]
 	end
+	-- Check achievement panel rows for reputation and dungeon set achievements
+	if _G.AchievementPanel and _G.AchievementPanel.achievements then
+		for _, row in ipairs(_G.AchievementPanel.achievements) do
+			local rowId = row.id or row.achId
+			if rowId and tostring(rowId) == tostring(achId) then
+				-- Return the definition from row._def if available, or construct from row data
+				if row._def then
+					return row._def
+				elseif row.Title and row.Title.GetText then
+					-- Construct a basic definition from row data
+					return {
+						achId = achId,
+						title = row.Title:GetText() or tostring(achId),
+						tooltip = row.tooltip or "",
+						icon = row.Icon and row.Icon.GetTexture and row.Icon:GetTexture() or 136116,
+						points = tonumber(row.points) or tonumber(row.originalPoints) or 0
+					}
+				end
+			end
+		end
+	end
 	return nil
 end
 
@@ -122,38 +143,131 @@ if Old_ItemRef_SetHyperlink then
 				ItemRefTooltip:AddLine(tooltip, 0.9, 0.9, 0.9, true)
 			end
 
-			-- Special handling for dungeon-style achievements: points under description, then list required bosses
-			-- Only show boss list for actual dungeon achievements (those with mapID)
+			-- Special handling for dungeon and raid achievements: points under description, then list required bosses
+			-- Show boss list for achievements with requiredKills and mapID (dungeons) or isRaid flag (raids)
 			local showedDungeonDetails = false
-			if rec and rec.requiredKills and next(rec.requiredKills) ~= nil and rec.mapID then
+			if rec and rec.requiredKills and next(rec.requiredKills) ~= nil and (rec.mapID or rec.isRaid) then
 				showedDungeonDetails = true
 				ItemRefTooltip:AddLine(" ")
 				ItemRefTooltip:AddLine("Required Bosses:", 0, 1, 0)
 				local progressFn = _G.HardcoreAchievements_GetProgress
 				local progress = progressFn and progressFn(rec.achId) or nil
 				local counts = (progress and progress.counts) or {}
-				-- Build sorted list of boss IDs for stable order
+				
+				-- Determine which boss name function to use (raid vs dungeon)
+				local isRaid = rec.isRaid or false
+				local getBossNameFn = isRaid and _G.HCA_GetRaidBossName or _G.HCA_GetBossName
+				
+				-- Use bossOrder if available (for raids), otherwise build sorted list
 				local keys = {}
-				for npcId, _ in pairs(rec.requiredKills) do table.insert(keys, npcId) end
-				table.sort(keys, function(a, b)
-					local aa = tonumber(a) or 0
-					local bb = tonumber(b) or 0
-					return aa < bb
-				end)
-				local total = #keys
-				for i, npcId in ipairs(keys) do
-					local need = rec.requiredKills[npcId]
-					local idNum = tonumber(npcId) or npcId
-					local current = (counts[idNum] or counts[tostring(idNum)] or 0)
-					local bossName = _G.HCA_GetBossName and _G.HCA_GetBossName(idNum) or ("Boss " .. tostring(idNum))
-					local done = current >= (tonumber(need) or 1)
+				if rec.bossOrder and next(rec.bossOrder) ~= nil then
+					-- Use provided boss order
+					for _, npcId in ipairs(rec.bossOrder) do
+						table.insert(keys, npcId)
+					end
+				else
+					-- Build sorted list of boss IDs for stable order
+					for npcId, _ in pairs(rec.requiredKills) do 
+						table.insert(keys, npcId) 
+					end
+					table.sort(keys, function(a, b)
+						local aa = tonumber(a) or 0
+						local bb = tonumber(b) or 0
+						return aa < bb
+					end)
+				end
+				
+				for i, entry in ipairs(keys) do
+					-- Check if entry is a string alias (like "Edge of Madness" or "Ring Of Law")
+					local bossName = ""
+					local done = false
+					
+					if type(entry) == "string" then
+						-- String alias - use it as the display name and look up the NPC IDs
+						bossName = entry
+						local need = rec.requiredKills[entry]
+						if type(need) == "table" then
+							-- Array of NPC IDs - check if any has been killed
+							for _, id in ipairs(need) do
+								local idNumCheck = tonumber(id) or id
+								if (counts[idNumCheck] or counts[tostring(idNumCheck)] or 0) >= 1 then
+									done = true
+									break
+								end
+							end
+						end
+					else
+						-- Numeric NPC ID - proceed normally
+						local npcId = entry
+						local need = rec.requiredKills[npcId]
+						local idNum = tonumber(npcId) or npcId
+						local current = (counts[idNum] or counts[tostring(idNum)] or 0)
+						
+						-- Support both single NPC IDs and arrays of NPC IDs
+						if type(need) == "table" then
+							-- Array of NPC IDs - get names for all of them
+							local bossNames = {}
+							for _, id in ipairs(need) do
+								local name = (getBossNameFn and getBossNameFn(id)) or ("Boss " .. tostring(id))
+								table.insert(bossNames, name)
+							end
+							bossName = table.concat(bossNames, " / ")
+							-- Check if any has been killed
+							for _, id in ipairs(need) do
+								local idNumCheck = tonumber(id) or id
+								if (counts[idNumCheck] or counts[tostring(idNumCheck)] or 0) >= 1 then
+									done = true
+									break
+								end
+							end
+						else
+							-- Single NPC ID
+							bossName = (getBossNameFn and getBossNameFn(idNum)) or ("Boss " .. tostring(idNum))
+							done = current >= (tonumber(need) or 1)
+						end
+					end
+					
 					local lr, lg, lb = done and 1 or 0.5, done and 1 or 0.5, done and 1 or 0.5
 					ItemRefTooltip:AddLine(bossName, lr, lg, lb)
 				end
 			end
 
+			-- Special handling for dungeon set achievements: list required items
+			local showedDungeonSetDetails = false
+			if rec and rec.requiredItems and next(rec.requiredItems) ~= nil then
+				showedDungeonSetDetails = true
+				ItemRefTooltip:AddLine(" ")
+				ItemRefTooltip:AddLine("Required Items:", 0, 1, 0)
+				local progressFn = _G.HardcoreAchievements_GetProgress
+				local progress = progressFn and progressFn(rec.achId) or nil
+				local itemOwned = (progress and progress.itemOwned) or {}
+				local isCompleted = ViewerHasCompletedAchievement(achId)
+				
+				-- Use itemOrder if available, otherwise use requiredItems array order
+				local itemsToShow = rec.itemOrder or rec.requiredItems
+				for _, itemId in ipairs(itemsToShow) do
+					local owned = false
+					-- Check saved state first (once owned, always owned)
+					if itemOwned and itemOwned[itemId] then
+						owned = true
+					else
+						-- Fall back to checking current inventory
+						local count = GetItemCount and GetItemCount(itemId, true) or 0
+						owned = count > 0
+					end
+					-- If achievement is complete, all items show as owned
+					if isCompleted then
+						owned = true
+					end
+					
+					local itemName = _G.HCA_GetItemName and _G.HCA_GetItemName(itemId) or ("Item " .. tostring(itemId))
+					local lr, lg, lb = owned and 1 or 0.5, owned and 1 or 0.5, owned and 1 or 0.5
+					ItemRefTooltip:AddLine(itemName, lr, lg, lb)
+				end
+			end
+
             -- Non-dungeon: Zone only (points shown with completion status)
-            if not showedDungeonDetails then
+            if not showedDungeonDetails and not showedDungeonSetDetails then
                 local zoneText
                 if rec then
                     if type(rec.zone) == "string" then

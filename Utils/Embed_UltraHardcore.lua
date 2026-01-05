@@ -621,9 +621,8 @@ local function ApplyOutleveledStyleEmbed(row)
     
     -- Desaturate icon
     if row.Icon and row.Icon.SetDesaturated then
-        if IsRowOutleveled(row) then
-            row.Icon:SetDesaturated(false)
-        elseif row.completed then
+        -- Completed achievements are full color; failed/outleveled should remain desaturated
+        if row.completed then
             row.Icon:SetDesaturated(false)
         else
             row.Icon:SetDesaturated(true)
@@ -700,6 +699,8 @@ local function ReadRowData(src)
       requiredKills = src.requiredKills,
     outleveled = IsRowOutleveled(src),
     hiddenUntilComplete = not not src.hiddenUntilComplete,
+    -- Profession milestones can "overwrite" previous tiers via ProfessionTracker
+    hiddenByProfession = not not src.hiddenByProfession,
   }
 end
 
@@ -908,6 +909,9 @@ function EMBED:BuildClassicGrid(srcRows)
         shouldShow = data.outleveled
       end
       if data.hiddenUntilComplete and not data.completed then
+        shouldShow = false
+      end
+      if data.hiddenByProfession then
         shouldShow = false
       end
       
@@ -1453,6 +1457,9 @@ function EMBED:BuildModernRows(srcRows)
         shouldShow = data.outleveled
       end
       if data.hiddenUntilComplete and not data.completed then
+        shouldShow = false
+      end
+      if data.hiddenByProfession then
         shouldShow = false
       end
       

@@ -216,7 +216,8 @@ local function UpdateInspectionPointsDisplay(row)
     end
 
     if row.Icon and row.Icon.SetDesaturated then
-        if row.completed or isOutleveled then
+        -- Completed achievements are full color; failed/outleveled should remain desaturated
+        if row.completed then
             row.Icon:SetDesaturated(false)
         else
             row.Icon:SetDesaturated(true)
