@@ -37,11 +37,13 @@ Achievements\Common.lua
 Achievements\DungeonCommon.lua
 Achievements\DungeonSetCommon.lua
 Achievements\ReputationCommon.lua
+Achievements\RaidCommon.lua
 Achievements\ProfessionCatalog.lua
 Achievements\Catalog.lua
 Achievements\DungeonCatalog.lua
 Achievements\DungeonSetCatalog.lua
 Achievements\ReputationCatalog.lua
+Achievements\RaidCatalog.lua
 Achievements\FourCandles.lua
 
 Utils\Embed_UltraHardcore.lua
@@ -49,3 +51,6 @@ Utils\CommandHandler.lua
 Utils\AchievementLinks.lua
 Utils\OptionsPanel.lua
 Utils\CharacterInspection.lua
+
+Admin\AdminPanel.lua
+Admin\AdminPanelTest.lua

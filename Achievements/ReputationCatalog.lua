@@ -173,6 +173,14 @@ local Reputations = {
     points = 200,
     factionId = 87,
     staticPoints = true,
+  }, {
+    achId = "Wintersaber",
+    title = "Exalted with Wintersaber Trainers",
+    tooltip = "Reach Exalted reputation with |cff0091e6Wintersaber Trainers|r",
+    icon = 236681,
+    points = 200,
+    factionId = 589,
+    staticPoints = true,
   },
 
   -- ROGUE

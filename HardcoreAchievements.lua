@@ -1,12 +1,25 @@
 local ADDON_NAME, addon = ...
 local playerGUID
-HCA_SELF_FOUND_BONUS = 5
+-- Legacy constant (historically a flat +5). Kept for backwards-compat, but no longer used in point math.
+HCA_SELF_FOUND_BONUS = HCA_SELF_FOUND_BONUS or 5
 local SETTINGS_ICON_TEXTURE = "Interface\\AddOns\\HardcoreAchievements\\Images\\icon_gear.png"
 
 local EvaluateCustomCompletions
 local RefreshOutleveledAll
 local ProfessionTracker = _G.HCA_ProfessionCommon
 local QuestTrackedRows = {}
+
+-- =========================================================
+-- Self-Found points bonus
+-- =========================================================
+-- New rule: bonus = +0.5x the achievement's BASE points (before multipliers/solo doubling), rounded to nearest integer.
+local function GetSelfFoundBonus(basePoints)
+    local bp = tonumber(basePoints) or 0
+    if bp <= 0 then return 0 end
+    return math.floor((bp * 0.5) + 0.5)
+end
+
+_G.HCA_GetSelfFoundBonus = GetSelfFoundBonus
 
 -- Load AchievementTracker module (loaded via TOC, accessed lazily)
 local function GetAchievementTracker()
@@ -417,7 +430,9 @@ function HCA_AchievementCount()
     
     if AchievementPanel and AchievementPanel.achievements then
         for _, row in ipairs(AchievementPanel.achievements) do
-            local hiddenByProfession = row.hiddenByProfession
+            -- `hiddenByProfession` is used to "overwrite" profession milestone tiers (e.g. show 150, hide 75).
+            -- Even when hidden, COMPLETED profession milestones should still count toward the totals.
+            local hiddenByProfession = row.hiddenByProfession and not row.completed
             local hiddenUntilComplete = row.hiddenUntilComplete and not row.completed
             
             -- Exclude variation achievements from the count UNLESS they are completed
@@ -427,7 +442,8 @@ function HCA_AchievementCount()
             local isVariation = row._def and row._def.isVariation
             local isDungeonSet = row._def and row._def.isDungeonSet
             local isReputation = row._def and row._def.isReputation
-            local shouldCount = not hiddenByProfession and not hiddenUntilComplete and (not isVariation or row.completed) and (not isDungeonSet or row.completed) and (not isReputation or row.completed)
+            local isRaid = row._def and row._def.isRaid
+            local shouldCount = not hiddenByProfession and not hiddenUntilComplete and (not isVariation or row.completed) and (not isDungeonSet or row.completed) and (not isReputation or row.completed) and (not isRaid or row.completed)
             
             if shouldCount then
                 total = total + 1
@@ -673,7 +689,8 @@ local function ApplyOutleveledStyle(row)
     local isOutleveled = IsRowOutleveled(row)
     
     if row.Icon and row.Icon.SetDesaturated then
-        if row.completed or isOutleveled then
+        -- Completed achievements are full color; failed/outleveled should remain desaturated
+        if row.completed then
             row.Icon:SetDesaturated(false)
         else
             row.Icon:SetDesaturated(true)
@@ -725,8 +742,10 @@ local function ApplyOutleveledStyle(row)
 end
 
 -- Small utility: mark a UI row as completed visually + persist in DB
-function HCA_MarkRowCompleted(row)
-    if row.completed then return end
+function HCA_MarkRowCompleted(row, cdbParam)
+    if row.completed then 
+        return 
+    end
     row.completed = true
     UntrackRowForQuest(row)
 
@@ -735,7 +754,7 @@ function HCA_MarkRowCompleted(row)
     local _, cdb = GetCharDB()
     local wasSolo = false
     if cdb then
-        local id = row.id or (row.Title and row.Title:GetText()) or ("row"..tostring(row))
+        local id = row.achId or row.id or (row.Title and row.Title:GetText()) or ("row"..tostring(row))
         cdb.progress = cdb.progress or {}
         local progress = cdb.progress[id]
         
@@ -762,9 +781,10 @@ function HCA_MarkRowCompleted(row)
             -- Add self-found bonus if applicable (pointsAtKill doesn't include it)
             local isSelfFound = _G.IsSelfFound and _G.IsSelfFound() or false
             local isDungeonSet = row._def and row._def.isDungeonSet
-            local isReputation = row._def and row._def.isReputation
-            if isSelfFound and not row.isSecretAchievement and not isDungeonSet and not isReputation then
-                finalPoints = finalPoints + HCA_SELF_FOUND_BONUS
+            -- Reputation achievements SHOULD receive the self-found bonus.
+            if isSelfFound and not row.isSecretAchievement and not isDungeonSet then
+                local baseForBonus = row.originalPoints or row.revealPointsBase or row.points or 0
+                finalPoints = finalPoints + GetSelfFoundBonus(baseForBonus)
                 -- Mark that we've already applied self-found bonus so ApplySelfFoundBonus doesn't add it again
                 rec.SFMod = true
             end
@@ -877,7 +897,7 @@ local function RestoreCompletionsFromDB()
     if not cdb or not AchievementPanel or not AchievementPanel.achievements then return end
 
     for _, row in ipairs(AchievementPanel.achievements) do
-        local id = row.id or (row.Title and row.Title:GetText())
+        local id = row.id or row.achId or (row.Title and row.Title:GetText())
         local rec = id and cdb.achievements and cdb.achievements[id]
         if rec and rec.completed then
             row.completed = true
@@ -1157,9 +1177,21 @@ function HCA_AchToast_Show(iconTex, title, pts, achIdOrRow)
             local isSelfFound = _G.IsSelfFound and _G.IsSelfFound() or false
             local isSecretAchievement = row and row.isSecretAchievement or false
             local isDungeonSet = row and row._def and row._def.isDungeonSet
-            local isReputation = row and row._def and row._def.isReputation
-            if isSelfFound and not isSecretAchievement and not isDungeonSet and not isReputation then
-                finalPoints = finalPoints + HCA_SELF_FOUND_BONUS
+            -- Reputation achievements SHOULD receive the self-found bonus.
+            if isSelfFound and not isSecretAchievement and not isDungeonSet then
+                -- Bonus is based on the base points (originalPoints) even though it's applied after multipliers
+                local baseForBonus = 0
+                if row and row.originalPoints then
+                    baseForBonus = row.originalPoints
+                elseif AchievementPanel and AchievementPanel.achievements and achId then
+                    for _, r in ipairs(AchievementPanel.achievements) do
+                        if r and (r.id == achId or r.achId == achId) then
+                            baseForBonus = r.originalPoints or r.points or 0
+                            break
+                        end
+                    end
+                end
+                finalPoints = finalPoints + GetSelfFoundBonus(baseForBonus)
             end
         end
     end
@@ -1267,12 +1299,23 @@ local function ApplySelfFoundBonus()
         if not AchievementPanel or not AchievementPanel.achievements then return false end
         for _, row in ipairs(AchievementPanel.achievements) do
             if row.id == achId and row._def then
-                if row._def.isDungeonSet or row._def.isReputation then
+                -- Reputation achievements SHOULD receive the self-found bonus.
+                if row._def.isDungeonSet then
                     return true
                 end
             end
         end
         return false
+    end
+
+    local function getBasePointsForAch(achId)
+        if not AchievementPanel or not AchievementPanel.achievements then return 0 end
+        for _, row in ipairs(AchievementPanel.achievements) do
+            if row and (row.id == achId or row.achId == achId) then
+                return tonumber(row.originalPoints) or tonumber(row.points) or 0
+            end
+        end
+        return 0
     end
 
     local updatedCount = 0
@@ -1281,7 +1324,8 @@ local function ApplySelfFoundBonus()
             if isSecretAch(achId) or isDungeonSetOrReputation(achId) then
                 ach.SFMod = true -- mark so we don't try again later
             else
-            ach.points = (ach.points or 0) + HCA_SELF_FOUND_BONUS
+            local baseForBonus = getBasePointsForAch(achId)
+            ach.points = (ach.points or 0) + GetSelfFoundBonus(baseForBonus)
             ach.SFMod = true
             updatedCount = updatedCount + 1
             end
@@ -2161,6 +2205,53 @@ end)
 
 -- Filter dropdown - using shared FilterDropdown module
 
+-- Helper function to check if achievement should be shown based on checkbox filter
+-- Returns true if should show, false if should hide
+local function ShouldShowByCheckboxFilter(def, isCompleted, currentFilter, checkboxIndex, variationType)
+    -- Completed achievements always show when "all" or "completed" filter is selected
+    if isCompleted and (currentFilter == "all" or currentFilter == "completed") then
+        return true
+    end
+    
+    -- Load checkbox states from database
+    local checkboxStates = { false, false, false, false, false, false }
+    if type(HardcoreAchievements_GetCharDB) == "function" then
+        local _, cdb = HardcoreAchievements_GetCharDB()
+        if cdb and cdb.settings and cdb.settings.filterCheckboxes then
+            local states = cdb.settings.filterCheckboxes
+            if type(states) == "table" then
+                checkboxStates = {
+                    states[1] == true,  -- Trio
+                    states[2] == true,  -- Duo
+                    states[3] == true,  -- Solo
+                    states[4] == true,  -- Dungeon Sets
+                    states[5] == true,  -- Reputations
+                    states[6] == true,  -- Raids
+                }
+            end
+        end
+    end
+    
+    -- For variations, check based on variation type
+    if variationType then
+        if variationType == "Trio" then
+            return checkboxStates[1]
+        elseif variationType == "Duo" then
+            return checkboxStates[2]
+        elseif variationType == "Solo" then
+            return checkboxStates[3]
+        end
+        return false
+    end
+    
+    -- For other types, check the specified checkbox index
+    if checkboxIndex then
+        return checkboxStates[checkboxIndex]
+    end
+    
+    return true -- Default to showing if no checkbox specified
+end
+
 -- Function to apply the current filter to all achievement rows
 local function ApplyFilter()
     if not AchievementPanel or not AchievementPanel.achievements then return end
@@ -2188,113 +2279,29 @@ local function ApplyFilter()
             shouldShow = false
         end
         
-        -- Hide/show variation achievements based on checkbox states
-        -- Completed variations always show when "all" or "completed" filter is selected
-        if row._def and row._def.isVariation then
-            -- Only check checkbox state for non-completed variations
-            -- Completed variations always show with "all" or "completed" filter
+        -- Hide/show achievements based on checkbox filter
+        if row._def then
             local isCompleted = row.completed == true
-            local shouldCheckCheckbox = true
+            local def = row._def
             
-            if isCompleted and (currentFilter == "all" or currentFilter == "completed") then
-                -- Completed variations always show with these filters, skip checkbox check
-                shouldCheckCheckbox = false
-            end
-            
-            if shouldCheckCheckbox then
-                local checkboxStates = { false, false, false }
-                if type(HardcoreAchievements_GetCharDB) == "function" then
-                    local _, cdb = HardcoreAchievements_GetCharDB()
-                    if cdb and cdb.settings and cdb.settings.filterCheckboxes then
-                        local states = cdb.settings.filterCheckboxes
-                        if type(states) == "table" then
-                            checkboxStates = {
-                                states[1] == true,  -- Trio
-                                states[2] == true,  -- Duo
-                                states[3] == true,  -- Solo
-                            }
-                        end
-                    end
-                end
-                
-                local variationType = row._def.variationType
-                if variationType == "Trio" and not checkboxStates[1] then
-                    shouldShow = false
-                elseif variationType == "Duo" and not checkboxStates[2] then
-                    shouldShow = false
-                elseif variationType == "Solo" and not checkboxStates[3] then
+            if def.isVariation then
+                -- Variations: check based on variation type
+                if not ShouldShowByCheckboxFilter(def, isCompleted, currentFilter, nil, def.variationType) then
                     shouldShow = false
                 end
-            end
-        end
-        
-        -- Hide/show dungeon set achievements based on checkbox state
-        -- Completed dungeon sets always show when "all" or "completed" filter is selected
-        if row._def and row._def.isDungeonSet then
-            local isCompleted = row.completed == true
-            local shouldCheckCheckbox = true
-            
-            if isCompleted and (currentFilter == "all" or currentFilter == "completed") then
-                -- Completed dungeon sets always show with these filters, skip checkbox check
-                shouldCheckCheckbox = false
-            end
-            
-            if shouldCheckCheckbox then
-                local checkboxStates = { false, false, false, false, false }
-                if type(HardcoreAchievements_GetCharDB) == "function" then
-                    local _, cdb = HardcoreAchievements_GetCharDB()
-                    if cdb and cdb.settings and cdb.settings.filterCheckboxes then
-                        local states = cdb.settings.filterCheckboxes
-                        if type(states) == "table" then
-                            checkboxStates = {
-                                states[1] == true,  -- Trio
-                                states[2] == true,  -- Duo
-                                states[3] == true,  -- Solo
-                                states[4] == true,  -- Dungeon Sets
-                                states[5] == true,  -- Reputations
-                            }
-                        end
-                    end
-                end
-                
-                -- Check if "Show Dungeon Sets" checkbox (index 4) is enabled
-                if not checkboxStates[4] then
+            elseif def.isDungeonSet then
+                -- Dungeon Sets: check index 4
+                if not ShouldShowByCheckboxFilter(def, isCompleted, currentFilter, 4, nil) then
                     shouldShow = false
                 end
-            end
-        end
-        
-        -- Hide/show reputation achievements based on checkbox state
-        -- Completed reputation achievements always show when "all" or "completed" filter is selected
-        if row._def and row._def.isReputation then
-            local isCompleted = row.completed == true
-            local shouldCheckCheckbox = true
-            
-            if isCompleted and (currentFilter == "all" or currentFilter == "completed") then
-                -- Completed reputation achievements always show with these filters, skip checkbox check
-                shouldCheckCheckbox = false
-            end
-            
-            if shouldCheckCheckbox then
-                local checkboxStates = { false, false, false, false, false }
-                if type(HardcoreAchievements_GetCharDB) == "function" then
-                    local _, cdb = HardcoreAchievements_GetCharDB()
-                    if cdb and cdb.settings and cdb.settings.filterCheckboxes then
-                        local states = cdb.settings.filterCheckboxes
-                        if type(states) == "table" then
-                            checkboxStates = {
-                                states[1] == true,  -- Trio
-                                states[2] == true,  -- Duo
-                                states[3] == true,  -- Solo
-                                states[4] == true,  -- Dungeon Sets
-                                states[5] == true,  -- Reputations
-                            }
-                        end
-                    end
+            elseif def.isReputation then
+                -- Reputations: check index 5
+                if not ShouldShowByCheckboxFilter(def, isCompleted, currentFilter, 5, nil) then
+                    shouldShow = false
                 end
-                
-                -- Check if "Show Reputations" checkbox (index 5) is enabled
-                if not checkboxStates[5] then
+            elseif def.isRaid then
+                -- Raids: check index 6
+                if not ShouldShowByCheckboxFilter(def, isCompleted, currentFilter, 6, nil) then
                     shouldShow = false
                 end
             end
@@ -2320,7 +2327,7 @@ AchievementPanel.filterDropdown = filterDropdown
 FilterDropdown:InitializeDropdown(filterDropdown, {
     currentFilter = "all",
     -- checkboxStates will be loaded from database automatically
-    checkboxLabels = { "Show Dungeon Trios", "Show Dungeon Duos", "Show Dungeon Solos", "Show Dungeon Sets", "Show Reputations" },
+    checkboxLabels = { "Show Dungeon Trios", "Show Dungeon Duos", "Show Dungeon Solos", "Show Dungeon Sets", "Show Reputations", "Show Raids" },
     onFilterChange = function(filterValue)
         ApplyFilter()
     end,
@@ -2744,6 +2751,9 @@ function CreateAchievementRow(parent, achId, title, tooltip, icon, level, points
     if def and type(def.customSpell) == "function" then
         row.spellTracker = def.customSpell
     end
+    if def and type(def.customAura) == "function" then
+        row.auraTracker = def.customAura
+    end
     if def and type(def.customChat) == "function" then
         row.chatTracker = def.customChat
     end
@@ -2752,6 +2762,9 @@ function CreateAchievementRow(parent, achId, title, tooltip, icon, level, points
     end
     if def and type(def.customIsCompleted) == "function" then
         row.customIsCompleted = def.customIsCompleted
+    end
+    if def and type(def.customItem) == "function" then
+        row.itemTracker = def.customItem
     end
     if def and def.hiddenUntilComplete == true then
         row.hiddenUntilComplete = true
@@ -3068,12 +3081,13 @@ do
         end
         
         AchievementPanel._achEvt:RegisterEvent("COMBAT_LOG_EVENT_UNFILTERED")
+        AchievementPanel._achEvt:RegisterEvent("BOSS_KILL")
         AchievementPanel._achEvt:RegisterEvent("QUEST_ACCEPTED")
         AchievementPanel._achEvt:RegisterEvent("QUEST_TURNED_IN")
         AchievementPanel._achEvt:RegisterEvent("QUEST_REMOVED")
         AchievementPanel._achEvt:RegisterEvent("UNIT_SPELLCAST_SENT")
-        AchievementPanel._achEvt:RegisterEvent("UNIT_SPELLCAST_SUCCEEDED")
         AchievementPanel._achEvt:RegisterEvent("UNIT_INVENTORY_CHANGED")
+        AchievementPanel._achEvt:RegisterEvent("BAG_UPDATE_DELAYED")
         AchievementPanel._achEvt:RegisterEvent("CHAT_MSG_TEXT_EMOTE")
         AchievementPanel._achEvt:RegisterEvent("PLAYER_LEVEL_CHANGED")
         AchievementPanel._achEvt:RegisterEvent("CHAT_MSG_LOOT")
@@ -3081,11 +3095,25 @@ do
         AchievementPanel._achEvt:RegisterEvent("PLAYER_REGEN_ENABLED")
         AchievementPanel._achEvt:RegisterEvent("PLAYER_ENTERING_WORLD")
         AchievementPanel._achEvt:RegisterEvent("UPDATE_FACTION")
+        AchievementPanel._achEvt:RegisterEvent("UNIT_AURA")
         AchievementPanel._achEvt:SetScript("OnEvent", function(_, event, ...)
             -- Clean up external player tracking on zone loads
             if event == "PLAYER_ENTERING_WORLD" then
                 externalPlayersByNPC = {}
                 npcsInCombat = {}
+                return
+            end
+            -- Handle BOSS_KILL event for raid achievements (fires regardless of who delivered final blow)
+            if event == "BOSS_KILL" then
+                local encounterID, encounterName = ...
+                if encounterID and AchievementPanel and AchievementPanel.achievements then
+                    -- Process boss kill for all raid achievements that have processBossKillByEncounterID function
+                    for _, row in ipairs(AchievementPanel.achievements) do
+                        if not row.completed and type(row.processBossKillByEncounterID) == "function" then
+                            row.processBossKillByEncounterID(encounterID)
+                        end
+                    end
+                end
                 return
             end
             -- Clean up combat tracking when combat ends
@@ -3365,15 +3393,17 @@ do
                         end
                     end
                 end
-            elseif event == "UNIT_SPELLCAST_SUCCEEDED" then
-                local unit, castGUID, spellId = ...
+            elseif event == "UNIT_AURA" then
+                local unit = select(1, ...)
                 if unit ~= "player" then return end
-                if spellId ~= 11435 then return end
-                -- Only check MalletZF achievement for this specific spell
                 for _, row in ipairs(AchievementPanel.achievements) do
-                    if not row.completed and (row.id == "MalletZF" or row.achId == "MalletZF") then
-                        HCA_MarkRowCompleted(row)
-                        HCA_AchToast_Show(row.Icon:GetTexture(), row.Title:GetText(), row.points, row)
+                    if not row.completed and type(row.auraTracker) == "function" then
+                        local ok, shouldComplete = pcall(row.auraTracker)
+                        if ok and shouldComplete == true then
+                            HCA_MarkRowCompleted(row)
+                            HCA_AchToast_Show(row.Icon:GetTexture(), row.Title:GetText(), row.points, row)
+                            break -- Achievement completed, no need to check others
+                        end
                     end
                 end
             elseif event == "UNIT_INVENTORY_CHANGED" then
@@ -3412,6 +3442,17 @@ do
                                     HCA_AchToast_Show(row.Icon:GetTexture(), row.Title:GetText(), row.points, row)
                                 end
                             end
+                        end
+                    end
+                end
+            elseif event == "BAG_UPDATE_DELAYED" then
+                for _, row in ipairs(AchievementPanel.achievements) do
+                    if not row.completed and type(row.itemTracker) == "function" then
+                        local ok, shouldComplete = pcall(row.itemTracker)
+                        if ok and shouldComplete == true then
+                            HCA_MarkRowCompleted(row)
+                            HCA_AchToast_Show(row.Icon:GetTexture(), row.Title:GetText(), row.points, row)
+                            break -- Achievement completed, no need to check others
                         end
                     end
                 end

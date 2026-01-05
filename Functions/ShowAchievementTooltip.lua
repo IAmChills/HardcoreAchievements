@@ -218,8 +218,9 @@ function HCA_ShowAchievementTooltip(frame, data)
     
     -- Also check HCA_AchievementDefs for dungeon achievement definition
     local isDungeonAchievement = false
+    local achDef = nil
     if achId and _G.HCA_AchievementDefs then
-        local achDef = _G.HCA_AchievementDefs[tostring(achId)]
+        achDef = _G.HCA_AchievementDefs[tostring(achId)]
         if achDef and achDef.mapID then
             isDungeonAchievement = true
             if achDef.requiredKills then
@@ -251,10 +252,16 @@ function HCA_ShowAchievementTooltip(frame, data)
         local progress = _G.HardcoreAchievements_GetProgress and _G.HardcoreAchievements_GetProgress(achId)
         local counts = progress and progress.counts or {}
         
+        -- Check if this is a raid achievement (from def or achDef)
+        local isRaid = (def and def.isRaid) or (achDef and achDef.isRaid)
+        
         -- Helper function to process a single boss entry
         local function processBossEntry(npcId, need)
             local done = achievementCompleted
             local bossName = ""
+            
+            -- Determine which boss name function to use (raid vs dungeon)
+            local getBossNameFn = isRaid and _G.HCA_GetRaidBossName or _G.HCA_GetBossName
             
             -- Support both single NPC IDs and arrays of NPC IDs
             if type(need) == "table" then
@@ -262,7 +269,7 @@ function HCA_ShowAchievementTooltip(frame, data)
                 local bossNames = {}
                 for _, id in pairs(need) do
                     local current = (counts[id] or counts[tostring(id)] or 0)
-                    local name = (_G.HCA_GetBossName and _G.HCA_GetBossName(id)) or ("Boss " .. tostring(id))
+                    local name = (getBossNameFn and getBossNameFn(id)) or ("Boss " .. tostring(id))
                     table.insert(bossNames, name)
                     if not done and current >= 1 then
                         done = true
@@ -279,7 +286,7 @@ function HCA_ShowAchievementTooltip(frame, data)
                 -- Single NPC ID
                 local idNum = tonumber(npcId) or npcId
                 local current = (counts[idNum] or counts[tostring(idNum)] or 0)
-                bossName = (_G.HCA_GetBossName and _G.HCA_GetBossName(idNum)) or ("Boss " .. tostring(idNum))
+                bossName = (getBossNameFn and getBossNameFn(idNum)) or ("Boss " .. tostring(idNum))
                 if not done then
                     done = current >= (tonumber(need) or 1)
                 end
@@ -292,8 +299,7 @@ function HCA_ShowAchievementTooltip(frame, data)
             end
         end
         
-        -- Get bossOrder from achievement definition
-        local achDef = achId and _G.HCA_AchievementDefs and _G.HCA_AchievementDefs[tostring(achId)]
+        -- Get bossOrder from achievement definition (achDef already retrieved earlier)
         if achDef then
             bossOrder = achDef.bossOrder
         end

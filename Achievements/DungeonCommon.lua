@@ -2,27 +2,27 @@ local DungeonCommon = {}
 
 -- Variation definitions
 local VARIATIONS = {
-    {
-        suffix = "_Trio",
-        label = "Trio",
-        levelOffset = 3,
-        pointMultiplier = 2,
-        maxPartySize = 3,
-    },
-    {
-        suffix = "_Duo",
-        label = "Duo",
-        levelOffset = 4,
-        pointMultiplier = 3,
-        maxPartySize = 2,
-    },
-    {
-        suffix = "_Solo",
-        label = "Solo",
-        levelOffset = 5,
-        pointMultiplier = 4,
-        maxPartySize = 1,
-    },
+  {
+    suffix = "_Trio",
+    label = "Trio",
+    levelOffset = 3,
+    pointMultiplier = 2,
+    maxPartySize = 3,
+  },
+  {
+    suffix = "_Duo",
+    label = "Duo",
+    levelOffset = 4,
+    pointMultiplier = 3,
+    maxPartySize = 2,
+  },
+  {
+    suffix = "_Solo",
+    label = "Solo",
+    levelOffset = 5,
+    pointMultiplier = 4,
+    maxPartySize = 1,
+  },
 }
 
 -- Generate a variation achievement from a base dungeon achievement
@@ -581,16 +581,15 @@ function DungeonCommon.registerDungeonAchievement(def)
             local rowVarName = achId .. "_Row"
             local row = _G[rowVarName]
             if row and row.points then
-              -- Calculate base points (row.points includes self-found bonus, subtract it)
-              -- Self-found bonus will be added at completion time
-              local basePoints = tonumber(row.points) or 0
-              local isSelfFound = _G.IsSelfFound and _G.IsSelfFound() or false
-              if isSelfFound and not row.isSecretAchievement then
-                basePoints = basePoints - HCA_SELF_FOUND_BONUS
+              -- Store pointsAtKill WITHOUT the self-found bonus.
+              -- Recompute from base/original points so we don't rely on subtracting a (now dynamic) bonus.
+              local base = tonumber(row.originalPoints) or tonumber(row.points) or 0
+              local pointsToStore = base
+              if not row.staticPoints then
+                local preset = _G.GetPlayerPresetFromSettings and _G.GetPlayerPresetFromSettings() or nil
+                local multiplier = _G.GetPresetMultiplier and _G.GetPresetMultiplier(preset) or 1.0
+                pointsToStore = math.floor(base * multiplier + 0.5)
               end
-              
-              -- Store regular points (no solo doubling for dungeons)
-              local pointsToStore = basePoints
               HardcoreAchievements_SetProgress(achId, "pointsAtKill", pointsToStore)
             end
           end
@@ -601,7 +600,10 @@ function DungeonCommon.registerDungeonAchievement(def)
         else
           -- Group is ineligible - don't count this kill
           -- Player can return later with an eligible group to kill this boss
-          print("|cff69adc9[Hardcore Achievements]|r |cffffd100" .. HCA_GetBossName(npcId) .. " killed but group is ineligible - kill not counted for achievement: " .. title .. "|r")
+          -- Only print message if the achievement is visible (not filtered out)
+          if _G.HCA_IsAchievementVisible and _G.HCA_IsAchievementVisible(achId) then
+            print("|cff69adc9[Hardcore Achievements]|r |cffffd100" .. HCA_GetBossName(npcId) .. " killed but group is ineligible - kill not counted for achievement: " .. title .. "|r")
+          end
         end
       end
     end

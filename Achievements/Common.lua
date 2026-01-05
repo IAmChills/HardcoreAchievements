@@ -13,6 +13,26 @@ local function getNpcIdFromGUID(guid)
     return npcId and tonumber(npcId) or nil
 end
 
+-- Helper function to check if an achievement is visible (not filtered out)
+-- Made global so it can be used in other achievement files
+function _G.HCA_IsAchievementVisible(achId)
+    if not achId or not _G.AchievementPanel or not _G.AchievementPanel.achievements then
+        return false
+    end
+    
+    for _, row in ipairs(_G.AchievementPanel.achievements) do
+        local rowId = row.id or row.achId
+        if rowId and tostring(rowId) == tostring(achId) then
+            -- Check if row is visible (shown and not hidden by filters)
+            return row:IsShown() and not row.hiddenByProfession and not (row.hiddenUntilComplete and not row.completed)
+        end
+    end
+    
+    return false
+end
+
+local isAchievementVisible = _G.HCA_IsAchievementVisible
+
 function M.registerQuestAchievement(cfg)
     assert(type(cfg.achId) == "string", "achId required")
     local ACH_ID = cfg.achId
@@ -156,20 +176,18 @@ function M.registerQuestAchievement(cfg)
                                 local isSoloMode = _G.HardcoreAchievements_IsSoloModeEnabled and _G.HardcoreAchievements_IsSoloModeEnabled() or false
                                 
                                 -- Detect if points have been doubled by preview toggle
-                                local basePoints = currentPoints
-                                if isSelfFound and not row.isSecretAchievement then
-                                    basePoints = basePoints - HCA_SELF_FOUND_BONUS
-                                end
+                                -- Use originalPoints when available; do NOT subtract a flat self-found bonus from display points.
+                                local basePoints = tonumber(row.originalPoints) or currentPoints
                                 -- If solo mode toggle is on and row.allowSoloDouble, the points might be doubled
                                 -- Use originalPoints if available, otherwise divide by 2 if doubled
                                 if row.originalPoints then
                                     -- Use stored original points
                                     basePoints = tonumber(row.originalPoints) or basePoints
-                                    -- Apply multiplier if not static
+                                    -- Apply multiplier if not static (replaces base points)
                                     if not row.staticPoints then
                                         local preset = _G.GetPlayerPresetFromSettings and _G.GetPlayerPresetFromSettings() or nil
                                         local multiplier = _G.GetPresetMultiplier and _G.GetPresetMultiplier(preset) or 1.0
-                                        basePoints = basePoints + math.floor((basePoints) * (multiplier - 1) + 0.5)
+                                        basePoints = math.floor((basePoints) * multiplier + 0.5)
                                     end
                                 elseif isSoloMode and row.allowSoloDouble and not row.staticPoints then
                                     -- Points might have been doubled by preview, divide by 2 to get base
@@ -186,9 +204,11 @@ function M.registerQuestAchievement(cfg)
                                     -- Update points display to show doubled value (including self-found bonus for display)
                                     local displayPoints = pointsToStore
                                     local isDungeonSet = row._def and row._def.isDungeonSet
-                                    local isReputation = row._def and row._def.isReputation
-                                    if isSelfFound and not row.isSecretAchievement and not isDungeonSet and not isReputation then
-                                        displayPoints = displayPoints + HCA_SELF_FOUND_BONUS
+                                    -- Reputation achievements SHOULD receive the self-found bonus.
+                                    if isSelfFound and not row.isSecretAchievement and not isDungeonSet then
+                                        local getBonus = _G.HCA_GetSelfFoundBonus
+                                        local bonus = (type(getBonus) == "function") and getBonus(tonumber(row.originalPoints) or 0) or 0
+                                        displayPoints = displayPoints + bonus
                                     end
                                     row.points = displayPoints
                                     if row.Points then
@@ -619,7 +639,10 @@ function M.registerQuestAchievement(cfg)
                     return false
                 end
                 
-                print("|cff69adc9[Hardcore Achievements]|r |cffffd100Achievement " .. (ACH_ID or "Unknown") .. " cannot be fulfilled: An ineligible player contributed.|r")
+                -- Only print message if the achievement is visible (not filtered out)
+                if isAchievementVisible(ACH_ID) then
+                    print("|cff69adc9[Hardcore Achievements]|r |cffffd100Achievement " .. (ACH_ID or "Unknown") .. " cannot be fulfilled: An ineligible player contributed.|r")
+                end
                 
                 -- Track the kill progress, but mark as ineligible (don't increment eligible counts)
                 if REQUIRED_KILLS then
@@ -743,10 +766,8 @@ function M.registerQuestAchievement(cfg)
                             local isSoloMode = _G.HardcoreAchievements_IsSoloModeEnabled and _G.HardcoreAchievements_IsSoloModeEnabled() or false
                             
                             -- Always recalculate base points from originalPoints if available, or from current points
-                            local basePoints = currentPoints
-                            if isSelfFound and not row.isSecretAchievement then
-                                basePoints = basePoints - HCA_SELF_FOUND_BONUS
-                            end
+                            -- Use originalPoints when available; do NOT subtract a flat self-found bonus from display points.
+                            local basePoints = tonumber(row.originalPoints) or currentPoints
                             if row.originalPoints then
                                 -- Use stored original points and apply current preset multiplier
                                 basePoints = tonumber(row.originalPoints) or basePoints
@@ -860,10 +881,8 @@ function M.registerQuestAchievement(cfg)
                             local isSoloMode = _G.HardcoreAchievements_IsSoloModeEnabled and _G.HardcoreAchievements_IsSoloModeEnabled() or false
                             
                             -- Always recalculate base points from originalPoints if available, or from current points
-                            local basePoints = currentPoints
-                            if isSelfFound and not row.isSecretAchievement then
-                                basePoints = basePoints - HCA_SELF_FOUND_BONUS
-                            end
+                            -- Use originalPoints when available; do NOT subtract a flat self-found bonus from display points.
+                            local basePoints = tonumber(row.originalPoints) or currentPoints
                             if row.originalPoints then
                                 -- Use stored original points and apply current preset multiplier
                                 basePoints = tonumber(row.originalPoints) or basePoints
@@ -946,9 +965,11 @@ function M.registerQuestAchievement(cfg)
                                 -- Update points display to show doubled value (including self-found bonus for display)
                                 local displayPoints = effectivePoints
                                 local isDungeonSet = row._def and row._def.isDungeonSet
-                                local isReputation = row._def and row._def.isReputation
-                                if isSelfFound and not row.isSecretAchievement and not isDungeonSet and not isReputation then
-                                    displayPoints = displayPoints + HCA_SELF_FOUND_BONUS
+                                -- Reputation achievements SHOULD receive the self-found bonus.
+                                if isSelfFound and not row.isSecretAchievement and not isDungeonSet then
+                                    local getBonus = _G.HCA_GetSelfFoundBonus
+                                    local bonus = (type(getBonus) == "function") and getBonus(tonumber(row.originalPoints) or 0) or 0
+                                    displayPoints = displayPoints + bonus
                                 end
                                 row.points = displayPoints
                                 if row.Points then
@@ -1145,11 +1166,9 @@ function M.registerQuestAchievement(cfg)
                             local isSelfFound = _G.IsSelfFound and _G.IsSelfFound() or false
                             local isSoloMode = _G.HardcoreAchievements_IsSoloModeEnabled and _G.HardcoreAchievements_IsSoloModeEnabled() or false
                             
-                            -- Detect if points have been doubled by preview toggle
-                            local basePoints = currentPoints
-                            if isSelfFound and not row.isSecretAchievement then
-                                basePoints = basePoints - HCA_SELF_FOUND_BONUS
-                            end
+                                -- Detect if points have been doubled by preview toggle
+                                -- Use originalPoints when available; do NOT subtract a flat self-found bonus from display points.
+                                local basePoints = tonumber(row.originalPoints) or currentPoints
                             -- If solo mode toggle is on and row.allowSoloDouble, the points might be doubled
                             -- Use originalPoints if available, otherwise divide by 2 if doubled
                             if row.originalPoints then
@@ -1176,10 +1195,12 @@ function M.registerQuestAchievement(cfg)
                                 -- Update points display to show doubled value (including self-found bonus for display)
                                 local displayPoints = pointsToStore
                                 local isDungeonSet = row._def and row._def.isDungeonSet
-                                local isReputation = row._def and row._def.isReputation
-                                if isSelfFound and not row.isSecretAchievement and not isDungeonSet and not isReputation then
-                                    displayPoints = displayPoints + HCA_SELF_FOUND_BONUS
-                                end
+                                -- Reputation achievements SHOULD receive the self-found bonus.
+                                    if isSelfFound and not row.isSecretAchievement and not isDungeonSet then
+                                        local getBonus = _G.HCA_GetSelfFoundBonus
+                                        local bonus = (type(getBonus) == "function") and getBonus(tonumber(row.originalPoints) or 0) or 0
+                                        displayPoints = displayPoints + bonus
+                                    end
                                 row.points = displayPoints
                                 if row.Points then
                                     row.Points:SetText(tostring(displayPoints))
@@ -1235,9 +1256,11 @@ function M.registerQuestAchievement(cfg)
                                     local storedPoints = tonumber(progressTable.pointsAtKill) or row.points
                                     local isSelfFound = _G.IsSelfFound and _G.IsSelfFound() or false
                                     local isDungeonSet = row._def and row._def.isDungeonSet
-                                    local isReputation = row._def and row._def.isReputation
-                                    if isSelfFound and not row.isSecretAchievement and not isDungeonSet and not isReputation then
-                                        storedPoints = storedPoints + HCA_SELF_FOUND_BONUS
+                                    -- Reputation achievements SHOULD receive the self-found bonus.
+                                    if isSelfFound and not row.isSecretAchievement and not isDungeonSet then
+                                        local getBonus = _G.HCA_GetSelfFoundBonus
+                                        local bonus = (type(getBonus) == "function") and getBonus(tonumber(row.originalPoints) or 0) or 0
+                                        storedPoints = storedPoints + bonus
                                     end
                                     row.points = storedPoints
                                     if row.Points then

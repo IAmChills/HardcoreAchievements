@@ -27,7 +27,7 @@ function RefreshAllAchievementPoints()
                 local finalPoints = originalPoints
                 
                 if not staticPoints then
-                    -- Apply preset multiplier
+                    -- Apply preset multiplier (replaces base points)
                     local multiplier = (_G.GetPresetMultiplier and _G.GetPresetMultiplier(preset)) or 1.0
                     finalPoints = math.floor(originalPoints * multiplier + 0.5)
                     
@@ -40,11 +40,13 @@ function RefreshAllAchievementPoints()
                     end
                 end
                 
-                -- Apply self-found bonus (always, except for secret achievements, dungeon sets, and reputation achievements)
+                -- Apply self-found bonus: +0.5x base points (rounded), applied after multiplier/solo preview.
                 local isDungeonSet = row._def and row._def.isDungeonSet
-                local isReputation = row._def and row._def.isReputation
-                if isSelfFound and not row.isSecretAchievement and not isDungeonSet and not isReputation then
-                    finalPoints = finalPoints + HCA_SELF_FOUND_BONUS
+                -- Reputation achievements SHOULD receive the self-found bonus.
+                if isSelfFound and not row.isSecretAchievement and not isDungeonSet then
+                    local getBonus = _G.HCA_GetSelfFoundBonus
+                    local bonus = (type(getBonus) == "function") and getBonus(originalPoints) or 0
+                    finalPoints = finalPoints + bonus
                 end
                 
                 row.points = finalPoints
@@ -67,9 +69,11 @@ function RefreshAllAchievementPoints()
                     finalPoints = tonumber(progress.pointsAtKill) or finalPoints
                     -- Add self-found bonus if applicable (pointsAtKill doesn't include it)
                     local isDungeonSet = row._def and row._def.isDungeonSet
-                    local isReputation = row._def and row._def.isReputation
-                    if isSelfFound and not row.isSecretAchievement and not isDungeonSet and not isReputation then
-                        finalPoints = finalPoints + HCA_SELF_FOUND_BONUS
+                    -- Reputation achievements SHOULD receive the self-found bonus.
+                    if isSelfFound and not row.isSecretAchievement and not isDungeonSet then
+                        local getBonus = _G.HCA_GetSelfFoundBonus
+                        local bonus = (type(getBonus) == "function") and getBonus(originalPoints) or 0
+                        finalPoints = finalPoints + bonus
                     end
                     row.points = finalPoints
                     if row.Points then
