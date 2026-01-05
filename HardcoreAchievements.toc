@@ -27,24 +27,36 @@ Functions\IsGroupEligibleForAchievement.lua
 Functions\GetStatusText.lua
 Functions\RefreshAllAchievementPoints.lua
 Functions\ShowAchievementTooltip.lua
-Functions\ProfessionTracker.lua
+Functions\ProfessionTracker.lua [AllowLoadGameType vanilla]
+TBC\ProfessionTracker.lua [AllowLoadGameType tbc]
 
 Utils\AchievementTracker.lua
 Utils\FilterDropdown.lua
 HardcoreAchievements.lua
 
 Achievements\Common.lua
-Achievements\DungeonCommon.lua
-Achievements\DungeonSetCommon.lua
-Achievements\ReputationCommon.lua
-Achievements\RaidCommon.lua
-Achievements\ProfessionCatalog.lua
-Achievements\Catalog.lua
-Achievements\DungeonCatalog.lua
-Achievements\DungeonSetCatalog.lua
-Achievements\ReputationCatalog.lua
-Achievements\RaidCatalog.lua
-Achievements\FourCandles.lua
+Achievements\DungeonCommon.lua [AllowLoadGameType vanilla]
+Achievements\DungeonSetCommon.lua [AllowLoadGameType vanilla]
+Achievements\ReputationCommon.lua [AllowLoadGameType vanilla]
+Achievements\RaidCommon.lua [AllowLoadGameType vanilla]
+Achievements\ProfessionCatalog.lua [AllowLoadGameType vanilla]
+Achievements\Catalog.lua [AllowLoadGameType vanilla]
+Achievements\DungeonCatalog.lua [AllowLoadGameType vanilla]
+Achievements\DungeonSetCatalog.lua [AllowLoadGameType vanilla]
+Achievements\ReputationCatalog.lua [AllowLoadGameType vanilla]
+Achievements\RaidCatalog.lua [AllowLoadGameType vanilla]
+Achievements\FourCandles.lua [AllowLoadGameType vanilla]
+
+TBC\DungeonCommon.lua [AllowLoadGameType tbc]
+TBC\DungeonSetCommon.lua [AllowLoadGameType tbc]
+TBC\ReputationCommon.lua [AllowLoadGameType tbc]
+TBC\RaidCommon.lua [AllowLoadGameType tbc]
+TBC\ProfessionCatalog.lua [AllowLoadGameType tbc]
+TBC\Catalog.lua [AllowLoadGameType tbc]
+TBC\DungeonCatalog.lua [AllowLoadGameType tbc]
+TBC\DungeonSetCatalog.lua [AllowLoadGameType tbc]
+TBC\ReputationCatalog.lua [AllowLoadGameType tbc]
+TBC\RaidCatalog.lua [AllowLoadGameType tbc]
 
 Utils\Embed_UltraHardcore.lua
 Utils\CommandHandler.lua
