@@ -3085,6 +3085,7 @@ do
         
         AchievementPanel._achEvt:RegisterEvent("COMBAT_LOG_EVENT_UNFILTERED")
         AchievementPanel._achEvt:RegisterEvent("BOSS_KILL")
+        AchievementPanel._achEvt:RegisterEvent("UNIT_DIED")
         AchievementPanel._achEvt:RegisterEvent("QUEST_ACCEPTED")
         AchievementPanel._achEvt:RegisterEvent("QUEST_TURNED_IN")
         AchievementPanel._achEvt:RegisterEvent("QUEST_REMOVED")
@@ -3114,6 +3115,33 @@ do
                     for _, row in ipairs(AchievementPanel.achievements) do
                         if not row.completed and type(row.processBossKillByEncounterID) == "function" then
                             row.processBossKillByEncounterID(encounterID)
+                        end
+                    end
+                end
+                return
+            end
+            -- Handle UNIT_DIED event for dungeon/raid bosses (fallback when PARTY_KILL doesn't fire)
+            if event == "UNIT_DIED" then
+                local unitToken = ...
+                if unitToken then
+                    -- Only process in instanced zones (dungeons or raids) to avoid tracking world kills
+                    local instanceName, instanceType = select(2, GetInstanceInfo())
+                    if instanceType == "party" or instanceType == "raid" then
+                        local destGUID = UnitGUID(unitToken)
+                        if destGUID then
+                            -- Verify this is an NPC, not a player
+                            local guidType = select(1, strsplit("-", destGUID))
+                            if guidType == "Creature" then
+                                local npcId = getNpcIdFromGUID(destGUID)
+                                if npcId and isNpcTrackedForAchievement(npcId) then
+                                    -- This is a tracked boss in an instance - process the kill
+                                    -- We don't need to check npcsInCombat since we're in an instance
+                                    -- and there's no risk of outside players contributing
+                                    processKill(destGUID)
+                                    -- Clean up combat tracking
+                                    npcsInCombat[destGUID] = nil
+                                end
+                            end
                         end
                     end
                 end
