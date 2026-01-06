@@ -292,9 +292,9 @@ local Dungeons = {
   {
     achId = "ZF",
     title = DUNGEON_FLOOR_ZULFARRAK,
-    tooltip = "Defeat the bosses of |cff0091e6"..DUNGEON_FLOOR_ZULFARRAK.."|r before level 48 (including party members)",
+    tooltip = "Defeat the bosses of |cff0091e6"..DUNGEON_FLOOR_ZULFARRAK.."|r before level 47 (including party members)",
     icon = 236406,
-    level = 47,
+    level = 46,
     points = 10,
     requiredQuestId = nil,
     staticPoints = false,
