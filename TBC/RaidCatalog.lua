@@ -189,6 +189,193 @@ local Raids = {
     },
     bossOrder = {15956, 15953, 15952, 15954, 15936, 16011, 16061, 16060, 16064, 16065, 16062, 16063, 16028, 15931, 15932, 15928, 15989, 15990}
   },
+
+  -- Karazhan (Level 70)
+  {
+    achId = "KARA",
+    title = "Karazhan",
+    tooltip = "Defeat the bosses of |cff0091e6Karazhan|r",
+    icon = 254651,
+    points = 25,
+    requiredQuestId = nil,
+    staticPoints = false,
+    requiredMapId = 532,
+    requiredKills = {
+      [16152] = 1,  -- Attumen the Huntsman
+      [15687] = 1,  -- Moroes
+      ["Opera Event"] = {18168, 17521, 17533, 17534},  -- Opera Event (any one of the four)
+      [16458] = 1,  -- Maiden of Virtue
+      [15691] = 1,  -- The Curator
+      [15688] = 1,  -- Terestian Illhoof
+      [16524] = 1,  -- Shade of Aran
+      [15689] = 1,  -- Netherspite
+      [17225] = 1,  -- Nightbane
+      [15690] = 1,  -- Prince Malchezaar
+    },
+    bossOrder = {16152, 15687, "Opera Event", 16458, 15691, 15688, 16524, 15689, 17225, 15690}
+  },
+
+  -- Gruul's Lair (Level 70)
+  {
+    achId = "GRUUL",
+    title = "Gruul's Lair",
+    tooltip = "Defeat the bosses of |cff0091e6Gruul's Lair|r",
+    icon = 236412,
+    points = 50,
+    requiredQuestId = nil,
+    staticPoints = false,
+    requiredMapId = 565,
+    requiredKills = {
+      [18831] = 1,  -- High King Maulgar
+      [19044] = 1,  -- Gruul the Dragonkiller
+    },
+    bossOrder = {18831, 19044}
+  },
+
+  -- Magtheridon's Lair (Level 70)
+  {
+    achId = "MAGTHERIDON",
+    title = "Magtheridon's Lair",
+    tooltip = "Defeat the bosses of |cff0091e6Magtheridon's Lair|r",
+    icon = 236423,
+    points = 50,
+    requiredQuestId = nil,
+    staticPoints = false,
+    requiredMapId = 544,
+    requiredKills = {
+      [17257] = 1,  -- Magtheridon
+    },
+    bossOrder = {17257}
+  },
+
+  -- Hyjal Summit (Level 70)
+  {
+    achId = "HYJAL",
+    title = "Hyjal Summit",
+    tooltip = "Defeat the bosses of |cff0091e6Hyjal Summit|r",
+    icon = 236402,
+    points = 50,
+    requiredQuestId = nil,
+    staticPoints = false,
+    requiredMapId = 534,
+    requiredKills = {
+      [17767] = 1,  -- Rage Winterchill
+      [17808] = 1,  -- Anetheron
+      [17888] = 1,  -- Kaz'rogal
+      [17842] = 1,  -- Azgalor
+      [17968] = 1,  -- Archimonde the Warchief
+    },
+    bossOrder = {17767, 17808, 17888, 17842, 17968}
+  },
+
+  -- Tempest Keep (Level 70)
+  {
+    achId = "TK",
+    title = "Tempest Keep",
+    tooltip = "Defeat the bosses of |cff0091e6Tempest Keep|r",
+    icon = 250117,
+    points = 50,
+    requiredQuestId = nil,
+    staticPoints = false,
+    requiredMapId = 550,
+    requiredKills = {
+      [19516] = 1,  -- Void Reaver
+      [19514] = 1,  -- Al'ar
+      [18805] = 1,  -- High Astromancer Solarian
+      [19622] = 1,  -- Kael'thas Sunstrider
+    },
+    bossOrder = {19516, 19514, 18805, 19622}
+  },
+
+  -- Serpentshrine Cavern (Level 70)
+  {
+    achId = "SSC",
+    title = "Serpentshrine Cavern",
+    tooltip = "Defeat the bosses of |cff0091e6Serpentshrine Cavern|r",
+    icon = 236422,
+    points = 50,
+    requiredQuestId = nil,
+    staticPoints = false,
+    requiredMapId = 548,
+    requiredKills = {
+      [21216] = 1,  -- Hydross the Unstable
+      [21217] = 1,  -- The Lurker Below
+      [21215] = 1,  -- Leotheras the Patient
+      [21214] = 1,  -- Fathom-Lord Karathress
+      [21213] = 1,  -- Morogrim Tidewalker
+      [21212] = 1,  -- Lady Vashj
+    },
+    bossOrder = {21216, 21217, 21215, 21214, 21213, 21212}
+  },
+
+  -- Black Temple (Level 70)
+  {
+    achId = "BT",
+    title = "Black Temple",
+    tooltip = "Defeat the bosses of |cff0091e6Black Temple|r",
+    icon = 236415,
+    points = 50,
+    requiredQuestId = nil,
+    staticPoints = false,
+    requiredMapId = 564,
+    requiredKills = {
+      [22887] = 1,  -- High Warlord Naj'entus
+      [22898] = 1,  -- Supremus
+      [22841] = 1,  -- Shade of Akama
+      [22871] = 1,  -- Teron Gorefiend
+      [22948] = 1,  -- Gurtogg Bloodboil
+      [23418] = 1,  -- Reliquary of Souls
+      [22947] = 1,  -- Mother Shahraz
+      [23426] = 1,  -- The Illidari Council
+      [22917] = 1,  -- Illidan Stormrage
+    },
+    bossOrder = {22887, 22898, 22841, 22871, 22948, 23418, 22947, 23426, 22917}
+  },
+
+  -- Zul'Aman (Level 70)
+  {
+    achId = "ZA",
+    title = "Zul'Aman",
+    tooltip = "Defeat the bosses of |cff0091e6Zul'Aman|r",
+    icon = 236438,
+    points = 50,
+    requiredQuestId = nil,
+    staticPoints = false,
+    requiredMapId = 568,
+    requiredKills = {
+      [23574] = 1,  -- Akil'zon
+      [23576] = 1,  -- Nalorakk
+      [23578] = 1,  -- Jan'alai
+      [23577] = 1,  -- Halazzi
+      [24239] = 1,  -- Hex Lord Malacrass
+      [23863] = 1,  -- Zul'jin
+    },
+    bossOrder = {23574, 23576, 23578, 23577, 24239, 23863}
+  },
+
+  -- Sunwell Plateau (Level 70)
+  {
+    achId = "SWP",
+    title = "Sunwell Plateau",
+    tooltip = "Defeat the bosses of |cff0091e6Sunwell Plateau|r",
+    icon = 236418,
+    points = 50,
+    requiredQuestId = nil,
+    staticPoints = false,
+    requiredMapId = 580,
+    requiredKills = {
+      [24850] = 1,  -- Kalecgos
+      [24892] = 1,  -- Sathrovarr
+      [24882] = 1,  -- Brutallus
+      [25038] = 1,  -- Felmyst
+      [25166] = 1,  -- Alythess
+      [25165] = 1,  -- Sacrolash
+      [25741] = 1,  -- M'uru
+      [25840] = 1,  -- Entropius
+      [25315] = 1,  -- Kil'jaeden
+    },
+    bossOrder = {24850, 24892, 24882, 25038, 25166, 25165, 25741, 25840, 25315}
+  },
 }
 
 -- Register all raid achievements

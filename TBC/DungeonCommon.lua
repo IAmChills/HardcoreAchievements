@@ -86,6 +86,7 @@ function DungeonCommon.registerDungeonAchievement(def)
     requiredKills = requiredKills,
     bossOrder = bossOrder,  -- Store boss order for tooltip display
     faction = faction,
+    isHeroicDungeon = def.isHeroicDungeon or false,  -- Preserve heroic dungeon flag
   }
 
   -- State for the current achievement session only
@@ -357,6 +358,116 @@ function DungeonCommon.registerDungeonAchievement(def)
       -- [314] = "Eliza", -- Duskwood Achievement
       -- [522] = "Mor'Ladim", -- Duskwood Achievement
       -- [412] = "Stitches", -- Duskwood Achievement
+      -- TBC Normal Dungeons
+      [17306] = "Watchkeeper Gargolmar",
+      [17308] = "Omor the Unscarred",
+      [17536] = "Nazan",
+      [17537] = "Vazruden",
+      [17381] = "The Maker",
+      [17380] = "Broggok",
+      [17377] = "Keli'dan the Breaker",
+      [17941] = "Mennu the Betrayer",
+      [17991] = "Rokmar the Crackler",
+      [17942] = "Quagmirran",
+      [17770] = "Hungarfen",
+      [18105] = "Ghaz'an",
+      [17826] = "Swamplord Musel'ek",
+      [17882] = "The Black Stalker",
+      [18341] = "Pandemonius",
+      [18343] = "Tavarok",
+      [18344] = "Nexus-Prince Shaffar",
+      [18371] = "Shirrak the Dead Watcher",
+      [18373] = "Exarch Maladaar",
+      [17848] = "Lieutenant Drake",
+      [17862] = "Captain Skarloc",
+      [18096] = "Epoch Hunter",
+      [18472] = "Darkweaver Syth",
+      [18473] = "Talon King Ikiss",
+      [17879] = "Chrono Lord Deja",
+      [17880] = "Temporus",
+      [17881] = "Aeonus",
+      [19219] = "Mechano-Lord Capacitus",
+      [19221] = "Nethermancer Sepethrea",
+      [19220] = "Pathaleon the Calculator",
+      [16807] = "Grand Warlock Nethekurse",
+      [16809] = "Warbringer O'mrogg",
+      [16808] = "Warchief Kargath Bladefist",
+      [18731] = "Ambassador Hellmaw",
+      [18667] = "Blackheart the Inciter",
+      [18732] = "Grandmaster Vorpil",
+      [18708] = "Murmur",
+      [17797] = "Hydromancer Thespia",
+      [17796] = "Mekgineer Steamrigger",
+      [17798] = "Warlord Kalithresh",
+      [17976] = "Commander Sarannis",
+      [17975] = "High Botanist Freywinn",
+      [17978] = "Thorngrin the Tender",
+      [17980] = "Laj",
+      [17977] = "Warp Splinter",
+      [24723] = "Selin Fireheart",
+      [24744] = "Vexallus",
+      [24560] = "Priestess Delrissa",
+      [24664] = "Kael'thas Sunstrider",
+      [20870] = "Zereketh the Unbound",
+      [20885] = "Dalliah the Doomsayer",
+      [20886] = "Wrath-Scryer Soccothrates",
+      [20912] = "Harbinger Skyriss",
+      -- TBC Heroic Dungeons
+      [18436] = "Watchkeeper Gargolmar",
+      [18433] = "Omar the Unscarred",
+      [18432] = "Nazan",
+      [18434] = "Vazruden",
+      [18621] = "The Maker",
+      [18601] = "Broggok",
+      [18607] = "Keli'dan the Breaker",
+      [19893] = "Mennu the Betrayer",
+      [19895] = "Rokmar the Crackler",
+      [19894] = "Quagmirran",
+      [20169] = "Hungarfen",
+      [20168] = "Ghaz'an",
+      [20183] = "Swamplord Musel'ek",
+      [20184] = "The Black Stalker",
+      [20267] = "Pandemonius",
+      [20268] = "Tavarok",
+      [20266] = "Nexus-Prince Shaffar",
+      [20318] = "Shirrak the Dead Watcher",
+      [20306] = "Exarch Maladaar",
+      [20535] = "Lieutenant Drake",
+      [20521] = "Captain Skarloc",
+      [20531] = "Epoch Hunter",
+      [20690] = "Darkweaver Syth",
+      [20706] = "Talon King Ikiss",
+      [23035] = "Anzu",
+      [20738] = "Chrono Lord Deja",
+      [20745] = "Temporus",
+      [20737] = "Aeonus",
+      [21533] = "Mechano-Lord Capacitus",
+      [21536] = "Nethermancer Sepethrea",
+      [21537] = "Pathaleon the Calculator",
+      [20568] = "Grand Warlock Nethekurse",
+      [20923] = "Blood Guard Porung",
+      [20596] = "Warbringer O'mrogg",
+      [20597] = "Warchief Kargath Bladefist",
+      [20636] = "Ambassador Hellmaw",
+      [20637] = "Blackheart the Inciter",
+      [20653] = "Grandmaster Vorpil",
+      [20657] = "Murmur",
+      [20629] = "Hydromancer Thespia",
+      [20630] = "Mekgineer Steamrigger",
+      [20633] = "Warlord Kalithresh",
+      [21551] = "Commander Sarannis",
+      [21558] = "High Botanist Freywinn",
+      [21581] = "Thorngrin the Tender",
+      [21559] = "Laj",
+      [21582] = "Warp Splinter",
+      [25562] = "Selin Fireheart",
+      [25573] = "Vexallus",
+      [25560] = "Priestess Delrissa",
+      [24857] = "Kael'thas Sunstrider",
+      [21626] = "Zereketh the Unbound",
+      [21590] = "Dalliah the Doomsayer",
+      [21624] = "Wrath-Scryer Soccothrates",
+      [21599] = "Harbinger Skyriss",
     }
     return bossNames[npcId] or ("Boss " .. npcId)
   end
@@ -600,8 +711,9 @@ function DungeonCommon.registerDungeonAchievement(def)
         else
           -- Group is ineligible - don't count this kill
           -- Player can return later with an eligible group to kill this boss
-          -- Only print message if the achievement is visible (not filtered out)
-          if _G.HCA_IsAchievementVisible and _G.HCA_IsAchievementVisible(achId) then
+          -- Only print message if the achievement is visible (not filtered out) and player is not max level
+          local playerLevel = UnitLevel("player") or 1
+          if playerLevel < 70 and _G.HCA_IsAchievementVisible and _G.HCA_IsAchievementVisible(achId) then
             print("|cff69adc9[Hardcore Achievements]|r |cffffd100" .. HCA_GetBossName(npcId) .. " killed but group is ineligible - kill not counted for achievement: " .. title .. "|r")
           end
         end
@@ -669,6 +781,10 @@ function DungeonCommon.registerDungeonAchievement(def)
     -- Ensure dungeons never have allowSoloDouble enabled
     local dungeonDef = def or {}
     dungeonDef.allowSoloDouble = false
+    -- Preserve isHeroicDungeon flag if present
+    if def.isHeroicDungeon then
+      dungeonDef.isHeroicDungeon = true
+    end
     
     _G[rowVarName] = CreateAchievementRow(
       AchievementPanel,

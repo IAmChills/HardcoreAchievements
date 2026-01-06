@@ -40,9 +40,9 @@ local Dungeons = {
   {
     achId = "VC",
     title = DUNGEON_FLOOR_THEDEADMINES1,
-    tooltip = "Defeat the bosses of |cff0091e6"..DUNGEON_FLOOR_THEDEADMINES1.."|r before level 20 (including party members)",
+    tooltip = "Defeat the bosses of |cff0091e6"..DUNGEON_FLOOR_THEDEADMINES1.."|r before level 19 (including party members)",
     icon = 236409,
-    level = 19,
+    level = 18,
     points = 10,
     requiredQuestId = nil,
     staticPoints = false,
@@ -62,9 +62,9 @@ local Dungeons = {
   {
     achId = "WC",
     title = DUNGEON_FLOOR_WAILINGCAVERNS1,
-    tooltip = "Defeat the bosses of |cff0091e6"..DUNGEON_FLOOR_WAILINGCAVERNS1.."|r before level 21 (including party members)",
+    tooltip = "Defeat the bosses of |cff0091e6"..DUNGEON_FLOOR_WAILINGCAVERNS1.."|r before level 19 (including party members)",
     icon = 236425,
-    level = 20,
+    level = 18,
     points = 10,
     requiredQuestId = nil,
     staticPoints = false,
@@ -86,9 +86,9 @@ local Dungeons = {
   {
     achId = "SFK",
     title = "Shadowfang Keep",
-    tooltip = "Defeat the bosses of |cff0091e6Shadowfang Keep|r before level 25 (including party members)",
+    tooltip = "Defeat the bosses of |cff0091e6Shadowfang Keep|r before level 20 (including party members)",
     icon = 254646,
-    level = 24,
+    level = 19,
     points = 10,
     requiredQuestId = nil,
     staticPoints = false,
@@ -111,9 +111,9 @@ local Dungeons = {
   {
     achId = "BFD",
     title = "Blackfathom Deeps",
-    tooltip = "Defeat the bosses of |cff0091e6Blackfathom Deeps|r before level 27 (including party members)",
+    tooltip = "Defeat the bosses of |cff0091e6Blackfathom Deeps|r before level 23 (including party members)",
     icon = 236403,
-    level = 26,
+    level = 22,
     points = 10,
     requiredQuestId = nil,
     staticPoints = false,
@@ -135,9 +135,9 @@ local Dungeons = {
   {
     achId = "STOCK",
     title = DUNGEON_FLOOR_THESTOCKADE1,
-    tooltip = "Defeat the bosses of |cff0091e6"..DUNGEON_FLOOR_THESTOCKADE1.."|r before level 28 (including party members)",
+    tooltip = "Defeat the bosses of |cff0091e6"..DUNGEON_FLOOR_THESTOCKADE1.."|r before level 24 (including party members)",
     icon = 236404,
-    level = 27,
+    level = 23,
     points = 10,
     requiredQuestId = nil,
     staticPoints = false,
@@ -157,9 +157,9 @@ local Dungeons = {
   {
     achId = "RFK",
     title = DUNGEON_FLOOR_RAZORFENKRAUL1,
-    tooltip = "Defeat the bosses of |cff0091e6"..DUNGEON_FLOOR_RAZORFENKRAUL1.."|r before level 32 (including party members)",
+    tooltip = "Defeat the bosses of |cff0091e6"..DUNGEON_FLOOR_RAZORFENKRAUL1.."|r before level 26 (including party members)",
     icon = 236405,
-    level = 31,
+    level = 25,
     points = 10,
     requiredQuestId = nil,
     staticPoints = false,
@@ -179,9 +179,9 @@ local Dungeons = {
   {
     achId = "GNOM",
     title = DUNGEON_FLOOR_DUNMOROGH10,
-    tooltip = "Defeat the bosses of |cff0091e6"..DUNGEON_FLOOR_DUNMOROGH10.."|r before level 33 (including party members)",
+    tooltip = "Defeat the bosses of |cff0091e6"..DUNGEON_FLOOR_DUNMOROGH10.."|r before level 27 (including party members)",
     icon = 236424,
-    level = 32,
+    level = 26,
     points = 10,
     requiredQuestId = nil,
     staticPoints = false,
@@ -222,9 +222,9 @@ local Dungeons = {
   {
     achId = "SM",
     title = "Scarlet Monastery",
-    tooltip = "Defeat the bosses of |cff0091e6Scarlet Monastery|r before level 41 (including party members)",
+    tooltip = "Defeat the bosses of |cff0091e6Scarlet Monastery|r before level 39 (including party members)",
     icon = 133154,
-    level = 40,
+    level = 38,
     points = 10,
     requiredQuestId = nil,
     staticPoints = false,
@@ -246,9 +246,9 @@ local Dungeons = {
   {
     achId = "RFD",
     title = DUNGEON_FLOOR_RAZORFENDOWNS1,
-    tooltip = "Defeat the bosses of |cff0091e6"..DUNGEON_FLOOR_RAZORFENDOWNS1.."|r before level 40 (including party members)",
+    tooltip = "Defeat the bosses of |cff0091e6"..DUNGEON_FLOOR_RAZORFENDOWNS1.."|r before level 36 (including party members)",
     icon = 236400,
-    level = 39,
+    level = 35,
     points = 10,
     requiredQuestId = nil,
     staticPoints = false,
@@ -268,9 +268,9 @@ local Dungeons = {
   {
     achId = "ULD",
     title = "Uldaman",
-    tooltip = "Defeat the bosses of |cff0091e6Uldaman|r before level 46 (including party members)",
+    tooltip = "Defeat the bosses of |cff0091e6Uldaman|r before level 39 (including party members)",
     icon = 236401, --254106 also looks good
-    level = 45,
+    level = 38,
     points = 10,
     requiredQuestId = nil,
     staticPoints = false,
@@ -292,9 +292,9 @@ local Dungeons = {
   {
     achId = "ZF",
     title = DUNGEON_FLOOR_ZULFARRAK,
-    tooltip = "Defeat the bosses of |cff0091e6"..DUNGEON_FLOOR_ZULFARRAK.."|r before level 48 (including party members)",
+    tooltip = "Defeat the bosses of |cff0091e6"..DUNGEON_FLOOR_ZULFARRAK.."|r before level 45 (including party members)",
     icon = 236406,
-    level = 47,
+    level = 44,
     points = 10,
     requiredQuestId = nil,
     staticPoints = false,
@@ -317,9 +317,9 @@ local Dungeons = {
   {
     achId = "MARA",
     title = "Maraudon",
-    tooltip = "Defeat the bosses of |cff0091e6Maraudon|r before level 51 (including party members)",
+    tooltip = "Defeat the bosses of |cff0091e6Maraudon|r before level 47 (including party members)",
     icon = 236432,
-    level = 50,
+    level = 46,
     points = 10,
     requiredQuestId = nil,
     staticPoints = false,
@@ -341,9 +341,9 @@ local Dungeons = {
   {
     achId = "ST",
     title = DUNGEON_FLOOR_THETEMPLEOFATALHAKKAR1,
-    tooltip = "Defeat the bosses of |cff0091e6"..DUNGEON_FLOOR_THETEMPLEOFATALHAKKAR1.."|r before level 55 (including party members)",
+    tooltip = "Defeat the bosses of |cff0091e6"..DUNGEON_FLOOR_THETEMPLEOFATALHAKKAR1.."|r before level 49 (including party members)",
     icon = 236434,
-    level = 54,
+    level = 48,
     points = 10,
     requiredQuestId = nil,
     staticPoints = false,
@@ -366,9 +366,9 @@ local Dungeons = {
   {
     achId = "BRD",
     title = DUNGEON_FLOOR_BURNINGSTEPPES16,
-    tooltip = "Defeat the bosses of |cff0091e6"..DUNGEON_FLOOR_BURNINGSTEPPES16.."|r before level 59 (including party members)",
+    tooltip = "Defeat the bosses of |cff0091e6"..DUNGEON_FLOOR_BURNINGSTEPPES16.."|r before level 55 (including party members)",
     icon = 236410,
-    level = 58,
+    level = 54,
     points = 10,
     requiredQuestId = nil,
     staticPoints = false,
@@ -423,7 +423,7 @@ local Dungeons = {
   {
     achId = "STRAT",
     title = "Stratholme",
-    tooltip = "Defeat the bosses of |cff0091e6Stratholme|r",
+    tooltip = "Defeat the bosses of |cff0091e6Stratholme|r before level 61 (including party members)",
     icon = 237511,
     level = 60,
     points = 10,
@@ -458,7 +458,7 @@ local Dungeons = {
   {
     achId = "DM",
     title = "Dire Maul",
-    tooltip = "Defeat the bosses of |cff0091e6Dire Maul|r",
+    tooltip = "Defeat the bosses of |cff0091e6Dire Maul|r before level 61 (including party members)",
     icon = 132340,
     level = 60,
     points = 10,
@@ -492,7 +492,7 @@ local Dungeons = {
   {
     achId = "SCHOLO",
     title = "Scholomance",
-    tooltip = "Defeat the bosses of |cff0091e6Scholomance|r",
+    tooltip = "Defeat the bosses of |cff0091e6Scholomance|r before level 61 (including party members)",
     icon = 135974,
     level = 60,
     points = 10,
@@ -515,7 +515,316 @@ local Dungeons = {
       [1853] = 1,  -- Darkmaster Gandling
     },
     bossOrder = {10503, 11622, 10433, 10432, 10508, 10505, 11261, 10901, 10507, 10504, 10502, 1853}
-  }
+  },
+
+  -- Hellfire Ramparts (Both, Level 60-62)
+  {
+    achId = "RAMPARTS",
+    title = "Hellfire Ramparts",
+    tooltip = "Defeat the bosses of |cff0091e6Hellfire Ramparts|r before level 61 (including party members)",
+    icon = 236427,
+    level = 60,
+    points = 10,
+    requiredQuestId = nil,
+    staticPoints = false,
+    requiredMapId = 543,
+    requiredKills = {
+      [17306] = 1, -- Watchkeeper Gargolmar
+      [17308] = 1, -- Omor the Unscarred
+      [17536] = 1, -- Nazan
+      [17537] = 1, -- Vazruden
+    },
+    bossOrder = {17306, 17308, 17536, 17537}
+  },
+
+  -- Hellfire Ramparts (Both, Level 61-63)
+  {
+    achId = "BLOODFURNACE",
+    title = "Blood Furnace",
+    tooltip = "Defeat the bosses of |cff0091e6Blood Furnace|r before level 62 (including party members)",
+    icon = 236417,
+    level = 61,
+    points = 10,
+    requiredQuestId = nil,
+    staticPoints = false,
+    requiredMapId = 542,
+    requiredKills = {
+      [17381] = 1, -- The Maker
+      [17380] = 1, -- Broggok
+      [17377] = 1, -- Keli'dan the Breaker
+    },
+    bossOrder = {17381, 17380, 17377}
+  },
+
+  -- The Slave Pens (Both, Level 62-64)
+  {
+    achId = "SLAVEPENS",
+    title = "The Slave Pens",
+    tooltip = "Defeat the bosses of |cff0091e6The Slave Pens|r before level 63 (including party members)",
+    icon = 236433,
+    level = 62,
+    points = 10,
+    requiredQuestId = nil,
+    staticPoints = false,
+    requiredMapId = 547,
+    requiredKills = {
+      [17941] = 1, -- Mennu the Betrayer
+      [17991] = 1, -- Rokmar the Crackler
+      [17942] = 1, -- Quagmirran
+    },
+    bossOrder = {17941, 17991, 17942}
+  },
+
+  -- The Underbog (Both, Level 63-65)
+  {
+    achId = "UNDERBOG",
+    title = "The Underbog",
+    tooltip = "Defeat the bosses of |cff0091e6The Underbog|r before level 64 (including party members)",
+    icon = 254502,
+    level = 63,
+    points = 10,
+    requiredQuestId = nil,
+    staticPoints = false,
+    requiredMapId = 546,
+    requiredKills = {
+      [17770] = 1, -- Hungarfen
+      [18105] = 1, -- Ghaz'an
+      [17826] = 1, -- Swamplord Musel'ek
+      [17882] = 1, -- The Black Stalker
+    },
+    bossOrder = {17770, 18105, 17826, 17882}
+  },
+
+  -- Mana-Tombs (Both, Level 64-66)
+  {
+    achId = "MANATOMBS",
+    title = "Mana-Tombs",
+    tooltip = "Defeat the bosses of |cff0091e6Mana-Tombs|r before level 65 (including party members)",
+    icon = 236426,
+    level = 64,
+    points = 10,
+    requiredQuestId = nil,
+    staticPoints = false,
+    requiredMapId = 557,
+    requiredKills = {
+      [18341] = 1, -- Pandemonius
+      [18343] = 1, -- Tavarok
+      [18344] = 1, -- Nexus-Prince Shaffar
+    },
+    bossOrder = {18341, 18343, 18344}
+  },
+
+  -- Auchenai Crypts (Both, Level 64-66)
+  {
+    achId = "AC",
+    title = "Auchenai Crypts",
+    tooltip = "Defeat the bosses of |cff0091e6Auchenai Crypts|r before level 65 (including party members)",
+    icon = 236411,
+    level = 65,
+    points = 10,
+    requiredQuestId = nil,
+    staticPoints = false,
+    requiredMapId = 558,
+    requiredKills = {
+      [18371] = 1, -- Shirrak the Dead Watcher
+      [18373] = 1, -- Exarch Maladaar
+    },
+    bossOrder = {18371, 18373}
+  },
+
+  -- Old Hillsbrad Foothills (Both, Level 66-68)
+  {
+    achId = "OLDHILLSBRAD",
+    title = "Old Hillsbrad Foothills",
+    tooltip = "Defeat the bosses of |cff0091e6Old Hillsbrad Foothills|r before level 67 (including party members)",
+    icon = 254647,
+    level = 66,
+    points = 10,
+    requiredQuestId = nil,
+    staticPoints = false,
+    requiredMapId = 560,
+    requiredKills = {
+      [17848] = 1, -- Lieutenant Drake
+      [17862] = 1, -- Captain Skarloc
+      [18096] = 1, -- Epoch Hunter
+    },
+    bossOrder = {17848, 17862, 18096}
+  },
+
+  -- Sethekk Halls (Both, Level 70)
+  {
+    achId = "SETHEKK",
+    title = "Sethekk Halls",
+    tooltip = "Defeat the bosses of |cff0091e6Sethekk Halls|r",
+    icon = 236435,
+    level = 70,
+    points = 10,
+    requiredQuestId = nil,
+    staticPoints = false,
+    requiredMapId = 556,
+    requiredKills = {
+      [18472] = 1, -- Darkweaver Syth
+      [18473] = 1, -- Talon King Ikiss
+    },
+    bossOrder = {18472, 18473}
+  },
+
+  -- The Black Morass (Both, Level 70)
+  {
+    achId = "BLACKMORASS",
+    title = "The Black Morass",
+    tooltip = "Defeat the bosses of |cff0091e6The Black Morass|r",
+    icon = 254086,
+    level = 70,
+    points = 10,
+    requiredQuestId = nil,
+    staticPoints = false,
+    requiredMapId = 269,
+    requiredKills = {
+      [17879] = 1, -- Chrono Lord Deja
+      [17880] = 1, -- Temporus
+      [17881] = 1, -- Aeonus
+    },
+    bossOrder = {17879, 17880, 17881}
+  },
+
+  -- The Mechanar (Both, Level 70)
+  {
+    achId = "MECHANAR",
+    title = "The Mechanar",
+    tooltip = "Defeat the bosses of |cff0091e6The Mechanar|r",
+    icon = 236430,
+    level = 70,
+    points = 10,
+    requiredQuestId = nil,
+    staticPoints = false,
+    requiredMapId = 554,
+    requiredKills = {
+      [19219] = 1, -- Mechano-Lord Capacitus
+      [19221] = 1, -- Nethermancer Sepethrea
+      [19220] = 1, -- Pathaleon the Calculator
+    },
+    bossOrder = {19219, 19221, 19220}
+  },
+
+  -- The Shattered Halls (Both, Level 70)
+  {
+    achId = "SHATTEREDHALLS",
+    title = "The Shattered Halls",
+    tooltip = "Defeat the bosses of |cff0091e6The Shattered Halls|r",
+    icon = 254093,
+    level = 70,
+    points = 10,
+    requiredQuestId = nil,
+    staticPoints = false,
+    requiredMapId = 540,
+    requiredKills = {
+      [16807] = 1, -- Grand Warlock Nethekurse
+      [16809] = 1, -- Warbringer O'mrogg
+      [16808] = 1, -- Warchief Kargath Bladefist
+    },
+    bossOrder = {16807, 16809, 16808}
+  },
+
+  -- Shadow Labyrinth (Both, Level 70)
+  {
+    achId = "SLABS",
+    title = "Shadow Labyrinth",
+    tooltip = "Defeat the bosses of |cff0091e6Shadow Labyrinth|r",
+    icon = 254501,
+    level = 70,
+    points = 10,
+    requiredQuestId = nil,
+    staticPoints = false,
+    requiredMapId = 555,
+    requiredKills = {
+      [18731] = 1, -- Ambassador Hellmaw
+      [18667] = 1, -- Blackheart the Inciter
+      [18732] = 1, -- Grandmaster Vorpil
+      [18708] = 1, -- Murmur
+    },
+    bossOrder = {18731, 18667, 18732, 18708}
+  },
+
+  -- The Steamvault (Both, Level 70)
+  {
+    achId = "STEAMVAULT",
+    title = "The Steamvault",
+    tooltip = "Defeat the bosses of |cff0091e6The Steamvault|r",
+    icon = 236436,
+    level = 70,
+    points = 10,
+    requiredQuestId = nil,
+    staticPoints = false,
+    requiredMapId = 545,
+    requiredKills = {
+      [17797] = 1, -- Hydromancer Thespia
+      [17796] = 1, -- Mekgineer Steamrigger
+      [17798] = 1, -- Warlord Kalithresh
+    },
+    bossOrder = {17797, 17796, 17798}
+  },
+
+  -- The Botanica (Both, Level 70)
+  {
+    achId = "BOTANICA",
+    title = "The Botanica",
+    tooltip = "Defeat the bosses of |cff0091e6The Botanica|r",
+    icon = 236437,
+    level = 70,
+    points = 10,
+    requiredQuestId = nil,
+    staticPoints = false,
+    requiredMapId = 553,
+    requiredKills = {
+      [17976] = 1, -- Commander Sarannis
+      [17975] = 1, -- High Botanist Freywinn
+      [17978] = 1, -- Thorngrin the Tender
+      [17980] = 1, -- Laj
+      [17977] = 1, -- Warp Splinter
+    },
+    bossOrder = {17976, 17975, 17978, 17980, 17977}
+  },
+
+  -- Magisters' Terrace (Both, Level 70)
+  {
+    achId = "MT",
+    title = "Magisters' Terrace",
+    tooltip = "Defeat the bosses of |cff0091e6Magisters' Terrace|r",
+    icon = 250117,
+    level = 70,
+    points = 10,
+    requiredQuestId = nil,
+    staticPoints = false,
+    requiredMapId = 585,
+    requiredKills = {
+      [24723] = 1, -- Selin Fireheart
+      [24744] = 1, -- Vexallus
+      [24560] = 1, -- Priestess Delrissa
+      [24664] = 1, -- Kael'thas Sunstrider
+    },
+    bossOrder = {24723, 24744, 24560, 24664}
+  },
+
+  -- The Arcatraz (Both, Level 70)
+  {
+    achId = "ARCATRAZ",
+    title = "The Arcatraz",
+    tooltip = "Defeat the bosses of |cff0091e6The Arcatraz|r",
+    icon = 236414,
+    level = 70,
+    points = 10,
+    requiredQuestId = nil,
+    staticPoints = false,
+    requiredMapId = 552,
+    requiredKills = {
+      [20870] = 1, -- Zereketh the Unbound
+      [20885] = 1, -- Dalliah the Doomsayer
+      [20886] = 1, -- Wrath-Scryer Soccothrates
+      [20912] = 1, -- Harbinger Skyriss
+    },
+    bossOrder = {20870, 20885, 20886, 20912}
+  },
 }
 
 -- Register all dungeon achievements and their variations

@@ -2214,7 +2214,7 @@ local function ShouldShowByCheckboxFilter(def, isCompleted, currentFilter, check
     end
     
     -- Load checkbox states from database
-    local checkboxStates = { false, false, false, false, false, false }
+    local checkboxStates = { false, false, false, false, false, false, false }
     if type(HardcoreAchievements_GetCharDB) == "function" then
         local _, cdb = HardcoreAchievements_GetCharDB()
         if cdb and cdb.settings and cdb.settings.filterCheckboxes then
@@ -2227,6 +2227,7 @@ local function ShouldShowByCheckboxFilter(def, isCompleted, currentFilter, check
                     states[4] == true,  -- Dungeon Sets
                     states[5] == true,  -- Reputations
                     states[6] == true,  -- Raids
+                    states[7] == true,  -- Heroic Dungeons
                 }
             end
         end
@@ -2304,6 +2305,11 @@ local function ApplyFilter()
                 if not ShouldShowByCheckboxFilter(def, isCompleted, currentFilter, 6, nil) then
                     shouldShow = false
                 end
+            elseif def.isHeroicDungeon then
+                -- Heroic Dungeons: check index 7
+                if not ShouldShowByCheckboxFilter(def, isCompleted, currentFilter, 7, nil) then
+                    shouldShow = false
+                end
             end
         end
         
@@ -2327,7 +2333,7 @@ AchievementPanel.filterDropdown = filterDropdown
 FilterDropdown:InitializeDropdown(filterDropdown, {
     currentFilter = "all",
     -- checkboxStates will be loaded from database automatically
-    checkboxLabels = { "Show Dungeon Trios", "Show Dungeon Duos", "Show Dungeon Solos", "Show Dungeon Sets", "Show Reputations", "Show Raids" },
+    checkboxLabels = { "Show Dungeon Trios", "Show Dungeon Duos", "Show Dungeon Solos", "Show Dungeon Sets", "Show Reputations", "Show Raids", "Show Heroic Dungeons" },
     onFilterChange = function(filterValue)
         ApplyFilter()
     end,

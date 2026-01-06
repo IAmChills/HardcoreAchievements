@@ -18,12 +18,13 @@ local function GetCheckboxStatesFromDB()
                     states[4] == true,
                     states[5] == true,
                     states[6] == true,
+                    states[7] == true,
                 }
             end
         end
     end
-    -- Default: all unchecked
-    return { false, false, false, false, false, false }
+            -- Default: all unchecked
+    return { false, false, false, false, false, false, false }
 end
 
 -- Helper function to save checkbox states to character database
@@ -39,6 +40,7 @@ local function SaveCheckboxStatesToDB(checkboxStates)
                 checkboxStates[4] == true,
                 checkboxStates[5] == true,
                 checkboxStates[6] == true,
+                checkboxStates[7] == true,
             }
         end
     end

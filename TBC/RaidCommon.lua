@@ -239,6 +239,72 @@ function RaidCommon.registerRaidAchievement(def)
       [15928] = "Thaddius",
       [15989] = "Sapphiron",
       [15990] = "Kel'Thuzad",
+      -- Karazhan
+      [16152] = "Attumen the Huntsman",
+      [15687] = "Moroes",
+      -- Karazhan Opera Event
+      [18168] = "The Crone",
+      [17521] = "The Big Bad Wolf",
+      [17533] = "Dorothee",
+      [17534] = "Strawman",
+      -- Karazhan Opera Event
+      [16458] = "Maiden of Virtue",
+      [15691] = "The Curator",
+      [15688] = "Terestian Illhoof",
+      [16524] = "Shade of Aran",
+      [15689] = "Netherspite",
+      [17225] = "Nightbane",
+      [15690] = "Prince Malchezaar",
+      -- Gruul's Lair
+      [18831] = "High King Maulgar",
+      [19044] = "Gruul the Dragonkiller",
+      -- Magtheridon's Lair
+      [17257] = "Magtheridon",
+      -- Hyjal Summit
+      [17767] = "Rage Winterchill",
+      [17808] = "Anetheron",
+      [17888] = "Kaz'rogal",
+      [17842] = "Azgalor",
+      [17968] = "Archimonde the Warchief",
+      -- Tempest Keep
+      [19516] = "Void Reaver",
+      [19514] = "Al'ar",
+      [18805] = "High Astromancer Solarian",
+      [19622] = "Kael'thas Sunstrider",
+      -- Serpentshrine Cavern
+      [21216] = "Hydross the Unstable",
+      [21217] = "The Lurker Below",
+      [21215] = "Leotheras the Patient",
+      [21214] = "Fathom-Lord Karathress",
+      [21213] = "Morogrim Tidewalker",
+      [21212] = "Lady Vashj",
+      -- Black Temple
+      [22887] = "High Warlord Naj'entus",
+      [22898] = "Supremus",
+      [22841] = "Shade of Akama",
+      [22871] = "Teron Gorefiend",
+      [22948] = "Gurtogg Bloodboil",
+      [23418] = "Reliquary of Souls",
+      [22947] = "Mother Shahraz",
+      [23426] = "The Illidari Council",
+      [22917] = "Illidan Stormrage",
+      -- Zul'Aman
+      [23574] = "Akil'zon",
+      [23576] = "Nalorakk",
+      [23578] = "Jan'alai",
+      [23577] = "Halazzi",
+      [24239] = "Hex Lord Malacrass",
+      [23863] = "Zul'jin",
+      -- Sunwell Plateau
+      [24850] = "Kalecgos",
+      [24892] = "Sathrovarr",
+      [24882] = "Brutallus",
+      [25038] = "Felmyst",
+      [25166] = "Alythess",
+      [25165] = "Sacrolash",
+      [25741] = "M'uru",
+      [25840] = "Entropius",
+      [25315] = "Kil'jaeden",
     }
     return bossNames[npcId] or ("Boss " .. tostring(npcId))
   end
