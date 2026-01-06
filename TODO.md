@@ -8,6 +8,8 @@
 - [ ] Bugs
   - [ ] 
 
+- [ ] Verify this works before release and it returns the instance type [party/raid] select(2, GetInstanceInfo())
+
 ## Helpful Code Snippets
 
 ### Class-colored text
@@ -35,3 +37,13 @@ if event == "ADDON_LOADED" and select(1, ...) == "UltraHardcore" then
 - [ ] Dungeons before specific level
 - [ ] Difficult Quests?
 - [ ] ??
+
+## TBC TODO
+
+- [ ] Catalog
+- [ ] Dungeon Catalog
+- [ ] Dungeon Common
+- [ ] Dungeon Set Catalog
+- [ ] Dungeon Set Common
+- [ ] Raid Catalog
+- [ ] Raid Common

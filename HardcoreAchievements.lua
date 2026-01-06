@@ -3120,7 +3120,7 @@ do
                 end
                 return
             end
-            -- Handle UNIT_DIED event for dungeon/raid bosses (fallback when PARTY_KILL doesn't fire)
+            -- Handle UNIT_DIED event for dungeon/raid bosses (fallback when PARTY_KILL doesn't fire due to a NPC or mechanic delivering the killing blow)
             if event == "UNIT_DIED" then
                 local unitToken = ...
                 if unitToken then
