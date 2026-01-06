@@ -726,8 +726,8 @@ end
 -- Function to register dungeon variations
 -- Note: Variations are always registered, but filtered in ApplyFilter based on checkbox states
 function DungeonCommon.registerDungeonVariations(baseDef)
-  -- Only create variations for dungeons up to ST (level 54)
-  if baseDef.level > 54 then
+  -- Only create variations for dungeons up to 60
+  if baseDef.level > 57 then
     return
   end
   
