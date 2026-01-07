@@ -2214,7 +2214,7 @@ local function ShouldShowByCheckboxFilter(def, isCompleted, currentFilter, check
     end
     
     -- Load checkbox states from database
-    local checkboxStates = { false, false, false, false, false, false }
+    local checkboxStates = { false, false, false, false, false, false, false }
     if type(HardcoreAchievements_GetCharDB) == "function" then
         local _, cdb = HardcoreAchievements_GetCharDB()
         if cdb and cdb.settings and cdb.settings.filterCheckboxes then
@@ -2227,6 +2227,7 @@ local function ShouldShowByCheckboxFilter(def, isCompleted, currentFilter, check
                     states[4] == true,  -- Dungeon Sets
                     states[5] == true,  -- Reputations
                     states[6] == true,  -- Raids
+                    states[7] == true,  -- Heroic Dungeons
                 }
             end
         end
@@ -2304,6 +2305,11 @@ local function ApplyFilter()
                 if not ShouldShowByCheckboxFilter(def, isCompleted, currentFilter, 6, nil) then
                     shouldShow = false
                 end
+            elseif def.isHeroicDungeon then
+                -- Heroic Dungeons: check index 7
+                if not ShouldShowByCheckboxFilter(def, isCompleted, currentFilter, 7, nil) then
+                    shouldShow = false
+                end
             end
         end
         
@@ -2327,7 +2333,7 @@ AchievementPanel.filterDropdown = filterDropdown
 FilterDropdown:InitializeDropdown(filterDropdown, {
     currentFilter = "all",
     -- checkboxStates will be loaded from database automatically
-    checkboxLabels = { "Show Dungeon Trios", "Show Dungeon Duos", "Show Dungeon Solos", "Show Dungeon Sets", "Show Reputations", "Show Raids" },
+    checkboxLabels = { "Show Dungeon Trios", "Show Dungeon Duos", "Show Dungeon Solos", "Show Dungeon Sets", "Show Reputations", "Show Raids", "Show Heroic Dungeons" },
     onFilterChange = function(filterValue)
         ApplyFilter()
     end,
@@ -2850,6 +2856,9 @@ EvaluateCustomCompletions = function(newLevel)
     end
 end
 
+-- Expose EvaluateCustomCompletions globally for use by other modules
+_G.EvaluateCustomCompletions = EvaluateCustomCompletions
+
 -- =========================================================
 -- Event bridge: forward PARTY_KILL to any rows with a tracker
 -- =========================================================
@@ -3142,6 +3151,28 @@ do
                         processKill(destGUID)
                         -- Clean up combat tracking
                         npcsInCombat[destGUID] = nil
+                    end
+                elseif subevent == "UNIT_DIED" then
+                    -- UNIT_DIED is a fallback for dungeon/raid bosses when PARTY_KILL doesn't fire
+                    -- (e.g., when a NPC or mechanic delivers the killing blow)
+                    -- Only process in instanced zones (dungeons or raids) to avoid tracking world kills
+                    local instanceName, instanceType = select(2, GetInstanceInfo())
+                    if instanceType == "party" or instanceType == "raid" then
+                        if destGUID then
+                            -- Verify this is an NPC, not a player
+                            local guidType = select(1, strsplit("-", destGUID))
+                            if guidType == "Creature" then
+                                local npcId = getNpcIdFromGUID(destGUID)
+                                if npcId and isNpcTrackedForAchievement(npcId) then
+                                    -- This is a tracked boss in an instance - process the kill
+                                    -- We don't need to check npcsInCombat since we're in an instance
+                                    -- and there's no risk of outside players contributing
+                                    processKill(destGUID)
+                                    -- Clean up combat tracking
+                                    npcsInCombat[destGUID] = nil
+                                end
+                            end
+                        end
                     end
                 elseif DAMAGE_SUBEVENTS[subevent] then
                     local playerGUID = UnitGUID("player")

@@ -35,3 +35,13 @@ if event == "ADDON_LOADED" and select(1, ...) == "UltraHardcore" then
 - [ ] Dungeons before specific level
 - [ ] Difficult Quests?
 - [ ] ??
+
+## TBC TODO
+
+- [ ] Catalog
+- [ ] Dungeon Catalog
+- [ ] Dungeon Common
+- [ ] Dungeon Set Catalog
+- [ ] Dungeon Set Common
+- [ ] Raid Catalog
+- [ ] Raid Common

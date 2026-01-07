@@ -831,26 +831,6 @@ local Achievements = {
     hiddenUntilComplete = true,
 }, {
     achId = "Secret95",
-    title = "Jump Master",
-    level = nil,
-    tooltip = "You have completed the secret achievement: |cff0091e6Jump 100,000 times|r",
-    icon = 134478,
-    points = 0,
-    customIsCompleted = function()
-        if not _G.HardcoreAchievements_GetCharDB then
-            return false
-        end
-        local _, cdb = _G.HardcoreAchievements_GetCharDB()
-        if not cdb or not cdb.stats or not cdb.stats.playerJumps then
-            return false
-        end
-        return cdb.stats.playerJumps >= 100000
-    end,
-    secret = true,
-    staticPoints = true,
-    hiddenUntilComplete = true,
-}, {
-    achId = "Secret95",
     title = "Mak'gora",
     level = nil,
     tooltip = "Obtain an ear by winning a |cff0091e6Mak'gora|r",

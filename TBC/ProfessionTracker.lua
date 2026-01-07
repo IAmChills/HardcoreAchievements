@@ -14,6 +14,7 @@ local ProfessionList = {
     { key = "Mining",        skillID = 186, name = "Mining",        icon = 134708 },
     { key = "Skinning",      skillID = 393, name = "Skinning",      icon = 134366 },
     { key = "Tailoring",     skillID = 197, name = "Tailoring",     icon = 136249 },
+    { key = "Jewelcrafting", skillID = 755, name = "Jewelcrafting", icon = 134072 },
     { key = "Cooking",       skillID = 185, name = "Cooking",       icon = 133971, secondary = true },
     { key = "Fishing",       skillID = 356, name = "Fishing",       icon = 136245, secondary = true },
     { key = "FirstAid",      skillID = 129, name = "First Aid",     icon = 135966, secondary = true },
