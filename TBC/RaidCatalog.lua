@@ -248,24 +248,25 @@ local Raids = {
     bossOrder = {17257}
   },
 
-  -- Hyjal Summit (Level 70)
+  -- Serpentshrine Cavern (Level 70)
   {
-    achId = "HYJAL",
-    title = "Hyjal Summit",
-    tooltip = "Defeat the bosses of |cff0091e6Hyjal Summit|r",
-    icon = 236402,
+    achId = "SSC",
+    title = "Serpentshrine Cavern",
+    tooltip = "Defeat the bosses of |cff0091e6Serpentshrine Cavern|r",
+    icon = 236422,
     points = 50,
     requiredQuestId = nil,
     staticPoints = false,
-    requiredMapId = 534,
+    requiredMapId = 548,
     requiredKills = {
-      [17767] = 1,  -- Rage Winterchill
-      [17808] = 1,  -- Anetheron
-      [17888] = 1,  -- Kaz'rogal
-      [17842] = 1,  -- Azgalor
-      [17968] = 1,  -- Archimonde the Warchief
+      [21216] = 1,  -- Hydross the Unstable
+      [21217] = 1,  -- The Lurker Below
+      [21215] = 1,  -- Leotheras the Patient
+      [21214] = 1,  -- Fathom-Lord Karathress
+      [21213] = 1,  -- Morogrim Tidewalker
+      [21212] = 1,  -- Lady Vashj
     },
-    bossOrder = {17767, 17808, 17888, 17842, 17968}
+    bossOrder = {21216, 21217, 21215, 21214, 21213, 21212}
   },
 
   -- Tempest Keep (Level 70)
@@ -287,25 +288,24 @@ local Raids = {
     bossOrder = {19516, 19514, 18805, 19622}
   },
 
-  -- Serpentshrine Cavern (Level 70)
+  -- Hyjal Summit (Level 70)
   {
-    achId = "SSC",
-    title = "Serpentshrine Cavern",
-    tooltip = "Defeat the bosses of |cff0091e6Serpentshrine Cavern|r",
-    icon = 236422,
+    achId = "HYJAL",
+    title = "Hyjal Summit",
+    tooltip = "Defeat the bosses of |cff0091e6Hyjal Summit|r",
+    icon = 236402,
     points = 50,
     requiredQuestId = nil,
     staticPoints = false,
-    requiredMapId = 548,
+    requiredMapId = 534,
     requiredKills = {
-      [21216] = 1,  -- Hydross the Unstable
-      [21217] = 1,  -- The Lurker Below
-      [21215] = 1,  -- Leotheras the Patient
-      [21214] = 1,  -- Fathom-Lord Karathress
-      [21213] = 1,  -- Morogrim Tidewalker
-      [21212] = 1,  -- Lady Vashj
+      [17767] = 1,  -- Rage Winterchill
+      [17808] = 1,  -- Anetheron
+      [17888] = 1,  -- Kaz'rogal
+      [17842] = 1,  -- Azgalor
+      [17968] = 1,  -- Archimonde the Warchief
     },
-    bossOrder = {21216, 21217, 21215, 21214, 21213, 21212}
+    bossOrder = {17767, 17808, 17888, 17842, 17968}
   },
 
   -- Black Temple (Level 70)
