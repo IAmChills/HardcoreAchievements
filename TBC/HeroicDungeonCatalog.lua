@@ -1,5 +1,5 @@
 -- Comprehensive dungeon achievement definitions
-local Dungeons = {
+local HeroicDungeons = {
   -- Hellfire Ramparts (Both, Level 70)
   {
     achId = "HRAMPARTS",
@@ -313,13 +313,9 @@ local Dungeons = {
 }
 
 -- Register all dungeon achievements and their variations
-for _, dungeon in ipairs(Dungeons) do
+for _, dungeon in ipairs(HeroicDungeons) do
   -- Mark as heroic dungeon for filtering
   dungeon.isHeroicDungeon = true
   -- Register base dungeon achievement
   DungeonCommon.registerDungeonAchievement(dungeon)
-  -- Register variations (if checkboxes are enabled)
-  if DungeonCommon.registerDungeonVariations then
-    DungeonCommon.registerDungeonVariations(dungeon)
-  end
 end

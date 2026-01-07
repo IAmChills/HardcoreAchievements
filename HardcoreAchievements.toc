@@ -5,7 +5,7 @@
 ## Notes: Hardcore achievements system
 ## OptionalDeps: Ace3, CallbackHandler-1.0, HereBeDragons, LibDataBroker-1.1, LibDBIcon-1.0, LibStub, LibUIDropDownMenu
 ## SavedVariables: HardcoreAchievementsDB
-## IconTexture: Interface\AddOns\HardcoreAchievements\Images\Logo
+## IconTexture: Interface\AddOns\HardcoreAchievements\Images\HardcoreAchievementsButton.png
 ## X-Category: Achievements
 
 # Required Libraries for CommandHandler

@@ -897,5 +897,4 @@ function DungeonCommon.refreshDungeonVariations()
   end
 end
 
--- Export to global scope
 _G.DungeonCommon = DungeonCommon

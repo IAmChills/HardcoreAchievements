@@ -8,8 +8,6 @@
 - [ ] Bugs
   - [ ] 
 
-- [ ] Verify this works before release and it returns the instance type [party/raid] select(2, GetInstanceInfo())
-
 ## Helpful Code Snippets
 
 ### Class-colored text
