@@ -1,4 +1,4 @@
-﻿## Interface: 11508
+﻿## Interface: 11508, 20505
 ## Title: HardcoreAchievements
 ## Author: Chills
 ## Version: 1.4.3
