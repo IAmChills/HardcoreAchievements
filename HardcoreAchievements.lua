@@ -3837,3 +3837,62 @@ hooksecurefunc("ToggleCharacter", function(tab, onlyShow)
         Tab.squareFrame:Hide()
     end
 end)
+
+-- =========================================================
+-- Deferred Achievement Registration System
+-- Processes queued achievements on PLAYER_LOGIN with throttling
+-- =========================================================
+do
+    local registrationFrame = CreateFrame("Frame")
+    local registrationIndex = 1
+    local BATCH_SIZE = 10  -- Process 10 achievements per frame
+    local BATCH_DELAY = 0.01  -- 10ms delay between batches
+    
+    local function ProcessRegistrationBatch()
+        if not _G.HCA_RegistrationQueue or #_G.HCA_RegistrationQueue == 0 then
+            registrationFrame:SetScript("OnUpdate", nil)
+            return
+        end
+        
+        local processed = 0
+        while registrationIndex <= #_G.HCA_RegistrationQueue and processed < BATCH_SIZE do
+            local registerFunc = _G.HCA_RegistrationQueue[registrationIndex]
+            if type(registerFunc) == "function" then
+                local success, err = pcall(registerFunc)
+                if not success then
+                    print("|cff69adc9[Hardcore Achievements]|r |cffff0000Error registering achievement: " .. tostring(err) .. "|r")
+                end
+            end
+            registrationIndex = registrationIndex + 1
+            processed = processed + 1
+        end
+        
+        if registrationIndex > #_G.HCA_RegistrationQueue then
+            -- All registrations complete
+            registrationFrame:SetScript("OnUpdate", nil)
+            _G.HCA_RegistrationQueue = nil  -- Clear queue to free memory
+            if RefreshAllAchievementPoints then
+                RefreshAllAchievementPoints()
+            end
+        end
+    end
+    
+    registrationFrame:RegisterEvent("PLAYER_LOGIN")
+    registrationFrame:SetScript("OnEvent", function(self, event)
+        if event == "PLAYER_LOGIN" then
+            -- Start processing queue with throttling
+            if _G.HCA_RegistrationQueue and #_G.HCA_RegistrationQueue > 0 then
+                registrationIndex = 1
+                -- Use OnUpdate with throttling instead of immediate processing
+                local lastUpdate = 0
+                registrationFrame:SetScript("OnUpdate", function(self, elapsed)
+                    lastUpdate = lastUpdate + elapsed
+                    if lastUpdate >= BATCH_DELAY then
+                        lastUpdate = 0
+                        ProcessRegistrationBatch()
+                    end
+                end)
+            end
+        end
+    end)
+end

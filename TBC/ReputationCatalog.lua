@@ -372,9 +372,14 @@ local Reputations = {
   },
 }
 
--- Register all reputation achievements
+-- Defer registration until PLAYER_LOGIN to prevent load timeouts
+_G.HCA_RegistrationQueue = _G.HCA_RegistrationQueue or {}
+
+-- Queue all reputation achievements for deferred registration
 for _, def in ipairs(Reputations) do
   if _G.ReputationCommon and _G.ReputationCommon.registerReputationAchievement then
-    _G.ReputationCommon.registerReputationAchievement(def)
+    table.insert(_G.HCA_RegistrationQueue, function()
+      _G.ReputationCommon.registerReputationAchievement(def)
+    end)
   end
 end

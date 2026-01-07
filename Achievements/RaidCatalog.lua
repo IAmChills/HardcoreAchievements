@@ -191,11 +191,16 @@ local Raids = {
   },
 }
 
--- Register all raid achievements
+-- Defer registration until PLAYER_LOGIN to prevent load timeouts
+_G.HCA_RegistrationQueue = _G.HCA_RegistrationQueue or {}
+
+-- Queue all raid achievements for deferred registration
 -- Note: RaidCommon must be loaded before this file (RaidCommon.lua should be in .toc before RaidCatalog.lua)
 if _G.RaidCommon and _G.RaidCommon.registerRaidAchievement then
   for _, raid in ipairs(Raids) do
-    RaidCommon.registerRaidAchievement(raid)
+    table.insert(_G.HCA_RegistrationQueue, function()
+      RaidCommon.registerRaidAchievement(raid)
+    end)
   end
 end
 

@@ -365,10 +365,15 @@ local DungeonSets = {
   },
 }
 
--- Register all dungeon set achievements
+-- Defer registration until PLAYER_LOGIN to prevent load timeouts
+_G.HCA_RegistrationQueue = _G.HCA_RegistrationQueue or {}
+
+-- Queue all dungeon set achievements for deferred registration
 for _, def in ipairs(DungeonSets) do
   if _G.DungeonSetCommon and _G.DungeonSetCommon.registerDungeonSetAchievement then
-    _G.DungeonSetCommon.registerDungeonSetAchievement(def)
+    table.insert(_G.HCA_RegistrationQueue, function()
+      _G.DungeonSetCommon.registerDungeonSetAchievement(def)
+    end)
   end
 end
 

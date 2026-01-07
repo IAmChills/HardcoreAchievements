@@ -697,8 +697,8 @@ function DungeonCommon.registerDungeonAchievement(def)
       RefreshAllAchievementPoints()
     end
     
-    -- Update tooltip after creation to ensure it shows current progress
-    C_Timer.After(0.1, UpdateTooltip)
+    -- Defer tooltip setup until first hover (optimization)
+    -- UpdateTooltip will be called lazily when needed
   end
 
   -- Auto-register the achievement immediately if the panel is ready
@@ -706,21 +706,8 @@ function DungeonCommon.registerDungeonAchievement(def)
     _G[registerFuncName]()
   end
 
-  -- Create the event frame dynamically
-  local eventFrame = CreateFrame("Frame")
-  eventFrame:RegisterEvent("PLAYER_LOGIN")
-  eventFrame:RegisterEvent("ADDON_LOADED")
-  eventFrame:SetScript("OnEvent", function()
-  LoadProgress() -- Load progress on login/addon load
-    _G[registerFuncName]()
-  end)
-
-  if _G.CharacterFrame and _G.CharacterFrame.HookScript then
-    CharacterFrame:HookScript("OnShow", function()
-      LoadProgress() -- Load progress when character frame is shown
-      _G[registerFuncName]()
-    end)
-  end
+  -- Note: Event handling is now centralized in HardcoreAchievements.lua
+  -- Individual event frames removed for performance
 end
 
 -- Function to register dungeon variations
