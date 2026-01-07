@@ -579,7 +579,11 @@ function RaidCommon.registerRaidAchievement(def)
   end
 
   -- No global tracker function for raids - we use BOSS_KILL event with encounter IDs instead
-  _G[achId .. "_IsCompleted"] = function() return state.completed end
+  
+  -- Register functions in local registry to reduce global pollution
+  if _G.HardcoreAchievements_RegisterAchievementFunction then
+    _G.HardcoreAchievements_RegisterAchievementFunction(achId, "IsCompleted", function() return state.completed end)
+  end
 
   -- Check faction eligibility
   local function IsEligible()

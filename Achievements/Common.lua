@@ -565,7 +565,7 @@ function M.registerQuestAchievement(cfg)
 
     -- Handle kills: support both TARGET_NPC_ID (single kill) and REQUIRED_KILLS (kill counts)
     if TARGET_NPC_ID or REQUIRED_KILLS then
-        _G[ACH_ID .. "_Kill"] = function(destGUID)
+        local killFunc = function(destGUID)
             if state.completed or not belowMax() then
                 return false
             end
@@ -1045,7 +1045,7 @@ function M.registerQuestAchievement(cfg)
     end
 
     if REQUIRED_QUEST_ID then
-        _G[ACH_ID .. "_Quest"] = function(questID)
+        local questFunc = function(questID)
             if state.completed then
                 return false
             end
@@ -1313,6 +1313,11 @@ function M.registerQuestAchievement(cfg)
             return checkComplete()
         end
 
+        -- Register quest function in local registry
+        if _G.HardcoreAchievements_RegisterAchievementFunction then
+            _G.HardcoreAchievements_RegisterAchievementFunction(ACH_ID, "Quest", questFunc)
+        end
+
         local f = CreateFrame("Frame")
         f:RegisterEvent("QUEST_LOG_UPDATE")
         f:SetScript("OnEvent", function(self)
@@ -1328,14 +1333,18 @@ function M.registerQuestAchievement(cfg)
         end)
     end
 
-    _G[ACH_ID .. "_IsCompleted"] = function()
-        if state.completed then
-            return true
-        end
-        if topUpFromServer() then
+    -- Register functions in local registry to reduce global pollution
+    if _G.HardcoreAchievements_RegisterAchievementFunction then
+        _G.HardcoreAchievements_RegisterAchievementFunction(ACH_ID, "Kill", killFunc)
+        _G.HardcoreAchievements_RegisterAchievementFunction(ACH_ID, "IsCompleted", function()
+            if state.completed then
+                return true
+            end
+            if topUpFromServer() then
+                return checkComplete()
+            end
             return checkComplete()
-        end
-        return checkComplete()
+        end)
     end
 end
 

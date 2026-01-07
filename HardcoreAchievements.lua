@@ -9,6 +9,26 @@ local RefreshOutleveledAll
 local ProfessionTracker = _G.HCA_ProfessionCommon
 local QuestTrackedRows = {}
 
+-- Achievement function registry to reduce global pollution
+local AchievementFunctionRegistry = {}
+
+-- Helper functions for achievement function registry
+local function RegisterAchievementFunction(achId, funcType, func)
+    if not achId or not funcType or not func then return end
+    AchievementFunctionRegistry[achId] = AchievementFunctionRegistry[achId] or {}
+    AchievementFunctionRegistry[achId][funcType] = func
+end
+
+local function GetAchievementFunction(achId, funcType)
+    if not achId or not funcType then return nil end
+    local achFuncs = AchievementFunctionRegistry[achId]
+    return achFuncs and achFuncs[funcType] or nil
+end
+
+-- Export registry functions globally for use by catalog files
+_G.HardcoreAchievements_RegisterAchievementFunction = RegisterAchievementFunction
+_G.HardcoreAchievements_GetAchievementFunction = GetAchievementFunction
+
 -- =========================================================
 -- Self-Found points bonus
 -- =========================================================
@@ -3840,20 +3860,19 @@ end)
 
 -- =========================================================
 -- Deferred Achievement Registration System
--- Processes queued achievements on PLAYER_LOGIN with throttling
+-- Processes queued achievements on PLAYER_LOGIN with C_Timer chains
 -- =========================================================
 do
     local registrationFrame = CreateFrame("Frame")
     local registrationIndex = 1
-    local BATCH_SIZE = 10  -- Process 10 achievements per frame
-    local BATCH_DELAY = 0.01  -- 10ms delay between batches
-    
+    local BATCH_SIZE = 50  -- Process 50 achievements per batch (increased from 10)
+    local BATCH_DELAY = 0.02  -- 20ms delay between batches (increased from 10ms)
+
     local function ProcessRegistrationBatch()
         if not _G.HCA_RegistrationQueue or #_G.HCA_RegistrationQueue == 0 then
-            registrationFrame:SetScript("OnUpdate", nil)
             return
         end
-        
+
         local processed = 0
         while registrationIndex <= #_G.HCA_RegistrationQueue and processed < BATCH_SIZE do
             local registerFunc = _G.HCA_RegistrationQueue[registrationIndex]
@@ -3866,32 +3885,26 @@ do
             registrationIndex = registrationIndex + 1
             processed = processed + 1
         end
-        
+
         if registrationIndex > #_G.HCA_RegistrationQueue then
             -- All registrations complete
-            registrationFrame:SetScript("OnUpdate", nil)
             _G.HCA_RegistrationQueue = nil  -- Clear queue to free memory
             if RefreshAllAchievementPoints then
                 RefreshAllAchievementPoints()
             end
+        else
+            -- Schedule next batch
+            C_Timer.After(BATCH_DELAY, ProcessRegistrationBatch)
         end
     end
-    
+
     registrationFrame:RegisterEvent("PLAYER_LOGIN")
     registrationFrame:SetScript("OnEvent", function(self, event)
         if event == "PLAYER_LOGIN" then
-            -- Start processing queue with throttling
+            -- Start processing queue with C_Timer chain
             if _G.HCA_RegistrationQueue and #_G.HCA_RegistrationQueue > 0 then
                 registrationIndex = 1
-                -- Use OnUpdate with throttling instead of immediate processing
-                local lastUpdate = 0
-                registrationFrame:SetScript("OnUpdate", function(self, elapsed)
-                    lastUpdate = lastUpdate + elapsed
-                    if lastUpdate >= BATCH_DELAY then
-                        lastUpdate = 0
-                        ProcessRegistrationBatch()
-                    end
-                end)
+                C_Timer.After(0.1, ProcessRegistrationBatch)  -- Small initial delay
             end
         end
     end)

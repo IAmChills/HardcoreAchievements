@@ -1026,8 +1026,8 @@ _G.HCA_RegistrationQueue = _G.HCA_RegistrationQueue or {}
 for _, def in ipairs(Achievements) do
   if IsEligible(def) then
     table.insert(_G.HCA_RegistrationQueue, function()
-      local killFn  = def.customKill or ((def.targetNpcId or def.requiredKills) and _G[def.achId .. "_Kill"]) or nil
-      local questFn = (def.requiredQuestId and _G[def.achId .. "_Quest"]) or nil
+      local killFn  = def.customKill or ((def.targetNpcId or def.requiredKills) and _G.HardcoreAchievements_GetAchievementFunction(def.achId, "Kill")) or nil
+      local questFn = (def.requiredQuestId and _G.HardcoreAchievements_GetAchievementFunction(def.achId, "Quest")) or nil
 
       CreateAchievementRow(
         AchievementPanel,

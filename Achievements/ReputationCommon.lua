@@ -156,10 +156,13 @@ function ReputationCommon.registerReputationAchievement(def)
   
   -- Store the tracker function globally for the main system
   -- Note: The bridge will call this on UPDATE_FACTION events
-  _G[achId] = ReputationTracker
+  -- Tracker function is passed directly to CreateAchievementRow and stored on row
   
-  _G[achId .. "_IsCompleted"] = function() 
-    return CheckCompletion()
+  -- Register functions in local registry to reduce global pollution
+  if _G.HardcoreAchievements_RegisterAchievementFunction then
+    _G.HardcoreAchievements_RegisterAchievementFunction(achId, "IsCompleted", function() 
+      return CheckCompletion()
+    end)
   end
   
   -- Check eligibility - only show if player has the faction in their list and matches class (if specified)

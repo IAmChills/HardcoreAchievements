@@ -502,11 +502,14 @@ function DungeonSetCommon.registerDungeonSetAchievement(def)
   
   -- Store the tracker function globally for the main system
   -- Note: The bridge will call this on EQUIP_UNEQUIP events
-  _G[achId] = ItemTracker
+  -- Tracker function is passed directly to CreateAchievementRow and stored on row
   
-  _G[achId .. "_IsCompleted"] = function() 
-    UpdateItemOwnership()
-    return CheckCompletion()
+  -- Register functions in local registry to reduce global pollution
+  if _G.HardcoreAchievements_RegisterAchievementFunction then
+    _G.HardcoreAchievements_RegisterAchievementFunction(achId, "IsCompleted", function() 
+      UpdateItemOwnership()
+      return CheckCompletion()
+    end)
   end
   
   -- Check eligibility

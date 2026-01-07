@@ -31,9 +31,9 @@ Functions\TrackJumps.lua
 Functions\ProfessionTracker.lua [AllowLoadGameType vanilla]
 TBC\ProfessionTracker.lua [AllowLoadGameType tbc]
 
-Utils\AchievementTracker.lua
 Utils\FilterDropdown.lua
 HardcoreAchievements.lua
+Utils\AchievementTracker.lua
 
 Achievements\Common.lua
 Achievements\DungeonCommon.lua [AllowLoadGameType vanilla]
