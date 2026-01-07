@@ -3,6 +3,9 @@
 
 local ADDON_NAME = "HardcoreAchievements"
 
+-- Load AceSerializer
+local AceSerialize = LibStub("AceSerializer-3.0")
+
 -- Helper function to get settings
 local function GetSetting(settingName, defaultValue)
     if type(HardcoreAchievements_GetCharDB) == "function" then
@@ -148,6 +151,264 @@ local function CreateDiscordFrame()
     discordFrame.placeholderIcon = placeholderIcon
     
     return discordFrame
+end
+
+-- =========================================================
+-- Backup/Import Database Frames
+-- =========================================================
+
+-- Backup frame (will be created on first use)
+local backupFrame = nil
+
+local function CreateBackupFrame()
+    if backupFrame then return backupFrame end
+    
+    -- Create the main frame
+    backupFrame = CreateFrame("Frame", nil, UIParent)
+    backupFrame:SetSize(600, 400)
+    backupFrame:SetPoint("CENTER")
+    backupFrame:SetFrameStrata("DIALOG")
+    backupFrame:Hide()
+    
+    -- Create simple semi-transparent background
+    local bgTexture = backupFrame:CreateTexture(nil, "BACKGROUND")
+    bgTexture:SetTexture("Interface\\DialogFrame\\UI-DialogBox-Background")
+    bgTexture:SetAllPoints(backupFrame)
+    bgTexture:SetVertexColor(0, 0, 0, 0.9)
+    
+    -- Title
+    local titleText = backupFrame:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+    titleText:SetPoint("TOP", 0, -15)
+    titleText:SetText("Database Backup")
+    titleText:SetTextColor(1, 1, 1, 1)
+    
+    -- Instructions text
+    local instructionsText = backupFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    instructionsText:SetPoint("TOP", titleText, "BOTTOM", 0, -10)
+    instructionsText:SetText("Copy the text below and save it as a backup. This includes all characters, achievements, progress, and settings.")
+    instructionsText:SetTextColor(0.8, 0.8, 0.8, 1)
+    instructionsText:SetWidth(550)
+    instructionsText:SetJustifyH("CENTER")
+    
+    -- Scroll frame for the serialized data
+    local scrollFrame = CreateFrame("ScrollFrame", nil, backupFrame, "UIPanelScrollFrameTemplate")
+    scrollFrame:SetPoint("TOP", instructionsText, "BOTTOM", 0, -15)
+    scrollFrame:SetSize(550, 250)
+    
+    -- Edit box for the serialized data (read-only)
+    local editBox = CreateFrame("EditBox", nil, scrollFrame)
+    editBox:SetMultiLine(true)
+    editBox:SetFontObject("GameFontHighlightSmall")
+    editBox:SetWidth(530)
+    editBox:SetHeight(250)
+    editBox:SetAutoFocus(false)
+    editBox:SetScript("OnEscapePressed", function(self)
+        self:ClearFocus()
+        backupFrame:Hide()
+    end)
+    
+    -- Make read-only (allow selection but prevent editing)
+    editBox:SetScript("OnEditFocusGained", function(self)
+        self:HighlightText()
+    end)
+    
+    editBox:SetScript("OnChar", function(self)
+        -- Prevent any text input - restore original text
+        if self.originalText then
+            self:SetText(self.originalText)
+        end
+    end)
+    
+    scrollFrame:SetScrollChild(editBox)
+    
+    -- Store reference to edit box
+    backupFrame.editBox = editBox
+    
+    -- Close button
+    local closeButton = CreateFrame("Button", nil, backupFrame, "UIPanelCloseButton")
+    closeButton:SetPoint("TOPRIGHT", -5, -5)
+    closeButton:SetScript("OnClick", function(self)
+        backupFrame:Hide()
+    end)
+    
+    -- Make frame movable
+    backupFrame:SetMovable(true)
+    backupFrame:EnableMouse(true)
+    backupFrame:RegisterForDrag("LeftButton")
+    backupFrame:SetScript("OnDragStart", backupFrame.StartMoving)
+    backupFrame:SetScript("OnDragStop", backupFrame.StopMovingOrSizing)
+    
+    return backupFrame
+end
+
+-- Import frame (will be created on first use)
+local importFrame = nil
+
+local function CreateImportFrame()
+    if importFrame then return importFrame end
+    
+    -- Create the main frame
+    importFrame = CreateFrame("Frame", nil, UIParent)
+    importFrame:SetSize(600, 400)
+    importFrame:SetPoint("CENTER")
+    importFrame:SetFrameStrata("DIALOG")
+    importFrame:Hide()
+    
+    -- Create simple semi-transparent background
+    local bgTexture = importFrame:CreateTexture(nil, "BACKGROUND")
+    bgTexture:SetTexture("Interface\\DialogFrame\\UI-DialogBox-Background")
+    bgTexture:SetAllPoints(importFrame)
+    bgTexture:SetVertexColor(0, 0, 0, 0.9)
+    
+    -- Title
+    local titleText = importFrame:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+    titleText:SetPoint("TOP", 0, -15)
+    titleText:SetText("Import Database")
+    titleText:SetTextColor(1, 1, 1, 1)
+    
+    -- Warning text
+    local warningText = importFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    warningText:SetPoint("TOP", titleText, "BOTTOM", 0, -10)
+    warningText:SetText("|cffff0000WARNING:|r This will replace your entire database including all characters, achievements, progress, and settings. Paste your backup string below and click Import.")
+    warningText:SetTextColor(1, 0.8, 0.8, 1)
+    warningText:SetWidth(550)
+    warningText:SetJustifyH("CENTER")
+    
+    -- Scroll frame for the input
+    local scrollFrame = CreateFrame("ScrollFrame", nil, importFrame, "UIPanelScrollFrameTemplate")
+    scrollFrame:SetPoint("TOP", warningText, "BOTTOM", 0, -15)
+    scrollFrame:SetSize(550, 200)
+    
+    -- Edit box for pasting the serialized data
+    local editBox = CreateFrame("EditBox", nil, scrollFrame)
+    editBox:SetMultiLine(true)
+    editBox:SetFontObject("GameFontHighlightSmall")
+    editBox:SetWidth(530)
+    editBox:SetHeight(200)
+    editBox:SetAutoFocus(true)
+    editBox:SetScript("OnEscapePressed", function(self)
+        self:ClearFocus()
+        importFrame:Hide()
+    end)
+    
+    scrollFrame:SetScrollChild(editBox)
+    
+    -- Store reference to edit box
+    importFrame.editBox = editBox
+    
+    -- Import button
+    local importButton = CreateFrame("Button", nil, importFrame, "UIPanelButtonTemplate")
+    importButton:SetPoint("TOP", scrollFrame, "BOTTOM", 0, -15)
+    importButton:SetText("Import Database")
+    importButton:SetWidth(150)
+    importButton:SetHeight(30)
+    importButton:SetScript("OnClick", function(self)
+        local text = editBox:GetText()
+        if not text or text:match("^%s*$") then
+            print("|cffff0000Hardcore Achievements:|r No data provided to import.")
+            return
+        end
+        
+        -- Try to deserialize
+        local success, data = AceSerialize:Deserialize(text)
+        if not success then
+            print("|cffff0000Hardcore Achievements:|r Failed to import database. Invalid backup string.")
+            return
+        end
+        
+        -- Validate that it looks like the full database structure
+        if type(data) ~= "table" or not data.chars or type(data.chars) ~= "table" then
+            print("|cffff0000Hardcore Achievements:|r Invalid backup data format. Expected full database structure with 'chars' table.")
+            return
+        end
+        
+        -- Import the entire database structure
+        if _G.HardcoreAchievementsDB then
+            -- Deep copy function
+            local function DeepCopy(orig)
+                local orig_type = type(orig)
+                local copy
+                if orig_type == 'table' then
+                    copy = {}
+                    for orig_key, orig_value in next, orig, nil do
+                        copy[DeepCopy(orig_key)] = DeepCopy(orig_value)
+                    end
+                    setmetatable(copy, DeepCopy(getmetatable(orig)))
+                else
+                    copy = orig
+                end
+                return copy
+            end
+            
+            -- Replace the entire database with imported data
+            _G.HardcoreAchievementsDB = DeepCopy(data)
+            
+            print("|cff00ff00Hardcore Achievements:|r Database imported successfully! All characters and settings have been restored.")
+            
+            -- Refresh the UI if needed
+            if RefreshAllAchievementPoints then
+                RefreshAllAchievementPoints()
+            end
+            
+            -- Close the frame
+            importFrame:Hide()
+        else
+            print("|cffff0000Hardcore Achievements:|r Database not available.")
+        end
+    end)
+    
+    -- Close button
+    local closeButton = CreateFrame("Button", nil, importFrame, "UIPanelCloseButton")
+    closeButton:SetPoint("TOPRIGHT", -5, -5)
+    closeButton:SetScript("OnClick", function(self)
+        importFrame:Hide()
+    end)
+    
+    -- Make frame movable
+    importFrame:SetMovable(true)
+    importFrame:EnableMouse(true)
+    importFrame:RegisterForDrag("LeftButton")
+    importFrame:SetScript("OnDragStart", importFrame.StartMoving)
+    importFrame:SetScript("OnDragStop", importFrame.StopMovingOrSizing)
+    
+    return importFrame
+end
+
+-- Function to export database
+local function ExportDatabase()
+    -- Access the full database structure
+    if not _G.HardcoreAchievementsDB then
+        print("|cffff0000Hardcore Achievements:|r No database found.")
+        return
+    end
+    
+    -- Create a deep copy of the entire database structure
+    local function DeepCopy(orig)
+        local orig_type = type(orig)
+        local copy
+        if orig_type == 'table' then
+            copy = {}
+            for orig_key, orig_value in next, orig, nil do
+                copy[DeepCopy(orig_key)] = DeepCopy(orig_value)
+            end
+            setmetatable(copy, DeepCopy(getmetatable(orig)))
+        else
+            copy = orig
+        end
+        return copy
+    end
+    
+    local exportData = DeepCopy(_G.HardcoreAchievementsDB)
+    
+    -- Serialize the data
+    local serialized = AceSerialize:Serialize(exportData)
+    
+    -- Show the backup frame
+    local frame = CreateBackupFrame()
+    frame.editBox:SetText(serialized)
+    frame.editBox.originalText = serialized
+    frame.editBox:HighlightText() -- Select all text for easy copying
+    frame:Show()
 end
 
 -- Helper function to update solo achievements checkbox based on self-found status
@@ -301,10 +562,42 @@ local function CreateOptionsPanel()
     AddTooltipToCheckbox(resetTabButton, "Used to reset the position of the Achievements tab in case it's hidden")
     
     -- =========================================================
+    -- Backup & Restore Category
+    -- =========================================================
+    local backupCategoryTitle = panel:CreateFontString(nil, "ARTWORK", "GameFontNormalLarge")
+    backupCategoryTitle:SetPoint("TOPLEFT", resetTabButton, "BOTTOMLEFT", 0, -30)
+    backupCategoryTitle:SetText("|cff69adc9Backup & Restore|r")
+    
+    -- Backup Database button
+    local backupButton = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
+    backupButton:SetPoint("TOPLEFT", backupCategoryTitle, "BOTTOMLEFT", 0, -8)
+    backupButton:SetText("Backup Database")
+    backupButton:SetWidth(220)
+    backupButton:SetHeight(25)
+    backupButton:SetScript("OnClick", function(self)
+        ExportDatabase()
+    end)
+    AddTooltipToCheckbox(backupButton, "Export your full database (all characters, settings, achievements, progress) as a backup string")
+    
+    -- Import Database button
+    local importButton = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
+    importButton:SetPoint("TOPLEFT", backupButton, "BOTTOMLEFT", 0, -8)
+    importButton:SetText("Import Database")
+    importButton:SetWidth(220)
+    importButton:SetHeight(25)
+    importButton:SetScript("OnClick", function(self)
+        local frame = CreateImportFrame()
+        frame.editBox:SetText("")
+        frame.editBox:SetFocus()
+        frame:Show()
+    end)
+    AddTooltipToCheckbox(importButton, "Import a previously exported database backup (WARNING: This will replace your entire database including all characters)")
+    
+    -- =========================================================
     -- Support & Contact Category
     -- =========================================================
     local supportCategoryTitle = panel:CreateFontString(nil, "ARTWORK", "GameFontNormalLarge")
-    supportCategoryTitle:SetPoint("TOPLEFT", resetTabButton, "BOTTOMLEFT", 0, -30)
+    supportCategoryTitle:SetPoint("TOPLEFT", importButton, "BOTTOMLEFT", 0, -30)
     supportCategoryTitle:SetText("|cff69adc9Support & Contact|r")
     
     -- Support text
@@ -356,6 +649,8 @@ local function CreateOptionsPanel()
     panel.buttons = {
         resetAchievementsTab = resetTabButton,
         discord = discordButton,
+        backup = backupButton,
+        import = importButton,
     }
 
     -- Refresh function to update checkboxes when panel is shown
