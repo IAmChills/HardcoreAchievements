@@ -381,6 +381,14 @@ function DungeonCommon.registerDungeonAchievement(def)
       row.highlight:Hide()
     end
     
+    -- Set up OnLeave script to hide highlight and tooltip
+    row:SetScript("OnLeave", function(self)
+      if self.highlight then
+        self.highlight:Hide()
+      end
+      GameTooltip:Hide()
+    end)
+    
     -- Return the tooltip handler function
     return function(self)
         -- Show highlight
@@ -474,17 +482,8 @@ function DungeonCommon.registerDungeonAchievement(def)
           
           GameTooltip:Show()
         end
-      end)
-      
-      -- Set up OnLeave script to hide highlight and tooltip
-      row:SetScript("OnLeave", function(self)
-        if self.highlight then
-          self.highlight:Hide()
-        end
-        GameTooltip:Hide()
-      end)
+      end
     end
-  end
 
   -- Lazy tooltip handler - initializes on first hover
   local tooltipHandler = nil
