@@ -998,24 +998,30 @@ end
 -- Export achievements to global scope for AdminPanel access
 _G.Achievements = Achievements
 
+-- Defer registration until PLAYER_LOGIN to prevent load timeouts
+_G.HCA_RegistrationQueue = _G.HCA_RegistrationQueue or {}
+
+-- Queue all achievements for deferred registration
 for _, def in ipairs(Achievements) do
   if IsEligible(def) then
-    local killFn  = def.customKill or ((def.targetNpcId or def.requiredKills) and _G[def.achId .. "_Kill"]) or nil
-    local questFn = (def.requiredQuestId and _G[def.achId .. "_Quest"]) or nil
+    table.insert(_G.HCA_RegistrationQueue, function()
+      local killFn  = def.customKill or ((def.targetNpcId or def.requiredKills) and _G.HardcoreAchievements_GetAchievementFunction(def.achId, "Kill")) or nil
+      local questFn = (def.requiredQuestId and _G.HardcoreAchievements_GetAchievementFunction(def.achId, "Quest")) or nil
 
-    CreateAchievementRow(
-      AchievementPanel,
-      def.achId,
-      def.title,
-      def.tooltip,
-      def.icon,
-      def.level,
-      def.points or 0,
-      killFn,
-      questFn,
-      def.staticPoints,
-      def.zone,
-      def
-    )
+      CreateAchievementRow(
+        AchievementPanel,
+        def.achId,
+        def.title,
+        def.tooltip,
+        def.icon,
+        def.level,
+        def.points or 0,
+        killFn,
+        questFn,
+        def.staticPoints,
+        def.zone,
+        def
+      )
+    end)
   end
 end

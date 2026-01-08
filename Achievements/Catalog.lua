@@ -830,27 +830,7 @@ local Achievements = {
     staticPoints = true,
     hiddenUntilComplete = true,
 }, {
-    achId = "Secret95",
-    title = "Jump Master",
-    level = nil,
-    tooltip = "You have completed the secret achievement: |cff0091e6Jump 100,000 times|r",
-    icon = 134478,
-    points = 0,
-    customIsCompleted = function()
-        if not _G.HardcoreAchievements_GetCharDB then
-            return false
-        end
-        local _, cdb = _G.HardcoreAchievements_GetCharDB()
-        if not cdb or not cdb.stats or not cdb.stats.playerJumps then
-            return false
-        end
-        return cdb.stats.playerJumps >= 100000
-    end,
-    secret = true,
-    staticPoints = true,
-    hiddenUntilComplete = true,
-}, {
-    achId = "Secret95",
+    achId = "Secret5",
     title = "Mak'gora",
     level = nil,
     tooltip = "Obtain an ear by winning a |cff0091e6Mak'gora|r",
@@ -866,6 +846,26 @@ local Achievements = {
             end
         end
         return false
+    end,
+    secret = true,
+    staticPoints = true,
+    hiddenUntilComplete = true,
+}, {
+    achId = "Secret95",
+    title = "Jump Master",
+    level = nil,
+    tooltip = "You have completed the secret achievement: |cff0091e6Jump 100,000 times|r",
+    icon = 134478,
+    points = 0,
+    customIsCompleted = function()
+        if not _G.HardcoreAchievements_GetCharDB then
+            return false
+        end
+        local _, cdb = _G.HardcoreAchievements_GetCharDB()
+        if not cdb or not cdb.stats or not cdb.stats.playerJumps then
+            return false
+        end
+        return cdb.stats.playerJumps >= 100000
     end,
     secret = true,
     staticPoints = true,
@@ -1018,24 +1018,31 @@ end
 -- Export achievements to global scope for AdminPanel access
 _G.Achievements = Achievements
 
+-- Defer registration until PLAYER_LOGIN to prevent load timeouts
+-- Create global registration queue if it doesn't exist
+_G.HCA_RegistrationQueue = _G.HCA_RegistrationQueue or {}
+
+-- Queue all achievements for deferred registration
 for _, def in ipairs(Achievements) do
   if IsEligible(def) then
-    local killFn  = def.customKill or ((def.targetNpcId or def.requiredKills) and _G[def.achId .. "_Kill"]) or nil
-    local questFn = (def.requiredQuestId and _G[def.achId .. "_Quest"]) or nil
+    table.insert(_G.HCA_RegistrationQueue, function()
+      local killFn  = def.customKill or ((def.targetNpcId or def.requiredKills) and _G.HardcoreAchievements_GetAchievementFunction(def.achId, "Kill")) or nil
+      local questFn = (def.requiredQuestId and _G.HardcoreAchievements_GetAchievementFunction(def.achId, "Quest")) or nil
 
-    CreateAchievementRow(
-      AchievementPanel,
-      def.achId,
-      def.title,
-      def.tooltip,
-      def.icon,
-      def.level,
-      def.points or 0,
-      killFn,
-      questFn,
-      def.staticPoints,
-      def.zone,
-      def
-    )
+      CreateAchievementRow(
+        AchievementPanel,
+        def.achId,
+        def.title,
+        def.tooltip,
+        def.icon,
+        def.level,
+        def.points or 0,
+        killFn,
+        questFn,
+        def.staticPoints,
+        def.zone,
+        def
+      )
+    end)
   end
 end

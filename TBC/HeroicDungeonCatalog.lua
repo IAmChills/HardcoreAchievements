@@ -312,10 +312,15 @@ local HeroicDungeons = {
   },
 }
 
--- Register all dungeon achievements and their variations
+-- Defer registration until PLAYER_LOGIN to prevent load timeouts
+_G.HCA_RegistrationQueue = _G.HCA_RegistrationQueue or {}
+
+-- Queue all heroic dungeon achievements for deferred registration
 for _, dungeon in ipairs(HeroicDungeons) do
   -- Mark as heroic dungeon for filtering
   dungeon.isHeroicDungeon = true
-  -- Register base dungeon achievement
-  DungeonCommon.registerDungeonAchievement(dungeon)
+  -- Queue base dungeon achievement
+  table.insert(_G.HCA_RegistrationQueue, function()
+    DungeonCommon.registerDungeonAchievement(dungeon)
+  end)
 end

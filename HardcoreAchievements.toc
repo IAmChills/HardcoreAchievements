@@ -1,7 +1,7 @@
 ﻿## Interface: 11508, 20505
 ## Title: HardcoreAchievements
 ## Author: Chills
-## Version: 1.4.4
+## Version: 1.4.5
 ## Notes: Hardcore achievements system
 ## OptionalDeps: Ace3, CallbackHandler-1.0, HereBeDragons, LibDataBroker-1.1, LibDBIcon-1.0, LibStub, LibUIDropDownMenu
 ## SavedVariables: HardcoreAchievementsDB
@@ -28,12 +28,13 @@ Functions\GetStatusText.lua
 Functions\RefreshAllAchievementPoints.lua
 Functions\ShowAchievementTooltip.lua
 Functions\TrackJumps.lua
+Functions\DataEncoding.lua
 Functions\ProfessionTracker.lua [AllowLoadGameType vanilla]
 TBC\ProfessionTracker.lua [AllowLoadGameType tbc]
 
-Utils\AchievementTracker.lua
 Utils\FilterDropdown.lua
 HardcoreAchievements.lua
+Utils\AchievementTracker.lua
 
 Achievements\Common.lua
 Achievements\DungeonCommon.lua [AllowLoadGameType vanilla]

@@ -518,12 +518,20 @@ local Dungeons = {
   }
 }
 
--- Register all dungeon achievements and their variations
+-- Defer registration until PLAYER_LOGIN to prevent load timeouts
+-- Create global registration queue if it doesn't exist
+_G.HCA_RegistrationQueue = _G.HCA_RegistrationQueue or {}
+
+-- Queue all dungeon achievements for deferred registration
 for _, dungeon in ipairs(Dungeons) do
-  -- Register base dungeon achievement
-  DungeonCommon.registerDungeonAchievement(dungeon)
-  -- Register variations (if checkboxes are enabled)
+  -- Queue base dungeon achievement
+  table.insert(_G.HCA_RegistrationQueue, function()
+    DungeonCommon.registerDungeonAchievement(dungeon)
+  end)
+  -- Queue variations (if checkboxes are enabled)
   if DungeonCommon.registerDungeonVariations then
-    DungeonCommon.registerDungeonVariations(dungeon)
+    table.insert(_G.HCA_RegistrationQueue, function()
+      DungeonCommon.registerDungeonVariations(dungeon)
+    end)
   end
 end

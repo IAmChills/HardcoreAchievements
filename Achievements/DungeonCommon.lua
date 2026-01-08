@@ -362,25 +362,35 @@ function DungeonCommon.registerDungeonAchievement(def)
   end
 
 
-  -- Update tooltip when progress changes (local; closes over the local generator)
-  local function UpdateTooltip()
+  -- Lazy tooltip setup - only initialize when first hovered (optimization)
+  local tooltipInitialized = false
+  local function CreateTooltipHandler()
     local row = _G[rowVarName]
-    if row then
-      -- Store the base tooltip for the main tooltip
-      local baseTooltip = tooltip or ""
-      row.tooltip = baseTooltip
-      
-      -- Ensure mouse events are enabled and highlight texture exists
-      row:EnableMouse(true)
-      if not row.highlight then
-        row.highlight = row:CreateTexture(nil, "BACKGROUND")
-        row.highlight:SetAllPoints(row)
-        row.highlight:SetColorTexture(1, 1, 1, 0.10)
-        row.highlight:Hide()
+    if not row then return function() end end
+    
+    -- Store the base tooltip for the main tooltip
+    local baseTooltip = tooltip or ""
+    row.tooltip = baseTooltip
+    
+    -- Ensure mouse events are enabled and highlight texture exists
+    row:EnableMouse(true)
+    if not row.highlight then
+      row.highlight = row:CreateTexture(nil, "BACKGROUND")
+      row.highlight:SetAllPoints(row)
+      row.highlight:SetColorTexture(1, 1, 1, 0.10)
+      row.highlight:Hide()
+    end
+    
+    -- Set up OnLeave script to hide highlight and tooltip
+    row:SetScript("OnLeave", function(self)
+      if self.highlight then
+        self.highlight:Hide()
       end
-      
-      -- Override the OnEnter script to use proper GameTooltip API while preserving highlighting
-      row:SetScript("OnEnter", function(self)
+      GameTooltip:Hide()
+    end)
+    
+    -- Return the tooltip handler function
+    return function(self)
         -- Show highlight
         if self.highlight then
           self.highlight:Show()
@@ -472,16 +482,23 @@ function DungeonCommon.registerDungeonAchievement(def)
           
           GameTooltip:Show()
         end
-      end)
-      
-      -- Set up OnLeave script to hide highlight and tooltip
-      row:SetScript("OnLeave", function(self)
-        if self.highlight then
-          self.highlight:Hide()
-        end
-        GameTooltip:Hide()
-      end)
+      end
     end
+
+  -- Lazy tooltip handler - initializes on first hover
+  local tooltipHandler = nil
+  local function GetTooltipHandler()
+    if not tooltipHandler then
+      tooltipHandler = CreateTooltipHandler()
+    end
+    return tooltipHandler
+  end
+
+  -- Update tooltip when progress changes (triggers lazy re-initialization on next hover)
+  local function UpdateTooltip()
+    -- Mark as needing update - tooltip will be re-initialized on next hover
+    tooltipInitialized = false
+    tooltipHandler = nil
   end
 
   local function IsGroupEligible()
@@ -641,10 +658,13 @@ function DungeonCommon.registerDungeonAchievement(def)
     return false
   end
 
-  -- Store the tracker function globally for the main system
-  _G[achId] = KillTracker
+  -- Tracker function is passed directly to CreateAchievementRow and stored on row.killTracker
 
-  _G[achId .. "_IsCompleted"] = function() return state.completed end
+  -- Register functions in local registry to reduce global pollution
+  if _G.HardcoreAchievements_RegisterAchievementFunction then
+    _G.HardcoreAchievements_RegisterAchievementFunction(achId, "Kill", KillTracker)
+    _G.HardcoreAchievements_RegisterAchievementFunction(achId, "IsCompleted", function() return state.completed end)
+  end
 
   -- Check faction eligibility
   local function IsEligible()
@@ -697,8 +717,22 @@ function DungeonCommon.registerDungeonAchievement(def)
       RefreshAllAchievementPoints()
     end
     
-    -- Update tooltip after creation to ensure it shows current progress
-    C_Timer.After(0.1, UpdateTooltip)
+    -- Set up lazy tooltip initialization - only set up handlers on first hover
+    local row = _G[rowVarName]
+    if row then
+      row:EnableMouse(true)
+      -- Lazy OnEnter handler - creates tooltip handler on first hover
+      row:SetScript("OnEnter", function(self)
+        GetTooltipHandler()(self)
+      end)
+      -- OnLeave handler
+      row:SetScript("OnLeave", function(self)
+        if self.highlight then
+          self.highlight:Hide()
+        end
+        GameTooltip:Hide()
+      end)
+    end
   end
 
   -- Auto-register the achievement immediately if the panel is ready
@@ -706,21 +740,8 @@ function DungeonCommon.registerDungeonAchievement(def)
     _G[registerFuncName]()
   end
 
-  -- Create the event frame dynamically
-  local eventFrame = CreateFrame("Frame")
-  eventFrame:RegisterEvent("PLAYER_LOGIN")
-  eventFrame:RegisterEvent("ADDON_LOADED")
-  eventFrame:SetScript("OnEvent", function()
-  LoadProgress() -- Load progress on login/addon load
-    _G[registerFuncName]()
-  end)
-
-  if _G.CharacterFrame and _G.CharacterFrame.HookScript then
-    CharacterFrame:HookScript("OnShow", function()
-      LoadProgress() -- Load progress when character frame is shown
-      _G[registerFuncName]()
-    end)
-  end
+  -- Note: Event handling is now centralized in HardcoreAchievements.lua
+  -- Individual event frames removed for performance
 end
 
 -- Function to register dungeon variations
