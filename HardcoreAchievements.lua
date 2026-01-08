@@ -1530,22 +1530,17 @@ initFrame:SetScript("OnEvent", function(self, event, ...)
             cdb.meta.faction   = UnitFactionGroup("player")
             cdb.meta.lastLogin = time()
             
-            -- Clean up incorrectly completed level bracket achievements
+            -- Clean up incorrectly completed level bracket achievements (lightweight, can run immediately)
             CleanupIncorrectLevelAchievements()
             
-            RestoreCompletionsFromDB()
-            CheckPendingCompletions()
-            RefreshOutleveledAll()
-        end
-        SortAchievementRows()
-        if ProfessionTracker and ProfessionTracker.RefreshAll then
-            ProfessionTracker.RefreshAll()
+            -- Defer heavy operations until after achievement registration completes
+            -- These will be called from the registration completion handler
         end
         
-        -- Initialize minimap button
+        -- Initialize minimap button (lightweight, can run immediately)
         InitializeMinimapButton()
         
-        -- Load saved tab position
+        -- Load saved tab position (lightweight, can run immediately)
         LoadTabPosition()
         
         if UISpecialFrames then
@@ -1555,16 +1550,17 @@ initFrame:SetScript("OnEvent", function(self, event, ...)
             end
         end
         
-        -- Refresh options panel to sync checkbox states
-        if _HardcoreAchievementsOptionsPanel and _HardcoreAchievementsOptionsPanel.refresh then
-            _HardcoreAchievementsOptionsPanel:refresh()
-        end
-        
+        -- Refresh options panel to sync checkbox states (deferred)
         -- Initialize AchievementTracker (after it loads)
         C_Timer.After(0.5, function()
             local AchievementTracker = GetAchievementTracker()
             if AchievementTracker and AchievementTracker.Initialize then
                 AchievementTracker:Initialize()
+            end
+            
+            -- Refresh options panel after a short delay
+            if _HardcoreAchievementsOptionsPanel and _HardcoreAchievementsOptionsPanel.refresh then
+                _HardcoreAchievementsOptionsPanel:refresh()
             end
         end)
 
@@ -1591,7 +1587,7 @@ end
 
 -- Define the welcome message popup
 StaticPopupDialogs["Hardcore Achievements"] = {
-    text = "|cff69adc9Hardcore Achievements|r\n\nIf you intend to progress into |cff00ff00The Burning Crusade|r it is highly recommended you backup your Hardcore Achievements database before pre patch in case of data loss.\n\nThere is a new backup and restore feature in the options panel.",
+    text = "|cff69adc9Hardcore Achievements|r\n\nIf you intend to progress into |cff00ff00The Burning Crusade|r and continue using Hardcore Achievements, it is highly recommended you backup your Hardcore Achievements database before pre patch in case of data loss.\n\nThere is a new backup and restore feature in the options panel.",
     button1 = "Got it!",
     button2 = "Show Me!",
     timeout = 0,
@@ -3875,16 +3871,76 @@ end)
 do
     local registrationFrame = CreateFrame("Frame")
     local registrationIndex = 1
-    local BATCH_SIZE = 50  -- Process 50 achievements per batch (increased from 10)
-    local BATCH_DELAY = 0.02  -- 20ms delay between batches (increased from 10ms)
+    local REGISTRATION_BATCH_SIZE = 1  -- Process 1 achievements per batch (very small to avoid lag)
+    local REGISTRATION_BATCH_DELAY = 0.01  -- 10ms delay between batches (allows frame updates)
+    
+    local registrationComplete = false
+    local playerLoggedIn = false
+    local heavyOpsScheduled = false
 
+    -- Forward declaration
+    local RunHeavyOperations
+
+    -- Run heavy operations after both registration and login are complete
+    -- These operations are batched as well to avoid lag
+    RunHeavyOperations = function()
+        if heavyOpsScheduled then return end
+        if not registrationComplete or not playerLoggedIn then return end
+        
+        heavyOpsScheduled = true
+        
+        -- Use small delays between operations to spread load
+        C_Timer.After(0.1, function()
+            if RestoreCompletionsFromDB then
+                RestoreCompletionsFromDB()
+            end
+            
+            C_Timer.After(0.1, function()
+                if CheckPendingCompletions then
+                    CheckPendingCompletions()
+                end
+                
+                C_Timer.After(0.1, function()
+                    if RefreshOutleveledAll then
+                        RefreshOutleveledAll()
+                    end
+                    
+                    C_Timer.After(0.1, function()
+                        if SortAchievementRows then
+                            SortAchievementRows()
+                        end
+                        
+                        C_Timer.After(0.1, function()
+                            if RefreshAllAchievementPoints then
+                                RefreshAllAchievementPoints()
+                            end
+                            
+                            C_Timer.After(0.1, function()
+                                if ProfessionTracker and ProfessionTracker.RefreshAll then
+                                    ProfessionTracker.RefreshAll()
+                                end
+                            end)
+                        end)
+                    end)
+                end)
+            end)
+        end)
+        print("|cff69adc9[Hardcore Achievements]|r |cffffffffAll achievements loaded!|r")
+    end
+
+    -- Process achievement registration in small batches to avoid blocking
     local function ProcessRegistrationBatch()
         if not _G.HCA_RegistrationQueue or #_G.HCA_RegistrationQueue == 0 then
+            registrationComplete = true
+            -- If player already logged in, trigger heavy operations
+            if playerLoggedIn then
+                RunHeavyOperations()
+            end
             return
         end
 
         local processed = 0
-        while registrationIndex <= #_G.HCA_RegistrationQueue and processed < BATCH_SIZE do
+        while registrationIndex <= #_G.HCA_RegistrationQueue and processed < REGISTRATION_BATCH_SIZE do
             local registerFunc = _G.HCA_RegistrationQueue[registrationIndex]
             if type(registerFunc) == "function" then
                 local success, err = pcall(registerFunc)
@@ -3892,6 +3948,7 @@ do
                     print("|cff69adc9[Hardcore Achievements]|r |cffff0000Error registering achievement: " .. tostring(err) .. "|r")
                 end
             end
+            --print("|cff69adc9[Hardcore Achievements]|r |cffffffffProcessing achievement: " .. tostring(registerFunc) .. "|r")
             registrationIndex = registrationIndex + 1
             processed = processed + 1
         end
@@ -3899,23 +3956,44 @@ do
         if registrationIndex > #_G.HCA_RegistrationQueue then
             -- All registrations complete
             _G.HCA_RegistrationQueue = nil  -- Clear queue to free memory
-            if RefreshAllAchievementPoints then
-                RefreshAllAchievementPoints()
+            registrationComplete = true
+            
+            -- If player already logged in, trigger heavy operations
+            if playerLoggedIn then
+                RunHeavyOperations()
             end
         else
-            -- Schedule next batch
-            C_Timer.After(BATCH_DELAY, ProcessRegistrationBatch)
+            -- Schedule next batch with delay to allow frame updates
+            C_Timer.After(REGISTRATION_BATCH_DELAY, ProcessRegistrationBatch)
         end
     end
 
+    registrationFrame:RegisterEvent("ADDON_LOADED")
     registrationFrame:RegisterEvent("PLAYER_LOGIN")
-    registrationFrame:SetScript("OnEvent", function(self, event)
-        if event == "PLAYER_LOGIN" then
-            -- Start processing queue with C_Timer chain
-            if _G.HCA_RegistrationQueue and #_G.HCA_RegistrationQueue > 0 then
-                registrationIndex = 1
-                C_Timer.After(0.1, ProcessRegistrationBatch)  -- Small initial delay
+    registrationFrame:SetScript("OnEvent", function(self, event, ...)
+        if event == "ADDON_LOADED" then
+            local addonName = ...
+            if addonName == ADDON_NAME then
+                -- Start processing achievements in batches during addon load
+                -- This happens before PLAYER_LOGIN, spreading the work out earlier
+                if _G.HCA_RegistrationQueue and #_G.HCA_RegistrationQueue > 0 then
+                    registrationIndex = 1
+                    -- Small initial delay to let addon finish initializing
+                    C_Timer.After(0.05, ProcessRegistrationBatch)
+                else
+                    -- No achievements to register
+                    registrationComplete = true
+                    -- Will wait for PLAYER_LOGIN to run heavy operations
+                end
             end
+        elseif event == "PLAYER_LOGIN" then
+            playerLoggedIn = true
+            
+            -- If registration already complete, trigger heavy operations
+            if registrationComplete then
+                RunHeavyOperations()
+            end
+            -- Otherwise, heavy operations will be triggered when registration completes
         end
     end)
 end
