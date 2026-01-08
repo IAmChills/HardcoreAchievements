@@ -56,19 +56,36 @@ local function base64encode(data)
     
     for i = 1, len, 3 do
         local b1 = string.byte(data, i) or 0
-        local b2 = string.byte(data, i + 1) or 0
-        local b3 = string.byte(data, i + 2) or 0
-        local bitmap = bor(bor(lshift(b1, 16), lshift(b2, 8)), b3)
-        for j = 1, 4 do
-            local idx = band(rshift(bitmap, 6 * (4 - j)), 63)
-            result[#result + 1] = string.sub(base64chars, idx + 1, idx + 1)
-        end
-    end
-    -- Fix padding
-    local padding = (3 - ((len - 1) % 3)) % 3
-    if padding > 0 then
-        for i = 1, padding do
-            result[#result - padding + i] = '='
+        local b2 = string.byte(data, i + 1)
+        local b3 = string.byte(data, i + 2)
+        
+        local bitmap = bor(bor(lshift(b1, 16), lshift(b2 or 0, 8)), b3 or 0)
+        
+        -- Determine how many bytes we actually have in this group
+        local bytesInGroup = math.min(3, len - i + 1)
+        
+        -- Output the appropriate number of characters
+        if bytesInGroup == 3 then
+            -- Full group: output all 4 characters
+            for j = 1, 4 do
+                local idx = band(rshift(bitmap, 6 * (4 - j)), 63)
+                result[#result + 1] = string.sub(base64chars, idx + 1, idx + 1)
+            end
+        elseif bytesInGroup == 2 then
+            -- 2 bytes: output 3 chars, then 1 padding
+            for j = 1, 3 do
+                local idx = band(rshift(bitmap, 6 * (4 - j)), 63)
+                result[#result + 1] = string.sub(base64chars, idx + 1, idx + 1)
+            end
+            result[#result + 1] = '='
+        else
+            -- 1 byte: output 2 chars, then 2 padding
+            for j = 1, 2 do
+                local idx = band(rshift(bitmap, 6 * (4 - j)), 63)
+                result[#result + 1] = string.sub(base64chars, idx + 1, idx + 1)
+            end
+            result[#result + 1] = '='
+            result[#result + 1] = '='
         end
     end
     return table.concat(result)
@@ -932,7 +949,7 @@ local function CreateOptionsPanel()
     -- Credits text
     local creditsText = panel:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
     creditsText:SetPoint("TOPLEFT", creditsCategoryTitle, "BOTTOMLEFT", 0, -8)
-    creditsText:SetText("Special thanks to:\n\n|cffff8000Viviway|r for the help with the addon and the overall design for UI.\n|cffff8000Tulhur|r for the help with tracking down bugs and all his suggestions.\n|cffff8000BonniesDad|r for supplying the Ultra Hardcore addon and allowing Hardcore Achivement to thrive.")
+    creditsText:SetText("Special thanks to:\n\n|cffff8000Viviway|r for the help with the addon and the overall design for UI.\n|cffff8000Tulhur|r for the help with tracking down bugs and all his suggestions.\n|cffff8000BonniesDad|r for supplying the Ultra Hardcore addon and allowing Hardcore Achivements to thrive.")
     creditsText:SetTextColor(0.8, 0.8, 0.8, 1)
     creditsText:SetWidth(600)
     creditsText:SetJustifyH("LEFT")
@@ -1056,3 +1073,10 @@ local optionsPanel = CreateOptionsPanel()
 
 -- Global reference for external access if needed
 _HardcoreAchievementsOptionsPanel = optionsPanel
+
+-- Global function to open backup/restore frame
+function HardcoreAchievements_ShowBackupRestore()
+    local frame = CreateBackupRestoreFrame()
+    SwitchTab("Backup")
+    ExportDatabase()
+end

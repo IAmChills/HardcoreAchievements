@@ -1574,33 +1574,43 @@ initFrame:SetScript("OnEvent", function(self, event, ...)
             C_Timer.After(3, function()
                 ApplySelfFoundBonus()
                 RestoreCompletionsFromDB()
-                --addon:ShowWelcomeMessage()
+                addon:ShowWelcomeMessage()
             end)
         end
     end
 end)
 
--- -- Function to show welcome message popup on first login
--- function addon:ShowWelcomeMessage()
---     local _, cdb = GetCharDB()
---     if not cdb.settings.showWelcomeMessage and IsSelfFound() then
---         StaticPopup_Show("Hardcore Achievements")
---         cdb.settings.showWelcomeMessage = true
---     end
--- end
+-- Function to show welcome message popup on first login
+function addon:ShowWelcomeMessage()
+    local _, cdb = GetCharDB()
+    if not cdb.settings.showWelcomeMessage then
+        StaticPopup_Show("Hardcore Achievements")
+        cdb.settings.showWelcomeMessage = true
+    end
+end
 
--- -- Define the welcome message popup
--- StaticPopupDialogs["Hardcore Achievements"] = {
---     text = "You are self found! You can enable Solo Self Found mode for Hardcore Achievements within the options panel for double the points and double the glory.",
---     button1 = "Got it!",
---     timeout = 0,
---     whileDead = true,
---     hideOnEscape = true,
---     preferredIndex = 3,
---     OnAccept = function()
---         -- Popup automatically closes
---     end,
--- }
+-- Define the welcome message popup
+StaticPopupDialogs["Hardcore Achievements"] = {
+    text = "|cff69adc9Hardcore Achievements|r\n\nIf you intend to progress into |cff00ff00The Burning Crusade|r it is highly recommended you backup your Hardcore Achievements database before pre patch in case of data loss.\n\nThere is a new backup and restore feature in the options panel.",
+    button1 = "Got it!",
+    button2 = "Show Me!",
+    timeout = 0,
+    whileDead = true,
+    hideOnEscape = true,
+    preferredIndex = 3,
+    OnAccept = function()
+        -- Popup automatically closes
+    end,
+    OnCancel = function()
+        OpenOptionsPanel()
+        -- Open backup/restore window after a short delay to ensure options panel is loaded
+        -- C_Timer.After(0.1, function()
+        --     if HardcoreAchievements_ShowBackupRestore then
+        --         HardcoreAchievements_ShowBackupRestore()
+        --     end
+        -- end)
+    end,
+}
 
 -- =========================================================
 -- Setting up the Interface
