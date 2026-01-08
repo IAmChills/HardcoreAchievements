@@ -1520,6 +1520,10 @@ initFrame:SetScript("OnEvent", function(self, event, ...)
         if cdb then
             -- Ensure settings table exists
             cdb.settings = cdb.settings or {}
+            -- Default showCustomTab to true for new characters
+            if cdb.settings.showCustomTab == nil then
+                cdb.settings.showCustomTab = true
+            end
             local name, realm = UnitName("player"), GetRealmName()
             local className = UnitClass("player")
             cdb.meta.name      = name
@@ -1667,7 +1671,9 @@ function LoadTabPosition()
         
         -- Respect user preference: hide custom tab entirely if disabled
         local _, cdb = GetCharDB()
-        if not (cdb and cdb.settings and cdb.settings.showCustomTab) then
+        -- Default to true if not set (for new characters)
+        local showTab = (cdb and cdb.settings and cdb.settings.showCustomTab ~= nil) and cdb.settings.showCustomTab or true
+        if not showTab then
             Tab:Hide()
             if Tab.squareFrame then
                 Tab.squareFrame:Hide()
@@ -1720,9 +1726,9 @@ function LoadTabPosition()
         -- Set the mode on the tab object
         Tab.mode = savedMode
     else
-        -- If no saved data, check showCustomTab setting
+        -- If no saved data, check showCustomTab setting (default to true for new characters)
         local _, cdb = GetCharDB()
-        local shouldShow = (cdb and cdb.settings and cdb.settings.showCustomTab)
+        local shouldShow = (cdb and cdb.settings and cdb.settings.showCustomTab ~= nil) and cdb.settings.showCustomTab or true
         
         if shouldShow then
             -- Show tab at default position if showCustomTab is true
