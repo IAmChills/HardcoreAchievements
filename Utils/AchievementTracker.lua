@@ -782,11 +782,31 @@ local function GetAchievementDescription(achievementId)
     local isRaid = false
     local achDef = nil
     
+    -- Check if achievement is completed first (needed for secret achievements)
+    local achievementCompleted = false
+    local getCharDB = _G.HardcoreAchievements_GetCharDB
+    if type(getCharDB) == "function" then
+        local _, cdb = getCharDB()
+        if cdb and cdb.achievements then
+            local record = cdb.achievements[tostring(achievementId)]
+            if record and record.completed then
+                achievementCompleted = true
+            end
+        end
+    end
+    
     -- Try to get from global achievement definitions
+    local isSecretAchievement = false
     if _G.Achievements then
         for _, rec in ipairs(_G.Achievements) do
             if tostring(rec.achId) == tostring(achievementId) then
-                baseTooltip = rec.tooltip
+                isSecretAchievement = rec.secret == true
+                -- For secret achievements that aren't completed, use secretTooltip
+                if isSecretAchievement and not achievementCompleted and rec.secretTooltip then
+                    baseTooltip = rec.secretTooltip
+                else
+                    baseTooltip = rec.tooltip
+                end
                 break
             end
         end
@@ -796,7 +816,12 @@ local function GetAchievementDescription(achievementId)
     if _G.HCA_AchievementDefs and _G.HCA_AchievementDefs[tostring(achievementId)] then
         achDef = _G.HCA_AchievementDefs[tostring(achievementId)]
         if not baseTooltip then
-            baseTooltip = achDef.tooltip
+            -- Check if it's a secret achievement and not completed
+            if achDef.secret and not achievementCompleted and achDef.secretTooltip then
+                baseTooltip = achDef.secretTooltip
+            else
+                baseTooltip = achDef.tooltip
+            end
         end
         if achDef.requiredKills then
             requiredKills = achDef.requiredKills
@@ -819,7 +844,14 @@ local function GetAchievementDescription(achievementId)
     if not baseTooltip and AchievementPanel and AchievementPanel.achievements then
         for _, row in ipairs(AchievementPanel.achievements) do
             if (row.id == achievementId or row.achId == achievementId) then
-                baseTooltip = row.tooltip or row._tooltip
+                -- Check if this is a secret achievement and not completed
+                local rowIsSecret = row.isSecretAchievement or (row._def and row._def.secret)
+                local rowCompleted = row.completed or achievementCompleted
+                if rowIsSecret and not rowCompleted and row.secretTooltip then
+                    baseTooltip = row.secretTooltip
+                else
+                    baseTooltip = row.tooltip or row._tooltip
+                end
                 if not requiredKills and row.requiredKills then
                     requiredKills = row.requiredKills
                 end
@@ -849,19 +881,6 @@ local function GetAchievementDescription(achievementId)
     -- For dungeon achievements, we don't need baseTooltip - only return nil if it's not a dungeon achievement and we have no tooltip
     if not baseTooltip and not isDungeonOrRaidAchievement then
         return nil
-    end
-    
-    -- Check if achievement is completed
-    local achievementCompleted = false
-    local getCharDB = _G.HardcoreAchievements_GetCharDB
-    if type(getCharDB) == "function" then
-        local _, cdb = getCharDB()
-        if cdb and cdb.achievements then
-            local record = cdb.achievements[tostring(achievementId)]
-            if record and record.completed then
-                achievementCompleted = true
-            end
-        end
     end
     
     -- Check row.completed flag as well (immediate status)
