@@ -266,7 +266,7 @@ local Achievements = {
     icon = 132484,
     points = 10,
     requiredQuestId = 4021,
-    targetNpcId = nil,
+    targetNpcId = 9456,
     faction = FACTION_HORDE,
     zone = "The Barrens"
 }, {

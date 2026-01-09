@@ -1,7 +1,7 @@
 # TODO List
 
 ## Active Tasks
-
+- Dungon achievements are calculated by dungeon entrance level
 - Show achievement locations on map
 
 ## Bugs
@@ -27,7 +27,7 @@
 ## TBC TODO List
 
 - Catalog
-  - This will be the general list of quests and what not and be the 'hard count' for showing how many total achievements are availabe, aka not secret/side achieves/niche
+  - NEED LEVEL 70 MILESTONE ICON
 - Dungeon Set Catalog
   - Already implemented, needs updated to include TBC sets
 - Dungeon Set Common

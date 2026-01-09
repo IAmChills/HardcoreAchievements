@@ -9,8 +9,8 @@ local Achievements = {
 {
     achId = "Rageclaw",
     title = "Claw of the Wilds",
-    level = 9,
-    tooltip = "Complete |cff0091e6Druid of the Claw|r before level 10",
+    level = 7,
+    tooltip = "Complete |cff0091e6Druid of the Claw|r before level 8",
     icon = 134297,
     points = 10,
     requiredQuestId = 2561, -- Quest available at level 3
@@ -20,8 +20,8 @@ local Achievements = {
 }, {
     achId = "Vagash",
     title = "The Alpha's End",
-    level = 10,
-    tooltip = "Complete |cff0091e6Protecting the Herd|r before level 11",
+    level = 8,
+    tooltip = "Complete |cff0091e6Protecting the Herd|r before level 9",
     icon = 132189,
     points = 10,
     requiredQuestId = 314, -- Quest available at level 6
@@ -31,8 +31,8 @@ local Achievements = {
 }, {
     achId = "Hogger",
     title = "Hogger? Never Heard of Her",
-    level = 11,
-    tooltip = "Complete |cff0091e6Wanted: 'Hogger'|r before level 12",
+    level = 9,
+    tooltip = "Complete |cff0091e6Wanted: 'Hogger'|r before level 10",
     icon = 134163,
     points = 10,
     requiredQuestId = 176, -- Quest available at level 5
@@ -42,8 +42,8 @@ local Achievements = {
 }, {
     achId = "Grawmug",
     title = "Defender of Dun Algaz",
-    level = 16,
-    tooltip = "Complete |cff0091e6In Defense of the King's Land Pt. 4|r before level 17",
+    level = 14,
+    tooltip = "Complete |cff0091e6In Defense of the King's Land Pt. 4|r before level 15",
     icon = 236421,
     points = 10,
     requiredQuestId = 217, -- Quest available at level 10
@@ -53,8 +53,8 @@ local Achievements = {
 }, {
     achId = "AbsentMindedProspector",
     title = "Absent-Minded Savior",
-    level = 19,
-    tooltip = "Complete |cff0091e6Absent Minded Prospector Pt. 1|r before level 20",
+    level = 17,
+    tooltip = "Complete |cff0091e6Absent Minded Prospector Pt. 1|r before level 18",
     icon = 236444,
     points = 10,
     allowSoloDouble = true,
@@ -65,8 +65,8 @@ local Achievements = {
 }, {
     achId = "Fangore",
     title = "Lieutenant’s Downfall",
-    level = 23,
-    tooltip = "Complete |cff0091e6Wanted: Lieutenant Fangore|r before level 24",
+    level = 24,
+    tooltip = "Complete |cff0091e6Wanted: Lieutenant Fangore|r before level 25",
     icon = 134296,
     points = 10,
     requiredQuestId = 180, -- Quest available at level 11
@@ -87,8 +87,8 @@ local Achievements = {
 }, {
     achId = "Nekrosh",
     title = "Nek’rosh No More",
-    level = 31,
-    tooltip = "Complete |cff0091e6Defeat Nek'rosh|r before level 32",
+    level = 24,
+    tooltip = "Complete |cff0091e6Defeat Nek'rosh|r before level 35",
     icon = 134170,
     points = 10,
     requiredQuestId = 474, -- Quest available at level 23
@@ -98,8 +98,8 @@ local Achievements = {
 }, {
     achId = "Morbent",
     title = "Morbent Has Fallen",
-    level = 32,
-    tooltip = "Complete |cff0091e6Morbent Fel|r before level 33",
+    level = 29,
+    tooltip = "Complete |cff0091e6Morbent Fel|r before level 30",
     icon = 236225,
     points = 10,
     requiredQuestId = 55, -- Quest available at level 20
@@ -109,8 +109,8 @@ local Achievements = {
 }, {
     achId = "Eliza",
     title = "The Alchemist's Wife",
-    level = 32,
-    tooltip = "Complete |cff0091e6Bride of the Embalmer|r before level 33",
+    level = 27,
+    tooltip = "Complete |cff0091e6Bride of the Embalmer|r before level 28",
     icon = 236399,
     points = 10,
     requiredQuestId = 253, -- Quest available at level 20
@@ -120,8 +120,8 @@ local Achievements = {
 }, {
     achId = "MorLadim",
     title = "Mor’Ladim’s Rest",
-    level = 33,
-    tooltip = "Complete |cff0091e6Mor'Ladim|r before level 34",
+    level = 28,
+    tooltip = "Complete |cff0091e6Mor'Ladim|r before level 29",
     icon = 133730,
     points = 10,
     requiredQuestId = 228, -- Quest available at level 25
@@ -131,8 +131,8 @@ local Achievements = {
 }, {
     achId = "ForsakenCourier",
     title = "Courier of Death",
-    level = 34,
-    tooltip = "Complete |cff0091e6Hints of a New Plague|r before level 35",
+    level = 32,
+    tooltip = "Complete |cff0091e6Hints of a New Plague|r before level 33",
     icon = 133470,
     points = 10,
     requiredQuestId = 658, -- Quest available at level 30
@@ -142,8 +142,8 @@ local Achievements = {
 }, {
     achId = "StinkysEscapeA",
     title = "Stinky Situation",
-    level = 34,
-    tooltip = "Complete |cff0091e6Stinky’s Escape|r before level 35",
+    level = 32,
+    tooltip = "Complete |cff0091e6Stinky’s Escape|r before level 33",
     icon = 236758,
     points = 10,
     allowSoloDouble = true,
@@ -152,21 +152,21 @@ local Achievements = {
     faction = FACTION_ALLIANCE,
     zone = "Dustwallow Marsh"
 }, {
-    achId = "ThogrunAlliance",
-    title = "Tremors Beneath",
-    level = 40,
-    tooltip = "Complete |cff0091e6Tremors of the Earth Pt. 1|r before level 41",
-    icon = 254093,
+    achId = "OttoFalcon",
+    title = "Bring Me Their Heads!",
+    level = 37,
+    tooltip = "Complete |cff0091e6Wanted! Otto and Falconcrest|r before level 38",
+    icon = 134166,
     points = 10,
-    requiredQuestId = 732, -- Quest available at level 40
-    targetNpcId = 2944, -- Thogrun level 41
+    requiredQuestId = 685, -- Quest available at level 29
+    targetNpcId = {2599, 2597}, -- Otto and Falconcrest level 38/40
     faction = FACTION_ALLIANCE,
-    zone = "Badlands"
+    zone = "Arathi Highlands"
 }, {
     achId = "Kurzen",
     title = "Kurzen's Fall",
-    level = 41,
-    tooltip = "Complete |cff0091e6Colonel Kurzen|r before level 42",
+    level = 37,
+    tooltip = "Complete |cff0091e6Colonel Kurzen|r before level 38",
     icon = 236844,
     points = 10,
     requiredQuestId = 202, -- Quest available at level 30
@@ -176,22 +176,43 @@ local Achievements = {
 }, {
     achId = "LordShalzaru",
     title = "Lord of the Depths",
-    level = 43,
-    tooltip = "Complete |cff0091e6Against Lord Shalzaru|r before level 44",
+    level = 44,
+    tooltip = "Complete |cff0091e6Against Lord Shalzaru|r before level 45",
     icon = 136098,
     points = 10,
     requiredQuestId = 2870, -- Quest available at level 40
     targetNpcId = 8136, -- Lord Shalzaru level 47
     faction = FACTION_ALLIANCE,
     zone = "Feralas"
+}, {
+    achId = "Overlord",
+    title = "So Rude",
+    level = 61,
+    tooltip = "Complete |cff0091e6Overlord|r before level 62",
+    icon = 237558,
+    points = 10,
+    requiredQuestId = 10400, -- Quest available at level 58
+    targetNpcId = 19191, -- Overlord level 63 Elite
+    faction = FACTION_ALLIANCE,
+    zone = "Hellfire Peninsula"
+}, {
+    achId = "FelReaverA",
+    title = "The Grim Reaver",
+    level = 68,
+    tooltip = "Complete |cff0091e6Hotter Than Hell|r before level 69",
+    icon = 135801,
+    points = 10,
+    requiredQuestId = 10764, -- Quest available at level 68
+    targetNpcId = 18733, -- Fel Reaver level 70 Elite
+    zone = "Hellfire Peninsula"
 },
 
 -- Horde (new)
 {
     achId = "Dargol",
     title = "Crypt Commander",
-    level = 11,
-    tooltip = "Complete |cff0091e6The Family Crypt|r before level 12",
+    level = 10,
+    tooltip = "Complete |cff0091e6The Family Crypt|r before level 11",
     icon = 236458,
     points = 10,
     requiredQuestId = 408, -- Quest available at level 7
@@ -201,8 +222,8 @@ local Achievements = {
 }, {
     achId = "Arrachea",
     title = "Spirit of the Earthmother",
-    level = 11,
-    tooltip = "Complete |cff0091e6Rites of the Earthmother|r before level 12",
+    level = 8,
+    tooltip = "Complete |cff0091e6Rites of the Earthmother|r before level 9",
     icon = 132243,
     points = 10,
     requiredQuestId = 776, -- Quest available at level 3
@@ -223,8 +244,8 @@ local Achievements = {
 }, {
     achId = "Fizzle",
     title = "For Rizzle my Fizzle!",
-    level = 12,
-    tooltip = "Complete |cff0091e6Dark Storms|r before level 13",
+    level = 10,
+    tooltip = "Complete |cff0091e6Dark Storms|r before level 11",
     icon = 236290,
     points = 10,
     requiredQuestId = 806, -- Quest available at level 4
@@ -234,8 +255,8 @@ local Achievements = {
 }, {
     achId = "Goggeroc",
     title = "Stone and Soil",
-    level = 20,
-    tooltip = "Complete |cff0091e6Earthen Arise|r before level 21",
+    level = 17,
+    tooltip = "Complete |cff0091e6Earthen Arise|r before level 18",
     icon = 236831,
     points = 10,
     requiredQuestId = 6481, -- Quest available at level 14
@@ -245,19 +266,41 @@ local Achievements = {
 }, {
     achId = "Kromzar",
     title = "Counterattack!",
-    level = 20,
-    tooltip = "Complete |cff0091e6Counterattack!|r before level 21",
+    level = 18,
+    tooltip = "Complete |cff0091e6Counterattack!|r before level 19",
     icon = 132484,
     points = 10,
     requiredQuestId = 4021, -- Quest available at level 11
-    targetNpcId = nil,
+    targetNpcId = 9456, -- Kromzar level 20 Elite
     faction = FACTION_HORDE,
     zone = "The Barrens"
 }, {
+    achId = "LuzKnuck",
+    title = "They Had It Coming",
+    level = 20,
+    tooltip = "Complete |cff0091e6Wanted: Luzran & Knucklerot|r before level 21",
+    icon = 298667,
+    points = 10,
+    requiredQuestId = 9156, -- Quest available at level 9
+    targetNpcId = {16245, 16246}, -- Luzran & Knucklerot level 21 Elite
+    faction = FACTION_HORDE,
+    zone = "Ghostlands"
+}, {
+    achId = "Drathir",
+    title = "Dar'khan the Traitor",
+    level = 19,
+    tooltip = "Complete |cff0091e6The Traitor's Destruction|r before level 20",
+    icon = 134179,
+    points = 10,
+    requiredQuestId = 9167, -- Quest available at level 15
+    targetNpcId = 16329, -- Dar'khan Drathir level 21 Elite
+    faction = FACTION_HORDE,
+    zone = "Ghostlands"
+}, {
     achId = "Ataeric",
     title = "Thread of the Weaver",
-    level = 20,
-    tooltip = "Complete |cff0091e6The Weaver|r before level 21",
+    level = 19,
+    tooltip = "Complete |cff0091e6The Weaver|r before level 20",
     icon = 135144,
     points = 10,
     requiredQuestId = 480, -- Quest available at level 10
@@ -278,8 +321,8 @@ local Achievements = {
 }, {
     achId = "Gizmo",
     title = "Flux-Hypercapacitor",
-    level = 28,
-    tooltip = "Complete |cff0091e6Hypercapacitor Gizmo|r before level 29",
+    level = 27,
+    tooltip = "Complete |cff0091e6Hypercapacitor Gizmo|r before level 28",
     icon = 133236,
     points = 10,
     requiredQuestId = 5151, -- Quest available at level 24
@@ -289,8 +332,8 @@ local Achievements = {
 }, {
     achId = "Grenka",
     title = "What's in the Box!?",
-    level = 30,
-    tooltip = "Complete |cff0091e6Test of Endurance|r before level 31",
+    level = 28,
+    tooltip = "Complete |cff0091e6Test of Endurance|r before level 29",
     icon = 236848,
     points = 10,
     requiredQuestId = 1150, -- Quest available at level 25
@@ -300,8 +343,8 @@ local Achievements = {
 }, {
     achId = "Ironhill",
     title = "Hillsbrad Commander",
-    level = 33,
-    tooltip = "Complete |cff0091e6Battle of Hillsbrad|r before level 34",
+    level = 28,
+    tooltip = "Complete |cff0091e6Battle of Hillsbrad|r before level 29",
     icon = 236779,
     points = 10,
     requiredQuestId = 541, -- Quest available at level 19
@@ -311,8 +354,8 @@ local Achievements = {
 }, {
     achId = "StinkysEscapeH",
     title = "Stinky Situation",
-    level = 34,
-    tooltip = "Complete |cff0091e6Stinky’s Escape|r before level 35",
+    level = 32,
+    tooltip = "Complete |cff0091e6Stinky’s Escape|r before level 33",
     icon = 236758,
     points = 10,
     allowSoloDouble = true,
@@ -321,21 +364,10 @@ local Achievements = {
     faction = FACTION_HORDE,
     zone = "Dustwallow Marsh"
 }, {
-    achId = "ThogrunHorde",
-    title = "Sign of the Earth",
-    level = 40,
-    tooltip = "Complete |cff0091e6Broken Alliances Pt. 1|r before level 41",
-    icon = 254093,
-    points = 10,
-    requiredQuestId = 782, -- Quest available at level 40
-    targetNpcId = 2944, -- Thogrun level 41
-    faction = FACTION_HORDE,
-    zone = "Badlands"
-}, {
     achId = "NothingButTruth",
     title = "Truth Seeker",
-    level = 40,
-    tooltip = "Complete |cff0091e6Nothing but the Truth Pt. 4|r before level 41",
+    level = 39,
+    tooltip = "Complete |cff0091e6Nothing but the Truth Pt. 4|r before level 40",
     icon = 132800,
     points = 10,
     requiredQuestId = 1383, -- Quest available at level 37
@@ -345,8 +377,8 @@ local Achievements = {
 }, {
     achId = "Mugthol",
     title = "Crowned",
-    level = 43,
-    tooltip = "Complete |cff0091e6The Crown of Will Pt. 4|r before level 44",
+    level = 40,
+    tooltip = "Complete |cff0091e6The Crown of Will Pt. 4|r before level 41",
     icon = 132768,
     points = 10,
     requiredQuestId = 520, -- Quest available at level 34
@@ -356,8 +388,8 @@ local Achievements = {
 }, {
     achId = "Hatetalon",
     title = "Dark Heart of the Wild",
-    level = 48,
-    tooltip = "Complete |cff0091e6Dark Heart|r before level 49",
+    level = 47,
+    tooltip = "Complete |cff0091e6Dark Heart|r before level 48",
     icon = 134131,
     points = 10,
     requiredQuestId = 3062, -- Quest available at level 45
@@ -375,6 +407,27 @@ local Achievements = {
     targetNpcId = 8977, -- Kromgrul level 54
     faction = FACTION_HORDE,
     zone = "Burning Steppes"
+}, {
+    achId = "Cruel",
+    title = "So Rude",
+    level = 61,
+    tooltip = "Complete |cff0091e6Cruel's Intentions|r before level 62",
+    icon = 237558,
+    points = 10,
+    requiredQuestId = 10136, -- Quest available at level 58
+    targetNpcId = 19191, -- Overlord level 63 Elite
+    faction = FACTION_HORDE,
+    zone = "Hellfire Peninsula"
+}, {
+    achId = "FelReaverH",
+    title = "The Grim Reaver",
+    level = 68,
+    tooltip = "Complete |cff0091e6Hotter Than Hell|r before level 69",
+    icon = 135801,
+    points = 10,
+    requiredQuestId = 10758, -- Quest available at level 68
+    targetNpcId = 18733, -- Fel Reaver level 70 Elite
+    zone = "Hellfire Peninsula"
 },
 
 -- Neutral (no faction)
@@ -455,8 +508,8 @@ local Achievements = {
 }, {
     achId = "GetMeOutOfHere",
     title = "Outta Here!",
-    level = 41,
-    tooltip = "Complete |cff0091e6Get Me Out of Here!|r before level 42",
+    level = 40,
+    tooltip = "Complete |cff0091e6Get Me Out of Here!|r before level 41",
     icon = 236742,
     points = 10,
     allowSoloDouble = true,
@@ -466,8 +519,8 @@ local Achievements = {
 }, {
     achId = "KingBangalash",
     title = "King of the Jungle",
-    level = 42,
-    tooltip = "Complete |cff0091e6Big Game Hunter|r before level 43",
+    level = 41,
+    tooltip = "Complete |cff0091e6Big Game Hunter|r before level 42",
     icon = 134176,
     points = 10,
     requiredQuestId = 208, -- Quest available at level 28
@@ -485,21 +538,10 @@ local Achievements = {
     targetNpcId = nil,
     zone = "Stranglethorn Vale"
 }, {
-    achId = "CuergosGold",
-    title = "Cuergo’s Fortune",
-    level = 45,
-    tooltip = "Complete |cff0091e6Cuergo’s Gold|r before level 46",
-    icon = 237387,
-    points = 10,
-    allowSoloDouble = true,
-    requiredQuestId = 2882, -- Quest available at level 40 (difficult to grind required items)
-    targetNpcId = nil,
-    zone = "Tanaris"
-}, {
     achId = "Mokk",
     title = "This Isn't Worth It",
-    level = 47,
-    tooltip = "Complete |cff0091e6Stranglethorn Fever|r before level 48",
+    level = 42,
+    tooltip = "Complete |cff0091e6Stranglethorn Fever|r before level 43",
     icon = 134338,
     points = 10,
     allowSoloDouble = true,
@@ -509,8 +551,8 @@ local Achievements = {
 }, {
     achId = "MalletZF",
     title = string.format("%s the Keeper", GetUnitName("player")),
-    level = 49,
-    tooltip = "Obtain the |cff0091e6Mallet of Zul'Farrak|r before level 50",
+    level = 47,
+    tooltip = "Obtain the |cff0091e6Mallet of Zul'Farrak|r before level 48",
     icon = 134559,
     points = 10,
     allowSoloDouble = true,
@@ -520,8 +562,8 @@ local Achievements = {
 }, {
     achId = "KimJaelIndeed",
     title = "Booty Bay Genius",
-    level = 51,
-    tooltip = "Complete |cff0091e6Kim’Jael Indeed!|r before level 52",
+    level = 50,
+    tooltip = "Complete |cff0091e6Kim’Jael Indeed!|r before level 51",
     icon = 236714,
     points = 10,
     allowSoloDouble = true,
@@ -531,8 +573,8 @@ local Achievements = {
 }, {
     achId = "StonesThatBindUs",
     title = "Stonebound Savior",
-    level = 51,
-    tooltip = "Complete |cff0091e6The Stones That Bind Us|r before level 52",
+    level = 53,
+    tooltip = "Complete |cff0091e6The Stones That Bind Us|r before level 54",
     icon = 236720,
     points = 10,
     allowSoloDouble = true,
@@ -540,21 +582,10 @@ local Achievements = {
     targetNpcId = nil,
     zone = "Blasted Lands"
 }, {
-    achId = "Mukla",
-    title = "Kong of the Jungle",
-    level = 52,
-    tooltip = "Complete |cff0091e6Message in a Bottle|r before level 53",
-    icon = 132159,
-    points = 10,
-    allowSoloDouble = true,
-    requiredQuestId = 630, -- Quest available at level 42
-    targetNpcId = 1559, -- Mukla level 42
-    zone = "Stranglethorn Vale"
-}, {
     achId = "Hakkar",
     title = "Spirits, Tablets, and Eggs, Oh My!",
-    level = 53,
-    tooltip = "Complete |cff0091e6The God Hakkar|r before level 54",
+    level = 48,
+    tooltip = "Complete |cff0091e6The God Hakkar|r before level 49",
     icon = 132209,
     points = 10,
     requiredQuestId = 3528, -- Quest available at level 40
@@ -573,8 +604,8 @@ local Achievements = {
 }, {
     achId = "SummoningThePrincess",
     title = "Shards of Myzrael",
-    level = 55,
-    tooltip = "Complete |cff0091e6Summoning the Princess|r before level 56",
+    level = 42,
+    tooltip = "Complete |cff0091e6Summoning the Princess|r before level 43",
     icon = 4571434,
     points = 10,
     requiredQuestId = 656, -- Quest available at level 30
@@ -583,8 +614,8 @@ local Achievements = {
 }, {
     achId = "GorishiHiveQueen",
     title = "Queen’s Gambit",
-    level = 56,
-    tooltip = "Complete |cff0091e6Pawn Captures Queen|r before level 57",
+    level = 53,
+    tooltip = "Complete |cff0091e6Pawn Captures Queen|r before level 54",
     icon = 134340,
     points = 10,
     requiredQuestId = 4507, -- Quest available at level 50
@@ -593,8 +624,8 @@ local Achievements = {
 }, {
     achId = "OverseerMaltorius",
     title = "Master of the Forge",
-    level = 56,
-    tooltip = "Complete |cff0091e6WANTED: Overseer Maltorius|r before level 57",
+    level = 47,
+    tooltip = "Complete |cff0091e6WANTED: Overseer Maltorius|r before level 48",
     icon = 134159,
     points = 10,
     requiredQuestId = 7701, -- Quest available at level 45
@@ -603,8 +634,8 @@ local Achievements = {
 }, {
     achId = "MercutioFilthgorger",
     title = "Mercutio’s Memory",
-    level = 57,
-    tooltip = "Complete |cff0091e6Of Forgotten Memories|r before level 58",
+    level = 54,
+    tooltip = "Complete |cff0091e6Of Forgotten Memories|r before level 55",
     icon = 133038,
     points = 10,
     requiredQuestId = 5781, -- Quest available at level 52
@@ -613,8 +644,8 @@ local Achievements = {
 }, {
     achId = "HighChiefWinterfall",
     title = "Winter is Coming",
-    level = 59,
-    tooltip = "Complete |cff0091e6High Chief Winterfall|r before level 60",
+    level = 56,
+    tooltip = "Complete |cff0091e6High Chief Winterfall|r before level 57",
     icon = 236696,
     points = 10,
     requiredQuestId = 5121, -- Quest available at level 52
@@ -623,13 +654,23 @@ local Achievements = {
 }, {
     achId = "Deathclasp",
     title = "Deathclasp Down",
-    level = 59,
-    tooltip = "Complete |cff0091e6Wanted: Deathclasp, Terror of the Sands|r before level 60",
+    level = 57,
+    tooltip = "Complete |cff0091e6Wanted: Deathclasp, Terror of the Sands|r before level 58",
     icon = 133708,
     points = 10,
     requiredQuestId = 8283, -- Quest available at level 54
     targetNpcId = 15196, -- Deathclasp level 59 Elite
     zone = "Silithus"
+}, {
+    achId = "RingOfBlood",
+    title = "The Gladiator's Ring",
+    level = 65,
+    tooltip = "Complete |cff0091e6The Ring of Blood: The Final Challenge|r before level 66",
+    icon = 132334,
+    points = 10,
+    requiredQuestId = 9977, -- Quest available at level 65
+    targetNpcId = 18069, -- Mogor level 67 Elite
+    zone = "Nagrand"
 },
 
 -- Rogue
