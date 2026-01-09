@@ -1042,6 +1042,11 @@ function M.registerQuestAchievement(cfg)
             
             return checkComplete()
         end
+        
+        -- Register Kill function immediately while killFunc is in scope
+        if _G.HardcoreAchievements_RegisterAchievementFunction and killFunc then
+            _G.HardcoreAchievements_RegisterAchievementFunction(ACH_ID, "Kill", killFunc)
+        end
     end
 
     if REQUIRED_QUEST_ID then
@@ -1333,9 +1338,8 @@ function M.registerQuestAchievement(cfg)
         end)
     end
 
-    -- Register functions in local registry to reduce global pollution
+    -- Register IsCompleted function in local registry
     if _G.HardcoreAchievements_RegisterAchievementFunction then
-        _G.HardcoreAchievements_RegisterAchievementFunction(ACH_ID, "Kill", killFunc)
         _G.HardcoreAchievements_RegisterAchievementFunction(ACH_ID, "IsCompleted", function()
             if state.completed then
                 return true
