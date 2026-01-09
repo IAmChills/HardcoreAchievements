@@ -36,15 +36,8 @@
   - dependancy for the above catalog
 
 ## Quests
- - Luzran & Knucklerot at level 18
- - The Traitor's Destruction at 18
- - Battle for Hillsbrad (full chain) at 27
- - Test of Endurance at 27
  - The Dying Balance (Boglash) at 58
    - Something like this might suck because its so low level for Outlands
- - Cruel's Intentions at 60
- - Ring of Blood (full chain) at 65
- - Hotter than Hell (Fel Reaver) at 68
  - ...Gonna need all hands on deck to get notable difficult Outlands quests. Too many might make it annoying since you never get a break and bounce from one to the next
 
 ## Explorer Achievements
