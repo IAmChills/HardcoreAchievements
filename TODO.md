@@ -2,6 +2,8 @@
 
 ## Active Tasks
 - Dungon achievements are calculated by dungeon entrance level
+- Expand on comms to allow achievement related statistics where data is propogated for realm-first, % of players completed style info
+- Meta achievements for finishing large genres
 - Show achievement locations on map
 
 ## Bugs

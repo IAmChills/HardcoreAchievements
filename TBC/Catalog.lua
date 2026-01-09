@@ -864,7 +864,7 @@ local Achievements = {
     staticPoints = true,
     hiddenUntilComplete = true,
 }, {
-    achId = "Secret95",
+    achId = "Secret5",
     title = "Mak'gora",
     level = nil,
     tooltip = "Obtain an ear by winning a |cff0091e6Mak'gora|r",
@@ -880,6 +880,57 @@ local Achievements = {
             end
         end
         return false
+    end,
+    secret = true,
+    staticPoints = true,
+    hiddenUntilComplete = true,
+}, {
+    achId = "Secret93",
+    title = "The Disciplined One",
+    level = nil,
+    tooltip = "You have completed the secret achievement: |cff0091e6Reach level 70 without jumping|r",
+    icon = 413584,
+    points = 0,
+    customIsCompleted = function()
+        if not _G.HardcoreAchievements_GetCharDB then
+            return false
+        end
+        local _, cdb = _G.HardcoreAchievements_GetCharDB()
+        if not cdb or not cdb.stats or not cdb.stats.playerJumps then
+            return false
+        end
+        return UnitLevel("player") >= 70 and cdb.stats.playerJumps == 0
+    end,
+    secret = true,
+    staticPoints = true,
+    hiddenUntilComplete = true,
+}, {
+    achId = "Secret94",
+    title = "Mok'rash",
+    level = 50,
+    tooltip = "You have completed the secret achievement: |cffff8000Kill Mok'rash and complete the quest: 'The Monogrammed Sash' before level 51|r",
+    icon = 133345,
+    points = 0,
+    requiredQuestId = 8552,
+    secret = true,
+    staticPoints = true,
+    hiddenUntilComplete = true,
+}, {
+    achId = "Secret95",
+    title = "Jump Master",
+    level = nil,
+    tooltip = "You have completed the secret achievement: |cff0091e6Jump 100,000 times|r",
+    icon = 134478,
+    points = 0,
+    customIsCompleted = function()
+        if not _G.HardcoreAchievements_GetCharDB then
+            return false
+        end
+        local _, cdb = _G.HardcoreAchievements_GetCharDB()
+        if not cdb or not cdb.stats or not cdb.stats.playerJumps then
+            return false
+        end
+        return cdb.stats.playerJumps >= 100000
     end,
     secret = true,
     staticPoints = true,

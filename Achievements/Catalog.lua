@@ -851,6 +851,26 @@ local Achievements = {
     staticPoints = true,
     hiddenUntilComplete = true,
 }, {
+    achId = "Secret93",
+    title = "The Disciplined One",
+    level = nil,
+    tooltip = "You have completed the secret achievement: |cff0091e6Reach level 60 without jumping|r",
+    icon = 413584,
+    points = 0,
+    customIsCompleted = function()
+        if not _G.HardcoreAchievements_GetCharDB then
+            return false
+        end
+        local _, cdb = _G.HardcoreAchievements_GetCharDB()
+        if not cdb or not cdb.stats or not cdb.stats.playerJumps then
+            return false
+        end
+        return UnitLevel("player") >= 60 and cdb.stats.playerJumps == 0
+    end,
+    secret = true,
+    staticPoints = true,
+    hiddenUntilComplete = true,
+}, {
     achId = "Secret94",
     title = "Mok'rash",
     level = 50,
