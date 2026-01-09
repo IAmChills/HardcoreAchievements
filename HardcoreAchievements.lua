@@ -900,6 +900,11 @@ end
 
 function CheckPendingCompletions()
     if not AchievementPanel or not AchievementPanel.achievements then return end
+    
+    -- Don't check until restorations are complete (prevents re-awarding on login)
+    if not restorationsComplete then
+        return
+    end
 
     for _, row in ipairs(AchievementPanel.achievements) do
         if not row.completed then
@@ -1582,10 +1587,11 @@ end)
 
 -- Function to show welcome message popup on first login
 function addon:ShowWelcomeMessage()
-    local _, cdb = GetCharDB()
-    if not cdb.settings.showWelcomeMessage then
+    local db = EnsureDB()
+    db.settings = db.settings or {}
+    if not db.settings.showWelcomeMessage then
         StaticPopup_Show("Hardcore Achievements")
-        cdb.settings.showWelcomeMessage = true
+        db.settings.showWelcomeMessage = true
     end
 end
 
@@ -2860,6 +2866,11 @@ end
 
 EvaluateCustomCompletions = function(newLevel)
     if not AchievementPanel or not AchievementPanel.achievements then return end
+    
+    -- Don't evaluate until restorations are complete (prevents re-awarding on login)
+    if not restorationsComplete then
+        return
+    end
 
     local anyCompleted = false
     for _, row in ipairs(AchievementPanel.achievements) do
@@ -3874,6 +3885,7 @@ end)
 -- Deferred Achievement Registration System
 -- Processes queued achievements on PLAYER_LOGIN with C_Timer chains
 -- =========================================================
+local restorationsComplete = false
 do
     local registrationFrame = CreateFrame("Frame")
     local registrationIndex = 1
@@ -3900,6 +3912,8 @@ do
             if RestoreCompletionsFromDB then
                 RestoreCompletionsFromDB()
             end
+            -- Mark that restorations are complete
+            restorationsComplete = true
             
             C_Timer.After(0.1, function()
                 if CheckPendingCompletions then

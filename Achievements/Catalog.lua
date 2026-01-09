@@ -525,6 +525,17 @@ local Achievements = {
     customItem = function() return GetItemCount(9240, true) > 0 end,
     zone = "Hinterlands"
 }, {
+    achId = "Mukla",
+    title = "Kong of the Jungle",
+    level = 50,
+    tooltip = "Complete |cff0091e6Message in a Bottle|r before level 51",
+    icon = 132159,
+    points = 10,
+    allowSoloDouble = true,
+    requiredQuestId = 630,
+    targetNpcId = 1559,
+    zone = "Stranglethorn Vale"
+}, {
     achId = "KimJaelIndeed",
     title = "Booty Bay Genius",
     level = 51,
@@ -546,17 +557,6 @@ local Achievements = {
     requiredQuestId = 2681,
     targetNpcId = nil,
     zone = "Blasted Lands"
-}, {
-    achId = "Mukla",
-    title = "Kong of the Jungle",
-    level = 52,
-    tooltip = "Complete |cff0091e6Message in a Bottle|r before level 53",
-    icon = 132159,
-    points = 10,
-    allowSoloDouble = true,
-    requiredQuestId = 630,
-    targetNpcId = 1559,
-    zone = "Stranglethorn Vale"
 }, {
     achId = "Hakkar",
     title = "Spirits, Tablets, and Eggs, Oh My!",
@@ -847,6 +847,17 @@ local Achievements = {
         end
         return false
     end,
+    secret = true,
+    staticPoints = true,
+    hiddenUntilComplete = true,
+}, {
+    achId = "Secret94",
+    title = "Mok'rash",
+    level = 50,
+    tooltip = "You have completed the secret achievement: |cffff8000Kill Mok'rash and complete the quest: 'The Monogrammed Sash' before level 51|r",
+    icon = 133345,
+    points = 0,
+    requiredQuestId = 8552,
     secret = true,
     staticPoints = true,
     hiddenUntilComplete = true,
