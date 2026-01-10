@@ -1585,18 +1585,35 @@ initFrame:SetScript("OnEvent", function(self, event, ...)
     end
 end)
 
--- Function to show welcome message popup on first login
+-- Function to show welcome message popup on first login or when version changes
 function addon:ShowWelcomeMessage()
+    local WELCOME_MESSAGE_NUMBER = 1
     local db = EnsureDB()
     db.settings = db.settings or {}
-    if not db.settings.showWelcomeMessage then
-        StaticPopup_Show("Hardcore Achievements")
-        db.settings.showWelcomeMessage = true
+    
+    -- Migrate old boolean flag to version system
+    if db.settings.showWelcomeMessage == true and not db.settings.welcomeMessageVersion then
+        -- User has already seen the welcome message with old system, set to current version
+        db.settings.welcomeMessageVersion = WELCOME_MESSAGE_NUMBER
+        -- Clean up old flag (optional, for cleanliness)
+        db.settings.showWelcomeMessage = nil
+    end
+    
+    local storedVersion = db.settings.welcomeMessageVersion or 0
+    
+    -- Show message if stored version is less than current version
+    if storedVersion < WELCOME_MESSAGE_NUMBER then
+        if GetExpansionLevel() > 0 then
+            StaticPopup_Show("Hardcore Achievements TBC")
+        else
+            StaticPopup_Show("Hardcore Achievements Vanilla")
+        end
+        db.settings.welcomeMessageVersion = WELCOME_MESSAGE_NUMBER
     end
 end
 
 -- Define the welcome message popup
-StaticPopupDialogs["Hardcore Achievements"] = {
+StaticPopupDialogs["Hardcore Achievements Vanilla"] = {
     text = "|cff69adc9Hardcore Achievements|r\n\nIf you intend to progress into |cff00ff00The Burning Crusade|r and continue using Hardcore Achievements, it is highly recommended you backup your Hardcore Achievements database before pre patch in case of data loss.\n\nThere is a new backup and restore feature in the options panel.",
     button1 = "Got it!",
     button2 = "Show Me!",
@@ -1615,6 +1632,22 @@ StaticPopupDialogs["Hardcore Achievements"] = {
         --         HardcoreAchievements_ShowBackupRestore()
         --     end
         -- end)
+    end,
+}
+
+StaticPopupDialogs["Hardcore Achievements TBC"] = {
+    text = "|cff69adc9Hardcore Achievements|r\n\nIf you intend to progress into |cff00ff00The Burning Crusade|r and continue using Hardcore Achievements, it is highly recommended you backup your Hardcore Achievements database before pre patch in case of data loss.\n\nThere is a new backup and restore feature in the options panel.",
+    button1 = "Got it!",
+    button2 = "Show Me!",
+    timeout = 0,
+    whileDead = true,
+    hideOnEscape = true,
+    preferredIndex = 3,
+    OnAccept = function()
+        -- Popup automatically closes
+    end,
+    OnCancel = function()
+        OpenOptionsPanel()
     end,
 }
 
@@ -3945,7 +3978,7 @@ do
                 end)
             end)
         end)
-        print("|cff69adc9[Hardcore Achievements]|r |cffffffffAll achievements loaded!|r")
+        print("|cff69adc9[Hardcore Achievements]|r |cffffd100All achievements loaded!|r")
     end
 
     -- Process achievement registration in small batches to avoid blocking

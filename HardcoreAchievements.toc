@@ -29,6 +29,7 @@ Functions\RefreshAllAchievementPoints.lua
 Functions\ShowAchievementTooltip.lua
 Functions\TrackJumps.lua
 Functions\DataEncoding.lua
+Functions\CheckMapDiscovery.lua
 Functions\ProfessionTracker.lua [AllowLoadGameType vanilla]
 TBC\ProfessionTracker.lua [AllowLoadGameType tbc]
 
