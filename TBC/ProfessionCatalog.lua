@@ -1,4 +1,4 @@
-local thresholds = { 75, 150, 225, 300 }
+local thresholds = { 75, 150, 225, 300, 375 }
 
 local rankTitles = {
     [75]  = "Apprentice",

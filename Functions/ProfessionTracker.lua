@@ -386,6 +386,12 @@ end)
 
 function ProfessionTracker.RefreshAll()
     ScanSkills()
+    -- Also evaluate completions for all known profession skills in case they weren't triggered by skill changes
+    for skillID, state in pairs(ProfessionState) do
+        if state.known then
+            EvaluateCompletions(skillID)
+        end
+    end
     UpdateAllProfessionRowVisibility()
 end
 
