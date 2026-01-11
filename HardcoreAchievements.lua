@@ -1813,23 +1813,55 @@ function LoadTabPosition()
         if shouldShow then
             -- Show tab at default position if showCustomTab is true
             local isCharacterFrameShown = CharacterFrame and CharacterFrame:IsShown()
+            local isTBC = GetExpansionLevel() > 0
             
             Tab:ClearAllPoints()
-            Tab:SetPoint("RIGHT", _G["CharacterFrameTab"..Tabs], "RIGHT", 43, 0)
-            Tab:SetAlpha(1)
-            Tab:EnableMouse(true)
-            Tab.mode = "bottom"
-            
-            if Tab.squareFrame then
-                Tab.squareFrame:EnableMouse(false)
-                Tab.squareFrame:Hide()
+            if isTBC then
+                -- TBC default: right mode with specific position
+                Tab:SetPoint("TOPRIGHT", CharacterFrame, "TOPRIGHT", 25, -385)
+                Tab:SetAlpha(0)
+                Tab:EnableMouse(false)  -- Disable tab mouse events in vertical mode; use square frame instead
+                Tab.mode = "right"
+                -- Ensure square frame exists
+                if not Tab.squareFrame then
+                    CreateSquareFrame()
+                end
+                if Tab.squareFrame then
+                    Tab.squareFrame:ClearAllPoints()
+                    Tab.squareFrame:SetPoint("TOPRIGHT", CharacterFrame, "TOPRIGHT", 25, -385)
+                    Tab.squareFrame:EnableMouse(true)
+                    -- Only show square frame if CharacterFrame is shown
+                    if isCharacterFrameShown then
+                        Tab.squareFrame:Show()
+                    else
+                        Tab.squareFrame:Hide()
+                    end
+                end
+            else
+                -- Classic default: bottom mode
+                Tab:SetPoint("RIGHT", _G["CharacterFrameTab"..Tabs], "RIGHT", 43, 0)
+                Tab:SetAlpha(1)
+                Tab:EnableMouse(true)
+                Tab.mode = "bottom"
+                
+                if Tab.squareFrame then
+                    Tab.squareFrame:EnableMouse(false)
+                    Tab.squareFrame:Hide()
+                end
             end
             
             -- Only show tab if CharacterFrame is shown
             if isCharacterFrameShown then
-                Tab:Show()
+                if isTBC and Tab.squareFrame then
+                    Tab.squareFrame:Show()
+                else
+                    Tab:Show()
+                end
             else
                 Tab:Hide()
+                if Tab.squareFrame then
+                    Tab.squareFrame:Hide()
+                end
             end
         else
             -- Hide the tab if showCustomTab is false
@@ -1848,15 +1880,9 @@ function ResetTabPosition()
         db.tabSettings = nil
     end
     
-    -- Reset to default position (same as original tab creation)
-    Tab:ClearAllPoints()
-    local Tabs = CharacterFrame.numTabs
-    Tab:SetPoint("RIGHT", _G["CharacterFrameTab"..Tabs], "RIGHT", 43, 0)
-    Tab:SetAlpha(1)
-    Tab:EnableMouse(true)   -- Enable tab mouse events in horizontal mode
-    if Tab.squareFrame then
-        Tab.squareFrame:Hide()
-    end
+    -- Reset to default by calling LoadTabPosition (which will use default position since db.tabSettings is now nil)
+    -- LoadTabPosition handles visibility based on CharacterFrame state
+    LoadTabPosition()
     
     print("HardcoreAchievements: Tab position reset to default")
 end
@@ -3921,42 +3947,8 @@ CharacterFrame:HookScript("OnShow", function()
         return
     end
     
-    -- Load tab position first to restore saved mode and position
+    -- Load tab position (this handles both saved and default positions, including expansion-dependent defaults)
     LoadTabPosition()
-    
-    -- Ensure tab is shown (LoadTabPosition may have hidden it if CharacterFrame wasn't shown)
-    -- Check if we have saved position data
-    local db = EnsureDB()
-    local hasSavedData = db.tabSettings and db.tabSettings.mode and db.tabSettings.position
-    
-    if not hasSavedData then
-        -- No saved data but showCustomTab is true, ensure tab is at default position and visible
-        Tab:ClearAllPoints()
-        Tab:SetPoint("RIGHT", _G["CharacterFrameTab"..Tabs], "RIGHT", 43, 0)
-        Tab:SetAlpha(1)
-        Tab:EnableMouse(true)
-        Tab.mode = "bottom"
-        Tab:Show()
-        
-        if Tab.squareFrame then
-            Tab.squareFrame:Hide()
-            Tab.squareFrame:EnableMouse(false)
-        end
-    else
-        -- Has saved data, LoadTabPosition should have handled it, but ensure tab/squareFrame is visible
-        if Tab.mode == "bottom" then
-            Tab:Show()
-        elseif Tab.mode == "right" and Tab.squareFrame then
-            Tab.squareFrame:Show()
-            Tab.squareFrame:EnableMouse(true)
-            -- Reposition the square frame to match the tab's current position
-            local _, _, _, x, y = Tab:GetPoint()
-            if x and y then
-                Tab.squareFrame:ClearAllPoints()
-                Tab.squareFrame:SetPoint("TOPRIGHT", CharacterFrame, "TOPRIGHT", x, y)
-            end
-        end
-    end
 end)
 
 -- Hook ToggleCharacter to handle CharacterStatsClassic visibility and square frame
