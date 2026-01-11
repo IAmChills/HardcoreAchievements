@@ -238,7 +238,7 @@ local Achievements = {
     zone = "Orgrimmar"
 }, {
     achId = "Fizzle",
-    title = "For Rizzle my Fizzle!",
+    title = "Fo' Rizzle My Fizzle!",
     level = 12,
     tooltip = "Complete |cff0091e6Dark Storms|r before level 13",
     icon = 236290,

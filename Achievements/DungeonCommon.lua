@@ -1,5 +1,398 @@
 local DungeonCommon = {}
 
+-- Module-level tracking for instance entry levels
+-- Tracks player and party member levels when entering dungeons
+-- Format: instanceEntryLevels[mapId] = { playerLevel = level, partyLevels = { [guid] = level }, wasDeadOnExit = bool }
+local instanceEntryLevels = {}
+
+-- Track if player/party members were dead when leaving instance (for re-entry handling)
+local wasDeadOnExit = false
+local lastInstanceMapId = nil
+
+-- Helper function to check if a group is eligible for a dungeon achievement
+local function CheckAchievementEligibility(mapId, achDef, entryData)
+    if not mapId or not achDef or not entryData then return false end
+    
+    local maxLevel = achDef.level
+    if not maxLevel then return false end -- No level requirement
+    
+    local maxPartySize = achDef.maxPartySize or 5
+    local members = GetNumGroupMembers()
+    if members > maxPartySize then return false end
+    if IsInRaid() then return false end
+    
+    -- Check faction
+    if achDef.faction then
+        local playerFaction = select(2, UnitFactionGroup("player"))
+        if playerFaction ~= achDef.faction then return false end
+    end
+    
+    -- Check player level
+    local playerLevel = entryData.playerLevel or UnitLevel("player") or 1
+    if playerLevel > maxLevel then return false end
+    
+    -- Check party member levels
+    if members > 1 then
+        for i = 1, 4 do
+            local unit = "party" .. i
+            if UnitExists(unit) then
+                local guid = UnitGUID(unit)
+                if guid then
+                    local partyLevel = entryData.partyLevels and entryData.partyLevels[guid]
+                    if partyLevel and partyLevel > maxLevel then
+                        return false
+                    end
+                end
+            end
+        end
+    end
+    
+    return true
+end
+
+-- Helper function to check and print eligibility messages for achievements matching a mapId
+local function CheckAndPrintEligibilityMessages(mapId, entryData)
+    if not mapId or not entryData then return end
+    if not _G.HCA_AchievementDefs then return end
+    
+    for achId, achDef in pairs(_G.HCA_AchievementDefs) do
+        if achDef.mapID == mapId then
+            -- Only show messages for visible achievements (checked in filter)
+            local isVisible = false
+            if _G.HCA_IsAchievementVisible then
+                isVisible = _G.HCA_IsAchievementVisible(achId)
+            end
+            
+            if isVisible then
+                -- Only show messages for available achievements (not completed, not failed)
+                local progress = HardcoreAchievements_GetProgress and HardcoreAchievements_GetProgress(achId)
+                local isCompleted = progress and progress.completed
+                local isFailed = progress and progress.failed
+                
+                -- Also check if row exists and is outleveled
+                if not isFailed and _G.AchievementPanel and _G.AchievementPanel.achievements then
+                    for _, row in ipairs(_G.AchievementPanel.achievements) do
+                        local rowId = row.id or row.achId
+                        if rowId and tostring(rowId) == tostring(achId) then
+                            if _G.IsRowOutleveled and _G.IsRowOutleveled(row) then
+                                isFailed = true
+                            end
+                            break
+                        end
+                    end
+                end
+                
+                -- Skip if completed or failed
+                if not isCompleted and not isFailed then
+                    local isEligible = CheckAchievementEligibility(mapId, achDef, entryData)
+                    if isEligible then
+                        print("|cff69adc9[Hardcore Achievements]|r |cff00ff00Group is eligible for achievement: " .. (achDef.title or achDef.mapName or "Unknown") .. "|r")
+                    else
+                        print("|cff69adc9[Hardcore Achievements]|r |cffff0000Group is not eligible for achievement: " .. (achDef.title or achDef.mapName or "Unknown") .. "|r")
+                    end
+                end
+            end
+        end
+    end
+end
+
+-- Helper function to update party member levels when they join the dungeon
+local function UpdatePartyMemberLevels(mapId, entryData)
+    if not mapId or not entryData then return end
+    
+    local members = GetNumGroupMembers()
+    if members > 1 then
+        for i = 1, 4 do
+            local unit = "party" .. i
+            if UnitExists(unit) then
+                local guid = UnitGUID(unit)
+                if guid then
+                    local storedLevel = entryData.partyLevels and entryData.partyLevels[guid]
+                    if not storedLevel then
+                        -- New party member - add them to entry levels
+                        if not entryData.partyLevels then
+                            entryData.partyLevels = {}
+                        end
+                        local currentLevel = UnitLevel(unit) or 1
+                        local unitName = UnitName(unit) or ("Party" .. i)
+                        entryData.partyLevels[guid] = currentLevel
+                        if _G.HCA_DebugPrint then
+                            _G.HCA_DebugPrint("Party member " .. unitName .. " joined dungeon - level stored: " .. currentLevel)
+                        end
+                    end
+                end
+            end
+        end
+    end
+end
+
+-- Initialize event frame for PLAYER_ENTERING_WORLD, PLAYER_DEAD, and party member events
+local dungeonEventFrame = CreateFrame("Frame")
+dungeonEventFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
+dungeonEventFrame:RegisterEvent("PLAYER_DEAD")
+dungeonEventFrame:RegisterEvent("PARTY_MEMBER_ENABLE")
+dungeonEventFrame:RegisterEvent("PARTY_MEMBER_DISABLE")
+dungeonEventFrame:SetScript("OnEvent", function(self, event, unitIndex)
+    if event == "PLAYER_DEAD" then
+        -- Track that player died while in an instance (will be used when leaving instance)
+        local inInstance, instanceType = IsInInstance()
+        if inInstance and instanceType == "party" then
+            wasDeadOnExit = true
+            local mapId = select(8, GetInstanceInfo())
+            if _G.HCA_DebugPrint then
+                _G.HCA_DebugPrint("Tracking death in dungeon (mapId: " .. (mapId or "unknown") .. ")")
+            end
+        end
+    elseif event == "PARTY_MEMBER_DISABLE" then
+        -- Party member left or went offline - clear their data if not dead/ghost (allows replacement)
+        -- unitIndex is actually the unit ID string (e.g., "party1")
+        local inInstance, instanceType = IsInInstance()
+        if inInstance and instanceType == "party" then
+            local mapId = select(8, GetInstanceInfo())
+            if mapId and instanceEntryLevels[mapId] then
+                if unitIndex then
+                    -- unitIndex is already the full unit ID like "party1"
+                    local unit = unitIndex
+                    if UnitExists(unit) then
+                        local guid = UnitGUID(unit)
+                        local unitName = UnitName(unit) or unitIndex
+                        local isDeadOrGhost = UnitIsDeadOrGhost(unit)
+                        
+                        if guid then
+                            local entryData = instanceEntryLevels[mapId]
+                            if entryData.partyLevels and entryData.partyLevels[guid] then
+                                if not isDeadOrGhost then
+                                    -- Party member left normally (not dead/ghost) - clear their data to allow replacement
+                                    entryData.partyLevels[guid] = nil
+                                    if _G.HCA_DebugPrint then
+                                        _G.HCA_DebugPrint("Party member " .. unitName .. " left dungeon - data cleared (can be replaced)")
+                                    end
+                                else
+                                    -- Party member is dead/ghost - keep their data (they're running back from graveyard)
+                                    if _G.HCA_DebugPrint then
+                                        _G.HCA_DebugPrint("Party member " .. unitName .. " left dungeon (dead/ghost) - data preserved")
+                                    end
+                                end
+                            end
+                        end
+                    else
+                        -- Unit already gone - debug message only
+                        local unitName = unitIndex
+                        if _G.HCA_DebugPrint then
+                            _G.HCA_DebugPrint("Party member " .. unitName .. " left dungeon (disabled)")
+                        end
+                    end
+                end
+            end
+        end
+    elseif event == "PARTY_MEMBER_ENABLE" then
+        -- Party member joined or zoned into the dungeon - update their level if we're tracking entry levels
+        -- unitIndex is actually the unit ID string (e.g., "party1")
+        local inInstance, instanceType = IsInInstance()
+        if inInstance and instanceType == "party" then
+            local mapId = select(8, GetInstanceInfo())
+            if mapId and instanceEntryLevels[mapId] then
+                -- Check the specific party member that enabled
+                if unitIndex then
+                    -- unitIndex is already the full unit ID like "party1"
+                    local unit = unitIndex
+                    if UnitExists(unit) then
+                        local guid = UnitGUID(unit)
+                        if guid then
+                            local entryData = instanceEntryLevels[mapId]
+                            local storedLevel = entryData.partyLevels and entryData.partyLevels[guid]
+                            local unitName = UnitName(unit) or unitIndex
+                            local currentLevel = UnitLevel(unit) or 1
+                            
+                            if storedLevel then
+                                -- Party member re-entered - update stored level (allow leveling outside if they return)
+                                if entryData.wasDeadOnExit then
+                                    -- Player was dead when leaving - don't update level (preserve original entry level)
+                                    if _G.HCA_DebugPrint then
+                                        _G.HCA_DebugPrint("Party member " .. unitName .. " re-entered after player death - level preserved (stored: " .. storedLevel .. ", current: " .. currentLevel .. ")")
+                                    end
+                                else
+                                    -- Update stored level to current level (accepts leveling outside as long as they re-enter)
+                                    entryData.partyLevels[guid] = currentLevel
+                                    if currentLevel > storedLevel then
+                                        if _G.HCA_DebugPrint then
+                                            _G.HCA_DebugPrint("Party member " .. unitName .. " re-entered with increased level (was " .. storedLevel .. ", now " .. currentLevel .. ") - stored level updated")
+                                        end
+                                    else
+                                        if _G.HCA_DebugPrint then
+                                            _G.HCA_DebugPrint("Party member " .. unitName .. " re-entered - level unchanged (" .. currentLevel .. ")")
+                                        end
+                                    end
+                                end
+                            else
+                                -- New party member - add them to entry levels
+                                if not entryData.partyLevels then
+                                    entryData.partyLevels = {}
+                                end
+                                entryData.partyLevels[guid] = currentLevel
+                                if _G.HCA_DebugPrint then
+                                    _G.HCA_DebugPrint("Party member " .. unitName .. " joined dungeon - level stored: " .. currentLevel)
+                                end
+                            end
+                        end
+                    end
+                else
+                        -- No unit provided, check all party members
+                        UpdatePartyMemberLevels(mapId, instanceEntryLevels[mapId])
+                    end
+                end
+            end
+    elseif event == "PLAYER_ENTERING_WORLD" then
+        local inInstance, instanceType = IsInInstance()
+        
+        if inInstance and instanceType == "party" then
+            -- Entering or already in a dungeon instance
+            local mapId = select(8, GetInstanceInfo())
+            if mapId then
+                -- Check if we already have entry levels for this map (to detect re-entry)
+                local existingEntry = instanceEntryLevels[mapId]
+                
+                if existingEntry then
+                    -- Re-entry: verify player and party members didn't level up
+                    -- Skip level check if player was dead when leaving (running back from graveyard)
+                    lastInstanceMapId = mapId  -- Update tracking for current instance
+                    
+                    if existingEntry.wasDeadOnExit then
+                        -- Player was dead when leaving, skip level check and clear the flag
+                        existingEntry.wasDeadOnExit = nil
+                        wasDeadOnExit = false
+                        if _G.HCA_DebugPrint then
+                            _G.HCA_DebugPrint("Re-entry after death - level check omitted")
+                        end
+                    else
+                        -- Normal re-entry: update stored level (allow leveling outside if they return)
+                        local playerLevel = UnitLevel("player") or 1
+                        local oldPlayerLevel = existingEntry.playerLevel
+                        if playerLevel > oldPlayerLevel then
+                            -- Player leveled up outside - update stored level
+                            existingEntry.playerLevel = playerLevel
+                            if _G.HCA_DebugPrint then
+                                _G.HCA_DebugPrint("Player re-entered with increased level (was " .. oldPlayerLevel .. ", now " .. playerLevel .. ") - stored level updated")
+                            end
+                        else
+                            if _G.HCA_DebugPrint then
+                                _G.HCA_DebugPrint("Player re-entered - level unchanged (" .. playerLevel .. ")")
+                            end
+                        end
+                    end
+                    
+                    -- Check and update party member levels on re-entry
+                    local members = GetNumGroupMembers()
+                    if members > 1 then
+                        for i = 1, 4 do
+                            local unit = "party" .. i
+                            if UnitExists(unit) then
+                                local guid = UnitGUID(unit)
+                                
+                                if guid then
+                                    local storedLevel = existingEntry.partyLevels and existingEntry.partyLevels[guid]
+                                    local currentLevel = UnitLevel(unit) or 1
+                                    local unitName = UnitName(unit) or ("Party" .. i)
+                                    
+                                    if storedLevel then
+                                        -- This party member was in the instance before - update stored level
+                                        if existingEntry.wasDeadOnExit then
+                                            -- Player was dead when leaving - preserve original stored level
+                                            if _G.HCA_DebugPrint then
+                                                _G.HCA_DebugPrint("Party member " .. unitName .. " re-entry after player death - level preserved (stored: " .. storedLevel .. ", current: " .. currentLevel .. ")")
+                                            end
+                                        else
+                                            -- Normal re-entry: update stored level to current level
+                                            existingEntry.partyLevels[guid] = currentLevel
+                                            if currentLevel > storedLevel then
+                                                if _G.HCA_DebugPrint then
+                                                    _G.HCA_DebugPrint("Party member " .. unitName .. " re-entered with increased level (was " .. storedLevel .. ", now " .. currentLevel .. ") - stored level updated")
+                                                end
+                                            else
+                                                if _G.HCA_DebugPrint then
+                                                    _G.HCA_DebugPrint("Party member " .. unitName .. " re-entered - level unchanged (" .. currentLevel .. ")")
+                                                end
+                                            end
+                                        end
+                                    else
+                                        -- New party member joined - store their level
+                                        if not existingEntry.partyLevels then
+                                            existingEntry.partyLevels = {}
+                                        end
+                                        existingEntry.partyLevels[guid] = currentLevel
+                                        if _G.HCA_DebugPrint then
+                                            _G.HCA_DebugPrint("Party member " .. unitName .. " joined on re-entry - level stored: " .. currentLevel)
+                                        end
+                                    end
+                                end
+                            end
+                        end
+                    end
+                else
+                    -- First entry: store entry levels
+                    local playerLevel = UnitLevel("player") or 1
+                    local entryData = {
+                        playerLevel = playerLevel,
+                        partyLevels = {}
+                    }
+                    
+                    -- Store party member levels
+                    local members = GetNumGroupMembers()
+                    local levelStr = "Player: " .. playerLevel
+                    if members > 1 then
+                        for i = 1, 4 do
+                            local unit = "party" .. i
+                            if UnitExists(unit) then
+                                local guid = UnitGUID(unit)
+                                local level = UnitLevel(unit) or 1
+                                if guid then
+                                    entryData.partyLevels[guid] = level
+                                    levelStr = levelStr .. ", Party" .. i .. ": " .. level
+                                end
+                            end
+                        end
+                    end
+                    
+                    instanceEntryLevels[mapId] = entryData
+                    lastInstanceMapId = mapId
+                    wasDeadOnExit = false
+                    if _G.HCA_DebugPrint then
+                        _G.HCA_DebugPrint("Dungeon entry levels stored: " .. levelStr)
+                    end
+                    -- Also update party member levels in case any joined during the zone load
+                    UpdatePartyMemberLevels(mapId, entryData)
+                    
+                    -- Check and print eligibility messages for visible achievements matching this mapId
+                    CheckAndPrintEligibilityMessages(mapId, entryData)
+                end
+            end
+        else
+            -- Not in a party instance - we're leaving an instance
+            if lastInstanceMapId and instanceEntryLevels[lastInstanceMapId] then
+                -- We were in an instance - if player was dead, mark it in entry data and keep entry levels
+                -- Otherwise, clear entry levels (normal exit)
+                if wasDeadOnExit then
+                    instanceEntryLevels[lastInstanceMapId].wasDeadOnExit = true
+                    if _G.HCA_DebugPrint then
+                        _G.HCA_DebugPrint("Left instance after death - entry levels preserved for re-entry")
+                    end
+                else
+                    -- Player left normally (not dead) - clear entry levels for this map
+                    instanceEntryLevels[lastInstanceMapId] = nil
+                    if _G.HCA_DebugPrint then
+                        _G.HCA_DebugPrint("Left instance normally - entry levels cleared")
+                    end
+                end
+            else
+                -- Not leaving from a tracked instance - clear all entry levels
+                wipe(instanceEntryLevels)
+            end
+            wasDeadOnExit = false
+            lastInstanceMapId = nil
+        end
+    end
+end)
+
 -- Variation definitions
 local VARIATIONS = {
   {
@@ -509,17 +902,55 @@ function DungeonCommon.registerDungeonAchievement(def)
     local maxPartySize = def.maxPartySize or 5
     if members > maxPartySize then return false end
 
-    local function overLeveled(unit)
-      local lvl = UnitLevel(unit)
-      return (lvl and lvl > level)
+    -- Check if we're in an instance and have stored entry levels for this map
+    local inInstance, instanceType = IsInInstance()
+    local currentMapId = inInstance and select(8, GetInstanceInfo())
+    local useEntryLevels = inInstance and instanceType == "party" and currentMapId and currentMapId == requiredMapId and instanceEntryLevels[currentMapId]
+    
+    local function overLeveled(unit, unitLevel)
+      return (unitLevel and unitLevel > level)
     end
 
-    if overLeveled("player") then return false end
-    if members > 1 then
-      for i = 1, 4 do
-        local u = "party"..i
-        if UnitExists(u) and overLeveled(u) then
-          return false
+    -- Always use stored entry levels if in an instance, otherwise use current levels
+    if useEntryLevels then
+      -- We're in a tracked instance - must use stored levels only
+      local entryData = instanceEntryLevels[currentMapId]
+      
+      -- Check player level (must use stored level)
+      local playerLevel = entryData.playerLevel
+      if not playerLevel or overLeveled("player", playerLevel) then return false end
+      
+      -- Check party member levels (must use stored levels only)
+      if members > 1 then
+        for i = 1, 4 do
+          local u = "party"..i
+          if UnitExists(u) then
+            local guid = UnitGUID(u)
+            if guid then
+              local partyLevel = entryData.partyLevels and entryData.partyLevels[guid]
+              -- If we don't have stored level for this party member, they shouldn't be eligible
+              -- (they should have been added when they entered)
+              if not partyLevel or overLeveled(u, partyLevel) then
+                return false
+              end
+            else
+              -- No GUID - disqualify
+              return false
+            end
+          end
+        end
+      end
+    else
+      -- Not in a tracked instance - use current levels (fallback for non-instance scenarios)
+      local playerLevel = UnitLevel("player")
+      if overLeveled("player", playerLevel) then return false end
+      
+      if members > 1 then
+        for i = 1, 4 do
+          local u = "party"..i
+          if UnitExists(u) and overLeveled(u, UnitLevel(u)) then
+            return false
+          end
         end
       end
     end
@@ -589,10 +1020,6 @@ function DungeonCommon.registerDungeonAchievement(def)
             end
           end
           
-          -- Store the level when this boss was killed (for eligibility checking)
-          local killLevel = UnitLevel("player") or 1
-          HardcoreAchievements_SetProgress(achId, "levelAtKill", killLevel)
-          
           -- Dungeons do not support solo points - store regular points only
           if AchievementPanel and AchievementPanel.achievements then
             local rowVarName = achId .. "_Row"
@@ -636,23 +1063,11 @@ function DungeonCommon.registerDungeonAchievement(def)
     
     -- Check if all bosses are killed
     if CountsSatisfied() then
-      -- Check eligibility using stored level at kill time, not current level
-      -- This prevents failing if player leveled up during the kill
-      -- Since we only count kills when eligible, if CountsSatisfied() is true,
-      -- all bosses were killed while eligible
-      if progress and progress.levelAtKill then
-        local levelToCheck = progress.levelAtKill
-        
-        -- If player was eligible when bosses were killed, complete the achievement
-        -- We use the stored level because that's when the requirement was fulfilled
-        if levelToCheck <= level then
-          state.completed = true
-          HardcoreAchievements_SetProgress(achId, "completed", true)
-          return true
-        end
-        -- If levelToCheck > level, the player was over-leveled when they killed a boss,
-        -- so we don't complete it (this is the fail case)
-      end
+      -- Since we only count kills when group is eligible (using entry levels when in instance),
+      -- if CountsSatisfied() is true, all bosses were killed while eligible
+      state.completed = true
+      HardcoreAchievements_SetProgress(achId, "completed", true)
+      return true
     end
 
     return false
