@@ -40,24 +40,28 @@ local function GetStatusText(params)
         end
     end
     
-    if completed and wasSolo and isSelfFound then
+    -- In TBC, solo bonuses are allowed even without Self-Found buff
+    local isTBC = GetExpansionLevel() > 0
+    local allowSoloBonus = isSelfFound or isTBC
+    
+    if completed and wasSolo and allowSoloBonus then
         return "|c" .. select(4, GetClassColor(select(2, UnitClass("player")))) .. "Solo|r"
     end
     
     -- Check if kills are satisfied but quest is pending (for achievements requiring both)
     if not completed and requiresBoth and killsSatisfied then
-        if hasSoloStatus and isSelfFound then
+        if hasSoloStatus and allowSoloBonus then
             return "|c" .. select(4, GetClassColor(select(2, UnitClass("player")))) .. "Pending Turn-in (solo)|r"
         else
             return "|c" .. select(4, GetClassColor(select(2, UnitClass("player")))) .. "Pending Turn-in|r"
         end
     end
     
-    if not completed and requiresBoth and hasSoloStatus and isSelfFound then
+    if not completed and requiresBoth and hasSoloStatus and allowSoloBonus then
         return "|c" .. select(4, GetClassColor(select(2, UnitClass("player")))) .. "Pending Turn-in (solo)|r"
     end
     
-    if not completed and isSoloMode and allowSoloDouble and not hasSoloStatus and isSelfFound then
+    if not completed and isSoloMode and allowSoloDouble and not hasSoloStatus and allowSoloBonus then
         return "|cff808080Solo bonus|r"
     end
     

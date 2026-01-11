@@ -238,7 +238,8 @@ local Achievements = {
     icon = 134085,
     points = 10,
     requiredQuestId = 832, -- Quest available at level 4
-    targetNpcId = nil, -- Gazzuz level 14
+    targetNpcId = 3204, -- Gazzuz level 14 (quest item drops from this NPC)
+    allowKillsBeforeQuest = true, -- Allow tracking kill before quest acceptance (quest item drops from NPC)
     faction = FACTION_HORDE,
     zone = "Orgrimmar"
 }, {
@@ -1067,14 +1068,15 @@ for _, def in ipairs(Achievements) do
       _G[def.achId .. "_IsCompleted"] = def.customIsCompleted
     else
       _G.Achievements_Common.registerQuestAchievement{
-        achId           = def.achId,
-        requiredQuestId = def.requiredQuestId,
-        targetNpcId     = def.targetNpcId,
-        requiredKills   = def.requiredKills,
-        maxLevel        = def.level,
-        faction         = def.faction,
-        race            = def.race,
-        class           = def.class,
+        achId                = def.achId,
+        requiredQuestId      = def.requiredQuestId,
+        targetNpcId          = def.targetNpcId,
+        requiredKills        = def.requiredKills,
+        maxLevel             = def.level,
+        faction              = def.faction,
+        race                 = def.race,
+        class                = def.class,
+        allowKillsBeforeQuest = def.allowKillsBeforeQuest,
       }
     end
   end

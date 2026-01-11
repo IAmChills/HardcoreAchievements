@@ -850,8 +850,9 @@ function HCA_MarkRowCompleted(row, cdbParam)
     -- Solo indicators only show if player is self-found
     -- Completed achievements always show "Solo", never "Solo bonus"
     local isSelfFound = _G.IsSelfFound and _G.IsSelfFound() or false
+    local isTBC = GetExpansionLevel() > 0
     if row.Sub then
-        if wasSolo and isSelfFound then
+        if wasSolo and (isSelfFound or isTBC) then
             -- Completed achievements always show "Solo", not "Solo bonus"
             row.Sub:SetText(AUCTION_TIME_LEFT0 .. "\n|c" .. select(4, GetClassColor(select(2, UnitClass("player")))) .. "Solo|r")
         else
@@ -958,8 +959,9 @@ local function RestoreCompletionsFromDB()
             -- Solo indicators only show if player is self-found
             -- Completed achievements always show "Solo", never "Solo bonus"
             local isSelfFound = _G.IsSelfFound and _G.IsSelfFound() or false
+            local isTBC = GetExpansionLevel() > 0
             if row.Sub then
-                if rec.wasSolo and isSelfFound then
+                if rec.wasSolo and (isSelfFound or isTBC) then
                     -- Completed achievements always show "Solo", not "Solo bonus"
                     row.Sub:SetText(AUCTION_TIME_LEFT0 .. "\n|c" .. select(4, GetClassColor(select(2, UnitClass("player")))) .. "Solo|r")
                 else
@@ -2486,7 +2488,12 @@ AchievementPanel.MultiplierText:SetTextColor(0.8, 0.8, 0.8)
 -- Solo mode checkbox
 AchievementPanel.SoloModeCheckbox = CreateFrame("CheckButton", nil, AchievementPanel, "InterfaceOptionsCheckButtonTemplate")
 AchievementPanel.SoloModeCheckbox:SetPoint("TOPLEFT", AchievementPanel, "TOPLEFT", 70, -50)
-AchievementPanel.SoloModeCheckbox.Text:SetText("SSF")
+-- In TBC, use "Solo" instead of "SSF"
+if GetExpansionLevel() > 0 then
+    AchievementPanel.SoloModeCheckbox.Text:SetText("Solo")
+else
+    AchievementPanel.SoloModeCheckbox.Text:SetText("SSF")
+end
 AchievementPanel.SoloModeCheckbox:SetScript("OnClick", function(self)
     if self:IsEnabled() then
         local isChecked = self:GetChecked()
@@ -3794,15 +3801,27 @@ function HCA_ShowAchievementTab()
         local isChecked = (cdb and cdb.settings and cdb.settings.soloAchievements) or false
         AchievementPanel.SoloModeCheckbox:SetChecked(isChecked)
         
-        -- Update enable/disable state based on Self-Found status
-        local isSelfFound = _G.IsSelfFound and _G.IsSelfFound() or false
-        if isSelfFound then
+        local isTBC = GetExpansionLevel() > 0
+        if isTBC then
+            -- In TBC, checkbox is always enabled (Self-Found not available)
             AchievementPanel.SoloModeCheckbox:Enable()
-            AchievementPanel.SoloModeCheckbox.tooltip = "|cffffffffSolo Self Found|r \nToggling this option on will display the total points you will receive if you complete this achievement solo (no help from nearby players)."
+            AchievementPanel.SoloModeCheckbox.Text:SetTextColor(1, 1, 1, 1)
+            AchievementPanel.SoloModeCheckbox.Text:SetText("Solo")
+            AchievementPanel.SoloModeCheckbox.tooltip = "|cffffffffSolo|r \nToggling this option on will display the total points you will receive if you complete this achievement solo (no help from nearby players)."
         else
-            AchievementPanel.SoloModeCheckbox:Disable()
-            AchievementPanel.SoloModeCheckbox.Text:SetTextColor(0.5, 0.5, 0.5, 1)
-            --AchievementPanel.SoloModeCheckbox.tooltip = "|cffffffffSolo Self Found|r \nToggling this option on will display the total points you will receive if you complete this achievement solo (no help from nearby players). |cffff0000(Requires Self-Found buff to enable)|r"
+            -- In Classic, checkbox is only enabled if Self-Found is active
+            local isSelfFound = _G.IsSelfFound and _G.IsSelfFound() or false
+            if isSelfFound then
+                AchievementPanel.SoloModeCheckbox:Enable()
+                AchievementPanel.SoloModeCheckbox.Text:SetTextColor(1, 1, 1, 1)
+                AchievementPanel.SoloModeCheckbox.Text:SetText("SSF")
+                AchievementPanel.SoloModeCheckbox.tooltip = "|cffffffffSolo Self Found|r \nToggling this option on will display the total points you will receive if you complete this achievement solo (no help from nearby players)."
+            else
+                AchievementPanel.SoloModeCheckbox:Disable()
+                AchievementPanel.SoloModeCheckbox.Text:SetTextColor(0.5, 0.5, 0.5, 1)
+                AchievementPanel.SoloModeCheckbox.Text:SetText("SSF")
+                --AchievementPanel.SoloModeCheckbox.tooltip = "|cffffffffSolo Self Found|r \nToggling this option on will display the total points you will receive if you complete this achievement solo (no help from nearby players). |cffff0000(Requires Self-Found buff to enable)|r"
+            end
         end
     end
     

@@ -233,7 +233,8 @@ local Achievements = {
     icon = 134085,
     points = 10,
     requiredQuestId = 832,
-    targetNpcId = nil,
+    targetNpcId = 3204,
+    allowKillsBeforeQuest = true,
     faction = FACTION_HORDE,
     zone = "Orgrimmar"
 }, {
@@ -1041,6 +1042,7 @@ for _, def in ipairs(Achievements) do
         faction         = def.faction,
         race            = def.race,
         class           = def.class,
+        allowKillsBeforeQuest = def.allowKillsBeforeQuest,
       }
     end
   end

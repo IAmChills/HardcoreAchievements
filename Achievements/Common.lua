@@ -85,6 +85,7 @@ function M.registerQuestAchievement(cfg)
     local REQUIRED_QUEST_ID = cfg.requiredQuestId
     local TARGET_NPC_ID = cfg.targetNpcId
     local REQUIRED_KILLS = cfg.requiredKills -- Support kill counts: { [npcId] = count }
+    local ALLOW_KILLS_BEFORE_QUEST = cfg.allowKillsBeforeQuest or false -- Allow tracking kills before quest acceptance
     -- Support multiple target NPC IDs (number or {ids})
     local function isTargetNpcId(npcId)
         if not TARGET_NPC_ID then return false end
@@ -208,9 +209,11 @@ function M.registerQuestAchievement(cfg)
                 
                 if not existingPointsAtKill then
                     -- No existing pointsAtKill, check if quest completion was solo (check at time of topUp)
-                    -- Solo points only apply if player is self-found
+                    -- Solo points apply if player is self-found (Classic) or in TBC
                     local isSelfFound = _G.IsSelfFound and _G.IsSelfFound() or false
-                    local isSoloQuest = isSelfFound and (_G.PlayerIsSolo and _G.PlayerIsSolo() or false) or false
+                    local isTBC = GetExpansionLevel() > 0
+                    local allowSoloBonus = isSelfFound or isTBC
+                    local isSoloQuest = allowSoloBonus and (_G.PlayerIsSolo and _G.PlayerIsSolo() or false) or false
                     
                     if AchievementPanel and AchievementPanel.achievements then
                         for _, row in ipairs(AchievementPanel.achievements) do
@@ -496,14 +499,16 @@ function M.registerQuestAchievement(cfg)
         end
         topUpFromServer()
         -- Check if we have solo status from previous kills/quests and update UI
-        -- Solo indicators only show if player is self-found
+        -- Solo indicators show if player is self-found (Classic) or in TBC
         local isSelfFound = _G.IsSelfFound and _G.IsSelfFound() or false
-        if p and (p.soloKill or p.soloQuest) and isSelfFound then
+        local isTBC = GetExpansionLevel() > 0
+        local allowSoloBonus = isSelfFound or isTBC
+        if p and (p.soloKill or p.soloQuest) and allowSoloBonus then
             if AchievementPanel and AchievementPanel.achievements then
                 for _, row in ipairs(AchievementPanel.achievements) do
                     if row.id == ACH_ID then
                         -- Restore "pending solo" indicator if it was a solo kill/quest and not completed
-                        if (p.soloKill or p.soloQuest) and not state.completed and isSelfFound then
+                        if (p.soloKill or p.soloQuest) and not state.completed and allowSoloBonus then
                             -- Use stored pointsAtKill value if available (doubled for solo kills)
                             if p.pointsAtKill then
                                 row.points = tonumber(p.pointsAtKill) or row.points
@@ -644,7 +649,7 @@ function M.registerQuestAchievement(cfg)
                 return false
             end
             
-            -- Check if player is on the quest (required for kills to count, unless award on kill is enabled)
+            -- Check if player is on the quest (required for kills to count, unless award on kill is enabled or allowKillsBeforeQuest is set)
             if REQUIRED_QUEST_ID then
                 -- Check if award on kill is enabled
                 local awardOnKillEnabled = false
@@ -655,13 +660,14 @@ function M.registerQuestAchievement(cfg)
                 -- Allow kill tracking if:
                 -- 1. Player is on the quest (normal case), OR
                 -- 2. Award on kill is enabled, OR
-                -- 3. Player has quest progress (has turned in quest) - allows re-killing for eligibility
+                -- 3. AllowKillsBeforeQuest is enabled (for quests where item drops from NPC), OR
+                -- 4. Player has quest progress (has turned in quest) - allows re-killing for eligibility
                 --    This fixes the case where player turns in quest with ineligible kill and needs to re-kill for eligibility
                 local hasQuestProgress = state.quest or (progressTable and progressTable.quest)
-                local canTrackKill = awardOnKillEnabled or isPlayerOnQuest() or hasQuestProgress
+                local canTrackKill = awardOnKillEnabled or isPlayerOnQuest() or ALLOW_KILLS_BEFORE_QUEST or hasQuestProgress
                 
                 if not canTrackKill then
-                    return false -- Player is not on quest, award on kill is disabled, and no quest progress - don't track kill
+                    return false -- Player is not on quest, award on kill is disabled, allowKillsBeforeQuest is disabled, and no quest progress - don't track kill
                 end
             end
             
@@ -894,15 +900,17 @@ function M.registerQuestAchievement(cfg)
                 return checkComplete()
             else
                 -- TARGET_NPC_ID: track kill normally (eligible kill)
-                -- Solo points only apply if player is self-found
+                -- Solo points apply if player is self-found (Classic) or in TBC
                 -- Use stored solo status from combat tracking (more accurate than checking at kill time)
                 local isSelfFound = _G.IsSelfFound and _G.IsSelfFound() or false
+                local isTBC = GetExpansionLevel() > 0
+                local allowSoloBonus = isSelfFound or isTBC
                 local storedSoloStatus = nil
                 if destGUID and _G.PlayerIsSoloForGUID then
                     storedSoloStatus = _G.PlayerIsSoloForGUID(destGUID)
                 end
                 -- Fallback to current check if no stored status available
-                local isSoloKill = isSelfFound and (
+                local isSoloKill = allowSoloBonus and (
                     (storedSoloStatus ~= nil and storedSoloStatus) or
                     (storedSoloStatus == nil and _G.PlayerIsSolo and _G.PlayerIsSolo() or false)
                 ) or false
@@ -1204,9 +1212,11 @@ function M.registerQuestAchievement(cfg)
             
             if not existingPointsAtKill then
                 -- No existing pointsAtKill, check if quest completion was solo
-                -- Solo points only apply if player is self-found
+                -- Solo points apply if player is self-found (Classic) or in TBC
                 local isSelfFound = _G.IsSelfFound and _G.IsSelfFound() or false
-                local isSoloQuest = isSelfFound and (_G.PlayerIsSolo and _G.PlayerIsSolo() or false) or false
+                local isTBC = GetExpansionLevel() > 0
+                local allowSoloBonus = isSelfFound or isTBC
+                local isSoloQuest = allowSoloBonus and (_G.PlayerIsSolo and _G.PlayerIsSolo() or false) or false
                 
                 if AchievementPanel and AchievementPanel.achievements then
                     for _, row in ipairs(AchievementPanel.achievements) do
@@ -1291,9 +1301,11 @@ function M.registerQuestAchievement(cfg)
                 else
                     -- We have existing pointsAtKill from NPC kill, preserve it
                     -- But still update solo status if quest was solo (for indicator purposes)
-                    -- Solo points only apply if player is self-found
+                    -- Solo points apply if player is self-found (Classic) or in TBC
                     local isSelfFound = _G.IsSelfFound and _G.IsSelfFound() or false
-                    local isSoloQuest = isSelfFound and (_G.PlayerIsSolo and _G.PlayerIsSolo() or false) or false
+                    local isTBC = GetExpansionLevel() > 0
+                    local allowSoloBonus = isSelfFound or isTBC
+                    local isSoloQuest = allowSoloBonus and (_G.PlayerIsSolo and _G.PlayerIsSolo() or false) or false
                     if isSoloQuest then
                     -- Update solo quest status and indicator (only if not completed)
                     setProg("soloQuest", true)
