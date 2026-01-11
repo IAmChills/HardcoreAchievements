@@ -1618,7 +1618,7 @@ end)
 
 -- Function to show welcome message popup on first login or when version changes
 function addon:ShowWelcomeMessage()
-    local WELCOME_MESSAGE_NUMBER = 1
+    local WELCOME_MESSAGE_NUMBER = 2
     local db = EnsureDB()
     db.settings = db.settings or {}
     
@@ -1637,7 +1637,7 @@ function addon:ShowWelcomeMessage()
         if GetExpansionLevel() > 0 then
             --StaticPopup_Show("Hardcore Achievements TBC")
         else
-            StaticPopup_Show("Hardcore Achievements Vanilla")
+            StaticPopup_Show("Hardcore Achievements Vanilla 2")
         end
         db.settings.welcomeMessageVersion = WELCOME_MESSAGE_NUMBER
     end
@@ -1653,15 +1653,29 @@ StaticPopupDialogs["Hardcore Achievements Vanilla"] = {
     hideOnEscape = true,
     preferredIndex = 3,
     OnAccept = function()
-        -- Popup automatically closes
     end,
     OnCancel = function()
         OpenOptionsPanel()
     end,
 }
 
+StaticPopupDialogs["Hardcore Achievements Vanilla 2"] = {
+    text = "|cff69adc9Hardcore Achievements|r\n\nDungeon related achievements have been redesigned and now require all party members to meet the level requirement at entry. Leveling up inside the dungeon is allowed, but leaving and re-entering if overleveled disqualifies the group.\n\nPlease report any issues you encounter.",
+    button1 = "OK",
+    timeout = 0,
+    whileDead = true,
+    hideOnEscape = true,
+    preferredIndex = 3,
+    OnAccept = function()
+        StaticPopup_Show("Hardcore Achievements Vanilla")
+    end,
+    OnCancel = function()
+        StaticPopup_Show("Hardcore Achievements Vanilla")
+    end,
+}
+
 StaticPopupDialogs["Hardcore Achievements TBC"] = {
-    text = "|cff69adc9Hardcore Achievements|r\n\n",
+    text = "|cff69adc9Hardcore Achievements|r\n\nDungeon related achievements have been redesigned.\n\nDungeon achievements require all party members to meet the level requirement at entry. Leveling up inside the dungeon is allowed, but leaving and re-entering if overleveled disqualifies the group.\n\nPlease report any issues you encounter.",
     button1 = "Got it!",
     button2 = "Show Me!",
     timeout = 0,
