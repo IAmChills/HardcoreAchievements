@@ -1,7 +1,7 @@
 ﻿## Interface: 11508, 20505
 ## Title: HardcoreAchievements
 ## Author: Chills
-## Version: 1.4.8
+## Version: 1.4.9
 ## Notes: Hardcore achievements system
 ## OptionalDeps: Ace3, CallbackHandler-1.0, HereBeDragons, LibDataBroker-1.1, LibDBIcon-1.0, LibStub, LibUIDropDownMenu
 ## SavedVariables: HardcoreAchievementsDB
@@ -71,6 +71,3 @@ Utils\CommandHandler.lua
 Utils\AchievementLinks.lua
 Utils\OptionsPanel.lua
 Utils\CharacterInspection.lua
-
-Admin\AdminPanel.lua
-Admin\AdminPanelTest.lua
