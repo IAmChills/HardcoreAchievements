@@ -452,7 +452,9 @@ local function ProcessAdminCommand(payload, sender)
 				-- Update solo status in UI if applicable
 				if payload.solo and achievementRow.Sub then
 					local isSelfFound = _G.IsSelfFound and _G.IsSelfFound() or false
-					if isSelfFound then
+					local isTBC = GetExpansionLevel() > 0
+					local allowSoloBonus = isSelfFound or isTBC
+					if allowSoloBonus then
 						achievementRow.Sub:SetText(AUCTION_TIME_LEFT0 .. "\n|c" .. select(4, GetClassColor(select(2, UnitClass("player")))) .. "Solo|r")
 					end
 				end

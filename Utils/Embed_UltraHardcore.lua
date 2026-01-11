@@ -1762,15 +1762,27 @@ function EMBED:Rebuild()
       local isChecked = (cdb and cdb.settings and cdb.settings.soloAchievements) or false
       UHCA.SoloModeCheckbox:SetChecked(isChecked)
       
-      -- Update enable/disable state based on Self-Found status
-      local isSelfFound = _G.IsSelfFound and _G.IsSelfFound() or false
-      if isSelfFound then
+      local isTBC = GetExpansionLevel() > 0
+      if isTBC then
+        -- In TBC, checkbox is always enabled (Self-Found not available)
         UHCA.SoloModeCheckbox:Enable()
-        UHCA.SoloModeCheckbox.tooltip = "|cffffffffSolo Self Found|r \nToggling this option on will display the total points you will receive if you complete this achievement solo (no help from nearby players)."
+        UHCA.SoloModeCheckbox.Text:SetTextColor(0.922, 0.871, 0.761, 1)
+        UHCA.SoloModeCheckbox.Text:SetText("Solo")
+        UHCA.SoloModeCheckbox.tooltip = "|cffffffffSolo|r \nToggling this option on will display the total points you will receive if you complete this achievement solo (no help from nearby players)."
       else
-        UHCA.SoloModeCheckbox:Disable()
-        UHCA.SoloModeCheckbox.Text:SetTextColor(0.5, 0.5, 0.5, 1)
-        --UHCA.SoloModeCheckbox.tooltip = "Require solo play (no group members nearby) to complete achievements. Doubles achievement points. |cffff0000(Requires Self-Found buff to enable)|r"
+        -- In Classic, checkbox is only enabled if Self-Found is active
+        local isSelfFound = _G.IsSelfFound and _G.IsSelfFound() or false
+        if isSelfFound then
+          UHCA.SoloModeCheckbox:Enable()
+          UHCA.SoloModeCheckbox.Text:SetTextColor(0.922, 0.871, 0.761, 1)
+          UHCA.SoloModeCheckbox.Text:SetText("SSF")
+          UHCA.SoloModeCheckbox.tooltip = "|cffffffffSolo Self Found|r \nToggling this option on will display the total points you will receive if you complete this achievement solo (no help from nearby players)."
+        else
+          UHCA.SoloModeCheckbox:Disable()
+          UHCA.SoloModeCheckbox.Text:SetTextColor(0.5, 0.5, 0.5, 1)
+          UHCA.SoloModeCheckbox.Text:SetText("SSF")
+          --UHCA.SoloModeCheckbox.tooltip = "Require solo play (no group members nearby) to complete achievements. Doubles achievement points. |cffff0000(Requires Self-Found buff to enable)|r"
+        end
       end
     end
   end
@@ -2118,7 +2130,12 @@ local function BuildEmbedIfNeeded()
     UHCA.SoloModeCheckbox:SetPoint("LEFT", UHCA.LayoutGridCheckbox.text, "RIGHT", 6, 0)
     UHCA.SoloModeCheckbox:SetSize(10, 10)
     UHCA.SoloModeCheckbox:SetFrameLevel(19)
-    UHCA.SoloModeCheckbox.Text:SetText("SSF")
+    -- In TBC, use "Solo" instead of "SSF"
+    if GetExpansionLevel() > 0 then
+      UHCA.SoloModeCheckbox.Text:SetText("Solo")
+    else
+      UHCA.SoloModeCheckbox.Text:SetText("SSF")
+    end
     UHCA.SoloModeCheckbox.Text:SetTextColor(0.922, 0.871, 0.761)
     UHCA.SoloModeCheckbox.Text:ClearAllPoints()
     UHCA.SoloModeCheckbox.Text:SetPoint("LEFT", UHCA.SoloModeCheckbox, "RIGHT", 5, 0)

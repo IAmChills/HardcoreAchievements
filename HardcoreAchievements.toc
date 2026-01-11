@@ -43,12 +43,14 @@ Achievements\DungeonCommon.lua [AllowLoadGameType vanilla]
 Achievements\DungeonSetCommon.lua [AllowLoadGameType vanilla]
 Achievements\ReputationCommon.lua [AllowLoadGameType vanilla]
 Achievements\RaidCommon.lua [AllowLoadGameType vanilla]
+Achievements\MetaCommon.lua
 Achievements\ProfessionCatalog.lua [AllowLoadGameType vanilla]
 Achievements\Catalog.lua [AllowLoadGameType vanilla]
 Achievements\DungeonCatalog.lua [AllowLoadGameType vanilla]
 Achievements\DungeonSetCatalog.lua [AllowLoadGameType vanilla]
 Achievements\ReputationCatalog.lua [AllowLoadGameType vanilla]
 Achievements\RaidCatalog.lua [AllowLoadGameType vanilla]
+Achievements\MetaCatalog.lua [AllowLoadGameType vanilla]
 Achievements\FourCandles.lua [AllowLoadGameType vanilla]
 
 TBC\DungeonCommon.lua [AllowLoadGameType tbc]
@@ -62,9 +64,13 @@ TBC\HeroicDungeonCatalog.lua [AllowLoadGameType tbc]
 TBC\DungeonSetCatalog.lua [AllowLoadGameType tbc]
 TBC\ReputationCatalog.lua [AllowLoadGameType tbc]
 TBC\RaidCatalog.lua [AllowLoadGameType tbc]
+TBC\MetaCatalog.lua [AllowLoadGameType tbc]
 
 Utils\Embed_UltraHardcore.lua
 Utils\CommandHandler.lua
 Utils\AchievementLinks.lua
 Utils\OptionsPanel.lua
 Utils\CharacterInspection.lua
+
+Admin\AdminPanel.lua
+Admin\AdminPanelTest.lua

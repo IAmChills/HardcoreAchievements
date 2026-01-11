@@ -270,8 +270,20 @@ local function IsRowOutleveled(row)
         end
     end
     
-    -- Achievements with no level restriction (maxLevel is nil) should never be marked as failed
-    if not row.maxLevel then return false end
+    -- Check if this is a meta achievement that should be failed based on required achievements
+    -- Meta achievements don't have maxLevel, so check database for failed flag
+    if not row.maxLevel then
+      -- Check if this is a meta achievement (has isMetaAchievement flag or requiredAchievements)
+      local isMetaAchievement = (row._def and row._def.isMetaAchievement) or (row.requiredAchievements ~= nil)
+      if isMetaAchievement then
+        -- For meta achievements, check the database directly for failed flag
+        local _, cdb = GetCharDB()
+        if cdb and cdb.achievements and cdb.achievements[achId] and cdb.achievements[achId].failed then
+          return true
+        end
+      end
+      return false
+    end
     
     local lvl = UnitLevel("player") or 1
     local isOverLevel = lvl > row.maxLevel
@@ -850,8 +862,9 @@ function HCA_MarkRowCompleted(row, cdbParam)
     -- Solo indicators only show if player is self-found
     -- Completed achievements always show "Solo", never "Solo bonus"
     local isSelfFound = _G.IsSelfFound and _G.IsSelfFound() or false
+    local isTBC = GetExpansionLevel() > 0
     if row.Sub then
-        if wasSolo and isSelfFound then
+        if wasSolo and (isSelfFound or isTBC) then
             -- Completed achievements always show "Solo", not "Solo bonus"
             row.Sub:SetText(AUCTION_TIME_LEFT0 .. "\n|c" .. select(4, GetClassColor(select(2, UnitClass("player")))) .. "Solo|r")
         else
@@ -958,8 +971,9 @@ local function RestoreCompletionsFromDB()
             -- Solo indicators only show if player is self-found
             -- Completed achievements always show "Solo", never "Solo bonus"
             local isSelfFound = _G.IsSelfFound and _G.IsSelfFound() or false
+            local isTBC = GetExpansionLevel() > 0
             if row.Sub then
-                if rec.wasSolo and isSelfFound then
+                if rec.wasSolo and (isSelfFound or isTBC) then
                     -- Completed achievements always show "Solo", not "Solo bonus"
                     row.Sub:SetText(AUCTION_TIME_LEFT0 .. "\n|c" .. select(4, GetClassColor(select(2, UnitClass("player")))) .. "Solo|r")
                 else
@@ -1811,23 +1825,55 @@ function LoadTabPosition()
         if shouldShow then
             -- Show tab at default position if showCustomTab is true
             local isCharacterFrameShown = CharacterFrame and CharacterFrame:IsShown()
+            local isHardcoreActive = C_GameRules and C_GameRules.IsHardcoreActive and C_GameRules.IsHardcoreActive() or false
             
             Tab:ClearAllPoints()
-            Tab:SetPoint("RIGHT", _G["CharacterFrameTab"..Tabs], "RIGHT", 43, 0)
-            Tab:SetAlpha(1)
-            Tab:EnableMouse(true)
-            Tab.mode = "bottom"
-            
-            if Tab.squareFrame then
-                Tab.squareFrame:EnableMouse(false)
-                Tab.squareFrame:Hide()
+            if not isHardcoreActive then
+                -- Non-hardcore default: right mode with specific position
+                Tab:SetPoint("TOPRIGHT", CharacterFrame, "TOPRIGHT", 25, -385)
+                Tab:SetAlpha(0)
+                Tab:EnableMouse(false)  -- Disable tab mouse events in vertical mode; use square frame instead
+                Tab.mode = "right"
+                -- Ensure square frame exists
+                if not Tab.squareFrame then
+                    CreateSquareFrame()
+                end
+                if Tab.squareFrame then
+                    Tab.squareFrame:ClearAllPoints()
+                    Tab.squareFrame:SetPoint("TOPRIGHT", CharacterFrame, "TOPRIGHT", 25, -385)
+                    Tab.squareFrame:EnableMouse(true)
+                    -- Only show square frame if CharacterFrame is shown
+                    if isCharacterFrameShown then
+                        Tab.squareFrame:Show()
+                    else
+                        Tab.squareFrame:Hide()
+                    end
+                end
+            else
+                -- Hardcore default: bottom mode
+                Tab:SetPoint("RIGHT", _G["CharacterFrameTab"..Tabs], "RIGHT", 43, 0)
+                Tab:SetAlpha(1)
+                Tab:EnableMouse(true)
+                Tab.mode = "bottom"
+                
+                if Tab.squareFrame then
+                    Tab.squareFrame:EnableMouse(false)
+                    Tab.squareFrame:Hide()
+                end
             end
             
             -- Only show tab if CharacterFrame is shown
             if isCharacterFrameShown then
-                Tab:Show()
+                if not isHardcoreActive and Tab.squareFrame then
+                    Tab.squareFrame:Show()
+                else
+                    Tab:Show()
+                end
             else
                 Tab:Hide()
+                if Tab.squareFrame then
+                    Tab.squareFrame:Hide()
+                end
             end
         else
             -- Hide the tab if showCustomTab is false
@@ -1846,15 +1892,9 @@ function ResetTabPosition()
         db.tabSettings = nil
     end
     
-    -- Reset to default position (same as original tab creation)
-    Tab:ClearAllPoints()
-    local Tabs = CharacterFrame.numTabs
-    Tab:SetPoint("RIGHT", _G["CharacterFrameTab"..Tabs], "RIGHT", 43, 0)
-    Tab:SetAlpha(1)
-    Tab:EnableMouse(true)   -- Enable tab mouse events in horizontal mode
-    if Tab.squareFrame then
-        Tab.squareFrame:Hide()
-    end
+    -- Reset to default by calling LoadTabPosition (which will use default position since db.tabSettings is now nil)
+    -- LoadTabPosition handles visibility based on CharacterFrame state
+    LoadTabPosition()
     
     print("HardcoreAchievements: Tab position reset to default")
 end
@@ -2486,7 +2526,12 @@ AchievementPanel.MultiplierText:SetTextColor(0.8, 0.8, 0.8)
 -- Solo mode checkbox
 AchievementPanel.SoloModeCheckbox = CreateFrame("CheckButton", nil, AchievementPanel, "InterfaceOptionsCheckButtonTemplate")
 AchievementPanel.SoloModeCheckbox:SetPoint("TOPLEFT", AchievementPanel, "TOPLEFT", 70, -50)
-AchievementPanel.SoloModeCheckbox.Text:SetText("SSF")
+-- In TBC, use "Solo" instead of "SSF"
+if GetExpansionLevel() > 0 then
+    AchievementPanel.SoloModeCheckbox.Text:SetText("Solo")
+else
+    AchievementPanel.SoloModeCheckbox.Text:SetText("SSF")
+end
 AchievementPanel.SoloModeCheckbox:SetScript("OnClick", function(self)
     if self:IsEnabled() then
         local isChecked = self:GetChecked()
@@ -3794,15 +3839,27 @@ function HCA_ShowAchievementTab()
         local isChecked = (cdb and cdb.settings and cdb.settings.soloAchievements) or false
         AchievementPanel.SoloModeCheckbox:SetChecked(isChecked)
         
-        -- Update enable/disable state based on Self-Found status
-        local isSelfFound = _G.IsSelfFound and _G.IsSelfFound() or false
-        if isSelfFound then
+        local isTBC = GetExpansionLevel() > 0
+        if isTBC then
+            -- In TBC, checkbox is always enabled (Self-Found not available)
             AchievementPanel.SoloModeCheckbox:Enable()
-            AchievementPanel.SoloModeCheckbox.tooltip = "|cffffffffSolo Self Found|r \nToggling this option on will display the total points you will receive if you complete this achievement solo (no help from nearby players)."
+            AchievementPanel.SoloModeCheckbox.Text:SetTextColor(1, 1, 1, 1)
+            AchievementPanel.SoloModeCheckbox.Text:SetText("Solo")
+            AchievementPanel.SoloModeCheckbox.tooltip = "|cffffffffSolo|r \nToggling this option on will display the total points you will receive if you complete this achievement solo (no help from nearby players)."
         else
-            AchievementPanel.SoloModeCheckbox:Disable()
-            AchievementPanel.SoloModeCheckbox.Text:SetTextColor(0.5, 0.5, 0.5, 1)
-            --AchievementPanel.SoloModeCheckbox.tooltip = "|cffffffffSolo Self Found|r \nToggling this option on will display the total points you will receive if you complete this achievement solo (no help from nearby players). |cffff0000(Requires Self-Found buff to enable)|r"
+            -- In Classic, checkbox is only enabled if Self-Found is active
+            local isSelfFound = _G.IsSelfFound and _G.IsSelfFound() or false
+            if isSelfFound then
+                AchievementPanel.SoloModeCheckbox:Enable()
+                AchievementPanel.SoloModeCheckbox.Text:SetTextColor(1, 1, 1, 1)
+                AchievementPanel.SoloModeCheckbox.Text:SetText("SSF")
+                AchievementPanel.SoloModeCheckbox.tooltip = "|cffffffffSolo Self Found|r \nToggling this option on will display the total points you will receive if you complete this achievement solo (no help from nearby players)."
+            else
+                AchievementPanel.SoloModeCheckbox:Disable()
+                AchievementPanel.SoloModeCheckbox.Text:SetTextColor(0.5, 0.5, 0.5, 1)
+                AchievementPanel.SoloModeCheckbox.Text:SetText("SSF")
+                --AchievementPanel.SoloModeCheckbox.tooltip = "|cffffffffSolo Self Found|r \nToggling this option on will display the total points you will receive if you complete this achievement solo (no help from nearby players). |cffff0000(Requires Self-Found buff to enable)|r"
+            end
         end
     end
     
@@ -3902,42 +3959,8 @@ CharacterFrame:HookScript("OnShow", function()
         return
     end
     
-    -- Load tab position first to restore saved mode and position
+    -- Load tab position (this handles both saved and default positions, including expansion-dependent defaults)
     LoadTabPosition()
-    
-    -- Ensure tab is shown (LoadTabPosition may have hidden it if CharacterFrame wasn't shown)
-    -- Check if we have saved position data
-    local db = EnsureDB()
-    local hasSavedData = db.tabSettings and db.tabSettings.mode and db.tabSettings.position
-    
-    if not hasSavedData then
-        -- No saved data but showCustomTab is true, ensure tab is at default position and visible
-        Tab:ClearAllPoints()
-        Tab:SetPoint("RIGHT", _G["CharacterFrameTab"..Tabs], "RIGHT", 43, 0)
-        Tab:SetAlpha(1)
-        Tab:EnableMouse(true)
-        Tab.mode = "bottom"
-        Tab:Show()
-        
-        if Tab.squareFrame then
-            Tab.squareFrame:Hide()
-            Tab.squareFrame:EnableMouse(false)
-        end
-    else
-        -- Has saved data, LoadTabPosition should have handled it, but ensure tab/squareFrame is visible
-        if Tab.mode == "bottom" then
-            Tab:Show()
-        elseif Tab.mode == "right" and Tab.squareFrame then
-            Tab.squareFrame:Show()
-            Tab.squareFrame:EnableMouse(true)
-            -- Reposition the square frame to match the tab's current position
-            local _, _, _, x, y = Tab:GetPoint()
-            if x and y then
-                Tab.squareFrame:ClearAllPoints()
-                Tab.squareFrame:SetPoint("TOPRIGHT", CharacterFrame, "TOPRIGHT", x, y)
-            end
-        end
-    end
 end)
 
 -- Hook ToggleCharacter to handle CharacterStatsClassic visibility and square frame

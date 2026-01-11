@@ -564,32 +564,6 @@ local function ExportDatabase()
     frame:Show()
 end
 
--- Helper function to update solo achievements checkbox based on self-found status
--- Defined before CreateOptionsPanel so it's available in the refresh function
-local function UpdateSoloAchievementsCheckbox()
-    local panel = _HardcoreAchievementsOptionsPanel
-    if not panel or not panel.checkboxes or not panel.checkboxes.soloAchievements then
-        return
-    end
-    
-    local soloAchievementsCB = panel.checkboxes.soloAchievements
-    local disableScreenshotsCB = panel.checkboxes.disableScreenshots
-    local isSelfFound = _G.IsSelfFound and _G.IsSelfFound() or false
-    
-    if isSelfFound then
-        soloAchievementsCB:Enable()
-        -- Get the default color from the other checkbox (same template) and use it
-        if disableScreenshotsCB and disableScreenshotsCB.Text then
-            local r, g, b = disableScreenshotsCB.Text:GetTextColor()
-            soloAchievementsCB.Text:SetTextColor(r, g, b, 1)
-        end
-        soloAchievementsCB.tooltip = "|cffffffffSolo Self Found|r \nToggling this option on will display the total points you will receive if you complete this achievement solo (no help from nearby players)."
-    else
-        soloAchievementsCB:Disable()
-        soloAchievementsCB.Text:SetTextColor(0.5, 0.5, 0.5, 1) -- Gray out the text
-    end
-end
-
 -- Create the main options panel
 local function CreateOptionsPanel()
     -- Create the panel frame
@@ -645,36 +619,9 @@ local function CreateOptionsPanel()
     end)
     AddTooltipToCheckbox(disableScreenshotsCB, "Prevent the addon from taking screenshots when achievements are completed.")
 
-    -- Solo Achievements checkbox
-    local soloAchievementsCB = CreateFrame("CheckButton", nil, panel, "InterfaceOptionsCheckButtonTemplate")
-    soloAchievementsCB:SetPoint("TOPLEFT", disableScreenshotsCB, "BOTTOMLEFT", 0, -8)
-    soloAchievementsCB.Text:SetText("Solo Self Found Mode")
-    soloAchievementsCB:SetChecked(GetSetting("soloAchievements", false))
-    
-    -- Check if player is self-found to enable/disable checkbox
-    local isSelfFound = _G.IsSelfFound and _G.IsSelfFound() or false
-    if not isSelfFound then
-        soloAchievementsCB:Disable()
-        soloAchievementsCB.Text:SetTextColor(0.5, 0.5, 0.5, 1) -- Gray out the text
-    end
-    
-    soloAchievementsCB:SetScript("OnClick", function(self)
-        if self:IsEnabled() then
-            local isChecked = self:GetChecked()
-            SetSetting("soloAchievements", isChecked)
-            -- Refresh all achievement points immediately
-            if RefreshAllAchievementPoints then
-                RefreshAllAchievementPoints()
-            end
-        end
-    end)
-    
-    local tooltipText = "|cffffffffSolo Self Found|r \nToggling this option on will display the total points you will receive if you complete this achievement solo (no help from nearby players)."
-    AddTooltipToCheckbox(soloAchievementsCB, tooltipText)
-
     -- Award on Kill checkbox
     local awardOnKillCB = CreateFrame("CheckButton", nil, panel, "InterfaceOptionsCheckButtonTemplate")
-    awardOnKillCB:SetPoint("TOPLEFT", soloAchievementsCB, "BOTTOMLEFT", 0, -8)
+    awardOnKillCB:SetPoint("TOPLEFT", disableScreenshotsCB, "BOTTOMLEFT", 0, -8)
     awardOnKillCB.Text:SetText("Award achievements on required kill instead of quest completion when available")
     awardOnKillCB:SetChecked(GetSetting("awardOnKill", false))
     awardOnKillCB:SetScript("OnClick", function(self)
@@ -782,7 +729,6 @@ local function CreateOptionsPanel()
     -- Store references for future use
     panel.checkboxes = {
         disableScreenshots = disableScreenshotsCB,
-        soloAchievements = soloAchievementsCB,
         awardOnKill = awardOnKillCB,
         announceInGuildChat = announceInGuildChatCB,
         modernRows = modernRowsCB,
@@ -799,11 +745,6 @@ local function CreateOptionsPanel()
         -- Update checkbox state from database
         if disableScreenshotsCB then
             disableScreenshotsCB:SetChecked(GetSetting("disableScreenshots", false))
-        end
-        if soloAchievementsCB then
-            soloAchievementsCB:SetChecked(GetSetting("soloAchievements", false))
-            -- Update enable/disable state based on Self-Found status using helper function
-            UpdateSoloAchievementsCheckbox()
         end
         if awardOnKillCB then
             awardOnKillCB:SetChecked(GetSetting("awardOnKill", false))
@@ -835,62 +776,6 @@ local function CreateOptionsPanel()
     
     return panel
 end
-
--- Event frame to listen for buff changes (self-found buff appearing)
-local selfFoundEventFrame = CreateFrame("Frame")
-selfFoundEventFrame:RegisterEvent("UNIT_AURA")
-selfFoundEventFrame:RegisterEvent("PLAYER_LOGIN")
-selfFoundEventFrame:RegisterEvent("ADDON_LOADED")
-
--- Track if we've already enabled the checkbox to avoid redundant updates
-local selfFoundCheckboxEnabled = false
-
-selfFoundEventFrame:SetScript("OnEvent", function(self, event, ...)
-    local arg1 = select(1, ...)
-    
-    -- Only process UNIT_AURA for player, and only if checkbox isn't already enabled
-    if event == "UNIT_AURA" and arg1 == "player" and not selfFoundCheckboxEnabled then
-        UpdateSoloAchievementsCheckbox()
-        -- Mark as enabled if self-found is detected
-        if _G.IsSelfFound and _G.IsSelfFound() then
-            selfFoundCheckboxEnabled = true
-        end
-    elseif event == "PLAYER_LOGIN" then
-        -- Reset flag on login
-        selfFoundCheckboxEnabled = false
-        -- Initial check (might be false at this point)
-        UpdateSoloAchievementsCheckbox()
-        -- Delayed check after a few seconds (fallback for slow buff loading)
-        C_Timer.After(3, function()
-            UpdateSoloAchievementsCheckbox()
-            if _G.IsSelfFound and _G.IsSelfFound() then
-                selfFoundCheckboxEnabled = true
-            end
-        end)
-        -- Another delayed check after 5 seconds as extra fallback
-        C_Timer.After(5, function()
-            if not selfFoundCheckboxEnabled then
-                UpdateSoloAchievementsCheckbox()
-                if _G.IsSelfFound and _G.IsSelfFound() then
-                    selfFoundCheckboxEnabled = true
-                end
-            end
-        end)
-    elseif event == "ADDON_LOADED" then
-        local addonName = arg1
-        if addonName == ADDON_NAME then
-            -- Reset flag when addon loads
-            selfFoundCheckboxEnabled = false
-            -- Delayed check after addon loads (buff might appear around this time)
-            C_Timer.After(3, function()
-                UpdateSoloAchievementsCheckbox()
-                if _G.IsSelfFound and _G.IsSelfFound() then
-                    selfFoundCheckboxEnabled = true
-                end
-            end)
-        end
-    end
-end)
 
 -- Initialize the options panel when the addon loads
 local optionsPanel = CreateOptionsPanel()

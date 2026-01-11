@@ -33,9 +33,11 @@ function RefreshAllAchievementPoints()
                     
                     -- Visual preview: if solo mode toggle is on and no stored points, show doubled points
                     -- This is just a preview - actual points are determined at kill/quest time
-                    -- Solo preview only applies if player is self-found
+                    -- Solo preview applies if player is self-found (Classic) or in TBC
+                    local isTBC = GetExpansionLevel() > 0
+                    local allowSoloBonus = isSelfFound or isTBC
                     local progress = HardcoreAchievements_GetProgress and HardcoreAchievements_GetProgress(rowId)
-                    if isSoloMode and row.allowSoloDouble and isSelfFound and not (progress and progress.pointsAtKill) then
+                    if isSoloMode and row.allowSoloDouble and allowSoloBonus and not (progress and progress.pointsAtKill) then
                         finalPoints = finalPoints * 2
                     end
                 end
@@ -177,17 +179,28 @@ function RefreshAllAchievementPoints()
                     end
                 else
                     -- Fallback if helper not available
+                    local isTBC = GetExpansionLevel() > 0
+                    local allowSoloBonus = isSelfFound or isTBC
                     if hasIneligibleKill then
                         local requiresBoth = row.questTracker and row.killTracker
                         local message = requiresBoth and "|cffff4646Ineligible Kill|r"
                         row.Sub:SetText(levelText .. "\n" .. message)
-                     elseif hasSoloStatus and isSelfFound then
+                     elseif hasSoloStatus and allowSoloBonus then
                         row.Sub:SetText(levelText .. "\n|cffac81d6Pending solo|r")
                     else
                         row.Sub:SetText(levelText)
                     end
                 end
                 end
+            end
+        end
+    end
+    
+    -- Check meta achievements for completion
+    if _G.HCA_MetaAchievementCheckers then
+        for achId, checkFn in pairs(_G.HCA_MetaAchievementCheckers) do
+            if type(checkFn) == "function" then
+                checkFn()
             end
         end
     end

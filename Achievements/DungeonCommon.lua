@@ -132,6 +132,7 @@ dungeonEventFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
 dungeonEventFrame:RegisterEvent("PLAYER_DEAD")
 dungeonEventFrame:RegisterEvent("PARTY_MEMBER_ENABLE")
 dungeonEventFrame:RegisterEvent("PARTY_MEMBER_DISABLE")
+dungeonEventFrame:RegisterEvent("GROUP_ROSTER_UPDATE")
 dungeonEventFrame:SetScript("OnEvent", function(self, event, unitIndex)
     if event == "PLAYER_DEAD" then
         -- Track that player died while in an instance (will be used when leaving instance)
@@ -242,6 +243,75 @@ dungeonEventFrame:SetScript("OnEvent", function(self, event, unitIndex)
                     end
                 end
             end
+    elseif event == "GROUP_ROSTER_UPDATE" then
+        -- Group roster changed (player joined or left the group)
+        -- Process for all tracked instances (in case we're not currently in one but have stored data)
+        local inInstance, instanceType = IsInInstance()
+        local currentMapId = nil
+        if inInstance and instanceType == "party" then
+            currentMapId = select(8, GetInstanceInfo())
+        end
+        
+        -- Process all stored entry levels (in case we're outside but have stored data to clean up)
+        for mapId, entryData in pairs(instanceEntryLevels) do
+            if not entryData.partyLevels then
+                entryData.partyLevels = {}
+            end
+            
+            -- Get current party member GUIDs
+            local currentPartyGUIDs = {}
+            local members = GetNumGroupMembers()
+            if members > 1 then
+                for i = 1, 4 do
+                    local unit = "party" .. i
+                    if UnitExists(unit) then
+                        local guid = UnitGUID(unit)
+                        if guid then
+                            currentPartyGUIDs[guid] = true
+                        end
+                    end
+                end
+            end
+            
+            -- Remove party members who are no longer in the group
+            for storedGUID, storedLevel in pairs(entryData.partyLevels) do
+                if not currentPartyGUIDs[storedGUID] then
+                    -- This party member left the group - clear their data
+                    entryData.partyLevels[storedGUID] = nil
+                    if _G.HCA_DebugPrint then
+                        _G.HCA_DebugPrint("Party member left group - data cleared (GUID: " .. (storedGUID or "unknown") .. ", mapId: " .. (mapId or "unknown") .. ")")
+                    end
+                end
+            end
+            
+            -- Add new party members (only if not already stored - preserve existing levels)
+            -- Only add if we're in the instance for this mapId
+            if currentMapId and currentMapId == mapId then
+                if members > 1 then
+                    for i = 1, 4 do
+                        local unit = "party" .. i
+                        if UnitExists(unit) then
+                            local guid = UnitGUID(unit)
+                            if guid and not entryData.partyLevels[guid] then
+                                -- New party member - add them to entry levels
+                                -- Only store if level is valid (> 0) - if level is 0, PARTY_MEMBER_ENABLE will handle it when they enter
+                                local currentLevel = UnitLevel(unit)
+                                if currentLevel and currentLevel > 0 then
+                                    local unitName = UnitName(unit) or ("Party" .. i)
+                                    entryData.partyLevels[guid] = currentLevel
+                                    if _G.HCA_DebugPrint then
+                                        _G.HCA_DebugPrint("Party member joined group - level stored: " .. currentLevel .. " (" .. unitName .. ", mapId: " .. (mapId or "unknown") .. ")")
+                                    end
+                                elseif _G.HCA_DebugPrint then
+                                    local unitName = UnitName(unit) or ("Party" .. i)
+                                    _G.HCA_DebugPrint("Party member joined group but level not available yet (" .. (unitName or "unknown") .. ") - will be handled on entry")
+                                end
+                            end
+                        end
+                    end
+                end
+            end
+        end
     elseif event == "PLAYER_ENTERING_WORLD" then
         local inInstance, instanceType = IsInInstance()
         
