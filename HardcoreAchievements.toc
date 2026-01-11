@@ -27,6 +27,7 @@ Functions\IsGroupEligibleForAchievement.lua
 Functions\GetStatusText.lua
 Functions\RefreshAllAchievementPoints.lua
 Functions\ShowAchievementTooltip.lua
+Functions\NPCTooltip.lua
 Functions\TrackJumps.lua
 Functions\DataEncoding.lua
 Functions\CheckMapDiscovery.lua

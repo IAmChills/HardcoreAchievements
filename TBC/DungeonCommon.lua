@@ -480,6 +480,8 @@ function DungeonCommon.registerDungeonAchievement(def)
     bossOrder = bossOrder,  -- Store boss order for tooltip display
     faction = faction,
     isHeroicDungeon = def.isHeroicDungeon or false,  -- Preserve heroic dungeon flag
+    isVariation = def.isVariation,  -- Store variation flag for filtering
+    baseAchId = def.baseAchId,  -- Store base achievement ID for variations
   }
 
   -- State for the current achievement session only

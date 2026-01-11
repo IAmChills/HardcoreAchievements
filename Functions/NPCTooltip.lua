@@ -1,0 +1,96 @@
+-- Functions/NPCTooltip.lua
+-- Adds achievement requirement information to NPC tooltips
+
+local function GetNPCIdFromGUID(guid)
+    if not guid then return nil end
+    local npcId = select(6, strsplit("-", guid))
+    return npcId and tonumber(npcId) or nil
+end
+
+-- Helper function to find achievements that require a specific NPC ID
+local function GetAchievementsForNPC(npcId)
+    if not npcId then return {} end
+    
+    local achievements = {}
+    
+    -- Check HCA_AchievementDefs (dungeon and raid achievements)
+    if _G.HCA_AchievementDefs then
+        for achId, achDef in pairs(_G.HCA_AchievementDefs) do
+            -- Skip variations (Solo, Duo, Trio) - only show base achievements
+            if achDef.isVariation then
+                -- Skip this variation
+            else
+                if achDef.requiredKills then
+                    local found = false
+                    -- Check if NPC ID is in requiredKills (supports both single IDs and arrays)
+                    for killNpcId, need in pairs(achDef.requiredKills) do
+                        if type(need) == "table" then
+                            -- Array of NPC IDs
+                            for _, id in pairs(need) do
+                                if tonumber(id) == npcId then
+                                    found = true
+                                    break
+                                end
+                            end
+                        else
+                            -- Single NPC ID
+                            if tonumber(killNpcId) == npcId then
+                                found = true
+                            end
+                        end
+                        if found then break end
+                    end
+                    
+                    if found then
+                        table.insert(achievements, {
+                            achId = achId,
+                            title = achDef.title or achDef.mapName or tostring(achId)
+                        })
+                    end
+                end
+            end
+        end
+    end
+    
+    return achievements
+end
+
+-- Hook GameTooltip to add achievement information
+local function HookNPCTooltip()
+    if GameTooltip then
+        GameTooltip:HookScript("OnTooltipSetUnit", function(self)
+            local unit = select(2, self:GetUnit())
+            if not unit then return end
+            
+            local guid = UnitGUID(unit)
+            if not guid then return end
+            
+            -- Only process NPCs (not players, pets, etc.)
+            local npcId = GetNPCIdFromGUID(guid)
+            if not npcId then return end
+            
+            -- Find achievements that require this NPC
+            local achievements = GetAchievementsForNPC(npcId)
+            if #achievements > 0 then
+                GameTooltip:AddLine(" ")  -- Add spacing
+                GameTooltip:AddLine("Required for Achievement:", 0.4, 0.8, 1)
+                for _, ach in ipairs(achievements) do
+                    GameTooltip:AddLine(ach.title, 1, 1, 1)
+                end
+            end
+        end)
+    end
+end
+
+-- Initialize on addon load
+local frame = CreateFrame("Frame")
+frame:RegisterEvent("ADDON_LOADED")
+frame:SetScript("OnEvent", function(self, event, addonName)
+    if addonName == "HardcoreAchievements" then
+        -- Hook after a short delay to ensure GameTooltip is ready
+        C_Timer.After(0.5, function()
+            HookNPCTooltip()
+        end)
+        self:UnregisterEvent("ADDON_LOADED")
+    end
+end)

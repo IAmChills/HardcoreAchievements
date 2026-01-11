@@ -479,6 +479,8 @@ function DungeonCommon.registerDungeonAchievement(def)
     requiredKills = requiredKills,
     bossOrder = bossOrder,  -- Store boss order for tooltip display
     faction = faction,
+    isVariation = def.isVariation,  -- Store variation flag for filtering
+    baseAchId = def.baseAchId,  -- Store base achievement ID for variations
   }
 
   -- State for the current achievement session only
