@@ -196,6 +196,15 @@ function RefreshAllAchievementPoints()
         end
     end
     
+    -- Check meta achievements for completion
+    if _G.HCA_MetaAchievementCheckers then
+        for achId, checkFn in pairs(_G.HCA_MetaAchievementCheckers) do
+            if type(checkFn) == "function" then
+                checkFn()
+            end
+        end
+    end
+    
     -- Update total points
     if HCA_UpdateTotalPoints then
         HCA_UpdateTotalPoints()

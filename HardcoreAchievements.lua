@@ -270,8 +270,20 @@ local function IsRowOutleveled(row)
         end
     end
     
-    -- Achievements with no level restriction (maxLevel is nil) should never be marked as failed
-    if not row.maxLevel then return false end
+    -- Check if this is a meta achievement that should be failed based on required achievements
+    -- Meta achievements don't have maxLevel, so check database for failed flag
+    if not row.maxLevel then
+      -- Check if this is a meta achievement (has isMetaAchievement flag or requiredAchievements)
+      local isMetaAchievement = (row._def and row._def.isMetaAchievement) or (row.requiredAchievements ~= nil)
+      if isMetaAchievement then
+        -- For meta achievements, check the database directly for failed flag
+        local _, cdb = GetCharDB()
+        if cdb and cdb.achievements and cdb.achievements[achId] and cdb.achievements[achId].failed then
+          return true
+        end
+      end
+      return false
+    end
     
     local lvl = UnitLevel("player") or 1
     local isOverLevel = lvl > row.maxLevel

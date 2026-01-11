@@ -345,6 +345,100 @@ function HCA_ShowAchievementTooltip(frame, data)
         end
     end
     
+    -- Check if this is a meta achievement (has requiredAchievements)
+    local requiredAchievements = nil
+    local achievementOrder = nil
+    
+    -- Try to get requiredAchievements from the row object or data table
+    if type(data) == "table" then
+        if data.Title and data.Title.GetText then
+            -- It's a row object
+            requiredAchievements = data.requiredAchievements
+            if not requiredAchievements and data.sourceRow and data.sourceRow.requiredAchievements then
+                requiredAchievements = data.sourceRow.requiredAchievements
+            end
+            achievementOrder = data.achievementOrder
+            if not achievementOrder and data.sourceRow and data.sourceRow.achievementOrder then
+                achievementOrder = data.sourceRow.achievementOrder
+            end
+        else
+            -- It's a data table
+            requiredAchievements = data.requiredAchievements
+            if not requiredAchievements and data.sourceRow and data.sourceRow.requiredAchievements then
+                requiredAchievements = data.sourceRow.requiredAchievements
+            end
+            achievementOrder = data.achievementOrder
+            if not achievementOrder and data.sourceRow and data.sourceRow.achievementOrder then
+                achievementOrder = data.sourceRow.achievementOrder
+            end
+        end
+    end
+    
+    -- Also check HCA_AchievementDefs for meta achievement definition
+    if achId and _G.HCA_AchievementDefs then
+        local achDefMeta = _G.HCA_AchievementDefs[tostring(achId)]
+        if achDefMeta and achDefMeta.isMetaAchievement then
+            if achDefMeta.requiredAchievements then
+                requiredAchievements = achDefMeta.requiredAchievements
+            end
+            if achDefMeta.achievementOrder then
+                achievementOrder = achDefMeta.achievementOrder
+            end
+        end
+    end
+    
+    -- Also check def for requiredAchievements
+    if def and def.requiredAchievements then
+        requiredAchievements = def.requiredAchievements
+    end
+    if def and def.achievementOrder then
+        achievementOrder = def.achievementOrder
+    end
+    
+    -- If we have requiredAchievements, show achievement requirements (for meta achievements)
+    if requiredAchievements and type(requiredAchievements) == "table" and #requiredAchievements > 0 then
+        GameTooltip:AddLine("\nRequired Achievements:", 0, 1, 0) -- Green header
+        
+        -- Use achievementOrder if available, otherwise use requiredAchievements order
+        local achievementsToShow = achievementOrder or requiredAchievements
+        
+        for _, reqAchId in ipairs(achievementsToShow) do
+            -- Get achievement title from HCA_AchievementDefs
+            local reqAchTitle = tostring(reqAchId) -- Fallback to ID
+            if _G.HCA_AchievementDefs then
+                local reqAchDef = _G.HCA_AchievementDefs[tostring(reqAchId)]
+                if reqAchDef and reqAchDef.title then
+                    reqAchTitle = reqAchDef.title
+                end
+            end
+            -- Fallback: check AchievementPanel.achievements (for quest and profession achievements)
+            if reqAchTitle == tostring(reqAchId) and _G.AchievementPanel and _G.AchievementPanel.achievements then
+                for _, row in ipairs(_G.AchievementPanel.achievements) do
+                    local rowId = row.id or row.achId
+                    if rowId and tostring(rowId) == tostring(reqAchId) then
+                        if row.Title and row.Title.GetText then
+                            reqAchTitle = row.Title:GetText() or reqAchTitle
+                        elseif row._title then
+                            reqAchTitle = row._title
+                        end
+                        break
+                    end
+                end
+            end
+            
+            -- Check if required achievement is completed
+            local reqProgress = _G.HardcoreAchievements_GetProgress and _G.HardcoreAchievements_GetProgress(reqAchId)
+            local reqCompleted = reqProgress and reqProgress.completed
+            local done = achievementCompleted or reqCompleted
+            
+            if done then
+                GameTooltip:AddLine(reqAchTitle, 1, 1, 1) -- White for completed
+            else
+                GameTooltip:AddLine(reqAchTitle, 0.5, 0.5, 0.5) -- Gray for not completed
+            end
+        end
+    end
+    
     -- Hint for linking the achievement in chat
     GameTooltip:AddLine("\nShift click to link in chat\nor add to tracking list", 0.5, 0.5, 0.5)
     GameTooltip:Show()
