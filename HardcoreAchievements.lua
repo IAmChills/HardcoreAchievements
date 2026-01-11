@@ -1813,11 +1813,11 @@ function LoadTabPosition()
         if shouldShow then
             -- Show tab at default position if showCustomTab is true
             local isCharacterFrameShown = CharacterFrame and CharacterFrame:IsShown()
-            local isTBC = GetExpansionLevel() > 0
+            local isHardcoreActive = C_GameRules and C_GameRules.IsHardcoreActive and C_GameRules.IsHardcoreActive() or false
             
             Tab:ClearAllPoints()
-            if isTBC then
-                -- TBC default: right mode with specific position
+            if not isHardcoreActive then
+                -- Non-hardcore default: right mode with specific position
                 Tab:SetPoint("TOPRIGHT", CharacterFrame, "TOPRIGHT", 25, -385)
                 Tab:SetAlpha(0)
                 Tab:EnableMouse(false)  -- Disable tab mouse events in vertical mode; use square frame instead
@@ -1838,7 +1838,7 @@ function LoadTabPosition()
                     end
                 end
             else
-                -- Classic default: bottom mode
+                -- Hardcore default: bottom mode
                 Tab:SetPoint("RIGHT", _G["CharacterFrameTab"..Tabs], "RIGHT", 43, 0)
                 Tab:SetAlpha(1)
                 Tab:EnableMouse(true)
@@ -1852,7 +1852,7 @@ function LoadTabPosition()
             
             -- Only show tab if CharacterFrame is shown
             if isCharacterFrameShown then
-                if isTBC and Tab.squareFrame then
+                if not isHardcoreActive and Tab.squareFrame then
                     Tab.squareFrame:Show()
                 else
                     Tab:Show()
