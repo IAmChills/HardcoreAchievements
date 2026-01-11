@@ -15,6 +15,7 @@ end
 
 -- Helper function to check if an achievement is visible (not filtered out)
 -- Made global so it can be used in other achievement files
+-- This checks filter state directly from database, so it works even if panel hasn't been opened yet
 function _G.HCA_IsAchievementVisible(achId)
     if not achId or not _G.AchievementPanel or not _G.AchievementPanel.achievements then
         return false
@@ -23,8 +24,53 @@ function _G.HCA_IsAchievementVisible(achId)
     for _, row in ipairs(_G.AchievementPanel.achievements) do
         local rowId = row.id or row.achId
         if rowId and tostring(rowId) == tostring(achId) then
-            -- Check if row is visible (shown and not hidden by filters)
-            return row:IsShown() and not row.hiddenByProfession and not (row.hiddenUntilComplete and not row.completed)
+            -- Check filter flags first
+            if row.hiddenByProfession then
+                return false
+            end
+            if row.hiddenUntilComplete and not row.completed then
+                return false
+            end
+            
+            -- Check checkbox filter state for variations (same logic as ApplyFilter/ShouldShowByCheckboxFilter)
+            -- This works even if the panel hasn't been opened and filter hasn't been applied yet
+            if row._def and row._def.isVariation and row._def.variationType then
+                local checkboxStates = { false, false, false, false, false, false, false }
+                if type(HardcoreAchievements_GetCharDB) == "function" then
+                    local _, cdb = HardcoreAchievements_GetCharDB()
+                    if cdb and cdb.settings and cdb.settings.filterCheckboxes then
+                        local states = cdb.settings.filterCheckboxes
+                        if type(states) == "table" then
+                            checkboxStates = {
+                                states[1] == true,  -- Trio
+                                states[2] == true,  -- Duo
+                                states[3] == true,  -- Solo
+                                states[4] == true,  -- Dungeon Sets
+                                states[5] == true,  -- Reputations
+                                states[6] == true,  -- Raids
+                                states[7] == true,  -- Heroic Dungeons
+                            }
+                        end
+                    end
+                end
+                
+                local shouldShow = false
+                if row._def.variationType == "Trio" then
+                    shouldShow = checkboxStates[1]
+                elseif row._def.variationType == "Duo" then
+                    shouldShow = checkboxStates[2]
+                elseif row._def.variationType == "Solo" then
+                    shouldShow = checkboxStates[3]
+                end
+                
+                -- Completed achievements always show (same as ShouldShowByCheckboxFilter logic)
+                if not shouldShow and not row.completed then
+                    return false
+                end
+            end
+            
+            -- If we got here, row passes filter checks - use IsShown() as final check
+            return row:IsShown()
         end
     end
     

@@ -9,6 +9,10 @@ local RefreshOutleveledAll
 local ProfessionTracker = _G.HCA_ProfessionCommon
 local QuestTrackedRows = {}
 
+-- Flag to track when achievement restorations from DB are complete
+-- Must be declared early so CheckPendingCompletions and EvaluateCustomCompletions can access it
+local restorationsComplete = false
+
 -- Achievement function registry to reduce global pollution
 local AchievementFunctionRegistry = {}
 
@@ -258,8 +262,15 @@ local function IsRowOutleveled(row)
         if cdb and cdb.achievements and cdb.achievements[achId] and cdb.achievements[achId].completed then
             return false -- Achievement is completed in database, never mark as failed
         end
+        
+        -- Level milestone achievements (Level10, Level20, etc.) should never be marked as failed
+        -- They're about "reaching" a level, not "completing by" a level
+        if IsLevelMilestone(achId) then
+            return false
+        end
     end
     
+    -- Achievements with no level restriction (maxLevel is nil) should never be marked as failed
     if not row.maxLevel then return false end
     
     local lvl = UnitLevel("player") or 1
@@ -906,12 +917,28 @@ function CheckPendingCompletions()
         return
     end
 
+    -- Get current player level for level milestone achievements
+    local currentLevel = UnitLevel("player") or 1
+
     for _, row in ipairs(AchievementPanel.achievements) do
         if not row.completed then
-            local id = row.id
-            local fn = _G[id .. "_IsCompleted"]
-            if type(fn) == "function" and fn() then
-                HCA_MarkRowCompleted(row)
+            -- Check row.customIsCompleted first (most common for milestone/profession achievements)
+            local fn = row.customIsCompleted
+            if type(fn) ~= "function" then
+                -- Fall back to global function
+                local id = row.id or row.achId
+                if id then
+                    fn = _G[id .. "_IsCompleted"]
+                end
+            end
+            
+            if type(fn) == "function" then
+                -- Pass current level to support level milestone achievements that accept newLevel parameter
+                local ok, result = pcall(fn, currentLevel)
+                if ok and result == true then
+                    HCA_MarkRowCompleted(row)
+                    HCA_AchToast_Show(row.Icon and row.Icon:GetTexture() or 136116, row.Title and row.Title:GetText() or "Achievement", row.points or 0, row)
+                end
             end
         end
     end
@@ -1398,8 +1425,12 @@ local function SetProgress(achId, key, value)
     cdb.progress[achId] = p
 
     C_Timer.After(0, function()
-        CheckPendingCompletions()
-        RefreshOutleveledAll()
+        -- Only check if restorations are complete (this is called during gameplay, not initial login)
+        -- During initial login, the RunHeavyOperations flow will handle completion checks
+        if restorationsComplete then
+            CheckPendingCompletions()
+            RefreshOutleveledAll()
+        end
     end)
 end
 
@@ -1585,19 +1616,66 @@ initFrame:SetScript("OnEvent", function(self, event, ...)
     end
 end)
 
--- Function to show welcome message popup on first login
+-- Function to show welcome message popup on first login or when version changes
 function addon:ShowWelcomeMessage()
+    local WELCOME_MESSAGE_NUMBER = 2
     local db = EnsureDB()
     db.settings = db.settings or {}
-    if not db.settings.showWelcomeMessage then
-        StaticPopup_Show("Hardcore Achievements")
-        db.settings.showWelcomeMessage = true
+    
+    -- Migrate old boolean flag to version system
+    if db.settings.showWelcomeMessage == true and not db.settings.welcomeMessageVersion then
+        -- User has already seen the welcome message with old system, set to current version
+        db.settings.welcomeMessageVersion = WELCOME_MESSAGE_NUMBER
+        -- Clean up old flag (optional, for cleanliness)
+        db.settings.showWelcomeMessage = nil
+    end
+    
+    local storedVersion = db.settings.welcomeMessageVersion or 0
+    
+    -- Show message if stored version is less than current version
+    if storedVersion < WELCOME_MESSAGE_NUMBER then
+        if GetExpansionLevel() > 0 then
+            --StaticPopup_Show("Hardcore Achievements TBC")
+        else
+            StaticPopup_Show("Hardcore Achievements Vanilla 2")
+        end
+        db.settings.welcomeMessageVersion = WELCOME_MESSAGE_NUMBER
     end
 end
 
 -- Define the welcome message popup
-StaticPopupDialogs["Hardcore Achievements"] = {
+StaticPopupDialogs["Hardcore Achievements Vanilla"] = {
     text = "|cff69adc9Hardcore Achievements|r\n\nIf you intend to progress into |cff00ff00The Burning Crusade|r and continue using Hardcore Achievements, it is highly recommended you backup your Hardcore Achievements database before pre patch in case of data loss.\n\nThere is a new backup and restore feature in the options panel.",
+    button1 = "Got it!",
+    button2 = "Show Me!",
+    timeout = 0,
+    whileDead = true,
+    hideOnEscape = true,
+    preferredIndex = 3,
+    OnAccept = function()
+    end,
+    OnCancel = function()
+        OpenOptionsPanel()
+    end,
+}
+
+StaticPopupDialogs["Hardcore Achievements Vanilla 2"] = {
+    text = "|cff69adc9Hardcore Achievements|r\n\nDungeon related achievements have been redesigned and now require all party members to meet the level requirement at entry. Leveling up inside the dungeon is allowed, but leaving and re-entering if overleveled disqualifies the group.\n\nPlease report any issues you encounter.",
+    button1 = "OK",
+    timeout = 0,
+    whileDead = true,
+    hideOnEscape = true,
+    preferredIndex = 3,
+    OnAccept = function()
+        StaticPopup_Show("Hardcore Achievements Vanilla")
+    end,
+    OnCancel = function()
+        StaticPopup_Show("Hardcore Achievements Vanilla")
+    end,
+}
+
+StaticPopupDialogs["Hardcore Achievements TBC"] = {
+    text = "|cff69adc9Hardcore Achievements|r\n\nDungeon related achievements have been redesigned.\n\nDungeon achievements require all party members to meet the level requirement at entry. Leveling up inside the dungeon is allowed, but leaving and re-entering if overleveled disqualifies the group.\n\nPlease report any issues you encounter.",
     button1 = "Got it!",
     button2 = "Show Me!",
     timeout = 0,
@@ -1609,12 +1687,6 @@ StaticPopupDialogs["Hardcore Achievements"] = {
     end,
     OnCancel = function()
         OpenOptionsPanel()
-        -- Open backup/restore window after a short delay to ensure options panel is loaded
-        -- C_Timer.After(0.1, function()
-        --     if HardcoreAchievements_ShowBackupRestore then
-        --         HardcoreAchievements_ShowBackupRestore()
-        --     end
-        -- end)
     end,
 }
 
@@ -2872,7 +2944,9 @@ EvaluateCustomCompletions = function(newLevel)
         return
     end
 
+    local level = newLevel or UnitLevel("player") or 1
     local anyCompleted = false
+    
     for _, row in ipairs(AchievementPanel.achievements) do
         if not row.completed then
             local fn = row.customIsCompleted
@@ -2884,7 +2958,7 @@ EvaluateCustomCompletions = function(newLevel)
             end
 
             if type(fn) == "function" then
-                local ok, result = pcall(fn, newLevel)
+                local ok, result = pcall(fn, level)
                 if ok and result == true then
                     HCA_MarkRowCompleted(row)
                     HCA_AchToast_Show(row.Icon:GetTexture(), row.Title:GetText(), row.points, row)
@@ -3885,7 +3959,7 @@ end)
 -- Deferred Achievement Registration System
 -- Processes queued achievements on PLAYER_LOGIN with C_Timer chains
 -- =========================================================
-local restorationsComplete = false
+-- restorationsComplete is declared at the top of the file for scope access
 do
     local registrationFrame = CreateFrame("Frame")
     local registrationIndex = 1
@@ -3916,10 +3990,19 @@ do
             restorationsComplete = true
             
             C_Timer.After(0.1, function()
+                -- First, check pending completions (including customIsCompleted achievements)
                 if CheckPendingCompletions then
                     CheckPendingCompletions()
                 end
+                -- Also evaluate custom completions (handles both row.customIsCompleted and global functions)
+                -- This is especially important for level milestones which can be completed at any level
+                if EvaluateCustomCompletions then
+                    local currentLevel = UnitLevel("player") or 1
+                    EvaluateCustomCompletions(currentLevel)
+                end
                 
+                -- Refresh outleveled status AFTER checking completions
+                -- This ensures level milestones and profession achievements are marked complete before checking if they're "failed"
                 C_Timer.After(0.1, function()
                     if RefreshOutleveledAll then
                         RefreshOutleveledAll()
@@ -3944,8 +4027,11 @@ do
                     end)
                 end)
             end)
+            
+            -- Print "All achievements loaded!" after restorations are marked complete
+            -- but before scheduling the completion checks
+            print("|cff69adc9[Hardcore Achievements]|r |cffffd100All achievements loaded!|r")
         end)
-        print("|cff69adc9[Hardcore Achievements]|r |cffffffffAll achievements loaded!|r")
     end
 
     -- Process achievement registration in small batches to avoid blocking

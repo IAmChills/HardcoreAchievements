@@ -15,6 +15,28 @@ local COMM_PREFIX = "HCA_Admin_Cmd" -- AceComm prefix for admin commands
 local RESPONSE_PREFIX = "HCA_Admin_Resp" -- AceComm prefix for responses (max 16 chars)
 local MAX_PAYLOAD_AGE = 300 -- 5 minutes in seconds
 
+-- Debug system: Helper functions for debug messages
+local function GetDebugEnabled()
+    if not HardcoreAchievementsDB then
+        HardcoreAchievementsDB = {}
+    end
+    return HardcoreAchievementsDB.debugEnabled or false
+end
+
+local function SetDebugEnabled(enabled)
+    if not HardcoreAchievementsDB then
+        HardcoreAchievementsDB = {}
+    end
+    HardcoreAchievementsDB.debugEnabled = enabled and true or false
+end
+
+-- Global debug print function (exported)
+function _G.HCA_DebugPrint(message)
+    if GetDebugEnabled() then
+        print("|cff69adc9[HCA DEBUG]|r |cffffd100" .. tostring(message) .. "|r")
+    end
+end
+
 -- SECURITY: Get admin secret key from database (set by admin via slash command)
 -- This key is NOT in source code and must be set by the admin
 local function GetAdminSecretKey()
@@ -692,11 +714,32 @@ local function HandleSlashCommand(msg)
             print("  |cffffff00/hca tracker hide|r - Hide the achievement tracker")
             print("  |cffffff00/hca tracker toggle|r - Toggle the achievement tracker")
         end
+    elseif command == "debug" then
+        -- Debug toggle command
+        if args[2] and string.lower(args[2]) == "on" then
+            SetDebugEnabled(true)
+            print("|cff00ff00[Hardcore Achievements]|r Debug mode enabled")
+            _G.HCA_DebugPrint("Debug mode is now ON - you will see debug messages")
+        elseif args[2] and string.lower(args[2]) == "off" then
+            SetDebugEnabled(false)
+            print("|cff00ff00[Hardcore Achievements]|r Debug mode disabled")
+        else
+            -- Toggle if no argument provided
+            local currentState = GetDebugEnabled()
+            SetDebugEnabled(not currentState)
+            if not currentState then
+                print("|cff00ff00[Hardcore Achievements]|r Debug mode enabled")
+                _G.HCA_DebugPrint("Debug mode is now ON - you will see debug messages")
+            else
+                print("|cff00ff00[Hardcore Achievements]|r Debug mode disabled")
+            end
+        end
     else
         print("|cff00ff00[Hardcore Achievements]|r Available commands:")
         print("  |cffffff00/hca show|r - Enable and show the custom achievement tab")
         print("  |cffffff00/hca reset tab|r - Reset the tab position to default")
         print("  |cffffff00/hca tracker|r - Manage the achievement tracker")
+        print("  |cffffff00/hca debug|r - Toggle debug mode (on/off)")
         --print("  |cffffff00/hca adminkey|r - Manage admin secret key for secure commands")
     end
 end
