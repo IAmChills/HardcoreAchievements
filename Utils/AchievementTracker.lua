@@ -1880,7 +1880,7 @@ function AchievementTracker:TrackAchievement(achievementId, title)
     end
 
     if count >= 10 and not trackedAchievements[achievementId] then
-        print("|cff69adc9[Hardcore Achievements]|r You may only track 10 achievements at a time.")
+        print("|cff11806a[Hardcore Achievements]|r You may only track 10 achievements at a time.")
         return
     end
 

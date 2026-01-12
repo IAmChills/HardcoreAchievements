@@ -33,7 +33,7 @@ end
 -- Global debug print function (exported)
 function _G.HCA_DebugPrint(message)
     if GetDebugEnabled() then
-        print("|cff69adc9[HCA DEBUG]|r |cffffd100" .. tostring(message) .. "|r")
+        print("|cff11806a[HCA DEBUG]|r |cffffd100" .. tostring(message) .. "|r")
     end
 end
 

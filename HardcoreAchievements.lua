@@ -34,6 +34,56 @@ _G.HardcoreAchievements_RegisterAchievementFunction = RegisterAchievementFunctio
 _G.HardcoreAchievements_GetAchievementFunction = GetAchievementFunction
 
 -- =========================================================
+-- Hook System for Addon Integration
+-- =========================================================
+-- Allows other addons to register callbacks for achievement events
+-- 
+-- Usage example for other addons:
+--   if HardcoreAchievements_Hooks then
+--       HardcoreAchievements_Hooks:HookScript("OnAchievement", function(achievementData)
+--           -- achievementData contains:
+--           --   achievementId: string - The achievement ID
+--           --   title: string - The achievement title
+--           --   points: number - Points awarded for this achievement
+--           --   completedAt: number - Timestamp of completion
+--           --   level: number - Player level at completion
+--           --   wasSolo: boolean - Whether it was completed solo
+--           --   completedCount: number - Total number of completed achievements (after this one)
+--           --   totalCount: number - Total number of achievements
+--           --   totalPoints: number - Total points across all completed achievements (after this one)
+--       end)
+--   end
+local HookSystem = {
+    hooks = {}
+}
+
+-- Register callback
+function HookSystem:HookScript(eventName, callback)
+    if type(eventName) ~= "string" or type(callback) ~= "function" then
+        return
+    end
+    self.hooks[eventName] = self.hooks[eventName] or {}
+    table.insert(self.hooks[eventName], callback)
+end
+
+-- Fire event
+function HookSystem:FireEvent(eventName, ...)
+    local eventHooks = self.hooks[eventName]
+    if not eventHooks then return end
+    
+    for _, callback in ipairs(eventHooks) do
+        local success, err = pcall(callback, ...)
+        if not success then
+            -- Log error
+            HCA_DebugPrint("Error in hook callback: " .. tostring(err))
+        end
+    end
+end
+
+-- Expose hook system
+_G.HardcoreAchievements_Hooks = HookSystem
+
+-- =========================================================
 -- Self-Found points bonus
 -- =========================================================
 -- New rule: bonus = +0.5x the achievement's BASE points (before multipliers/solo doubling), rounded to nearest integer.
@@ -137,13 +187,13 @@ local function CleanupIncorrectLevelAchievements()
     
     -- Log cleanup if any achievements were removed
     if cleanedCount > 0 then
-        local message = "|cff69adc9[Hardcore Achievements]|r |cffffd100Cleaned up " .. cleanedCount .. " incorrectly completed achievement(s):|r"
+        local message = "|cff11806a[Hardcore Achievements]|r |cffffd100Cleaned up " .. cleanedCount .. " incorrectly completed achievement(s):|r"
         print(message)
         for _, cleaned in ipairs(cleanedAchievements) do
             print(string.format("  |cffffd100- %s (completed at level %d, required level %d)|r", 
                 cleaned.achId, cleaned.completionLevel, cleaned.requiredLevel))
         end
-        print("|cffffd100I am chasing a weird bug, thank you for your patience. - |r|cff69adc9Chills|r")
+        --print("|cffffd100I am chasing a weird bug, thank you for your patience. - |r|cff11806aChills|r")
     end
     
     return cleanedCount
@@ -856,6 +906,26 @@ function HCA_MarkRowCompleted(row, cdbParam)
 
         ClearProgress(id)
         HCA_UpdateTotalPoints()
+        
+        -- Fire hook event for other addons
+        if _G.HardcoreAchievements_Hooks then
+            -- Get aggregate statistics (after completion, so counts are up-to-date)
+            local completedCount, totalCount = HCA_AchievementCount()
+            local totalPoints = HCA_GetTotalPoints()
+            
+            local achievementData = {
+                achievementId = id,
+                title = row.Title and row.Title:GetText() or nil,
+                points = finalPoints,
+                completedAt = rec.completedAt,
+                level = rec.level,
+                wasSolo = wasSolo,
+                completedCount = completedCount,
+                totalCount = totalCount,
+                totalPoints = totalPoints
+            }
+            _G.HardcoreAchievements_Hooks:FireEvent("OnAchievement", achievementData)
+        end
     end
     
     -- Set Sub text with "Solo" indicator if achievement was completed solo
@@ -1659,7 +1729,7 @@ end
 
 -- Define the welcome message popup
 StaticPopupDialogs["Hardcore Achievements Vanilla"] = {
-    text = "|cff69adc9Hardcore Achievements|r\n\nIf you intend to progress into |cff00ff00The Burning Crusade|r and continue using Hardcore Achievements, it is highly recommended you backup your Hardcore Achievements database before pre patch in case of data loss.\n\nThere is a new backup and restore feature in the options panel.",
+    text = "|cff11806aHardcore Achievements|r\n\nIf you intend to progress into |cff00ff00The Burning Crusade|r and continue using Hardcore Achievements, it is highly recommended you backup your Hardcore Achievements database before pre patch in case of data loss.\n\nThere is a new backup and restore feature in the options panel.",
     button1 = "Got it!",
     button2 = "Show Me!",
     timeout = 0,
@@ -1674,7 +1744,7 @@ StaticPopupDialogs["Hardcore Achievements Vanilla"] = {
 }
 
 StaticPopupDialogs["Hardcore Achievements Vanilla 2"] = {
-    text = "|cff69adc9Hardcore Achievements|r\n\nDungeon related achievements have been redesigned and now require all party members to meet the level requirement at entry. Leveling up inside the dungeon is allowed, but leaving and re-entering if overleveled disqualifies the group.\n\nPlease report any issues you encounter.",
+    text = "|cff11806aHardcore Achievements|r\n\nDungeon related achievements have been redesigned and now require all party members to meet the level requirement at entry. Leveling up inside the dungeon is allowed, but leaving and re-entering if overleveled disqualifies the group.\n\nPlease report any issues you encounter.",
     button1 = "OK",
     timeout = 0,
     whileDead = true,
@@ -1689,7 +1759,7 @@ StaticPopupDialogs["Hardcore Achievements Vanilla 2"] = {
 }
 
 StaticPopupDialogs["Hardcore Achievements TBC"] = {
-    text = "|cff69adc9Hardcore Achievements|r\n\nDungeon related achievements have been redesigned.\n\nDungeon achievements require all party members to meet the level requirement at entry. Leveling up inside the dungeon is allowed, but leaving and re-entering if overleveled disqualifies the group.\n\nPlease report any issues you encounter.",
+    text = "|cff11806aHardcore Achievements|r\n\nDungeon related achievements have been redesigned.\n\nDungeon achievements require all party members to meet the level requirement at entry. Leveling up inside the dungeon is allowed, but leaving and re-entering if overleveled disqualifies the group.\n\nPlease report any issues you encounter.",
     button1 = "Got it!",
     button2 = "Show Me!",
     timeout = 0,
@@ -2850,7 +2920,7 @@ function CreateAchievementRow(parent, achId, title, tooltip, icon, level, points
                 -- Chat edit box is NOT active: track/untrack achievement
                 local AchievementTracker = GetAchievementTracker()
                 if not AchievementTracker then
-                    print("|cffff0000[Hardcore Achievements]|r Achievement tracker not available. Please reload your UI (/reload).")
+                    print("|cff11806a[Hardcore Achievements]|r Achievement tracker not available. Please reload your UI (/reload).")
                     return
                 end
                 
@@ -2866,10 +2936,10 @@ function CreateAchievementRow(parent, achId, title, tooltip, icon, level, points
                 
                 if isTracked then
                     AchievementTracker:UntrackAchievement(achId)
-                    --print("|cff69adc9[Hardcore Achievements]|r Stopped tracking: " .. title)
+                    --print("|cff11806a[Hardcore Achievements]|r Stopped tracking: " .. title)
                 else
                     AchievementTracker:TrackAchievement(achId, title)
-                    --print("|cff69adc9[Hardcore Achievements]|r Now tracking: " .. title)
+                    --print("|cff11806a[Hardcore Achievements]|r Now tracking: " .. title)
                 end
             end
         end
@@ -4053,7 +4123,7 @@ do
             
             -- Print "All achievements loaded!" after restorations are marked complete
             -- but before scheduling the completion checks
-            print("|cff69adc9[Hardcore Achievements]|r |cffffd100All achievements loaded!|r")
+            print("|cff11806a[Hardcore Achievements]|r |cffffd100All achievements loaded!|r")
         end)
     end
 
@@ -4074,10 +4144,10 @@ do
             if type(registerFunc) == "function" then
                 local success, err = pcall(registerFunc)
                 if not success then
-                    print("|cff69adc9[Hardcore Achievements]|r |cffff0000Error registering achievement: " .. tostring(err) .. "|r")
+                    print("|cff11806a[Hardcore Achievements]|r |cffff0000Error registering achievement: " .. tostring(err) .. "|r")
                 end
             end
-            --print("|cff69adc9[Hardcore Achievements]|r |cffffffffProcessing achievement: " .. tostring(registerFunc) .. "|r")
+            --print("|cff11806a[Hardcore Achievements]|r |cffffffffProcessing achievement: " .. tostring(registerFunc) .. "|r")
             registrationIndex = registrationIndex + 1
             processed = processed + 1
         end
