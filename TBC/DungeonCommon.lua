@@ -86,9 +86,9 @@ local function CheckAndPrintEligibilityMessages(mapId, entryData)
                 if not isCompleted and not isFailed then
                     local isEligible = CheckAchievementEligibility(mapId, achDef, entryData)
                     if isEligible then
-                        print("|cff11806a[Hardcore Achievements]|r |cff00ff00Group is eligible for achievement: " .. (achDef.title or achDef.mapName or "Unknown") .. "|r")
+                        print("|cff008066[Hardcore Achievements]|r |cff00ff00Group is eligible for achievement: " .. (achDef.title or achDef.mapName or "Unknown") .. "|r")
                     else
-                        print("|cff11806a[Hardcore Achievements]|r |cffff0000Group is not eligible for achievement: " .. (achDef.title or achDef.mapName or "Unknown") .. "|r")
+                        print("|cff008066[Hardcore Achievements]|r |cffff0000Group is not eligible for achievement: " .. (achDef.title or achDef.mapName or "Unknown") .. "|r")
                     end
                 end
             end
@@ -1221,7 +1221,7 @@ function DungeonCommon.registerDungeonAchievement(def)
           
           SaveProgress() -- Save progress after each eligible kill
           UpdateTooltip() -- Update tooltip to show progress
-          print("|cff11806a[Hardcore Achievements]|r |cffffd100" .. HCA_GetBossName(npcId) .. " killed as part of achievement: " .. title .. "|r")
+          print("|cff008066[Hardcore Achievements]|r |cffffd100" .. HCA_GetBossName(npcId) .. " killed as part of achievement: " .. title .. "|r")
         else
           -- Group is ineligible - don't count this kill
           -- Player can return later with an eligible group to kill this boss
@@ -1229,7 +1229,7 @@ function DungeonCommon.registerDungeonAchievement(def)
           local progress = HardcoreAchievements_GetProgress(achId)
           local isStillAvailable = not state.completed and not (progress and progress.failed)
           if isStillAvailable and _G.HCA_IsAchievementVisible and _G.HCA_IsAchievementVisible(achId) then
-            print("|cff11806a[Hardcore Achievements]|r |cffffd100" .. HCA_GetBossName(npcId) .. " killed but group is ineligible - kill not counted for achievement: " .. title .. "|r")
+            print("|cff008066[Hardcore Achievements]|r |cffffd100" .. HCA_GetBossName(npcId) .. " killed but group is ineligible - kill not counted for achievement: " .. title .. "|r")
           end
         end
       end

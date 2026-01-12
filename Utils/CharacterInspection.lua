@@ -1112,7 +1112,7 @@ function CharacterInspection.CreateInspectionAchievementRow(parent, achId, title
         end
         if achievementData.wasSolo then
             local base = row._defaultSubText or ""
-            local soloText = "|cff11806aSolo|r"
+            local soloText = "|cff008066Solo|r"
             if base ~= "" then
                 row.Sub:SetText(base .. "\n" .. soloText)
             else

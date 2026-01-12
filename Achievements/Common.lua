@@ -693,7 +693,7 @@ function M.registerQuestAchievement(cfg)
                 
                 -- Only print message if the achievement is visible (not filtered out)
                 if isAchievementVisible(ACH_ID) then
-                    print("|cff11806a[Hardcore Achievements]|r |cffffd100Achievement " .. (ACH_ID or "Unknown") .. " cannot be fulfilled: An ineligible player contributed.|r")
+                    print("|cff008066[Hardcore Achievements]|r |cffffd100Achievement " .. (ACH_ID or "Unknown") .. " cannot be fulfilled: An ineligible player contributed.|r")
                 end
                 
                 -- Track the kill progress, but mark as ineligible (don't increment eligible counts)

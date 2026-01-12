@@ -187,13 +187,13 @@ local function CleanupIncorrectLevelAchievements()
     
     -- Log cleanup if any achievements were removed
     if cleanedCount > 0 then
-        local message = "|cff11806a[Hardcore Achievements]|r |cffffd100Cleaned up " .. cleanedCount .. " incorrectly completed achievement(s):|r"
+        local message = "|cff008066[Hardcore Achievements]|r |cffffd100Cleaned up " .. cleanedCount .. " incorrectly completed achievement(s):|r"
         print(message)
         for _, cleaned in ipairs(cleanedAchievements) do
             print(string.format("  |cffffd100- %s (completed at level %d, required level %d)|r", 
                 cleaned.achId, cleaned.completionLevel, cleaned.requiredLevel))
         end
-        --print("|cffffd100I am chasing a weird bug, thank you for your patience. - |r|cff11806aChills|r")
+        --print("|cffffd100I am chasing a weird bug, thank you for your patience. - |r|cff008066Chills|r")
     end
     
     return cleanedCount
@@ -1727,7 +1727,7 @@ end
 
 -- Define the welcome message popup
 StaticPopupDialogs["Hardcore Achievements Vanilla"] = {
-    text = "|cff11806aHardcore Achievements|r\n\nIf you intend to progress into |cff00ff00The Burning Crusade|r and continue using Hardcore Achievements, it is highly recommended you backup your Hardcore Achievements database before pre patch in case of data loss.\n\nThere is a new backup and restore feature in the options panel.",
+    text = "|cff008066Hardcore Achievements|r\n\nIf you intend to progress into |cff00ff00The Burning Crusade|r and continue using Hardcore Achievements, it is highly recommended you backup your Hardcore Achievements database before pre patch in case of data loss.\n\nThere is a new backup and restore feature in the options panel.",
     button1 = "Got it!",
     button2 = "Show Me!",
     timeout = 0,
@@ -1742,7 +1742,7 @@ StaticPopupDialogs["Hardcore Achievements Vanilla"] = {
 }
 
 StaticPopupDialogs["Hardcore Achievements Vanilla 2"] = {
-    text = "|cff11806aHardcore Achievements|r\n\nDungeon related achievements have been redesigned and now require all party members to meet the level requirement at entry. Leveling up inside the dungeon is allowed, but leaving and re-entering if overleveled disqualifies the group.\n\nPlease report any issues you encounter.",
+    text = "|cff008066Hardcore Achievements|r\n\nDungeon related achievements have been redesigned and now require all party members to meet the level requirement at entry. Leveling up inside the dungeon is allowed, but leaving and re-entering if overleveled disqualifies the group.\n\nPlease report any issues you encounter.",
     button1 = "OK",
     timeout = 0,
     whileDead = true,
@@ -1757,7 +1757,7 @@ StaticPopupDialogs["Hardcore Achievements Vanilla 2"] = {
 }
 
 StaticPopupDialogs["Hardcore Achievements TBC"] = {
-    text = "|cff11806aHardcore Achievements|r\n\nDungeon related achievements have been redesigned.\n\nDungeon achievements require all party members to meet the level requirement at entry. Leveling up inside the dungeon is allowed, but leaving and re-entering if overleveled disqualifies the group.\n\nPlease report any issues you encounter.",
+    text = "|cff008066Hardcore Achievements|r\n\nDungeon related achievements have been redesigned.\n\nDungeon achievements require all party members to meet the level requirement at entry. Leveling up inside the dungeon is allowed, but leaving and re-entering if overleveled disqualifies the group.\n\nPlease report any issues you encounter.",
     button1 = "Got it!",
     button2 = "Show Me!",
     timeout = 0,
@@ -2919,7 +2919,7 @@ function CreateAchievementRow(parent, achId, title, tooltip, icon, level, points
                 -- Chat edit box is NOT active: track/untrack achievement
                 local AchievementTracker = GetAchievementTracker()
                 if not AchievementTracker then
-                    print("|cff11806a[Hardcore Achievements]|r Achievement tracker not available. Please reload your UI (/reload).")
+                    print("|cff008066[Hardcore Achievements]|r Achievement tracker not available. Please reload your UI (/reload).")
                     return
                 end
                 
@@ -2935,10 +2935,10 @@ function CreateAchievementRow(parent, achId, title, tooltip, icon, level, points
                 
                 if isTracked then
                     AchievementTracker:UntrackAchievement(achId)
-                    --print("|cff11806a[Hardcore Achievements]|r Stopped tracking: " .. title)
+                    --print("|cff008066[Hardcore Achievements]|r Stopped tracking: " .. title)
                 else
                     AchievementTracker:TrackAchievement(achId, title)
-                    --print("|cff11806a[Hardcore Achievements]|r Now tracking: " .. title)
+                    --print("|cff008066[Hardcore Achievements]|r Now tracking: " .. title)
                 end
             end
         end
@@ -4122,7 +4122,7 @@ do
             
             -- Print "All achievements loaded!" after restorations are marked complete
             -- but before scheduling the completion checks
-            print("|cff11806a[Hardcore Achievements]|r |cffffd100All achievements loaded!|r")
+            print("|cff008066[Hardcore Achievements]|r |cffffd100All achievements loaded!|r")
         end)
     end
 
@@ -4143,10 +4143,10 @@ do
             if type(registerFunc) == "function" then
                 local success, err = pcall(registerFunc)
                 if not success then
-                    print("|cff11806a[Hardcore Achievements]|r |cffff0000Error registering achievement: " .. tostring(err) .. "|r")
+                    print("|cff008066[Hardcore Achievements]|r |cffff0000Error registering achievement: " .. tostring(err) .. "|r")
                 end
             end
-            --print("|cff11806a[Hardcore Achievements]|r |cffffffffProcessing achievement: " .. tostring(registerFunc) .. "|r")
+            --print("|cff008066[Hardcore Achievements]|r |cffffffffProcessing achievement: " .. tostring(registerFunc) .. "|r")
             registrationIndex = registrationIndex + 1
             processed = processed + 1
         end
