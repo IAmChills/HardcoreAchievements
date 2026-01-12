@@ -794,7 +794,9 @@ local function ApplyOutleveledStyle(row)
         if row.maxLevel then
             row.Sub:SetText((LEVEL or "Level") .. " " .. row.maxLevel)
         else
-            row.Sub:SetText(AUCTION_TIME_LEFT0 or "")
+            -- For achievements without maxLevel (meta achievements), don't show "Completed!" when failed
+            local defaultText = row._defaultSubText
+            row.Sub:SetText(defaultText or "")
         end
     end
     

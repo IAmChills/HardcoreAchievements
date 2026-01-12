@@ -26,7 +26,14 @@ function RefreshAllAchievementPoints()
                 local staticPoints = row.staticPoints or false
                 local finalPoints = originalPoints
                 
-                if not staticPoints then
+                -- Check if we have stored pointsAtKill (solo kill/quest) - use those points first
+                local progress = HardcoreAchievements_GetProgress and HardcoreAchievements_GetProgress(rowId)
+                local hasStoredPoints = progress and progress.pointsAtKill
+                
+                if hasStoredPoints then
+                    -- Use stored points (already doubled if solo, includes multiplier if applicable)
+                    finalPoints = tonumber(progress.pointsAtKill) or finalPoints
+                elseif not staticPoints then
                     -- Apply preset multiplier (replaces base points)
                     local multiplier = (_G.GetPresetMultiplier and _G.GetPresetMultiplier(preset)) or 1.0
                     finalPoints = math.floor(originalPoints * multiplier + 0.5)
@@ -36,19 +43,21 @@ function RefreshAllAchievementPoints()
                     -- Solo preview applies: requires self-found if hardcore is active, otherwise solo is allowed
                     local isHardcoreActive = C_GameRules and C_GameRules.IsHardcoreActive and C_GameRules.IsHardcoreActive() or false
                     local allowSoloBonus = isSelfFound or not isHardcoreActive
-                    local progress = HardcoreAchievements_GetProgress and HardcoreAchievements_GetProgress(rowId)
-                    if isSoloMode and row.allowSoloDouble and allowSoloBonus and not (progress and progress.pointsAtKill) then
+                    if isSoloMode and row.allowSoloDouble and allowSoloBonus then
                         finalPoints = finalPoints * 2
                     end
                 end
                 
-                -- Apply self-found bonus: +0.5x base points (rounded), applied after multiplier/solo preview.
-                local isDungeonSet = row._def and row._def.isDungeonSet
-                -- Reputation achievements SHOULD receive the self-found bonus.
-                if isSelfFound and not row.isSecretAchievement and not isDungeonSet then
-                    local getBonus = _G.HCA_GetSelfFoundBonus
-                    local bonus = (type(getBonus) == "function") and getBonus(originalPoints) or 0
-                    finalPoints = finalPoints + bonus
+                -- Self-found bonus is NOT included in the preview - it's applied at completion time
+                -- Only add self-found bonus if we have stored pointsAtKill (for completed/in-progress achievements)
+                if hasStoredPoints then
+                    local isDungeonSet = row._def and row._def.isDungeonSet
+                    -- Reputation achievements SHOULD receive the self-found bonus.
+                    if isSelfFound and not row.isSecretAchievement and not isDungeonSet then
+                        local getBonus = _G.HCA_GetSelfFoundBonus
+                        local bonus = (type(getBonus) == "function") and getBonus(originalPoints) or 0
+                        finalPoints = finalPoints + bonus
+                    end
                 end
                 
                 row.points = finalPoints
@@ -60,28 +69,12 @@ function RefreshAllAchievementPoints()
                 -- Only update Sub text for incomplete achievements to preserve completed achievement solo indicators
                 if not row.completed and row.Sub and row.maxLevel and row.maxLevel > 0 then
                     local levelText = LEVEL .. " " .. row.maxLevel
-                    -- Check progress for solo status and ineligible status
-                    local progress = HardcoreAchievements_GetProgress and HardcoreAchievements_GetProgress(rowId)
-                local hasSoloStatus = progress and (progress.soloKill or progress.soloQuest)
-                local hasIneligibleKill = progress and progress.ineligibleKill
-                
-                -- If we have stored pointsAtKill (solo kill/quest), use those points
-                -- pointsAtKill doesn't include self-found bonus, so add it if applicable
-                if progress and progress.pointsAtKill then
-                    finalPoints = tonumber(progress.pointsAtKill) or finalPoints
-                    -- Add self-found bonus if applicable (pointsAtKill doesn't include it)
-                    local isDungeonSet = row._def and row._def.isDungeonSet
-                    -- Reputation achievements SHOULD receive the self-found bonus.
-                    if isSelfFound and not row.isSecretAchievement and not isDungeonSet then
-                        local getBonus = _G.HCA_GetSelfFoundBonus
-                        local bonus = (type(getBonus) == "function") and getBonus(originalPoints) or 0
-                        finalPoints = finalPoints + bonus
+                    -- Check progress for solo status and ineligible status (reuse progress from above)
+                    if not progress then
+                        progress = HardcoreAchievements_GetProgress and HardcoreAchievements_GetProgress(rowId)
                     end
-                    row.points = finalPoints
-                    if row.Points then
-                        row.Points:SetText(tostring(finalPoints))
-                    end
-                end
+                    local hasSoloStatus = progress and (progress.soloKill or progress.soloQuest)
+                    local hasIneligibleKill = progress and progress.ineligibleKill
                 
                 -- Use helper function to set status text
                 if _G.HCA_SetStatusTextOnRow then

@@ -427,8 +427,23 @@ function HCA_ShowAchievementTooltip(frame, data)
             end
             
             -- Check if required achievement is completed
+            -- First check progress database
             local reqProgress = _G.HardcoreAchievements_GetProgress and _G.HardcoreAchievements_GetProgress(reqAchId)
             local reqCompleted = reqProgress and reqProgress.completed
+            
+            -- Also check the row's completed status directly (for profession achievements and others)
+            if not reqCompleted and _G.AchievementPanel and _G.AchievementPanel.achievements then
+                for _, row in ipairs(_G.AchievementPanel.achievements) do
+                    local rowId = row.id or row.achId
+                    if rowId and tostring(rowId) == tostring(reqAchId) then
+                        if row.completed then
+                            reqCompleted = true
+                        end
+                        break
+                    end
+                end
+            end
+            
             local done = achievementCompleted or reqCompleted
             
             if done then

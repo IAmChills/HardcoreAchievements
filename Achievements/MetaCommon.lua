@@ -22,6 +22,11 @@ function MetaCommon.registerMetaAchievement(def)
     achievementOrder = achievementOrder,
     isMetaAchievement = true,
   }
+  
+  -- Meta achievements only allow solo bonuses when hardcore is active (self-found buff)
+  -- Set allowSoloDouble on def to control this behavior
+  local isHardcoreActive = C_GameRules and C_GameRules.IsHardcoreActive and C_GameRules.IsHardcoreActive() or false
+  def.allowSoloDouble = isHardcoreActive
 
   -- State for the current achievement session only
   local state = {
