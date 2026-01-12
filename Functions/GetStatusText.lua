@@ -40,9 +40,9 @@ local function GetStatusText(params)
         end
     end
     
-    -- In TBC, solo bonuses are allowed even without Self-Found buff
-    local isTBC = GetExpansionLevel() > 0
-    local allowSoloBonus = isSelfFound or isTBC
+    -- Solo bonuses: require self-found if hardcore is active, otherwise solo is allowed
+    local isHardcoreActive = C_GameRules and C_GameRules.IsHardcoreActive and C_GameRules.IsHardcoreActive() or false
+    local allowSoloBonus = isSelfFound or not isHardcoreActive
     
     if completed and wasSolo and allowSoloBonus then
         return "|c" .. select(4, GetClassColor(select(2, UnitClass("player")))) .. "Solo|r"

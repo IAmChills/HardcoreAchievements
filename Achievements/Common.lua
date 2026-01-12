@@ -209,10 +209,10 @@ function M.registerQuestAchievement(cfg)
                 
                 if not existingPointsAtKill then
                     -- No existing pointsAtKill, check if quest completion was solo (check at time of topUp)
-                    -- Solo points apply if player is self-found (Classic) or in TBC
+                    -- Solo points apply: requires self-found if hardcore is active, otherwise solo is allowed
                     local isSelfFound = _G.IsSelfFound and _G.IsSelfFound() or false
-                    local isTBC = GetExpansionLevel() > 0
-                    local allowSoloBonus = isSelfFound or isTBC
+                    local isHardcoreActive = C_GameRules and C_GameRules.IsHardcoreActive and C_GameRules.IsHardcoreActive() or false
+                    local allowSoloBonus = isSelfFound or not isHardcoreActive
                     local isSoloQuest = allowSoloBonus and (_G.PlayerIsSolo and _G.PlayerIsSolo() or false) or false
                     
                     if AchievementPanel and AchievementPanel.achievements then
@@ -499,10 +499,10 @@ function M.registerQuestAchievement(cfg)
         end
         topUpFromServer()
         -- Check if we have solo status from previous kills/quests and update UI
-        -- Solo indicators show if player is self-found (Classic) or in TBC
+        -- Solo indicators show: requires self-found if hardcore is active, otherwise solo is allowed
         local isSelfFound = _G.IsSelfFound and _G.IsSelfFound() or false
-        local isTBC = GetExpansionLevel() > 0
-        local allowSoloBonus = isSelfFound or isTBC
+        local isHardcoreActive = C_GameRules and C_GameRules.IsHardcoreActive and C_GameRules.IsHardcoreActive() or false
+        local allowSoloBonus = isSelfFound or not isHardcoreActive
         if p and (p.soloKill or p.soloQuest) and allowSoloBonus then
             if AchievementPanel and AchievementPanel.achievements then
                 for _, row in ipairs(AchievementPanel.achievements) do
@@ -900,11 +900,11 @@ function M.registerQuestAchievement(cfg)
                 return checkComplete()
             else
                 -- TARGET_NPC_ID: track kill normally (eligible kill)
-                -- Solo points apply if player is self-found (Classic) or in TBC
+                -- Solo points apply: requires self-found if hardcore is active, otherwise solo is allowed
                 -- Use stored solo status from combat tracking (more accurate than checking at kill time)
                 local isSelfFound = _G.IsSelfFound and _G.IsSelfFound() or false
-                local isTBC = GetExpansionLevel() > 0
-                local allowSoloBonus = isSelfFound or isTBC
+                local isHardcoreActive = C_GameRules and C_GameRules.IsHardcoreActive and C_GameRules.IsHardcoreActive() or false
+                local allowSoloBonus = isSelfFound or not isHardcoreActive
                 local storedSoloStatus = nil
                 if destGUID and _G.PlayerIsSoloForGUID then
                     storedSoloStatus = _G.PlayerIsSoloForGUID(destGUID)
@@ -1212,10 +1212,10 @@ function M.registerQuestAchievement(cfg)
             
             if not existingPointsAtKill then
                 -- No existing pointsAtKill, check if quest completion was solo
-                -- Solo points apply if player is self-found (Classic) or in TBC
+                -- Solo points apply: requires self-found if hardcore is active, otherwise solo is allowed
                 local isSelfFound = _G.IsSelfFound and _G.IsSelfFound() or false
-                local isTBC = GetExpansionLevel() > 0
-                local allowSoloBonus = isSelfFound or isTBC
+                local isHardcoreActive = C_GameRules and C_GameRules.IsHardcoreActive and C_GameRules.IsHardcoreActive() or false
+                local allowSoloBonus = isSelfFound or not isHardcoreActive
                 local isSoloQuest = allowSoloBonus and (_G.PlayerIsSolo and _G.PlayerIsSolo() or false) or false
                 
                 if AchievementPanel and AchievementPanel.achievements then
@@ -1301,10 +1301,10 @@ function M.registerQuestAchievement(cfg)
                 else
                     -- We have existing pointsAtKill from NPC kill, preserve it
                     -- But still update solo status if quest was solo (for indicator purposes)
-                    -- Solo points apply if player is self-found (Classic) or in TBC
+                    -- Solo points apply: requires self-found if hardcore is active, otherwise solo is allowed
                     local isSelfFound = _G.IsSelfFound and _G.IsSelfFound() or false
-                    local isTBC = GetExpansionLevel() > 0
-                    local allowSoloBonus = isSelfFound or isTBC
+                    local isHardcoreActive = C_GameRules and C_GameRules.IsHardcoreActive and C_GameRules.IsHardcoreActive() or false
+                    local allowSoloBonus = isSelfFound or not isHardcoreActive
                     local isSoloQuest = allowSoloBonus and (_G.PlayerIsSolo and _G.PlayerIsSolo() or false) or false
                     if isSoloQuest then
                     -- Update solo quest status and indicator (only if not completed)

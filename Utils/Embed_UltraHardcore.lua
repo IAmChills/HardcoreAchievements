@@ -1762,15 +1762,15 @@ function EMBED:Rebuild()
       local isChecked = (cdb and cdb.settings and cdb.settings.soloAchievements) or false
       UHCA.SoloModeCheckbox:SetChecked(isChecked)
       
-      local isTBC = GetExpansionLevel() > 0
-      if isTBC then
-        -- In TBC, checkbox is always enabled (Self-Found not available)
+      local isHardcoreActive = C_GameRules and C_GameRules.IsHardcoreActive and C_GameRules.IsHardcoreActive() or false
+      if not isHardcoreActive then
+        -- In Hardcore mode, checkbox is always enabled (Self-Found not available)
         UHCA.SoloModeCheckbox:Enable()
         UHCA.SoloModeCheckbox.Text:SetTextColor(0.922, 0.871, 0.761, 1)
         UHCA.SoloModeCheckbox.Text:SetText("Solo")
         UHCA.SoloModeCheckbox.tooltip = "|cffffffffSolo|r \nToggling this option on will display the total points you will receive if you complete this achievement solo (no help from nearby players)."
       else
-        -- In Classic, checkbox is only enabled if Self-Found is active
+        -- In Non-Hardcore mode, checkbox is only enabled if Self-Found is active
         local isSelfFound = _G.IsSelfFound and _G.IsSelfFound() or false
         if isSelfFound then
           UHCA.SoloModeCheckbox:Enable()
@@ -2131,7 +2131,8 @@ local function BuildEmbedIfNeeded()
     UHCA.SoloModeCheckbox:SetSize(10, 10)
     UHCA.SoloModeCheckbox:SetFrameLevel(19)
     -- In TBC, use "Solo" instead of "SSF"
-    if GetExpansionLevel() > 0 then
+    local isHardcoreActive = C_GameRules and C_GameRules.IsHardcoreActive and C_GameRules.IsHardcoreActive() or false
+    if not isHardcoreActive then
       UHCA.SoloModeCheckbox.Text:SetText("Solo")
     else
       UHCA.SoloModeCheckbox.Text:SetText("SSF")

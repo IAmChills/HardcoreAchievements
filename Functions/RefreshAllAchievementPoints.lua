@@ -33,9 +33,9 @@ function RefreshAllAchievementPoints()
                     
                     -- Visual preview: if solo mode toggle is on and no stored points, show doubled points
                     -- This is just a preview - actual points are determined at kill/quest time
-                    -- Solo preview applies if player is self-found (Classic) or in TBC
-                    local isTBC = GetExpansionLevel() > 0
-                    local allowSoloBonus = isSelfFound or isTBC
+                    -- Solo preview applies: requires self-found if hardcore is active, otherwise solo is allowed
+                    local isHardcoreActive = C_GameRules and C_GameRules.IsHardcoreActive and C_GameRules.IsHardcoreActive() or false
+                    local allowSoloBonus = isSelfFound or not isHardcoreActive
                     local progress = HardcoreAchievements_GetProgress and HardcoreAchievements_GetProgress(rowId)
                     if isSoloMode and row.allowSoloDouble and allowSoloBonus and not (progress and progress.pointsAtKill) then
                         finalPoints = finalPoints * 2
@@ -179,8 +179,8 @@ function RefreshAllAchievementPoints()
                     end
                 else
                     -- Fallback if helper not available
-                    local isTBC = GetExpansionLevel() > 0
-                    local allowSoloBonus = isSelfFound or isTBC
+                    local isHardcoreActive = C_GameRules and C_GameRules.IsHardcoreActive and C_GameRules.IsHardcoreActive() or false
+                    local allowSoloBonus = isSelfFound or not isHardcoreActive
                     if hasIneligibleKill then
                         local requiresBoth = row.questTracker and row.killTracker
                         local message = requiresBoth and "|cffff4646Ineligible Kill|r"

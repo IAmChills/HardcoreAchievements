@@ -929,12 +929,15 @@ function HCA_MarkRowCompleted(row, cdbParam)
     end
     
     -- Set Sub text with "Solo" indicator if achievement was completed solo
-    -- Solo indicators only show if player is self-found
+    -- Solo indicators show based on hardcore status:
+    --   If hardcore is active: requires self-found
+    --   If hardcore is not active: solo achievements allowed without self-found
     -- Completed achievements always show "Solo", never "Solo bonus"
     local isSelfFound = _G.IsSelfFound and _G.IsSelfFound() or false
-    local isTBC = GetExpansionLevel() > 0
+    local isHardcoreActive = C_GameRules and C_GameRules.IsHardcoreActive and C_GameRules.IsHardcoreActive() or false
     if row.Sub then
-        if wasSolo and (isSelfFound or isTBC) then
+        local shouldShowSolo = wasSolo and (isHardcoreActive and isSelfFound or not isHardcoreActive)
+        if shouldShowSolo then
             -- Completed achievements always show "Solo", not "Solo bonus"
             row.Sub:SetText(AUCTION_TIME_LEFT0 .. "\n|c" .. select(4, GetClassColor(select(2, UnitClass("player")))) .. "Solo|r")
         else
@@ -1038,12 +1041,15 @@ local function RestoreCompletionsFromDB()
             row.completed = true
             -- Title color will be set by UpdatePointsDisplay
             -- Check if achievement was completed solo and show indicator
-            -- Solo indicators only show if player is self-found
+            -- Solo indicators show based on hardcore status:
+            --   If hardcore is active: requires self-found
+            --   If hardcore is not active: solo achievements allowed without self-found
             -- Completed achievements always show "Solo", never "Solo bonus"
             local isSelfFound = _G.IsSelfFound and _G.IsSelfFound() or false
-            local isTBC = GetExpansionLevel() > 0
+            local isHardcoreActive = C_GameRules and C_GameRules.IsHardcoreActive and C_GameRules.IsHardcoreActive() or false
             if row.Sub then
-                if rec.wasSolo and (isSelfFound or isTBC) then
+                local shouldShowSolo = rec.wasSolo and (isHardcoreActive and isSelfFound or not isHardcoreActive)
+                if shouldShowSolo then
                     -- Completed achievements always show "Solo", not "Solo bonus"
                     row.Sub:SetText(AUCTION_TIME_LEFT0 .. "\n|c" .. select(4, GetClassColor(select(2, UnitClass("player")))) .. "Solo|r")
                 else
@@ -1705,14 +1711,6 @@ function addon:ShowWelcomeMessage()
     local WELCOME_MESSAGE_NUMBER = 2
     local db = EnsureDB()
     db.settings = db.settings or {}
-    
-    -- Migrate old boolean flag to version system
-    if db.settings.showWelcomeMessage == true and not db.settings.welcomeMessageVersion then
-        -- User has already seen the welcome message with old system, set to current version
-        db.settings.welcomeMessageVersion = WELCOME_MESSAGE_NUMBER
-        -- Clean up old flag (optional, for cleanliness)
-        db.settings.showWelcomeMessage = nil
-    end
     
     local storedVersion = db.settings.welcomeMessageVersion or 0
     
@@ -2596,11 +2594,12 @@ AchievementPanel.MultiplierText:SetTextColor(0.8, 0.8, 0.8)
 -- Solo mode checkbox
 AchievementPanel.SoloModeCheckbox = CreateFrame("CheckButton", nil, AchievementPanel, "InterfaceOptionsCheckButtonTemplate")
 AchievementPanel.SoloModeCheckbox:SetPoint("TOPLEFT", AchievementPanel, "TOPLEFT", 70, -50)
--- In TBC, use "Solo" instead of "SSF"
-if GetExpansionLevel() > 0 then
-    AchievementPanel.SoloModeCheckbox.Text:SetText("Solo")
-else
+-- In Hardcore mode, use "SSF" instead of "Solo"
+local isHardcoreActive = C_GameRules and C_GameRules.IsHardcoreActive and C_GameRules.IsHardcoreActive() or false
+if isHardcoreActive then
     AchievementPanel.SoloModeCheckbox.Text:SetText("SSF")
+else
+    AchievementPanel.SoloModeCheckbox.Text:SetText("Solo")
 end
 AchievementPanel.SoloModeCheckbox:SetScript("OnClick", function(self)
     if self:IsEnabled() then
@@ -3909,15 +3908,15 @@ function HCA_ShowAchievementTab()
         local isChecked = (cdb and cdb.settings and cdb.settings.soloAchievements) or false
         AchievementPanel.SoloModeCheckbox:SetChecked(isChecked)
         
-        local isTBC = GetExpansionLevel() > 0
-        if isTBC then
-            -- In TBC, checkbox is always enabled (Self-Found not available)
+        local isHardcoreActive = C_GameRules and C_GameRules.IsHardcoreActive and C_GameRules.IsHardcoreActive() or false
+        if not isHardcoreActive then
+            -- In Non-Hardcore mode, checkbox is always enabled (Self-Found not available)
             AchievementPanel.SoloModeCheckbox:Enable()
             AchievementPanel.SoloModeCheckbox.Text:SetTextColor(1, 1, 1, 1)
             AchievementPanel.SoloModeCheckbox.Text:SetText("Solo")
             AchievementPanel.SoloModeCheckbox.tooltip = "|cffffffffSolo|r \nToggling this option on will display the total points you will receive if you complete this achievement solo (no help from nearby players)."
         else
-            -- In Classic, checkbox is only enabled if Self-Found is active
+            -- In Hardcore mode, checkbox is only enabled if Self-Found is active
             local isSelfFound = _G.IsSelfFound and _G.IsSelfFound() or false
             if isSelfFound then
                 AchievementPanel.SoloModeCheckbox:Enable()
