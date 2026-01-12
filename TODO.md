@@ -6,23 +6,6 @@
 ## Bugs
  - empty
 
-## Helpful Code Snippets
-
-### Class-colored text
-```lua
-|c" .. select(4, GetClassColor(select(2, UnitClass("player")))) .. "PlayerName|r
-```
-
-### Print player's assigned group role
-```lua
-/script print(UnitGroupRolesAssigned('player'))
-```
-
-### Reset Progress or Achievement in database
-```lua
-/run HardcoreAchievementsDB.chars[UnitGUID("player")].progress["Test3"] = nil; ReloadUI()
-```
-
 ## TBC TODO List
 
 - Catalog
@@ -69,3 +52,20 @@
 
 ## Class challenges
  - paladin, hunter, mage (likely not do-able with the nerfs)
+
+ ## Helpful Code Snippets
+
+### Class-colored text
+```lua
+|c" .. select(4, GetClassColor(select(2, UnitClass("player")))) .. "PlayerName|r
+```
+
+### Print player's assigned group role
+```lua
+/script print(UnitGroupRolesAssigned('player'))
+```
+
+### Reset Progress or Achievement in database
+```lua
+/run HardcoreAchievementsDB.chars[UnitGUID("player")].progress["Test3"] = nil; ReloadUI()
+```
