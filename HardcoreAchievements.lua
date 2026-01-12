@@ -1708,7 +1708,7 @@ end)
 
 -- Function to show welcome message popup on first login or when version changes
 function addon:ShowWelcomeMessage()
-    local WELCOME_MESSAGE_NUMBER = 2
+    local WELCOME_MESSAGE_NUMBER = 3
     local db = EnsureDB()
     db.settings = db.settings or {}
     
@@ -1717,9 +1717,9 @@ function addon:ShowWelcomeMessage()
     -- Show message if stored version is less than current version
     if storedVersion < WELCOME_MESSAGE_NUMBER then
         if GetExpansionLevel() > 0 then
-            --StaticPopup_Show("Hardcore Achievements TBC")
+            StaticPopup_Show("Hardcore Achievements TBC")
         else
-            StaticPopup_Show("Hardcore Achievements Vanilla 2")
+            StaticPopup_Show("Hardcore Achievements Vanilla")
         end
         db.settings.welcomeMessageVersion = WELCOME_MESSAGE_NUMBER
     end
@@ -1727,39 +1727,9 @@ end
 
 -- Define the welcome message popup
 StaticPopupDialogs["Hardcore Achievements Vanilla"] = {
-    text = "|cff008066Hardcore Achievements|r\n\nIf you intend to progress into |cff00ff00The Burning Crusade|r and continue using Hardcore Achievements, it is highly recommended you backup your Hardcore Achievements database before pre patch in case of data loss.\n\nThere is a new backup and restore feature in the options panel.",
-    button1 = "Got it!",
-    button2 = "Show Me!",
-    timeout = 0,
-    whileDead = true,
-    hideOnEscape = true,
-    preferredIndex = 3,
-    OnAccept = function()
-    end,
-    OnCancel = function()
-        OpenOptionsPanel()
-    end,
-}
-
-StaticPopupDialogs["Hardcore Achievements Vanilla 2"] = {
     text = "|cff008066Hardcore Achievements|r\n\nDungeon related achievements have been redesigned and now require all party members to meet the level requirement at entry. Leveling up inside the dungeon is allowed, but leaving and re-entering if overleveled disqualifies the group.\n\nPlease report any issues you encounter.",
-    button1 = "OK",
-    timeout = 0,
-    whileDead = true,
-    hideOnEscape = true,
-    preferredIndex = 3,
-    OnAccept = function()
-        StaticPopup_Show("Hardcore Achievements Vanilla")
-    end,
-    OnCancel = function()
-        StaticPopup_Show("Hardcore Achievements Vanilla")
-    end,
-}
-
-StaticPopupDialogs["Hardcore Achievements TBC"] = {
-    text = "|cff008066Hardcore Achievements|r\n\nDungeon related achievements have been redesigned.\n\nDungeon achievements require all party members to meet the level requirement at entry. Leveling up inside the dungeon is allowed, but leaving and re-entering if overleveled disqualifies the group.\n\nPlease report any issues you encounter.",
-    button1 = "Got it!",
-    button2 = "Show Me!",
+    button1 = "Okay",
+    --button2 = "Show Me!",
     timeout = 0,
     whileDead = true,
     hideOnEscape = true,
@@ -1767,9 +1737,25 @@ StaticPopupDialogs["Hardcore Achievements TBC"] = {
     OnAccept = function()
         -- Popup automatically closes
     end,
-    OnCancel = function()
-        OpenOptionsPanel()
+    --OnCancel = function()
+        -- Popup automatically closes
+    --end,
+}
+
+StaticPopupDialogs["Hardcore Achievements TBC"] = {
+    text = "|cff008066Hardcore Achievements|r\n\nDungeon related achievements have been redesigned and now require all party members to meet the level requirement at entry. Leveling up inside the dungeon is allowed, but leaving and re-entering if overleveled disqualifies the group.\n\nPlease report any issues you encounter.",
+    button1 = "Okay",
+    --button2 = "Show Me!",
+    timeout = 0,
+    whileDead = true,
+    hideOnEscape = true,
+    preferredIndex = 3,
+    OnAccept = function()
+        -- Popup automatically closes
     end,
+    --OnCancel = function()
+        -- Popup automatically closes
+    --end,
 }
 
 -- =========================================================
