@@ -2,7 +2,6 @@
 
 ## Active Tasks
 - Expand on comms to allow achievement related statistics where data is propogated for realm-first, % of players completed style info
-- Show achievement locations on map
 
 ## Bugs
  - empty
@@ -36,7 +35,6 @@
 ## Quests
  - The Dying Balance (Boglash) at 58
    - Something like this might suck because its so low level for Outlands
- - ...Gonna need all hands on deck to get notable difficult Outlands quests. Too many might make it annoying since you never get a break and bounce from one to the next
 
 ## Explorer Achievements
  - Discover Karazhan before level 25 and speak to archmage leryda
@@ -71,4 +69,3 @@
 
 ## Class challenges
  - paladin, hunter, mage (likely not do-able with the nerfs)
-   - zg solo pull (kill x number of zombies in y amount of time solo)
