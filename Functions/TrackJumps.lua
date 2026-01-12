@@ -51,6 +51,21 @@ jumpTrackingFrame:SetScript("OnEvent", function(self, event, addonName)
                 end
             end
 
+            -- If playerJumps is nil (first load), check if player is already max level
+            -- If so, set a flag to prevent awarding "The Disciplined One" achievement
+            -- (can't verify they had 0 jumps when they reached 60)
+            if jumpCount == nil then
+                local playerLevel = UnitLevel("player") or 0
+                if playerLevel >= 60 then
+                    -- Player is already max level on first load - mark achievement as failed
+                    cdb.achievements = cdb.achievements or {}
+                    local achId = "Secret93"
+                    if _G.HCA_EnsureFailureTimestamp then
+                        _G.HCA_EnsureFailureTimestamp(achId)
+                    end
+                end
+            end
+
             -- Set default to 0 if still nil
             local JumpCounter = {}
             JumpCounter.count = jumpCount or 0

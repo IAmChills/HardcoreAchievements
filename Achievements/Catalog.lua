@@ -866,6 +866,15 @@ local Achievements = {
         if not cdb or not cdb.stats or not cdb.stats.playerJumps then
             return false
         end
+        
+        -- Check if achievement is already failed (e.g., player was max level on first load)
+        local achId = "Secret93"
+        local rec = cdb.achievements and cdb.achievements[achId]
+        if rec and rec.failed then
+            return false
+        end
+        
+        -- Only award if player is max level and has 0 jumps
         return UnitLevel("player") >= 60 and cdb.stats.playerJumps == 0
     end,
     secret = true,
