@@ -47,7 +47,9 @@
    - hearth out of an instance while in combat
  - Warlord of the Rings
    - Destroy the 1 ring in black rock mountain as a level 1 gnome must be carrying the ring the entire way from the starting zone
+   - May require tracking for when item is picked up (set flag) player is in BRM, all else satisfied, destroy popup displays, and count goes to 0?
    - “and my axe…” for being in the raid with the person who does it
+   - Use a hook?
  - Destroy your light of elune (giga hardcore achievement)
 
 ## Class challenges
