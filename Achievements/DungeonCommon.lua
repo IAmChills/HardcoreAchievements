@@ -1178,6 +1178,7 @@ function DungeonCommon.registerDungeonAchievement(def)
     -- Ensure dungeons never have allowSoloDouble enabled
     local dungeonDef = def or {}
     dungeonDef.allowSoloDouble = false
+    dungeonDef.isDungeon = true
     
     _G[rowVarName] = CreateAchievementRow(
       AchievementPanel,

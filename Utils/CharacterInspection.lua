@@ -1193,37 +1193,37 @@ local function HookInspectionEvents()
     end)
 end
 
--- Hook into unit popup menu to add "Inspect Achievements" option
-local function HookUnitPopupMenu()
-    -- Try modern Menu API first (if available, likely Retail)
-    if Menu and type(Menu.ModifyMenu) == "function" and MENU_UNIT_TARGET then
-        Menu.ModifyMenu("MENU_UNIT_TARGET", function(ownerRegion, rootDescription, contextData)
-            -- Only show for friendly players (not self)
-            local unit = contextData and contextData.unit
-            if unit and UnitIsPlayer(unit) and UnitIsFriend("player", unit) and not UnitIsUnit(unit, "player") then
-                rootDescription:CreateDivider()
-                rootDescription:CreateButton("Inspect Achievements", function()
-                    local targetName = UnitName(unit)
-                    if targetName then
-                        -- Open inspection frame and switch to achievements tab
-                        if InspectUnit then
-                            InspectUnit(unit)
-                        end
-                        -- Wait a frame for InspectFrame to initialize, then show achievement tab
-                        if C_Timer and C_Timer.After then
-                            C_Timer.After(0.1, function()
-                                if InspectFrame and InspectFrame:IsShown() then
-                                    CharacterInspection.ShowInspectionAchievementTab()
-                                end
-                            end)
-                        end
-                    end
-                end)
-            end
-        end)
-        return
-    end
-end
+-- -- Hook into unit popup menu to add "Inspect Achievements" option
+-- local function HookUnitPopupMenu()
+--     -- Try modern Menu API first (if available, likely Retail)
+--     if Menu and type(Menu.ModifyMenu) == "function" and MENU_UNIT_TARGET then
+--         Menu.ModifyMenu("MENU_UNIT_TARGET", function(ownerRegion, rootDescription, contextData)
+--             -- Only show for friendly players (not self)
+--             local unit = contextData and contextData.unit
+--             if unit and UnitIsPlayer(unit) and UnitIsFriend("player", unit) and not UnitIsUnit(unit, "player") then
+--                 rootDescription:CreateDivider()
+--                 rootDescription:CreateButton("Inspect Achievements", function()
+--                     local targetName = UnitName(unit)
+--                     if targetName then
+--                         -- Open inspection frame and switch to achievements tab
+--                         if InspectUnit then
+--                             InspectUnit(unit)
+--                         end
+--                         -- Wait a frame for InspectFrame to initialize, then show achievement tab
+--                         if C_Timer and C_Timer.After then
+--                             C_Timer.After(0.1, function()
+--                                 if InspectFrame and InspectFrame:IsShown() then
+--                                     CharacterInspection.ShowInspectionAchievementTab()
+--                                 end
+--                             end)
+--                         end
+--                     end
+--                 end)
+--             end
+--         end)
+--         return
+--     end
+-- end
 
 -- Initialize when addon loads
 local initFrame = CreateFrame("Frame")

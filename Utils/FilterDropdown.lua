@@ -8,23 +8,29 @@ local function GetCheckboxStatesFromDB()
     if type(HardcoreAchievements_GetCharDB) == "function" then
         local _, cdb = HardcoreAchievements_GetCharDB()
         if cdb and cdb.settings and cdb.settings.filterCheckboxes then
-            -- Ensure we have a table with up to 6 boolean values
+            -- Ensure we have a table with up to 13 boolean values
             local states = cdb.settings.filterCheckboxes
             if type(states) == "table" then
                 return {
-                    states[1] == true,
-                    states[2] == true,
-                    states[3] == true,
-                    states[4] == true,
-                    states[5] == true,
-                    states[6] == true,
-                    states[7] == true,
+                    states[1] ~= false,  -- Quest (default true)
+                    states[2] ~= false,  -- Dungeon (default true)
+                    states[3] == true,  -- Heroic Dungeon
+                    states[4] ~= false,  -- Raid (default true)
+                    states[5] ~= false,  -- Professions (default true)
+                    states[6] ~= false,  -- Meta (default true)
+                    states[7] == true,  -- Reputations
+                    states[8] == true,  -- Dungeon Sets
+                    states[9] == true,  -- Solo
+                    states[10] == true,  -- Duo
+                    states[11] == true,  -- Trio
+                    states[12] == true,  -- Ridiculous
+                    states[13] == true,  -- Secret
                 }
             end
         end
     end
-            -- Default: all unchecked
-    return { false, false, false, false, false, false, false }
+    -- Default: Core checked, Miscellaneous unchecked
+    return { true, true, false, true, true, true, false, false, false, false, false, false, false }
 end
 
 -- Helper function to save checkbox states to character database
@@ -34,13 +40,19 @@ local function SaveCheckboxStatesToDB(checkboxStates)
         if cdb then
             cdb.settings = cdb.settings or {}
             cdb.settings.filterCheckboxes = {
-                checkboxStates[1] == true,
-                checkboxStates[2] == true,
-                checkboxStates[3] == true,
-                checkboxStates[4] == true,
-                checkboxStates[5] == true,
-                checkboxStates[6] == true,
-                checkboxStates[7] == true,
+                checkboxStates[1] == true,  -- Quest
+                checkboxStates[2] == true,  -- Dungeon
+                checkboxStates[3] == true,  -- Heroic Dungeon
+                checkboxStates[4] == true,  -- Raid
+                checkboxStates[5] == true,  -- Professions
+                checkboxStates[6] == true,  -- Meta
+                checkboxStates[7] == true,  -- Reputations
+                checkboxStates[8] == true,  -- Dungeon Sets
+                checkboxStates[9] == true,  -- Solo
+                checkboxStates[10] == true,  -- Duo
+                checkboxStates[11] == true,  -- Trio
+                checkboxStates[12] == true,  -- Ridiculous
+                checkboxStates[13] == true,  -- Secret
             }
         end
     end
@@ -182,11 +194,77 @@ function FilterDropdown:InitializeDropdown(dropdown, config)
             }
             UIDropDownMenu_AddButton(separatorInfo)
             
-            -- Add checkbox options
-            for i, label in ipairs(checkboxLabels) do
+            -- Add "Core Achievements" section title
+            local coreTitleInfo = UIDropDownMenu_CreateInfo()
+            coreTitleInfo.text = "Core Achievements"
+            coreTitleInfo.isTitle = true
+            coreTitleInfo.isUninteractable = true
+            coreTitleInfo.notCheckable = true
+            coreTitleInfo.disabled = true
+            UIDropDownMenu_AddButton(coreTitleInfo)
+            
+            -- Add Core checkboxes (indices 1-6: Quest, Dungeon, Heroic Dungeon, Raid, Professions, Meta)
+            local isTBC = GetExpansionLevel and GetExpansionLevel() > 0
+            for i = 1, 6 do
+                -- Skip Heroic Dungeon (index 3) if not TBC
+                if not (i == 3 and not isTBC) then
+                    local info = UIDropDownMenu_CreateInfo()
+                    local checkboxIndex = i  -- Capture index in local variable
+                    info.text = checkboxLabels[checkboxIndex]
+                    info.checked = dropdown._checkboxStates[checkboxIndex]
+                    info.isNotRadio = true
+                    info.keepShownOnClick = true
+                    info.func = function(self)
+                        -- Toggle the state
+                        dropdown._checkboxStates[checkboxIndex] = not dropdown._checkboxStates[checkboxIndex]
+                        local newState = dropdown._checkboxStates[checkboxIndex]
+                        
+                        -- Update the button's checked property
+                        self.checked = newState
+                        
+                        -- Manually toggle the checkmark textures for immediate visual feedback
+                        local buttonName = self:GetName()
+                        local checkTexture = _G[buttonName .. "Check"]
+                        local uncheckTexture = _G[buttonName .. "UnCheck"]
+                        if checkTexture and uncheckTexture then
+                            if newState then
+                                checkTexture:Show()
+                                uncheckTexture:Hide()
+                            else
+                                checkTexture:Hide()
+                                uncheckTexture:Show()
+                            end
+                        end
+                        
+                        -- Save to database
+                        SaveCheckboxStatesToDB(dropdown._checkboxStates)
+                        
+                        -- Call the callback
+                        if dropdown._onCheckboxChange then
+                            dropdown._onCheckboxChange(checkboxIndex, newState)
+                        end
+                    end
+                    UIDropDownMenu_AddButton(info)
+                end
+            end
+            
+            -- Add separator
+            UIDropDownMenu_AddButton(separatorInfo)
+            
+            -- Add "Miscellaneous" section title
+            local miscTitleInfo = UIDropDownMenu_CreateInfo()
+            miscTitleInfo.text = "Miscellaneous"
+            miscTitleInfo.isTitle = true
+            miscTitleInfo.isUninteractable = true
+            miscTitleInfo.notCheckable = true
+            miscTitleInfo.disabled = true
+            UIDropDownMenu_AddButton(miscTitleInfo)
+            
+            -- Add Miscellaneous checkboxes (indices 7-13: Reputations, Dungeon Sets, Solo, Duo, Trio, Ridiculous, Secret)
+            for i = 7, 13 do
                 local info = UIDropDownMenu_CreateInfo()
                 local checkboxIndex = i  -- Capture index in local variable
-                info.text = label
+                info.text = checkboxLabels[checkboxIndex]
                 info.checked = dropdown._checkboxStates[checkboxIndex]
                 info.isNotRadio = true
                 info.keepShownOnClick = true
