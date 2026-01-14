@@ -528,16 +528,20 @@ function HCA_AchievementCount()
             local hiddenByProfession = row.hiddenByProfession and not row.completed
             local hiddenUntilComplete = row.hiddenUntilComplete and not row.completed
             
-            -- Exclude variation achievements from the count UNLESS they are completed
-            -- This prevents incomplete variations from inflating the total, but includes
-            -- completed variations so the completed count doesn't exceed the total
-            -- Same logic applies to dungeon set achievements
+            -- Core Achievements (indices 1-6: Quest, Dungeon, Heroic Dungeon, Raid, Professions, Meta) always count
+            -- Miscellaneous Achievements (indices 7-14) only count if completed
+            -- This prevents incomplete miscellaneous achievements from inflating the total, but includes
+            -- completed miscellaneous achievements so the completed count doesn't exceed the total
+            -- Special achievements (like FourCandle) are excluded from count entirely
             local isVariation = row._def and row._def.isVariation
             local isDungeonSet = row._def and row._def.isDungeonSet
             local isReputation = row._def and row._def.isReputation
-            local isRaid = row._def and row._def.isRaid
+            local isExploration = row._def and row._def.isExploration
             local isRidiculous = row._def and row._def.isRidiculous
-            local shouldCount = not hiddenByProfession and not hiddenUntilComplete and (not isVariation or row.completed) and (not isDungeonSet or row.completed) and (not isReputation or row.completed) and (not isRaid or row.completed) and (not isRidiculous or row.completed)
+            local isSecret = row._def and row._def.isSecret
+            local excludeFromCount = row._def and row._def.excludeFromCount
+            -- Note: isRaid is Core (index 4), so it always counts - don't exclude it
+            local shouldCount = not hiddenByProfession and not hiddenUntilComplete and not excludeFromCount and (not isVariation or row.completed) and (not isDungeonSet or row.completed) and (not isReputation or row.completed) and (not isExploration or row.completed) and (not isRidiculous or row.completed) and (not isSecret or row.completed)
             
             if shouldCount then
                 total = total + 1
@@ -2421,7 +2425,7 @@ local function ShouldShowByCheckboxFilter(def, isCompleted, currentFilter, check
     end
     
     -- Load checkbox states from database
-    local checkboxStates = { true, true, false, true, true, true, false, false, false, false, false, false, false }
+    local checkboxStates = { true, true, true, true, true, true, false, false, false, false, false, false, false, false }
     if type(HardcoreAchievements_GetCharDB) == "function" then
         local _, cdb = HardcoreAchievements_GetCharDB()
         if cdb and cdb.settings and cdb.settings.filterCheckboxes then
@@ -2430,17 +2434,18 @@ local function ShouldShowByCheckboxFilter(def, isCompleted, currentFilter, check
                 checkboxStates = {
                     states[1] ~= false,  -- Quest (default true)
                     states[2] ~= false,  -- Dungeon (default true)
-                    states[3] == true,  -- Heroic Dungeon
+                    states[3] ~= false,  -- Heroic Dungeon (default true)
                     states[4] ~= false,  -- Raid (default true)
                     states[5] ~= false,  -- Professions (default true)
                     states[6] ~= false,  -- Meta (default true)
                     states[7] == true,  -- Reputations
-                    states[8] == true,  -- Dungeon Sets
-                    states[9] == true,  -- Solo
-                    states[10] == true,  -- Duo
-                    states[11] == true,  -- Trio
-                    states[12] == true,  -- Ridiculous
-                    states[13] == true,  -- Secret
+                    states[8] == true,  -- Exploration
+                    states[9] == true,  -- Dungeon Sets
+                    states[10] == true,  -- Solo
+                    states[11] == true,  -- Duo
+                    states[12] == true,  -- Trio
+                    states[13] == true,  -- Ridiculous
+                    states[14] == true,  -- Secret
                 }
             end
         end
@@ -2449,11 +2454,11 @@ local function ShouldShowByCheckboxFilter(def, isCompleted, currentFilter, check
     -- For variations, check based on variation type
     if variationType then
         if variationType == "Trio" then
-            return checkboxStates[11]
+            return checkboxStates[12]
         elseif variationType == "Duo" then
-            return checkboxStates[10]
+            return checkboxStates[11]
         elseif variationType == "Solo" then
-            return checkboxStates[9]
+            return checkboxStates[10]
         end
         return false
     end
@@ -2499,18 +2504,23 @@ local function ApplyFilter()
             local def = row._def
             
             if def.isVariation then
-                -- Variations: check based on variation type (Solo=9, Duo=10, Trio=11)
+                -- Variations: check based on variation type (Solo=10, Duo=11, Trio=12)
                 if not ShouldShowByCheckboxFilter(def, isCompleted, currentFilter, nil, def.variationType) then
-                    shouldShow = false
-                end
-            elseif def.isDungeonSet then
-                -- Dungeon Sets: check index 8
-                if not ShouldShowByCheckboxFilter(def, isCompleted, currentFilter, 8, nil) then
                     shouldShow = false
                 end
             elseif def.isReputation then
                 -- Reputations: check index 7
                 if not ShouldShowByCheckboxFilter(def, isCompleted, currentFilter, 7, nil) then
+                    shouldShow = false
+                end
+            elseif def.isExploration then
+                -- Exploration: check index 8
+                if not ShouldShowByCheckboxFilter(def, isCompleted, currentFilter, 8, nil) then
+                    shouldShow = false
+                end
+            elseif def.isDungeonSet then
+                -- Dungeon Sets: check index 9
+                if not ShouldShowByCheckboxFilter(def, isCompleted, currentFilter, 9, nil) then
                     shouldShow = false
                 end
             elseif def.isRaid then
@@ -2524,13 +2534,13 @@ local function ApplyFilter()
                     shouldShow = false
                 end
             elseif def.isRidiculous then
-                -- Ridiculous: check index 12
-                if not ShouldShowByCheckboxFilter(def, isCompleted, currentFilter, 12, nil) then
+                -- Ridiculous: check index 13
+                if not ShouldShowByCheckboxFilter(def, isCompleted, currentFilter, 13, nil) then
                     shouldShow = false
                 end
             elseif def.isSecret then
-                -- Secret: check index 13
-                if not ShouldShowByCheckboxFilter(def, isCompleted, currentFilter, 13, nil) then
+                -- Secret: check index 14
+                if not ShouldShowByCheckboxFilter(def, isCompleted, currentFilter, 14, nil) then
                     shouldShow = false
                 end
             elseif def.isQuest then
@@ -2579,7 +2589,7 @@ AchievementPanel.filterDropdown = filterDropdown
 FilterDropdown:InitializeDropdown(filterDropdown, {
     currentFilter = "all",
     -- checkboxStates will be loaded from database automatically
-    checkboxLabels = { "Quest", "Dungeon", "Heroic Dungeon", "Raid", "Professions", "Meta", "Reputations", "Dungeon Sets", "Solo Dungeon", "Duo Dungeon", "Trio Dungeon", "Ridiculous", "Secret" },
+    checkboxLabels = { "Quests", "Dungeons", "Heroic Dungeons", "Raids", "Professions", "Meta", "Reputations", "Exploration", "Dungeon Sets", "Solo Dungeons", "Duo Dungeons", "Trio Dungeons", "Ridiculous", "Secret" },
     onFilterChange = function(filterValue)
         ApplyFilter()
     end,

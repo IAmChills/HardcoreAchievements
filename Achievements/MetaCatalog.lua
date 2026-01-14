@@ -147,8 +147,8 @@ local MetaAchievements = {
     tooltip = "Complete all meta achievements",
     icon = 254648,
     points = 500,
-    requiredAchievements = {"DungeonMeta", "QuestMeta", "CoreRepMeta", "RaidMeta", "SecoProfMeta"},
-    achievementOrder = {"DungeonMeta", "QuestMeta", "CoreRepMeta", "RaidMeta", "SecoProfMeta"}
+    requiredAchievements = {"DungeonMeta", "QuestMeta", "CoreRepMeta", "SecoProfMeta"},
+    achievementOrder = {"DungeonMeta", "QuestMeta", "CoreRepMeta", "SecoProfMeta"}
   }
 }
 

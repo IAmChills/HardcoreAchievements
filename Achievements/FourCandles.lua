@@ -170,6 +170,12 @@ local function HCA_RegisterFourCandles()
   if not _G.CreateAchievementRow or not _G.AchievementPanel then return end
   if _G.FourCandle_Row then return end
 
+  -- Create def object with isDungeon flag so it shows with dungeons
+  local def = {
+    isDungeon = true,
+    excludeFromCount = true,  -- Exclude from total count
+  }
+
   _G.FourCandle_Row = CreateAchievementRow(
     AchievementPanel,
     achId,
@@ -179,9 +185,10 @@ local function HCA_RegisterFourCandles()
     level,
     points,
     FourCandle,  -- killTracker (custom completion function)
-    questTracker,
+    nil,  -- No quest tracker
     staticPoints,
-    zone
+    zone,
+    def
   )
 end
 

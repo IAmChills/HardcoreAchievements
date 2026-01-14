@@ -35,7 +35,7 @@ function _G.HCA_IsAchievementVisible(achId)
             -- Check checkbox filter state for variations (same logic as ApplyFilter/ShouldShowByCheckboxFilter)
             -- This works even if the panel hasn't been opened and filter hasn't been applied yet
             if row._def and row._def.isVariation and row._def.variationType then
-                local checkboxStates = { true, true, false, true, true, true, false, false, false, false, false, false, false }
+                local checkboxStates = { true, true, true, true, true, true, false, false, false, false, false, false, false, false }
                 if type(HardcoreAchievements_GetCharDB) == "function" then
                     local _, cdb = HardcoreAchievements_GetCharDB()
                     if cdb and cdb.settings and cdb.settings.filterCheckboxes then
@@ -44,17 +44,18 @@ function _G.HCA_IsAchievementVisible(achId)
                             checkboxStates = {
                                 states[1] ~= false,  -- Quest (default true)
                                 states[2] ~= false,  -- Dungeon (default true)
-                                states[3] == true,  -- Heroic Dungeon
+                                states[3] ~= false,  -- Heroic Dungeon (default true)
                                 states[4] ~= false,  -- Raid (default true)
                                 states[5] ~= false,  -- Professions (default true)
                                 states[6] ~= false,  -- Meta (default true)
                                 states[7] == true,  -- Reputations
-                                states[8] == true,  -- Dungeon Sets
-                                states[9] == true,  -- Solo
-                                states[10] == true,  -- Duo
-                                states[11] == true,  -- Trio
-                                states[12] == true,  -- Ridiculous
-                                states[13] == true,  -- Secret
+                                states[8] == true,  -- Exploration
+                                states[9] == true,  -- Dungeon Sets
+                                states[10] == true,  -- Solo
+                                states[11] == true,  -- Duo
+                                states[12] == true,  -- Trio
+                                states[13] == true,  -- Ridiculous
+                                states[14] == true,  -- Secret
                             }
                         end
                     end

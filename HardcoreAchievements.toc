@@ -7,6 +7,7 @@
 ## SavedVariables: HardcoreAchievementsDB
 ## IconTexture: Interface\AddOns\HardcoreAchievements\Images\HardcoreAchievementsButton.png
 ## X-Category: Achievements
+## Category: Achievements
 
 # Required Libraries for CommandHandler
 Libs\LibStub\LibStub.lua

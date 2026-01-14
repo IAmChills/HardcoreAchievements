@@ -1232,7 +1232,7 @@ initFrame:SetScript("OnEvent", function(self, event)
     if event == "PLAYER_LOGIN" then
         InitializeInspectionSystem()
         HookInspectionEvents()
-        HookUnitPopupMenu()
+        --HookUnitPopupMenu()
         self:UnregisterAllEvents()
     end
 end)

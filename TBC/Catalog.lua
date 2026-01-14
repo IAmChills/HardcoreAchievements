@@ -204,6 +204,7 @@ local Achievements = {
     points = 10,
     requiredQuestId = 10764, -- Quest available at level 68
     targetNpcId = 18733, -- Fel Reaver level 70 Elite
+    faction = FACTION_ALLIANCE,
     zone = "Hellfire Peninsula"
 },
 
@@ -428,6 +429,7 @@ local Achievements = {
     points = 10,
     requiredQuestId = 10758, -- Quest available at level 68
     targetNpcId = 18733, -- Fel Reaver level 70 Elite
+    faction = FACTION_HORDE,
     zone = "Hellfire Peninsula"
 },
 

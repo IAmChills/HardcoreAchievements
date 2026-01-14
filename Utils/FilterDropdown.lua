@@ -8,29 +8,30 @@ local function GetCheckboxStatesFromDB()
     if type(HardcoreAchievements_GetCharDB) == "function" then
         local _, cdb = HardcoreAchievements_GetCharDB()
         if cdb and cdb.settings and cdb.settings.filterCheckboxes then
-            -- Ensure we have a table with up to 13 boolean values
+            -- Ensure we have a table with up to 14 boolean values
             local states = cdb.settings.filterCheckboxes
             if type(states) == "table" then
                 return {
                     states[1] ~= false,  -- Quest (default true)
                     states[2] ~= false,  -- Dungeon (default true)
-                    states[3] == true,  -- Heroic Dungeon
+                    states[3] ~= false,  -- Heroic Dungeon (default true)
                     states[4] ~= false,  -- Raid (default true)
                     states[5] ~= false,  -- Professions (default true)
                     states[6] ~= false,  -- Meta (default true)
                     states[7] == true,  -- Reputations
-                    states[8] == true,  -- Dungeon Sets
-                    states[9] == true,  -- Solo
-                    states[10] == true,  -- Duo
-                    states[11] == true,  -- Trio
-                    states[12] == true,  -- Ridiculous
-                    states[13] == true,  -- Secret
+                    states[8] == true,  -- Exploration
+                    states[9] == true,  -- Dungeon Sets
+                    states[10] == true,  -- Solo
+                    states[11] == true,  -- Duo
+                    states[12] == true,  -- Trio
+                    states[13] == true,  -- Ridiculous
+                    states[14] == true,  -- Secret
                 }
             end
         end
     end
     -- Default: Core checked, Miscellaneous unchecked
-    return { true, true, false, true, true, true, false, false, false, false, false, false, false }
+    return { true, true, true, true, true, true, false, false, false, false, false, false, false, false }
 end
 
 -- Helper function to save checkbox states to character database
@@ -47,12 +48,13 @@ local function SaveCheckboxStatesToDB(checkboxStates)
                 checkboxStates[5] == true,  -- Professions
                 checkboxStates[6] == true,  -- Meta
                 checkboxStates[7] == true,  -- Reputations
-                checkboxStates[8] == true,  -- Dungeon Sets
-                checkboxStates[9] == true,  -- Solo
-                checkboxStates[10] == true,  -- Duo
-                checkboxStates[11] == true,  -- Trio
-                checkboxStates[12] == true,  -- Ridiculous
-                checkboxStates[13] == true,  -- Secret
+                checkboxStates[8] == true,  -- Exploration
+                checkboxStates[9] == true,  -- Dungeon Sets
+                checkboxStates[10] == true,  -- Solo
+                checkboxStates[11] == true,  -- Duo
+                checkboxStates[12] == true,  -- Trio
+                checkboxStates[13] == true,  -- Ridiculous
+                checkboxStates[14] == true,  -- Secret
             }
         end
     end
@@ -151,6 +153,16 @@ function FilterDropdown:InitializeDropdown(dropdown, config)
         if level == 1 then
             -- Reload checkbox states from database each time dropdown opens (for sync between frames)
             dropdown._checkboxStates = GetCheckboxStatesFromDB()
+            
+            -- Add "Filter By" section title
+            local filterByTitleInfo = UIDropDownMenu_CreateInfo()
+            filterByTitleInfo.text = "Filter By"
+            filterByTitleInfo.isTitle = true
+            filterByTitleInfo.isUninteractable = true
+            filterByTitleInfo.notCheckable = true
+            filterByTitleInfo.disabled = true
+            UIDropDownMenu_AddButton(filterByTitleInfo)
+            
             -- Add filter options
             for _, filter in ipairs(filterList) do
                 local info = UIDropDownMenu_CreateInfo()
@@ -260,8 +272,8 @@ function FilterDropdown:InitializeDropdown(dropdown, config)
             miscTitleInfo.disabled = true
             UIDropDownMenu_AddButton(miscTitleInfo)
             
-            -- Add Miscellaneous checkboxes (indices 7-13: Reputations, Dungeon Sets, Solo, Duo, Trio, Ridiculous, Secret)
-            for i = 7, 13 do
+            -- Add Miscellaneous checkboxes (indices 7-14: Reputations, Exploration, Dungeon Sets, Solo, Duo, Trio, Ridiculous, Secret)
+            for i = 7, 14 do
                 local info = UIDropDownMenu_CreateInfo()
                 local checkboxIndex = i  -- Capture index in local variable
                 info.text = checkboxLabels[checkboxIndex]
