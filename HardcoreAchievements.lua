@@ -1112,8 +1112,12 @@ end
 
 function ShowHardcoreAchievementWindow()
     local _, cdb = GetCharDB()
-    -- Check if user wants to use Character Panel instead of Dashboard (default is Dashboard)
-    if cdb and cdb.settings and cdb.settings.useCharacterPanel then
+    -- Check if user wants to use Character Panel instead of Dashboard (default is Character Panel)
+    local useCharacterPanel = true
+    if cdb and cdb.settings and cdb.settings.useCharacterPanel ~= nil then
+        useCharacterPanel = cdb.settings.useCharacterPanel
+    end
+    if useCharacterPanel then
         -- Use Character Panel tab (old behavior)
         ToggleAchievementCharacterFrameTab()
     else
@@ -1581,7 +1585,15 @@ local minimapDataObject = LDB:NewDataObject("HardcoreAchievements", {
     icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\HardcoreAchievementsButton.png",
     OnClick = function(self, button)
         if button == "LeftButton" and not IsShiftKeyDown() then
-            ShowHardcoreAchievementWindow()
+            -- Always open Dashboard, regardless of useCharacterPanel setting
+            if HardcoreAchievements_Dashboard and HardcoreAchievements_Dashboard.Toggle then
+                HardcoreAchievements_Dashboard:Toggle()
+            elseif _G.HCA_ShowDashboard then
+                _G.HCA_ShowDashboard()
+            else
+                -- Fallback to Character Panel if Dashboard not available
+                ShowHardcoreAchievementWindow()
+            end
         elseif button == "RightButton" then
             -- Right-click to open options panel
             OpenOptionsPanel()
@@ -1595,13 +1607,8 @@ local minimapDataObject = LDB:NewDataObject("HardcoreAchievements", {
     OnTooltipShow = function(tooltip)
         tooltip:AddLine("HardcoreAchievements", 1, 1, 1)
         
-        -- Show different tooltip text based on user preference
-        local _, cdb = GetCharDB()
-        if cdb and cdb.settings and cdb.settings.useCharacterPanel then
-            tooltip:AddLine("Left-click to open Character Panel", 0.5, 0.5, 0.5)
-        else
-            tooltip:AddLine("Left-click to open Dashboard", 0.5, 0.5, 0.5)
-        end
+        -- Minimap icon always opens Dashboard
+        tooltip:AddLine("Left-click to open Dashboard", 0.5, 0.5, 0.5)
         tooltip:AddLine("Right-click to open Options", 0.5, 0.5, 0.5)
         
         -- Show current achievement count
@@ -1642,9 +1649,9 @@ initFrame:SetScript("OnEvent", function(self, event, ...)
         if cdb then
             -- Ensure settings table exists
             cdb.settings = cdb.settings or {}
-            -- Default showCustomTab to false (hidden by default, unless useCharacterPanel is enabled)
+            -- Default showCustomTab to true (visible by default, synced with useCharacterPanel)
             if cdb.settings.showCustomTab == nil then
-                cdb.settings.showCustomTab = false
+                cdb.settings.showCustomTab = true
             end
             local name, realm = UnitName("player"), GetRealmName()
             local className = UnitClass("player")
@@ -1813,8 +1820,11 @@ function LoadTabPosition()
         
         -- Respect user preference: hide custom tab if useCharacterPanel is disabled
         local _, cdb = GetCharDB()
-        -- Check useCharacterPanel setting (default to false - Dashboard mode)
-        local useCharacterPanel = (cdb and cdb.settings and cdb.settings.useCharacterPanel ~= nil) and cdb.settings.useCharacterPanel or false
+        -- Check useCharacterPanel setting (default to true - Character Panel mode)
+        local useCharacterPanel = true
+        if cdb and cdb.settings and cdb.settings.useCharacterPanel ~= nil then
+            useCharacterPanel = cdb.settings.useCharacterPanel
+        end
         if not useCharacterPanel then
             Tab:Hide()
             if Tab.squareFrame then
@@ -1858,6 +1868,7 @@ function LoadTabPosition()
                 Tab.squareFrame:EnableMouse(true)
                 -- Only show square frame if CharacterFrame is shown
                 if isCharacterFrameShown then
+                    Tab.squareFrame:SetAlpha(1)
                     Tab.squareFrame:Show()
                 else
                     Tab.squareFrame:Hide()
@@ -1868,9 +1879,12 @@ function LoadTabPosition()
         -- Set the mode on the tab object
         Tab.mode = savedMode
     else
-        -- If no saved data, check useCharacterPanel setting (default to false - Dashboard mode)
+        -- If no saved data, check useCharacterPanel setting (default to true - Character Panel mode)
         local _, cdb = GetCharDB()
-        local shouldShow = (cdb and cdb.settings and cdb.settings.useCharacterPanel ~= nil) and cdb.settings.useCharacterPanel or false
+        local shouldShow = true
+        if cdb and cdb.settings and cdb.settings.useCharacterPanel ~= nil then
+            shouldShow = cdb.settings.useCharacterPanel
+        end
         
         if shouldShow then
             -- Show tab at default position if showCustomTab is true
@@ -1894,6 +1908,7 @@ function LoadTabPosition()
                     Tab.squareFrame:EnableMouse(true)
                     -- Only show square frame if CharacterFrame is shown
                     if isCharacterFrameShown then
+                        Tab.squareFrame:SetAlpha(1)
                         Tab.squareFrame:Show()
                     else
                         Tab.squareFrame:Hide()
@@ -1916,8 +1931,10 @@ function LoadTabPosition()
             -- Only show tab if CharacterFrame is shown
             if isCharacterFrameShown then
                 if not isHardcoreActive and Tab.squareFrame then
+                    Tab.squareFrame:SetAlpha(1)
                     Tab.squareFrame:Show()
                 else
+                    Tab:SetAlpha(1)
                     Tab:Show()
                 end
             else
@@ -1939,14 +1956,48 @@ end
 
 function ResetTabPosition()
     local db = EnsureDB()
-    if db.tabSettings then
-        db.tabSettings = nil
+    -- Clear saved drag position so LoadTabPosition uses its built-in defaults
+    db.tabSettings = nil
+
+    -- Reset should ALWAYS re-enable the Character Panel tab option
+    local _, cdb = GetCharDB()
+    if cdb then
+        cdb.settings = cdb.settings or {}
+        cdb.settings.useCharacterPanel = true
+        cdb.settings.showCustomTab = true
     end
-    
-    -- Reset to default by calling LoadTabPosition (which will use default position since db.tabSettings is now nil)
-    -- LoadTabPosition handles visibility based on CharacterFrame state
+
+    -- Sync Dashboard checkbox if the Dashboard frame is loaded
+    if _G.HardcoreAchievementsDashboard and _G.HardcoreAchievementsDashboard.UseCharacterPanelCheckbox then
+        _G.HardcoreAchievementsDashboard.UseCharacterPanelCheckbox:SetChecked(true)
+    end
+
+    -- Re-apply default positioning logic
     LoadTabPosition()
-    
+
+    -- If the CharacterFrame is currently open, ensure the visible surface is shown.
+    -- In "right" mode, Tab alpha is 0 by design and the squareFrame is the clickable/visible UI.
+    if CharacterFrame and CharacterFrame:IsShown() then
+        if Tab and Tab.mode == "right" then
+            if not Tab.squareFrame then
+                CreateSquareFrame()
+            end
+            if Tab.squareFrame then
+                Tab.squareFrame:SetAlpha(1)
+                Tab.squareFrame:Show()
+                Tab.squareFrame:EnableMouse(true)
+            end
+        elseif Tab and Tab.mode == "bottom" then
+            Tab:SetAlpha(1)
+            Tab:EnableMouse(true)
+            Tab:Show()
+            if Tab.squareFrame then
+                Tab.squareFrame:Hide()
+                Tab.squareFrame:EnableMouse(false)
+            end
+        end
+    end
+
     print("|cff008066[Hardcore Achievements]|r Tab position reset to default")
 end
 
@@ -4029,8 +4080,11 @@ end)
 -- Hook CharacterFrame OnShow to restore square frame visibility if in vertical mode
 CharacterFrame:HookScript("OnShow", function()
     local _, cdb = GetCharDB()
-    -- Check useCharacterPanel setting (default to false - Dashboard mode)
-    local useCharacterPanel = (cdb and cdb.settings and cdb.settings.useCharacterPanel ~= nil) and cdb.settings.useCharacterPanel or false
+    -- Check useCharacterPanel setting (default to true - Character Panel mode)
+    local useCharacterPanel = true
+    if cdb and cdb.settings and cdb.settings.useCharacterPanel ~= nil then
+        useCharacterPanel = cdb.settings.useCharacterPanel
+    end
     if not useCharacterPanel then
         Tab:Hide()
         if Tab.squareFrame then

@@ -2290,7 +2290,7 @@ local function BuildDashboardFrame()
     
     -- Initialize checkbox state
     local SharedUtils = _G.HardcoreAchievements_SharedUtils
-    local useCharacterPanel = SharedUtils and SharedUtils.GetSetting("useCharacterPanel", false) or false
+    local useCharacterPanel = SharedUtils and SharedUtils.GetSetting("useCharacterPanel", true) or true
     DashboardFrame.UseCharacterPanelCheckbox:SetChecked(useCharacterPanel)
     
     -- Handle checkbox changes

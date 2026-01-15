@@ -70,7 +70,7 @@ function SharedUtils.UpdateCharacterPanelTabVisibility()
         end
     end
     
-    local useCharacterPanel = SharedUtils.GetSetting("useCharacterPanel", false)
+    local useCharacterPanel = SharedUtils.GetSetting("useCharacterPanel", true)
     
     if useCharacterPanel then
         -- Show custom tab (Character Panel mode) - LoadTabPosition will handle the actual showing
@@ -110,8 +110,8 @@ function SharedUtils.SetUseCharacterPanel(enabled)
     
     SharedUtils.UpdateCharacterPanelTabVisibility()
     
-    -- Reload tab position to ensure tab is properly shown/hidden
-    if type(_G.HardcoreAchievements_LoadTabPosition) == "function" then
+    -- Reload tab position only when enabling (positioning). When disabling, we already hid it directly.
+    if enabled and type(_G.HardcoreAchievements_LoadTabPosition) == "function" then
         _G.HardcoreAchievements_LoadTabPosition()
     end
 end
