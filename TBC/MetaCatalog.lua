@@ -32,6 +32,20 @@ end
 
 local tbcDungeons = GetTBCDungeonMasterAchievements()
 
+-- TBC Heroic Dungeon Master - requires all TBC heroic dungeon achievements
+local function GetTBCHeroicDungeonMasterAchievements()
+  local requiredHeroicAchievements = {
+    -- TBC heroic dungeons
+    "HRAMPARTS", "HBLOODFURNACE", "HSLAVEPENS", "HUNDERBOG", "HMANATOMBS", "HAC",
+    "HOLDHILLSBRAD", "HSETHEKK", "HBLACKMORASS", "HMECHANAR", "HSHATTEREDHALLS",
+    "HSLABS", "HSTEAMVAULT", "HBOTANICA", "HMT", "HARCATRAZ"
+  }
+    
+  return requiredHeroicAchievements
+end
+
+local tbcHeroicDungeons = GetTBCHeroicDungeonMasterAchievements()
+
 -- Quest Master - requires all classic and TBC quest achievements
 -- Pre-ordered lists (sorted by level from TBC/Catalog.lua, lowest to highest)
 local QUEST_ALLIANCE_ORDERED = {
@@ -108,16 +122,25 @@ local MetaAchievements = {
     achId = "DungeonMeta",
     title = "The Dungeon Master",
     tooltip = "Complete all dungeon achievements",
-    icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_dungeon_heroic_gloryoftheraider.png", -- 255347
+    icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_Dungeon_GloryoftheHERO.png", -- 255345
     points = 100,
     requiredAchievements = tbcDungeons,
     achievementOrder = tbcDungeons
   },
   {
+    achId = "HeroicDungeonMeta",
+    title = "The Heroic Dungeon Master",
+    tooltip = "Complete all heroic dungeon achievements",
+    icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_Dungeon_HEROIC_GloryoftheRaider.png", -- 255347
+    points = 100,
+    requiredAchievements = tbcHeroicDungeons,
+    achievementOrder = tbcHeroicDungeons
+  },
+  {
     achId = "QuestMeta",
     title = "The Diplomat",
     tooltip = "Complete all quest-related achievements",
-    icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_quests_completed_07.png", -- 236670
+    icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\INV_Misc_Trophy_Argent.png", -- ??
     points = 100,
     requiredAchievements = nil, -- Will be set at registration time
     achievementOrder = nil -- Will be set at registration time
@@ -135,7 +158,7 @@ local MetaAchievements = {
     achId = "RaidMeta",
     title = "The Raider",
     tooltip = "Complete all raid achievements",
-    icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_dungeon_gloryoftheraider.png", -- 255346
+    icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_Dungeon_GloryoftheRaider.png", -- 255346
     points = 100,
     requiredAchievements = raidAchievements,
     achievementOrder = raidAchievements
@@ -153,10 +176,10 @@ local MetaAchievements = {
     achId = "Meta",
     title = "Metalomaniac",
     tooltip = "Complete all meta achievements",
-    icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Ability_paladin_beaconoflight.png", -- 236247
+    icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_Dungeon_ClassicDungeonMaster.png", -- 255343
     points = 500,
-    requiredAchievements = {"DungeonMeta", "QuestMeta", "CoreRepMeta", "RaidMeta", "SecoProfMeta"},
-    achievementOrder = {"DungeonMeta", "QuestMeta", "CoreRepMeta", "RaidMeta", "SecoProfMeta"}
+    requiredAchievements = {"DungeonMeta", "HeroicDungeonMeta", "QuestMeta", "CoreRepMeta", "RaidMeta", "SecoProfMeta"},
+    achievementOrder = {"DungeonMeta", "HeroicDungeonMeta", "QuestMeta", "CoreRepMeta", "RaidMeta", "SecoProfMeta"}
   }
 }
 

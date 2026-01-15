@@ -5,7 +5,7 @@ local Secrets = {
     title = "Snowball at Thrall",
     level = nil,
     tooltip = "Throw a snowball at Thrall",
-    icon = 236710,
+    icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_worldevent_xmasogre.png", -- 236710
     points = 0,
     faction = FACTION_HORDE,
     zone = "Orgrimmar",
@@ -51,7 +51,7 @@ local Secrets = {
     title = "Rats! Rats! Rats!",
     level = nil,
     tooltip = "You have completed the secret achievement: |cff0091e6Kill a rat|r",
-    icon = 294480,
+    icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_rat.png", -- ??
     points = 0,
     targetNpcId = {4075, 13016, 2110},
     secret = true,
@@ -106,7 +106,6 @@ local Secrets = {
     secret = true,
     secretTitle = "Secret Achievement",
     secretTooltip = "I spot a good boy!",
-    --secretIcon = 132387,
     secretPoints = 0,
     staticPoints = true,
 }, {
@@ -143,31 +142,23 @@ local Secrets = {
     hiddenUntilComplete = true,
 }, 
 -- {
---     achId = "Secret006",
---     title = "The Precious",
---     level = nil,
---     tooltip = "Starting as a level 1 Gnome, journey on foot to |cff0091e6Blackrock Mountain|r and destroy |cff0091e6The 1 Ring|r",
---     icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\ThePrecious.png",
---     points = 0,
---     customIsCompleted = function()
---         local mapId = GetSubZoneText()
---         if mapId ~= "Blackrock Mountain" then
---             return false
---         end
---         local itemCount = GetItemCount(8350, true)
---         if itemCount == 0 then
---             return false
---         end
---         return true
---     end,
---     staticPoints = true,
--- }, 
+--   achId = "Secret006",
+--   title = "PLACEHOLDER",
+--   level = nil,
+--   tooltip = "",
+--   icon = 237542,
+--   points = 0,
+--   customIsCompleted = function() return false end,
+--   secret = true,
+--   staticPoints = true,
+--   hiddenUntilComplete = true,
+-- },
 {
     achId = "Secret007",
     title = "Mok'rash",
     level = 50,
     tooltip = "You have completed the secret achievement: |cffff8000Kill Mok'rash and complete the quest: 'The Monogrammed Sash' before level 51|r",
-    icon = 133345,
+    icon = 133694,
     points = 0,
     requiredQuestId = 8552,
     secret = true,
@@ -178,7 +169,7 @@ local Secrets = {
     title = "Jump Master",
     level = nil,
     tooltip = "You have completed the secret achievement: |cff0091e6Jump 100,000 times|r",
-    icon = 134478,
+    icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\INV_Icon_Feather01a.png", -- ??
     points = 0,
     customIsCompleted = function()
         if not _G.HardcoreAchievements_GetCharDB then
@@ -246,11 +237,24 @@ local Secrets = {
     staticPoints = true,
     hiddenUntilComplete = true,
 }, {
+  achId = "Secret013",
+  title = "O.G. Colectors Edition",
+  level = nil,
+  tooltip = "You have completed the secret achievement: |cffff8000Owner of the Vanilla Collectors Edition|r",
+  icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\DiabloAnniversary_Achievement.png", -- ??
+  points = 0,
+  customIsCompleted = function() return false end,
+  customItem = function() return (GetItemCount(13584, true) > 0 or GetItemCount(13583, true) > 0 or GetItemCount(13582, true) > 0) end,
+  -- Secret presentation before completion
+  secret = true,
+  staticPoints = true,
+  hiddenUntilComplete = true,
+}, {
     achId = "Secret100",
     title = "You've Got the Chills",
     level = nil,
     tooltip = "You've unlocked the authors hidden achievement",
-    icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Chills.png",
+    icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Chills.png",
     points = 0,
     customIsCompleted = function() return false end,
     customEmote = function(token)

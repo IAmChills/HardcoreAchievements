@@ -1,49 +1,12 @@
 # TODO List
 
 The following icons need downlaoded and added to the addon for TBC:
-Ramparts
-Strat
-Blood Furnace
-Slave Pens
-Underbog
-Mana Tombs
-AC
-Old HB
-Magister
-Sethekk
-Slabs
-Arc
-Morass
-Bot
-Mech
-Shattered Halls
-SV
-RFK
-Gnomer
-RFD
-Ulda
-ZF
-Mara
-ST
-BRD
-LBRS
-VC
-WC
-SFK
-BFD
-NONE OF THE HEROICS
-NONE OF THE RAIDS
-NONE OF THE META
-NONE OF THE REP
-NONE OF RIDICULOUS
+Achievement_worldevent_xmasogre
+Inv_pet_ratcage
 
-ALLIANCE
-Stockades
-Alchemist Wife
-Morbent
-Stinky
-Kurzen
-Defender of Dun
+NOT USED BUT COULD HAVE USE (Already added to Icons)
+Achievement_Dungeon_Outland_Dungeon_Hero
+INV_DARKMOON_EYE (could be LOTR alternative)
 
 ## Active Tasks
 - Expand on comms to allow achievement related statistics where data is propogated for realm-first, % of players completed style info
