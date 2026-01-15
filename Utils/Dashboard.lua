@@ -3,7 +3,7 @@ local DASHBOARD = {}
 local DashboardFrame -- Main dashboard frame (standalone window)
 local ICON_SIZE = 60
 local ICON_PADDING = 12
-local GRID_COLS = 8  -- Number of columns in the grid
+local GRID_COLS = 7  -- Number of columns in the grid
 local CHECKBOX_TEXTURE_NORMAL = "Interface\\AddOns\\HardcoreAchievements\\Images\\box.png"
 local CHECKBOX_TEXTURE_ACTIVE = "Interface\\AddOns\\HardcoreAchievements\\Images\\box_active.png"
 local SETTINGS_ICON_TEXTURE = "Interface\\AddOns\\HardcoreAchievements\\Images\\icon_gear.png"
@@ -675,38 +675,47 @@ local function CreateDashboardIcon(parent)
   icon:SetSize(ICON_SIZE, ICON_SIZE)
   icon:RegisterForClicks("AnyUp")
 
-  -- Create the achievement icon
-  icon.Icon = icon:CreateTexture(nil, "ARTWORK")
-  icon.Icon:SetSize(ICON_SIZE - 5, ICON_SIZE - 5)
-  icon.Icon:SetPoint("CENTER", icon, "CENTER", 0, 0)
+  -- Create a clipper so we can oversize the icon texture without it bleeding past the frame textures.
+  -- (Mask textures aren't consistently available across Classic-era builds.)
+  icon.IconClip = CreateFrame("Frame", nil, icon)
+  icon.IconClip:SetSize(ICON_SIZE, ICON_SIZE)
+  icon.IconClip:SetPoint("CENTER", icon, "CENTER", 0, 0)
+  icon.IconClip:SetClipsChildren(true)
+
+  -- Create the achievement icon (intentionally oversized; clipped by IconClip)
+  icon.Icon = icon.IconClip:CreateTexture(nil, "ARTWORK")
+  icon.Icon:SetSize(ICON_SIZE + 4, ICON_SIZE + 4)
+  icon.Icon:SetPoint("CENTER", icon.IconClip, "CENTER", 0, 0)
   icon.Icon:SetTexCoord(0, 1, 0, 1)
 
   -- Create status frames that match the list view styling
-  icon.FrameGold = icon:CreateTexture(nil, "OVERLAY", nil, 1)
+  -- Important: attach these to IconClip so they always render ABOVE the icon (same frame),
+  -- avoiding cases where the child frame's ARTWORK can appear above the parent's OVERLAY.
+  icon.FrameGold = icon.IconClip:CreateTexture(nil, "OVERLAY", nil, 1)
   icon.FrameGold:SetSize(ICON_SIZE, ICON_SIZE)
-  icon.FrameGold:SetPoint("CENTER", icon, "CENTER", 0, 0)
+  icon.FrameGold:SetPoint("CENTER", icon.IconClip, "CENTER", 0, 0)
   icon.FrameGold:SetTexture("Interface\\AddOns\\HardcoreAchievements\\Images\\frame_gold.png")
   icon.FrameGold:SetTexCoord(0, 1, 0, 1)
   icon.FrameGold:Hide()
 
-  icon.FrameSilver = icon:CreateTexture(nil, "OVERLAY", nil, 1)
+  icon.FrameSilver = icon.IconClip:CreateTexture(nil, "OVERLAY", nil, 1)
   icon.FrameSilver:SetSize(ICON_SIZE, ICON_SIZE)
-  icon.FrameSilver:SetPoint("CENTER", icon, "CENTER", 0, 0)
+  icon.FrameSilver:SetPoint("CENTER", icon.IconClip, "CENTER", 0, 0)
   icon.FrameSilver:SetTexture("Interface\\AddOns\\HardcoreAchievements\\Images\\frame_silver.png")
   icon.FrameSilver:SetTexCoord(0, 1, 0, 1)
   icon.FrameSilver:Show()
   
   -- Status overlays (green check / red X)
-  icon.StatusCheck = icon:CreateTexture(nil, "OVERLAY", nil, 2)
+  icon.StatusCheck = icon.IconClip:CreateTexture(nil, "OVERLAY", nil, 2)
   icon.StatusCheck:SetSize(ICON_SIZE - 32, ICON_SIZE - 32)
-  icon.StatusCheck:SetPoint("CENTER", icon, "CENTER", 0, 0)
+  icon.StatusCheck:SetPoint("CENTER", icon.IconClip, "CENTER", 0, 0)
   icon.StatusCheck:SetTexture("Interface\\AddOns\\HardcoreAchievements\\Images\\ReadyCheck-Ready.png")
   icon.StatusCheck:SetTexCoord(0, 1, 0, 1)
   icon.StatusCheck:Hide()
 
-  icon.StatusFail = icon:CreateTexture(nil, "OVERLAY", nil, 2)
+  icon.StatusFail = icon.IconClip:CreateTexture(nil, "OVERLAY", nil, 2)
   icon.StatusFail:SetSize(ICON_SIZE - 32, ICON_SIZE - 32)
-  icon.StatusFail:SetPoint("CENTER", icon, "CENTER", 0, 0)
+  icon.StatusFail:SetPoint("CENTER", icon.IconClip, "CENTER", 0, 0)
   icon.StatusFail:SetTexture("Interface\\AddOns\\HardcoreAchievements\\Images\\ReadyCheck-NotReady.png")
   icon.StatusFail:SetTexCoord(0, 1, 0, 1)
   icon.StatusFail:Hide()
@@ -1034,10 +1043,13 @@ end
 local function CreateDashboardModernRow(parent, srow)
     if not parent or not srow then return nil end
     
+    local ROW_SIDE_INSET = 8 -- add a little breathing room on both sides in list view
+    local SCROLL_GUTTER = 0  -- keep a small gutter for the scrollbar
+
     local row = CreateFrame("Frame", nil, parent)
     -- Get container width and set row to full width minus 5px for scrollbar spacing, taller
-    local containerWidth = (parent:GetWidth() or 310) - 5
-    row:SetSize(containerWidth, 64) -- Increased height for additional padding
+    local containerWidth = (parent:GetWidth() or 310) - (ROW_SIDE_INSET * 2) - SCROLL_GUTTER
+    row:SetSize(containerWidth, 60)
     row:SetClipsChildren(false)
     
     -- Extract data from source row
@@ -1052,7 +1064,7 @@ local function CreateDashboardModernRow(parent, srow)
     
     -- icon
     row.Icon = row:CreateTexture(nil, "ARTWORK")
-    row.Icon:SetSize(39, 39)
+    row.Icon:SetSize(41, 41)
     row.Icon:SetPoint("LEFT", row, "LEFT", 10, -2)
     row.Icon:SetTexture(iconTex)
     row.Icon:SetTexCoord(0.025, 0.975, 0.025, 0.975)
@@ -1388,7 +1400,9 @@ local function LayoutModernRows(container, rows)
     if not container or not rows then return end
     
     -- Get container width for full-width rows (minus 5px for scrollbar spacing)
-    local containerWidth = (container:GetWidth() or 310) - 5
+    local ROW_SIDE_INSET = 8
+    local SCROLL_GUTTER = 0
+    local containerWidth = (container:GetWidth() or 310) - (ROW_SIDE_INSET * 2) - SCROLL_GUTTER
     
     local visibleRows = {}
     for i, row in ipairs(rows) do
@@ -1412,7 +1426,7 @@ local function LayoutModernRows(container, rows)
         row:SetWidth(containerWidth)
         
         if i == 1 then
-            row:SetPoint("TOPLEFT", container, "TOPLEFT", 0, 0)
+            row:SetPoint("TOPLEFT", container, "TOPLEFT", ROW_SIDE_INSET, 0)
         else
             row:SetPoint("TOPLEFT", visibleRows[i-1], "BOTTOMLEFT", 0, -rowSpacing)
         end
@@ -1818,7 +1832,7 @@ local function BuildDashboardFrame()
     local backdropTemplate = BackdropTemplateMixin and "BackdropTemplate" or nil
     DashboardFrame = CreateFrame("Frame", "HardcoreAchievementsDashboard", UIParent, backdropTemplate)
     tinsert(UISpecialFrames, "HardcoreAchievementsDashboard")
-    DashboardFrame:SetSize(620, 640)
+    DashboardFrame:SetSize(550, 640)
     DashboardFrame:SetPoint("CENTER", UIParent, "CENTER", 0, 30)
     DashboardFrame:SetMovable(true)
     DashboardFrame:EnableMouse(true)
@@ -1841,8 +1855,9 @@ local function BuildDashboardFrame()
     
     -- Title bar (matching UltraHardcore style)
     local titleBar = CreateFrame("Frame", nil, DashboardFrame, backdropTemplate)
-    titleBar:SetSize(620, 60)
-    titleBar:SetPoint("TOP", DashboardFrame, "TOP", 0, 0)
+    titleBar:SetHeight(40)
+    titleBar:SetPoint("TOPLEFT", DashboardFrame, "TOPLEFT", 0, 0)
+    titleBar:SetPoint("TOPRIGHT", DashboardFrame, "TOPRIGHT", 0, 0)
     titleBar:SetFrameStrata("DIALOG")
     titleBar:SetFrameLevel(20)
     titleBar:SetBackdrop({
@@ -1869,6 +1884,7 @@ local function BuildDashboardFrame()
     DashboardFrame.TitleText = titleBar:CreateFontString(nil, "OVERLAY", "GameFontHighlightHuge")
     DashboardFrame.TitleText:SetPoint("CENTER", titleBar, "CENTER", 0, 0)
     DashboardFrame.TitleText:SetText("Hardcore Achievements Dashboard")
+    DashboardFrame.TitleText:SetFont(POINTS_FONT_PATH, 24)
     DashboardFrame.TitleText:SetTextColor(0.922, 0.871, 0.761)
     
     -- Close button (matching UltraHardcore style)
@@ -1894,8 +1910,10 @@ local function BuildDashboardFrame()
     
     -- Divider frame (below title bar)
     local dividerFrame = CreateFrame("Frame", nil, DashboardFrame)
-    dividerFrame:SetSize(630, 24)
-    dividerFrame:SetPoint("BOTTOM", titleBar, "BOTTOM", 0, -10)
+    dividerFrame:SetHeight(24)
+    -- Slight overscan past the title bar edges (matches prior +10px behavior at 620->630)
+    dividerFrame:SetPoint("TOPLEFT", titleBar, "BOTTOMLEFT", -5, 5)
+    dividerFrame:SetPoint("TOPRIGHT", titleBar, "BOTTOMRIGHT", 5, 5)
     dividerFrame:SetFrameStrata("DIALOG")
     dividerFrame:SetFrameLevel(20)
     local dividerTexture = dividerFrame:CreateTexture(nil, "ARTWORK")
