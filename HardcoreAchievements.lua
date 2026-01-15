@@ -2810,31 +2810,40 @@ function CreateAchievementRow(parent, achId, title, tooltip, icon, level, points
         row:SetPoint("TOPLEFT", AchievementPanel.achievements[index-1], "BOTTOMLEFT", 0, 0)
     end
 
-    -- icon
-    row.Icon = row:CreateTexture(nil, "ARTWORK")
-    row.Icon:SetSize(30, 30)
-    row.Icon:SetPoint("LEFT", row, "LEFT", 1, 0) -- Shift to account for SSF border
+    -- icon (clipped so oversized textures can't bleed past the frame)
+    local ICON_SIZE = 35
+    row.IconClip = CreateFrame("Frame", nil, row)
+    row.IconClip:SetSize(ICON_SIZE, ICON_SIZE)
+    row.IconClip:SetPoint("LEFT", row, "LEFT", 1, 0) -- Shift to account for SSF border
+    row.IconClip:SetClipsChildren(true)
+
+    row.Icon = row.IconClip:CreateTexture(nil, "ARTWORK")
+    -- Slightly oversized to hide the default Blizzard icon border; clipped by IconClip
+    row.Icon:SetSize(ICON_SIZE - 4, ICON_SIZE - 4)
+    row.Icon:SetPoint("CENTER", row.IconClip, "CENTER", 0, 0)
+    row.Icon:SetTexCoord(0.05, 0.95, 0.05, 0.95)
     row.Icon:SetTexture(icon or 136116)
     
     -- Icon overlay (for failed state - red X)
-    row.IconOverlay = row:CreateTexture(nil, "OVERLAY")
+    row.IconOverlay = row.IconClip:CreateTexture(nil, "OVERLAY")
     row.IconOverlay:SetSize(20, 20) -- Same size as points checkmark
-    row.IconOverlay:SetPoint("CENTER", row.Icon, "CENTER", 0, 0)
+    row.IconOverlay:SetPoint("CENTER", row.IconClip, "CENTER", 0, 0)
     row.IconOverlay:Hide() -- Hidden by default
 
     -- IconFrame overlays (gold for completed, disabled for failed, silver for available)
     -- Gold frame (completed)
-    row.IconFrameGold = row:CreateTexture(nil, "OVERLAY", nil, 7)
-    row.IconFrameGold:SetSize(33, 33)
-    row.IconFrameGold:SetPoint("CENTER", row.Icon, "CENTER", 0, 0)
+    row.IconFrameGold = row.IconClip:CreateTexture(nil, "OVERLAY", nil, 7)
+    -- Match the clip size so the icon can't "peek" outside the frame.
+    row.IconFrameGold:SetSize(ICON_SIZE, ICON_SIZE)
+    row.IconFrameGold:SetPoint("CENTER", row.IconClip, "CENTER", 0, 0)
     row.IconFrameGold:SetTexture("Interface\\AddOns\\HardcoreAchievements\\Images\\frame_gold.png")
     row.IconFrameGold:SetDrawLayer("OVERLAY", 1)
     row.IconFrameGold:Hide()
     
     -- Silver frame (available/failed) - default
-    row.IconFrame = row:CreateTexture(nil, "OVERLAY", nil, 7)
-    row.IconFrame:SetSize(33, 33)
-    row.IconFrame:SetPoint("CENTER", row.Icon, "CENTER", 0, 0)
+    row.IconFrame = row.IconClip:CreateTexture(nil, "OVERLAY", nil, 7)
+    row.IconFrame:SetSize(ICON_SIZE, ICON_SIZE)
+    row.IconFrame:SetPoint("CENTER", row.IconClip, "CENTER", 0, 0)
     row.IconFrame:SetTexture("Interface\\AddOns\\HardcoreAchievements\\Images\\frame_silver.png")
     row.IconFrame:SetDrawLayer("OVERLAY", 1)
     row.IconFrame:Show()

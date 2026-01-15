@@ -1420,7 +1420,7 @@ local function LayoutModernRows(container, rows)
     end
     
     local totalHeight = 0
-    local rowSpacing = 8 -- Additional spacing for taller rows
+    local rowSpacing = 6 -- Reduced spacing (was 8)
     for i, row in ipairs(visibleRows) do
         -- Set row to full width minus 5px for scrollbar spacing
         row:SetWidth(containerWidth)
@@ -1623,7 +1623,7 @@ function DASHBOARD:BuildModernRows(srcRows)
     UpdateDashboardModernRow(row, srow)
     
     -- Position row
-    local rowSpacing = 8 -- Additional spacing for taller rows
+    local rowSpacing = 6 -- Reduced spacing (was 8)
     if i == 1 then
       row:SetPoint("TOPLEFT", self.Content, "TOPLEFT", 0, 0)
     else

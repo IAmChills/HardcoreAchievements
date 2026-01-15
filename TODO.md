@@ -1,9 +1,5 @@
 # TODO List
 
-The following icons need downlaoded and added to the addon for TBC:
-Achievement_worldevent_xmasogre
-Inv_pet_ratcage
-
 NOT USED BUT COULD HAVE USE (Already added to Icons)
 Achievement_Dungeon_Outland_Dungeon_Hero
 INV_DARKMOON_EYE (could be LOTR alternative)
@@ -16,8 +12,6 @@ INV_DARKMOON_EYE (could be LOTR alternative)
 
 ## TBC TODO List
 
-- Catalog
-  - NEED LEVEL 70 MILESTONE ICON
 - Dungeon Set Catalog
   - Already implemented, needs updated to include TBC sets
 - Dungeon Set Common
