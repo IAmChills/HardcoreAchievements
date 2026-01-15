@@ -35,6 +35,7 @@ Functions\CheckMapDiscovery.lua
 Functions\ProfessionTracker.lua [AllowLoadGameType vanilla]
 TBC\ProfessionTracker.lua [AllowLoadGameType tbc]
 
+Utils\SharedUtils.lua
 Utils\FilterDropdown.lua
 HardcoreAchievements.lua
 Utils\AchievementTracker.lua
@@ -71,6 +72,7 @@ TBC\ReputationCatalog.lua [AllowLoadGameType tbc]
 TBC\RaidCatalog.lua [AllowLoadGameType tbc]
 TBC\MetaCatalog.lua [AllowLoadGameType tbc]
 
+Utils\Dashboard.lua
 Utils\Embed_UltraHardcore.lua
 Utils\CommandHandler.lua
 Utils\AchievementLinks.lua

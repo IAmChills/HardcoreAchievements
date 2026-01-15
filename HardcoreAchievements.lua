@@ -2,7 +2,6 @@ local ADDON_NAME, addon = ...
 local playerGUID
 -- Legacy constant (historically a flat +5). Kept for backwards-compat, but no longer used in point math.
 HCA_SELF_FOUND_BONUS = HCA_SELF_FOUND_BONUS or 5
-local SETTINGS_ICON_TEXTURE = "Interface\\AddOns\\HardcoreAchievements\\Images\\icon_gear.png"
 
 local EvaluateCustomCompletions
 local RefreshOutleveledAll
@@ -1113,31 +1112,18 @@ end
 
 function ShowHardcoreAchievementWindow()
     local _, cdb = GetCharDB()
-    if cdb and cdb.settings and cdb.settings.showCustomTab then
+    -- Check if user wants to use Character Panel instead of Dashboard (default is Dashboard)
+    if cdb and cdb.settings and cdb.settings.useCharacterPanel then
+        -- Use Character Panel tab (old behavior)
         ToggleAchievementCharacterFrameTab()
-    elseif type(ToggleSettings) == "function" then
-        local container = nil
-        if TabManager and TabManager.getTabContent then
-            container = TabManager.getTabContent(3)
-        end
-        if not container and _G.tabContents and _G.tabContents[3] then
-            container = _G.tabContents[3]
-        end
-        local isContainerShown = container and container.IsShown and container:IsShown()
-        if isContainerShown then
-            ToggleSettings()
-        else
-            ToggleSettings()
-            if TabManager and TabManager.switchToTab then
-                TabManager.switchToTab(3)
-            elseif type(OpenSettingsToTab) == "function" then
-                OpenSettingsToTab(3)
-            end
-        end
-    elseif type(OpenSettingsToTab) == "function" then
-        OpenSettingsToTab(3)
     else
-        ToggleAchievementCharacterFrameTab()
+        -- Default: Use Dashboard (standalone window)
+        if HardcoreAchievements_Dashboard and HardcoreAchievements_Dashboard.Toggle then
+            HardcoreAchievements_Dashboard:Toggle()
+        else
+            -- Fallback to Character Panel if Dashboard not available
+            ToggleAchievementCharacterFrameTab()
+        end
     end
 end
 
@@ -1537,6 +1523,11 @@ function HardcoreAchievements_SetProgress(achId, key, value) SetProgress(achId, 
 function HardcoreAchievements_ClearProgress(achId) ClearProgress(achId) end
 function HardcoreAchievements_GetCharDB() return GetCharDB() end
   
+-- Exported: getter for Tab frame (used by SharedUtils)
+function HardcoreAchievements_GetTab()
+    return Tab
+end
+
 -- Exported: hide custom vertical tab if present (used by embedded UI)
 function HardcoreAchievements_HideVerticalTab()
     if Tab and Tab.squareFrame then
@@ -1604,14 +1595,12 @@ local minimapDataObject = LDB:NewDataObject("HardcoreAchievements", {
     OnTooltipShow = function(tooltip)
         tooltip:AddLine("HardcoreAchievements", 1, 1, 1)
         
-        -- Show different tooltip text based on user preference and UltraHardcore availability
+        -- Show different tooltip text based on user preference
         local _, cdb = GetCharDB()
-        if cdb and cdb.settings and cdb.settings.showCustomTab then
-            tooltip:AddLine("Left-click to open Hardcore Achievements", 0.5, 0.5, 0.5)
-        elseif type(OpenSettingsToTab) == "function" then
-            tooltip:AddLine("Left-click to open UltraHardcore Achievements", 0.5, 0.5, 0.5)
+        if cdb and cdb.settings and cdb.settings.useCharacterPanel then
+            tooltip:AddLine("Left-click to open Character Panel", 0.5, 0.5, 0.5)
         else
-            tooltip:AddLine("Left-click to open Hardcore Achievements", 0.5, 0.5, 0.5)
+            tooltip:AddLine("Left-click to open Dashboard", 0.5, 0.5, 0.5)
         end
         tooltip:AddLine("Right-click to open Options", 0.5, 0.5, 0.5)
         
@@ -1653,9 +1642,9 @@ initFrame:SetScript("OnEvent", function(self, event, ...)
         if cdb then
             -- Ensure settings table exists
             cdb.settings = cdb.settings or {}
-            -- Default showCustomTab to true for new characters
+            -- Default showCustomTab to false (hidden by default, unless useCharacterPanel is enabled)
             if cdb.settings.showCustomTab == nil then
-                cdb.settings.showCustomTab = true
+                cdb.settings.showCustomTab = false
             end
             local name, realm = UnitName("player"), GetRealmName()
             local className = UnitClass("player")
@@ -1822,11 +1811,11 @@ function LoadTabPosition()
         local posX = db.tabSettings.position.x
         local posY = db.tabSettings.position.y
         
-        -- Respect user preference: hide custom tab entirely if disabled
+        -- Respect user preference: hide custom tab if useCharacterPanel is disabled
         local _, cdb = GetCharDB()
-        -- Default to true if not set (for new characters)
-        local showTab = (cdb and cdb.settings and cdb.settings.showCustomTab ~= nil) and cdb.settings.showCustomTab or true
-        if not showTab then
+        -- Check useCharacterPanel setting (default to false - Dashboard mode)
+        local useCharacterPanel = (cdb and cdb.settings and cdb.settings.useCharacterPanel ~= nil) and cdb.settings.useCharacterPanel or false
+        if not useCharacterPanel then
             Tab:Hide()
             if Tab.squareFrame then
                 Tab.squareFrame:Hide()
@@ -1879,9 +1868,9 @@ function LoadTabPosition()
         -- Set the mode on the tab object
         Tab.mode = savedMode
     else
-        -- If no saved data, check showCustomTab setting (default to true for new characters)
+        -- If no saved data, check useCharacterPanel setting (default to false - Dashboard mode)
         local _, cdb = GetCharDB()
-        local shouldShow = (cdb and cdb.settings and cdb.settings.showCustomTab ~= nil) and cdb.settings.showCustomTab or true
+        local shouldShow = (cdb and cdb.settings and cdb.settings.useCharacterPanel ~= nil) and cdb.settings.useCharacterPanel or false
         
         if shouldShow then
             -- Show tab at default position if showCustomTab is true
@@ -1912,6 +1901,7 @@ function LoadTabPosition()
                 end
             else
                 -- Hardcore default: bottom mode
+                local Tabs = CharacterFrame.numTabs
                 Tab:SetPoint("RIGHT", _G["CharacterFrameTab"..Tabs], "RIGHT", 43, 0)
                 Tab:SetAlpha(1)
                 Tab:EnableMouse(true)
@@ -1957,7 +1947,7 @@ function ResetTabPosition()
     -- LoadTabPosition handles visibility based on CharacterFrame state
     LoadTabPosition()
     
-    print("HardcoreAchievements: Tab position reset to default")
+    print("|cff008066[Hardcore Achievements]|r Tab position reset to default")
 end
 
 -- Keeps default anchoring until the user drags; then constrains motion to bottom or right edge.
@@ -2142,6 +2132,10 @@ do
             -- Show default tab, hide square frame
             Tab:SetAlpha(1) -- Show the default tab
             Tab:EnableMouse(true)   -- Enable tab mouse events in horizontal mode
+            -- Explicitly show the tab when switching to bottom mode (only if CharacterFrame is shown)
+            if CharacterFrame and CharacterFrame:IsShown() then
+                Tab:Show()
+            end
             if Tab.squareFrame then
                 Tab.squareFrame:EnableMouse(false)
                 if keepSquareVisible then
@@ -2416,59 +2410,13 @@ end)
 
 -- Filter dropdown - using shared FilterDropdown module
 
--- Helper function to check if achievement should be shown based on checkbox filter
--- Returns true if should show, false if should hide
+-- Use FilterDropdown for checkbox filtering logic
+local FilterDropdown = _G.FilterDropdown
 local function ShouldShowByCheckboxFilter(def, isCompleted, currentFilter, checkboxIndex, variationType)
-    -- Completed achievements always show when "all" or "completed" filter is selected
-    if isCompleted and (currentFilter == "all" or currentFilter == "completed") then
-        return true
+    if FilterDropdown and FilterDropdown.ShouldShowByCheckboxFilter then
+        return FilterDropdown.ShouldShowByCheckboxFilter(def, isCompleted, currentFilter, checkboxIndex, variationType)
     end
-    
-    -- Load checkbox states from database
-    local checkboxStates = { true, true, true, true, true, true, false, false, false, false, false, false, false, false }
-    if type(HardcoreAchievements_GetCharDB) == "function" then
-        local _, cdb = HardcoreAchievements_GetCharDB()
-        if cdb and cdb.settings and cdb.settings.filterCheckboxes then
-            local states = cdb.settings.filterCheckboxes
-            if type(states) == "table" then
-                checkboxStates = {
-                    states[1] ~= false,  -- Quest (default true)
-                    states[2] ~= false,  -- Dungeon (default true)
-                    states[3] ~= false,  -- Heroic Dungeon (default true)
-                    states[4] ~= false,  -- Raid (default true)
-                    states[5] ~= false,  -- Professions (default true)
-                    states[6] ~= false,  -- Meta (default true)
-                    states[7] == true,  -- Reputations
-                    states[8] == true,  -- Exploration
-                    states[9] == true,  -- Dungeon Sets
-                    states[10] == true,  -- Solo
-                    states[11] == true,  -- Duo
-                    states[12] == true,  -- Trio
-                    states[13] == true,  -- Ridiculous
-                    states[14] == true,  -- Secret
-                }
-            end
-        end
-    end
-    
-    -- For variations, check based on variation type
-    if variationType then
-        if variationType == "Trio" then
-            return checkboxStates[12]
-        elseif variationType == "Duo" then
-            return checkboxStates[11]
-        elseif variationType == "Solo" then
-            return checkboxStates[10]
-        end
-        return false
-    end
-    
-    -- For other types, check the specified checkbox index
-    if checkboxIndex then
-        return checkboxStates[checkboxIndex]
-    end
-    
-    return true -- Default to showing if no checkbox specified
+    return true -- Fallback to showing if FilterDropdown not available
 end
 
 -- Function to apply the current filter to all achievement rows
@@ -2582,24 +2530,27 @@ end
 
 _G.HCA_ApplyFilter = ApplyFilter
 
--- Create and initialize the filter dropdown
-local filterDropdown = FilterDropdown:CreateDropdown(AchievementPanel, "TOPRIGHT", AchievementPanel, -20, -52, 60)
-AchievementPanel.filterDropdown = filterDropdown
-
-FilterDropdown:InitializeDropdown(filterDropdown, {
-    currentFilter = "all",
-    -- checkboxStates will be loaded from database automatically
-    checkboxLabels = { "Quests", "Dungeons", "Heroic Dungeons", "Raids", "Professions", "Meta", "Reputations", "Exploration", "Dungeon Sets", "Solo Dungeons", "Duo Dungeons", "Trio Dungeons", "Ridiculous", "Secret" },
-    onFilterChange = function(filterValue)
-        ApplyFilter()
-    end,
-    onCheckboxChange = function(checkboxIndex, newState)
-        -- Checkbox state is automatically saved to database in FilterDropdown
-        -- Variations are always registered but filtered based on checkbox states
-        -- Re-apply filter to show/hide variations when checkbox changes
-        ApplyFilter()
-    end,
-})
+-- Create and initialize the filter dropdown using centralized helper
+AchievementPanel.filterDropdown = FilterDropdown:CreateAndInitializeDropdown(
+    AchievementPanel,
+    {
+        anchorPoint = "TOPRIGHT",
+        anchorTo = AchievementPanel,
+        xOffset = -20,
+        yOffset = -52,
+        width = 60
+    },
+    {
+        onFilterChange = function(filterValue)
+            ApplyFilter()
+        end,
+        onCheckboxChange = function(checkboxIndex, newState)
+            -- Checkbox state is automatically saved to database in FilterDropdown
+            -- Re-apply filter to show/hide achievements when checkbox changes
+            ApplyFilter()
+        end
+    }
+)
 
 --AchievementPanel.Text = AchievementPanel:CreateFontString(nil, "OVERLAY", "GameFontNormal")
 --AchievementPanel.Text:SetPoint("TOP", 5, -45)
@@ -2665,11 +2616,11 @@ end)
 
 AchievementPanel.SettingsButton = CreateFrame("Button", nil, AchievementPanel)
 AchievementPanel.SettingsButton:SetSize(14, 14)
-AchievementPanel.SettingsButton:SetPoint("BOTTOMLEFT", AchievementPanel.SoloModeCheckbox, "TOPLEFT", 6, 18)
+AchievementPanel.SettingsButton:SetPoint("BOTTOMLEFT", AchievementPanel.SoloModeCheckbox, "TOPLEFT", 6, 17)
 AchievementPanel.SettingsButton.Icon = AchievementPanel.SettingsButton:CreateTexture(nil, "ARTWORK")
 AchievementPanel.SettingsButton.Icon:SetAllPoints(AchievementPanel.SettingsButton)
-AchievementPanel.SettingsButton.Icon:SetTexture(SETTINGS_ICON_TEXTURE)
-AchievementPanel.SettingsButton.Icon:SetVertexColor(1, 0.82, 0.0)
+AchievementPanel.SettingsButton.Icon:SetTexture("Interface\\WorldMap\\Gear_64")
+AchievementPanel.SettingsButton.Icon:SetTexCoord(0, 0.5, 0.5, 1)
 AchievementPanel.SettingsButton:SetScript("OnClick", function()
     OpenOptionsPanel()
 end)
@@ -2679,6 +2630,27 @@ AchievementPanel.SettingsButton:SetScript("OnEnter", function(self)
     GameTooltip:Show()
 end)
 AchievementPanel.SettingsButton:SetScript("OnLeave", function()
+    GameTooltip:Hide()
+end)
+
+-- Dashboard button (next to Settings button)
+AchievementPanel.DashboardButton = CreateFrame("Button", nil, AchievementPanel)
+AchievementPanel.DashboardButton:SetSize(24, 24)
+AchievementPanel.DashboardButton:SetPoint("LEFT", AchievementPanel.SettingsButton, "RIGHT", 1, -2)
+AchievementPanel.DashboardButton.Icon = AchievementPanel.DashboardButton:CreateTexture(nil, "ARTWORK")
+AchievementPanel.DashboardButton.Icon:SetAllPoints(AchievementPanel.DashboardButton)
+AchievementPanel.DashboardButton.Icon:SetTexture("Interface\\AchievementFrame\\UI-Achievement-Progressive-Shield-NoPoints")
+AchievementPanel.DashboardButton:SetScript("OnClick", function()
+    if _G.HCA_ShowDashboard then
+        _G.HCA_ShowDashboard()
+    end
+end)
+AchievementPanel.DashboardButton:SetScript("OnEnter", function(self)
+    GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+    GameTooltip:SetText("Open Dashboard", nil, nil, nil, nil, true)
+    GameTooltip:Show()
+end)
+AchievementPanel.DashboardButton:SetScript("OnLeave", function()
     GameTooltip:Hide()
 end)
 
@@ -4057,7 +4029,9 @@ end)
 -- Hook CharacterFrame OnShow to restore square frame visibility if in vertical mode
 CharacterFrame:HookScript("OnShow", function()
     local _, cdb = GetCharDB()
-    if not (cdb and cdb.settings and cdb.settings.showCustomTab) then
+    -- Check useCharacterPanel setting (default to false - Dashboard mode)
+    local useCharacterPanel = (cdb and cdb.settings and cdb.settings.useCharacterPanel ~= nil) and cdb.settings.useCharacterPanel or false
+    if not useCharacterPanel then
         Tab:Hide()
         if Tab.squareFrame then
             Tab.squareFrame:Hide()

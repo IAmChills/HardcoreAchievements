@@ -628,16 +628,11 @@ local function HandleSlashCommand(msg)
                     HCA_ShowAchievementTab()
                 end
             end)
-            print("|cff00ff00[Hardcore Achievements]|r Custom achievement tab enabled and shown")
-        else
-            print("|cffff0000[Hardcore Achievements]|r Custom achievement tab not found")
+            print("|cff008066[Hardcore Achievements]|r Custom achievement tab enabled and shown")
         end
     elseif command == "reset" and args[2] == "tab" then
         if ResetTabPosition then
             ResetTabPosition()
-            print("|cff00ff00[Hardcore Achievements]|r Tab position reset to default")
-        else
-            print("|cffff0000[Hardcore Achievements]|r ResetTabPosition function not found")
         end
     elseif command == "adminkey" then
         -- SECURITY: Set admin secret key for secure command authentication
@@ -685,33 +680,33 @@ local function HandleSlashCommand(msg)
         local subcommand = args[2] and string.lower(args[2]) or ""
         
         if not AchievementTracker then
-            print("|cffff0000[Hardcore Achievements]|r Achievement tracker not loaded yet. Please wait a moment and try again, or reload your UI.")
+            print("|cff008066[Hardcore Achievements]|r Achievement tracker not loaded yet. Please wait a moment and try again, or reload your UI.")
             return
         end
         
         if subcommand == "show" then
             if AchievementTracker.Show then
                 AchievementTracker:Show()
-                print("|cff00ff00[Hardcore Achievements]|r Achievement tracker shown")
+                print("|cff008066[Hardcore Achievements]|r Achievement tracker shown")
             else
                 print("|cffff0000[Hardcore Achievements]|r Achievement tracker not initialized")
             end
         elseif subcommand == "hide" then
             if AchievementTracker.Hide then
                 AchievementTracker:Hide()
-                print("|cff00ff00[Hardcore Achievements]|r Achievement tracker hidden")
+                print("|cff008066[Hardcore Achievements]|r Achievement tracker hidden")
             else
                 print("|cffff0000[Hardcore Achievements]|r Achievement tracker not initialized")
             end
         elseif subcommand == "toggle" then
             if AchievementTracker.Toggle then
                 AchievementTracker:Toggle()
-                print("|cff00ff00[Hardcore Achievements]|r Achievement tracker toggled")
+                print("|cff008066[Hardcore Achievements]|r Achievement tracker toggled")
             else
                 print("|cffff0000[Hardcore Achievements]|r Achievement tracker not initialized")
             end
         else
-            print("|cff00ff00[Hardcore Achievements]|r Tracker commands:")
+            print("|cff008066[Hardcore Achievements]|r Tracker commands:")
             print("  |cffffff00/hca tracker show|r - Show the achievement tracker")
             print("  |cffffff00/hca tracker hide|r - Hide the achievement tracker")
             print("  |cffffff00/hca tracker toggle|r - Toggle the achievement tracker")
@@ -720,24 +715,24 @@ local function HandleSlashCommand(msg)
         -- Debug toggle command
         if args[2] and string.lower(args[2]) == "on" then
             SetDebugEnabled(true)
-            print("|cff00ff00[Hardcore Achievements]|r Debug mode enabled")
+            print("|cff008066[Hardcore Achievements]|r Debug mode enabled")
             _G.HCA_DebugPrint("Debug mode is now ON - you will see debug messages")
         elseif args[2] and string.lower(args[2]) == "off" then
             SetDebugEnabled(false)
-            print("|cff00ff00[Hardcore Achievements]|r Debug mode disabled")
+            print("|cff008066[Hardcore Achievements]|r Debug mode disabled")
         else
             -- Toggle if no argument provided
             local currentState = GetDebugEnabled()
             SetDebugEnabled(not currentState)
             if not currentState then
-                print("|cff00ff00[Hardcore Achievements]|r Debug mode enabled")
+                print("|cff008066[Hardcore Achievements]|r Debug mode enabled")
                 _G.HCA_DebugPrint("Debug mode is now ON - you will see debug messages")
             else
-                print("|cff00ff00[Hardcore Achievements]|r Debug mode disabled")
+                print("|cff008066[Hardcore Achievements]|r Debug mode disabled")
             end
         end
     else
-        print("|cff00ff00[Hardcore Achievements]|r Available commands:")
+        print("|cff008066[Hardcore Achievements]|r Available commands:")
         print("  |cffffff00/hca show|r - Enable and show the custom achievement tab")
         print("  |cffffff00/hca reset tab|r - Reset the tab position to default")
         print("  |cffffff00/hca tracker|r - Manage the achievement tracker")

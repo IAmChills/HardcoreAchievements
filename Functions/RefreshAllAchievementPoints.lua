@@ -203,30 +203,13 @@ function RefreshAllAchievementPoints()
         HCA_UpdateTotalPoints()
     end
     
-    -- Update multiplier text if it exists
-    if AchievementPanel and AchievementPanel.MultiplierText then
-        local labelText = ""
-        if preset or isSelfFound or isSoloMode then
-            -- Build array of modifiers (preset goes last)
-            local modifiers = {}
-            if isSelfFound and not isSoloMode then
-                table.insert(modifiers, "Self Found")
-            end
-            if isSoloMode and not isSelfFound then
-                table.insert(modifiers, "Solo")
-            end
-            if isSoloMode and isSelfFound then
-                table.insert(modifiers, "Solo Self Found")
-            end
-            if preset then
-                table.insert(modifiers, preset)
-            end
-            
-            labelText = "Point Multiplier (" .. table.concat(modifiers, ", ") .. ")"
-        end
-        
-        AchievementPanel.MultiplierText:SetText(labelText)
-        AchievementPanel.MultiplierText:SetTextColor(0.8, 0.8, 0.8)
+    -- Update multiplier text if it exists (using centralized function)
+    if AchievementPanel and AchievementPanel.MultiplierText and _G.UpdateMultiplierText then
+        _G.UpdateMultiplierText(AchievementPanel.MultiplierText)
+    end
+    -- Update Dashboard multiplier text if it exists
+    if DashboardFrame and DashboardFrame.MultiplierText and _G.UpdateMultiplierText then
+        _G.UpdateMultiplierText(DashboardFrame.MultiplierText, {0.922, 0.871, 0.761})
     end
     
     -- Sync character panel checkbox state if it exists

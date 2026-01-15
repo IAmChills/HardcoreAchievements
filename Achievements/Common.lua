@@ -35,39 +35,17 @@ function _G.HCA_IsAchievementVisible(achId)
             -- Check checkbox filter state for variations (same logic as ApplyFilter/ShouldShowByCheckboxFilter)
             -- This works even if the panel hasn't been opened and filter hasn't been applied yet
             if row._def and row._def.isVariation and row._def.variationType then
-                local checkboxStates = { true, true, true, true, true, true, false, false, false, false, false, false, false, false }
-                if type(HardcoreAchievements_GetCharDB) == "function" then
-                    local _, cdb = HardcoreAchievements_GetCharDB()
-                    if cdb and cdb.settings and cdb.settings.filterCheckboxes then
-                        local states = cdb.settings.filterCheckboxes
-                        if type(states) == "table" then
-                            checkboxStates = {
-                                states[1] ~= false,  -- Quest (default true)
-                                states[2] ~= false,  -- Dungeon (default true)
-                                states[3] ~= false,  -- Heroic Dungeon (default true)
-                                states[4] ~= false,  -- Raid (default true)
-                                states[5] ~= false,  -- Professions (default true)
-                                states[6] ~= false,  -- Meta (default true)
-                                states[7] == true,  -- Reputations
-                                states[8] == true,  -- Exploration
-                                states[9] == true,  -- Dungeon Sets
-                                states[10] == true,  -- Solo
-                                states[11] == true,  -- Duo
-                                states[12] == true,  -- Trio
-                                states[13] == true,  -- Ridiculous
-                                states[14] == true,  -- Secret
-                            }
-                        end
-                    end
-                end
+                -- Use FilterDropdown for checkbox states
+                local FilterDropdown = _G.FilterDropdown
+                local checkboxStates = FilterDropdown and FilterDropdown.GetCheckboxStates and FilterDropdown.GetCheckboxStates() or { true, true, true, true, true, true, false, false, false, false, false, false, false, false }
                 
                 local shouldShow = false
                 if row._def.variationType == "Trio" then
-                    shouldShow = checkboxStates[11]
+                    shouldShow = checkboxStates[12]
                 elseif row._def.variationType == "Duo" then
-                    shouldShow = checkboxStates[10]
+                    shouldShow = checkboxStates[11]
                 elseif row._def.variationType == "Solo" then
-                    shouldShow = checkboxStates[9]
+                    shouldShow = checkboxStates[10]
                 end
                 
                 -- Completed achievements always show (same as ShouldShowByCheckboxFilter logic)

@@ -1,17 +1,22 @@
 -- FilterDropdown.lua
 -- Shared filter dropdown implementation for both Character Panel and Embed UI
+-- Contains all filter-related logic including checkbox state management
 
 local FilterDropdown = {}
 
--- Helper function to get checkbox states from character database
-local function GetCheckboxStatesFromDB()
+-- =========================================================
+-- Checkbox Filter Logic (Core Business Logic)
+-- =========================================================
+
+-- Get checkbox states from database with proper defaults
+function FilterDropdown.GetCheckboxStates()
+    local checkboxStates = { true, true, true, true, true, true, false, false, false, false, false, false, false, false }
     if type(HardcoreAchievements_GetCharDB) == "function" then
         local _, cdb = HardcoreAchievements_GetCharDB()
         if cdb and cdb.settings and cdb.settings.filterCheckboxes then
-            -- Ensure we have a table with up to 14 boolean values
             local states = cdb.settings.filterCheckboxes
             if type(states) == "table" then
-                return {
+                checkboxStates = {
                     states[1] ~= false,  -- Quest (default true)
                     states[2] ~= false,  -- Dungeon (default true)
                     states[3] ~= false,  -- Heroic Dungeon (default true)
@@ -30,12 +35,11 @@ local function GetCheckboxStatesFromDB()
             end
         end
     end
-    -- Default: Core checked, Miscellaneous unchecked
-    return { true, true, true, true, true, true, false, false, false, false, false, false, false, false }
+    return checkboxStates
 end
 
--- Helper function to save checkbox states to character database
-local function SaveCheckboxStatesToDB(checkboxStates)
+-- Save checkbox states to character database
+function FilterDropdown.SaveCheckboxStates(checkboxStates)
     if type(HardcoreAchievements_GetCharDB) == "function" then
         local _, cdb = HardcoreAchievements_GetCharDB()
         if cdb then
@@ -58,6 +62,50 @@ local function SaveCheckboxStatesToDB(checkboxStates)
             }
         end
     end
+end
+
+-- Check if achievement should be shown based on checkbox filter
+-- Returns true if should show, false if should hide
+function FilterDropdown.ShouldShowByCheckboxFilter(def, isCompleted, currentFilter, checkboxIndex, variationType)
+    -- Completed achievements always show when "all" or "completed" filter is selected
+    if isCompleted and (currentFilter == "all" or currentFilter == "completed") then
+        return true
+    end
+    
+    local checkboxStates = FilterDropdown.GetCheckboxStates()
+    
+    -- For variations, check based on variation type
+    if variationType then
+        if variationType == "Trio" then
+            return checkboxStates[12]
+        elseif variationType == "Duo" then
+            return checkboxStates[11]
+        elseif variationType == "Solo" then
+            return checkboxStates[10]
+        end
+        return false
+    end
+    
+    -- For other types, check the specified checkbox index
+    if checkboxIndex then
+        return checkboxStates[checkboxIndex]
+    end
+    
+    return true -- Default to showing if no checkbox specified
+end
+
+-- =========================================================
+-- UI Helper Functions
+-- =========================================================
+
+-- Helper function to get checkbox states from database (internal use)
+local function GetCheckboxStatesFromDB()
+    return FilterDropdown.GetCheckboxStates()
+end
+
+-- Helper function to save checkbox states to database (internal use)
+local function SaveCheckboxStatesToDB(checkboxStates)
+    FilterDropdown.SaveCheckboxStates(checkboxStates)
 end
 
 -- Default filter list
@@ -347,6 +395,43 @@ function FilterDropdown:SetCheckboxState(dropdown, index, state)
             filterList = dropdown._filterList,
         })
     end
+end
+
+-- Helper function to create and initialize a complete filter dropdown with standard configuration
+-- parent: Frame to attach dropdown to
+-- positionConfig: Table with {anchorPoint, anchorTo, xOffset, yOffset, width} or defaults will be used
+-- callbacks: Table with {onFilterChange, onCheckboxChange} functions
+-- Returns: The created dropdown frame
+function FilterDropdown:CreateAndInitializeDropdown(parent, positionConfig, callbacks)
+    positionConfig = positionConfig or {}
+    callbacks = callbacks or {}
+    
+    -- Default position if not provided
+    local anchorPoint = positionConfig.anchorPoint or "TOPRIGHT"
+    local anchorTo = positionConfig.anchorTo or parent
+    local xOffset = positionConfig.xOffset or -20
+    local yOffset = positionConfig.yOffset or -52
+    local width = positionConfig.width or 60
+    
+    -- Create the dropdown
+    local dropdown = FilterDropdown:CreateDropdown(parent, anchorPoint, anchorTo, xOffset, yOffset, width)
+    
+    -- Standard checkbox labels
+    local checkboxLabels = { 
+        "Quests", "Dungeons", "Heroic Dungeons", "Raids", "Professions", "Meta", 
+        "Reputations", "Exploration", "Dungeon Sets", "Solo Dungeons", "Duo Dungeons", 
+        "Trio Dungeons", "Ridiculous", "Secret" 
+    }
+    
+    -- Initialize the dropdown
+    FilterDropdown:InitializeDropdown(dropdown, {
+        currentFilter = "all",
+        checkboxLabels = checkboxLabels,
+        onFilterChange = callbacks.onFilterChange or function() end,
+        onCheckboxChange = callbacks.onCheckboxChange or function() end,
+    })
+    
+    return dropdown
 end
 
 -- Export as global module
