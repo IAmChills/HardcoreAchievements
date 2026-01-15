@@ -141,26 +141,28 @@ local Secrets = {
     secret = true,
     staticPoints = true,
     hiddenUntilComplete = true,
-}, {
-    achId = "Secret006",
-    title = "The Precious",
-    level = nil,
-    tooltip = "Starting as a level 1 Gnome, journey on foot to |cff0091e6Blackrock Mountain|r and destroy |cff0091e6The 1 Ring|r",
-    icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\ThePrecious.png",
-    points = 0,
-    customIsCompleted = function()
-        local mapId = GetSubZoneText()
-        if mapId ~= "Blackrock Mountain" then
-            return false
-        end
-        local itemCount = GetItemCount(8350, true)
-        if itemCount == 0 then
-            return false
-        end
-        return true
-    end,
-    staticPoints = true,
-}, {
+}, 
+-- {
+--     achId = "Secret006",
+--     title = "The Precious",
+--     level = nil,
+--     tooltip = "Starting as a level 1 Gnome, journey on foot to |cff0091e6Blackrock Mountain|r and destroy |cff0091e6The 1 Ring|r",
+--     icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\ThePrecious.png",
+--     points = 0,
+--     customIsCompleted = function()
+--         local mapId = GetSubZoneText()
+--         if mapId ~= "Blackrock Mountain" then
+--             return false
+--         end
+--         local itemCount = GetItemCount(8350, true)
+--         if itemCount == 0 then
+--             return false
+--         end
+--         return true
+--     end,
+--     staticPoints = true,
+-- }, 
+{
     achId = "Secret007",
     title = "Mok'rash",
     level = 50,
