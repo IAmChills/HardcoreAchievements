@@ -6,7 +6,7 @@ local RidiculousAchievements = {
     title = "The Disciplined One",
     level = nil,
     tooltip = "Reach level 70 without jumping",
-    icon = 413584,
+    icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_guildperk_honorablemention.png", -- 413584
     points = 0,
     customIsCompleted = function()
       if not _G.HardcoreAchievements_GetCharDB then
