@@ -237,12 +237,15 @@ function M.registerQuestAchievement(cfg)
                                     pointsToStore = basePoints * 2
                                     -- Update points display to show doubled value (including self-found bonus for display)
                                     local displayPoints = pointsToStore
-                                    local isDungeonSet = row._def and row._def.isDungeonSet
-                                    -- Reputation achievements SHOULD receive the self-found bonus.
-                                    if isSelfFound and not row.isSecretAchievement and not isDungeonSet then
+                                    if isSelfFound then
+                                        -- pointsAtKill is stored WITHOUT self-found bonus; display includes it.
+                                        -- 0-point achievements naturally add 0.
                                         local getBonus = _G.HCA_GetSelfFoundBonus
-                                        local bonus = (type(getBonus) == "function") and getBonus(tonumber(row.originalPoints) or 0) or 0
-                                        displayPoints = displayPoints + bonus
+                                        local baseForBonus = row.originalPoints or row.revealPointsBase or 0
+                                        local bonus = (type(getBonus) == "function") and getBonus(tonumber(baseForBonus) or 0) or 0
+                                        if bonus > 0 and displayPoints > 0 then
+                                            displayPoints = displayPoints + bonus
+                                        end
                                     end
                                     row.points = displayPoints
                                     if row.Points then
@@ -1003,12 +1006,15 @@ function M.registerQuestAchievement(cfg)
                             if effectiveSoloKill then
                                 -- Update points display to show doubled value (including self-found bonus for display)
                                 local displayPoints = effectivePoints
-                                local isDungeonSet = row._def and row._def.isDungeonSet
-                                -- Reputation achievements SHOULD receive the self-found bonus.
-                                if isSelfFound and not row.isSecretAchievement and not isDungeonSet then
+                                if isSelfFound then
+                                    -- pointsAtKill is stored WITHOUT self-found bonus; display includes it.
+                                    -- 0-point achievements naturally add 0.
                                     local getBonus = _G.HCA_GetSelfFoundBonus
-                                    local bonus = (type(getBonus) == "function") and getBonus(tonumber(row.originalPoints) or 0) or 0
-                                    displayPoints = displayPoints + bonus
+                                    local baseForBonus = row.originalPoints or row.revealPointsBase or 0
+                                    local bonus = (type(getBonus) == "function") and getBonus(tonumber(baseForBonus) or 0) or 0
+                                    if bonus > 0 and displayPoints > 0 then
+                                        displayPoints = displayPoints + bonus
+                                    end
                                 end
                                 row.points = displayPoints
                                 if row.Points then
@@ -1240,13 +1246,16 @@ function M.registerQuestAchievement(cfg)
                                 pointsToStore = basePoints * 2
                                 -- Update points display to show doubled value (including self-found bonus for display)
                                 local displayPoints = pointsToStore
-                                local isDungeonSet = row._def and row._def.isDungeonSet
-                                -- Reputation achievements SHOULD receive the self-found bonus.
-                                    if isSelfFound and not row.isSecretAchievement and not isDungeonSet then
-                                        local getBonus = _G.HCA_GetSelfFoundBonus
-                                        local bonus = (type(getBonus) == "function") and getBonus(tonumber(row.originalPoints) or 0) or 0
+                                if isSelfFound then
+                                    -- pointsAtKill is stored WITHOUT self-found bonus; display includes it.
+                                    -- 0-point achievements naturally add 0.
+                                    local getBonus = _G.HCA_GetSelfFoundBonus
+                                    local baseForBonus = row.originalPoints or row.revealPointsBase or 0
+                                    local bonus = (type(getBonus) == "function") and getBonus(tonumber(baseForBonus) or 0) or 0
+                                    if bonus > 0 and displayPoints > 0 then
                                         displayPoints = displayPoints + bonus
                                     end
+                                end
                                 row.points = displayPoints
                                 if row.Points then
                                     row.Points:SetText(tostring(displayPoints))
@@ -1303,12 +1312,15 @@ function M.registerQuestAchievement(cfg)
                                 if progressTable and progressTable.pointsAtKill then
                                     local storedPoints = tonumber(progressTable.pointsAtKill) or row.points
                                     local isSelfFound = _G.IsSelfFound and _G.IsSelfFound() or false
-                                    local isDungeonSet = row._def and row._def.isDungeonSet
-                                    -- Reputation achievements SHOULD receive the self-found bonus.
-                                    if isSelfFound and not row.isSecretAchievement and not isDungeonSet then
+                                    if isSelfFound then
+                                        -- pointsAtKill is stored WITHOUT self-found bonus; display includes it.
+                                        -- 0-point achievements naturally add 0.
                                         local getBonus = _G.HCA_GetSelfFoundBonus
-                                        local bonus = (type(getBonus) == "function") and getBonus(tonumber(row.originalPoints) or 0) or 0
-                                        storedPoints = storedPoints + bonus
+                                        local baseForBonus = row.originalPoints or row.revealPointsBase or 0
+                                        local bonus = (type(getBonus) == "function") and getBonus(tonumber(baseForBonus) or 0) or 0
+                                        if bonus > 0 and storedPoints > 0 then
+                                            storedPoints = storedPoints + bonus
+                                        end
                                     end
                                     row.points = storedPoints
                                     if row.Points then

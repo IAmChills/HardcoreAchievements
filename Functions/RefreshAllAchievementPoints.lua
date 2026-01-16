@@ -48,14 +48,12 @@ function RefreshAllAchievementPoints()
                     end
                 end
                 
-                -- Self-found bonus is NOT included in the preview - it's applied at completion time
-                -- Only add self-found bonus if we have stored pointsAtKill (for completed/in-progress achievements)
-                if hasStoredPoints then
-                    local isDungeonSet = row._def and row._def.isDungeonSet
-                    -- Reputation achievements SHOULD receive the self-found bonus.
-                    if isSelfFound and not row.isSecretAchievement and not isDungeonSet then
-                        local getBonus = _G.HCA_GetSelfFoundBonus
-                        local bonus = (type(getBonus) == "function") and getBonus(originalPoints) or 0
+                -- Self-found bonus should be reflected in the displayed points (preview + stored),
+                -- with a simple rule: 0-point achievements remain 0 (bonus computes to 0).
+                if isSelfFound then
+                    local getBonus = _G.HCA_GetSelfFoundBonus
+                    local bonus = (type(getBonus) == "function") and getBonus(originalPoints) or 0
+                    if bonus > 0 and finalPoints > 0 then
                         finalPoints = finalPoints + bonus
                     end
                 end
@@ -63,6 +61,10 @@ function RefreshAllAchievementPoints()
                 row.points = finalPoints
                 if row.Points then
                     row.Points:SetText(tostring(finalPoints))
+                end
+                -- Re-apply point-circle UI rules (e.g., 0-point shield icon) after recalculation.
+                if _G.HCA_UpdatePointsDisplay then
+                    _G.HCA_UpdatePointsDisplay(row)
                 end
                 
                 -- Update Sub text - check if we have stored solo status or ineligible status from previous kills/quests

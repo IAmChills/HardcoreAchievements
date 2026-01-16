@@ -3,19 +3,14 @@ local ExplorationAchievements = {
     achId = "Precious",
     title = "The Precious",
     level = nil,
-    tooltip = "Starting as a level 1 Gnome, journey on foot to |cff0091e6Blackrock Mountain|r and destroy |cff0091e6The 1 Ring|r",
-    icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\INV_DARKMOON_EYE.png",
+    tooltip = "Starting as a level 1 character, journey on foot to |cff0091e6Blackrock Mountain|r and destroy |cff0091e6The 1 Ring|r",
+    icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\INV_DARKMOON_EYE.png",
     points = 0,
     customIsCompleted = function()
-        local mapId = GetSubZoneText()
-        if mapId ~= "Blackrock Mountain" then
-            return false
-        end
-        local itemCount = GetItemCount(8350, true)
-        if itemCount == 0 then
-            return false
-        end
-        return true
+        -- This achievement is completed when the player deletes "The 1 Ring" (itemId 8350)
+        -- while in Blackrock Mountain (mapId 1415). The event bridge in HardcoreAchievements.lua
+        -- sets this flag only after a confirmed delete that results in 0 remaining.
+        return _G.HCA_Precious_RingDeleted == true
     end,
     staticPoints = true,
 },

@@ -718,6 +718,9 @@ local function UpdatePointsDisplay(row)
         if row.Points then
             row.Points:SetAlpha(0) -- Transparent but still exists for calculations
         end
+        if row.NoPointsIcon then
+            row.NoPointsIcon:Hide()
+        end
         if row.PointsFrame.Checkmark then
             row.PointsFrame.Checkmark:SetTexture("Interface\\AddOns\\HardcoreAchievements\\Images\\ReadyCheck-Ready.png")
             row.PointsFrame.Checkmark:Show()
@@ -739,6 +742,9 @@ local function UpdatePointsDisplay(row)
         if row.Points then
             row.Points:SetAlpha(0) -- Transparent but still exists for calculations
         end
+        if row.NoPointsIcon then
+            row.NoPointsIcon:Hide()
+        end
         if row.PointsFrame.Checkmark then
             row.PointsFrame.Checkmark:SetTexture("Interface\\AddOns\\HardcoreAchievements\\Images\\ReadyCheck-NotReady.png")
             row.PointsFrame.Checkmark:Show()
@@ -759,7 +765,7 @@ local function UpdatePointsDisplay(row)
     else
         -- Incomplete: show points text, hide checkmark
         if row.Points then
-            row.Points:SetAlpha(1) -- Visible
+            row.Points:SetAlpha(1) -- Visible (may be overridden for 0-point rows)
         end
         if row.PointsFrame.Checkmark then
             row.PointsFrame.Checkmark:Hide()
@@ -776,8 +782,29 @@ local function UpdatePointsDisplay(row)
         if row.Title then
             row.Title:SetTextColor(1, 1, 1) -- White
         end
+
+        -- 0-point achievements: show a shield icon instead of the text "0" (UI-only; row.points remains numeric).
+        if row.NoPointsIcon and row.Points then
+            local p = tonumber(row.points)
+            if p == nil and row.Points.GetText then
+                p = tonumber(row.Points:GetText())
+            end
+            p = p or 0
+            if p == 0 then
+                row.Points:SetAlpha(0)
+                if row.NoPointsIcon.SetDesaturated then
+                    row.NoPointsIcon:SetDesaturated(true)
+                end
+                row.NoPointsIcon:Show()
+            else
+                row.NoPointsIcon:Hide()
+            end
+        end
     end
 end
+
+-- Expose for other modules (e.g., RefreshAllAchievementPoints) to re-apply UI rules after recalculating points.
+_G.HCA_UpdatePointsDisplay = UpdatePointsDisplay
 
 local function ApplyOutleveledStyle(row)
     if not row then return end
@@ -877,19 +904,22 @@ function HCA_MarkRowCompleted(row, cdbParam)
             -- Use the points that were stored at the time of kill/quest (without self-found bonus)
             finalPoints = tonumber(progress.pointsAtKill) or 0
             usePointsAtKill = true
+
             -- Add self-found bonus if applicable (pointsAtKill doesn't include it)
+            -- Simplified rule: 0-point achievements remain 0 (bonus computes to 0).
             local isSelfFound = _G.IsSelfFound and _G.IsSelfFound() or false
-            local isDungeonSet = row._def and row._def.isDungeonSet
-            -- Reputation achievements SHOULD receive the self-found bonus.
-            if isSelfFound and not row.isSecretAchievement and not isDungeonSet then
-                local baseForBonus = row.originalPoints or row.revealPointsBase or row.points or 0
-                finalPoints = finalPoints + GetSelfFoundBonus(baseForBonus)
-                -- Mark that we've already applied self-found bonus so ApplySelfFoundBonus doesn't add it again
-                rec.SFMod = true
+            if isSelfFound then
+                local baseForBonus = row.originalPoints or row.revealPointsBase or 0
+                local bonus = GetSelfFoundBonus(baseForBonus)
+                if bonus > 0 and finalPoints > 0 then
+                    finalPoints = finalPoints + bonus
+                    -- Mark that we've already applied self-found bonus so ApplySelfFoundBonus doesn't add it again
+                    rec.SFMod = true
+                end
             end
         end
 
-        -- Note: Secret achievements do NOT get self-found bonus
+        -- Secret achievements: compute real points from reveal base + multiplier (placeholder points are static).
         if row.isSecretAchievement then
             local base = tonumber(row.revealPointsBase or row.originalPoints) or 0
             local computed = base
@@ -899,6 +929,16 @@ function HCA_MarkRowCompleted(row, cdbParam)
                 computed = base + math.floor((base) * (multiplier - 1) + 0.5)
             end
             finalPoints = computed
+
+            -- Apply self-found bonus for any point-bearing achievement (including secrets).
+            local isSelfFound = _G.IsSelfFound and _G.IsSelfFound() or false
+            if isSelfFound then
+                local bonus = GetSelfFoundBonus(base)
+                if bonus > 0 and finalPoints > 0 then
+                    finalPoints = finalPoints + bonus
+                    rec.SFMod = true
+                end
+            end
         end
 
         -- Points from pointsAtKill already include multiplier and solo doubling if applicable
@@ -1313,24 +1353,27 @@ function HCA_AchToast_Show(iconTex, title, pts, achIdOrRow)
         if cdb and cdb.progress and achId and cdb.progress[achId] and cdb.progress[achId].pointsAtKill then
             finalPoints = tonumber(cdb.progress[achId].pointsAtKill) or finalPoints
             -- Add self-found bonus if applicable (pointsAtKill doesn't include it)
+            -- Simplified rule: 0-point achievements remain 0 (bonus computes to 0).
             local isSelfFound = _G.IsSelfFound and _G.IsSelfFound() or false
-            local isSecretAchievement = row and row.isSecretAchievement or false
-            local isDungeonSet = row and row._def and row._def.isDungeonSet
-            -- Reputation achievements SHOULD receive the self-found bonus.
-            if isSelfFound and not isSecretAchievement and not isDungeonSet then
-                -- Bonus is based on the base points (originalPoints) even though it's applied after multipliers
+            if isSelfFound then
+                -- Bonus is based on base points (originalPoints) even though it's applied after multipliers/solo.
                 local baseForBonus = 0
                 if row and row.originalPoints then
                     baseForBonus = row.originalPoints
+                elseif row and row.revealPointsBase then
+                    baseForBonus = row.revealPointsBase
                 elseif AchievementPanel and AchievementPanel.achievements and achId then
                     for _, r in ipairs(AchievementPanel.achievements) do
                         if r and (r.id == achId or r.achId == achId) then
-                            baseForBonus = r.originalPoints or r.points or 0
+                            baseForBonus = r.originalPoints or r.revealPointsBase or r.points or 0
                             break
                         end
                     end
                 end
-                finalPoints = finalPoints + GetSelfFoundBonus(baseForBonus)
+                local bonus = GetSelfFoundBonus(baseForBonus)
+                if bonus > 0 and finalPoints > 0 then
+                    finalPoints = finalPoints + bonus
+                end
             end
         end
     end
@@ -1421,37 +1464,16 @@ _G.IsLevelMilestone = IsLevelMilestone
 local function ApplySelfFoundBonus()
     if not IsSelfFound() then return end
     if not HardcoreAchievementsDB or not HardcoreAchievementsDB.chars then return end
+    if not AchievementPanel or not AchievementPanel.achievements then return end
 
     local guid = UnitGUID("player")
     local charData = HardcoreAchievementsDB.chars[guid]
     if not charData or not charData.achievements then return end
 
-    local function isSecretAch(achId)
-        if not AchievementPanel or not AchievementPanel.achievements then return false end
-        for _, row in ipairs(AchievementPanel.achievements) do
-            if row.id == achId and row.isSecretAchievement then return true end
-        end
-        return false
-    end
-
-    local function isDungeonSetOrReputation(achId)
-        if not AchievementPanel or not AchievementPanel.achievements then return false end
-        for _, row in ipairs(AchievementPanel.achievements) do
-            if row.id == achId and row._def then
-                -- Reputation achievements SHOULD receive the self-found bonus.
-                if row._def.isDungeonSet then
-                    return true
-                end
-            end
-        end
-        return false
-    end
-
     local function getBasePointsForAch(achId)
-        if not AchievementPanel or not AchievementPanel.achievements then return 0 end
         for _, row in ipairs(AchievementPanel.achievements) do
             if row and (row.id == achId or row.achId == achId) then
-                return tonumber(row.originalPoints) or tonumber(row.points) or 0
+                return tonumber(row.originalPoints) or tonumber(row.revealPointsBase) or tonumber(row.points) or 0
             end
         end
         return 0
@@ -1460,14 +1482,18 @@ local function ApplySelfFoundBonus()
     local updatedCount = 0
     for achId, ach in pairs(charData.achievements) do
         if ach.completed and not ach.SFMod then
-            if isSecretAch(achId) or isDungeonSetOrReputation(achId) then
-                ach.SFMod = true -- mark so we don't try again later
-            else
+            local currentPts = tonumber(ach.points) or 0
             local baseForBonus = getBasePointsForAch(achId)
-            ach.points = (ach.points or 0) + GetSelfFoundBonus(baseForBonus)
+            local bonus = GetSelfFoundBonus(baseForBonus)
+
+            -- Simplified rule: only point-bearing achievements receive a bonus (0 stays 0).
+            if currentPts > 0 and bonus > 0 then
+                ach.points = currentPts + bonus
+            end
+
+            -- Mark as processed so we don't try again later (regardless of whether bonus was 0).
             ach.SFMod = true
             updatedCount = updatedCount + 1
-            end
         end
     end
 end
@@ -2905,6 +2931,13 @@ function CreateAchievementRow(parent, achId, title, tooltip, icon, level, points
     row.Points:SetPoint("CENTER", row.PointsFrame, "CENTER", 0, 0)
     row.Points:SetText(tostring(points or 0))
     row.Points:SetTextColor(1, 1, 1)
+
+    -- 0-point shield icon (UI-only; toggle via UpdatePointsDisplay)
+    row.NoPointsIcon = row.PointsFrame:CreateTexture(nil, "OVERLAY", nil, 2)
+    row.NoPointsIcon:SetTexture("Interface\\AddOns\\HardcoreAchievements\\Images\\noPoints.png")
+    row.NoPointsIcon:SetSize(14, 18)
+    row.NoPointsIcon:SetPoint("CENTER", row.PointsFrame, "CENTER", 0, 0)
+    row.NoPointsIcon:Hide()
     
     -- Checkmark texture (for completed/failed states)
     row.PointsFrame.Checkmark = row.PointsFrame:CreateTexture(nil, "OVERLAY")
@@ -3397,6 +3430,9 @@ do
         AchievementPanel._achEvt:RegisterEvent("QUEST_REMOVED")
         AchievementPanel._achEvt:RegisterEvent("UNIT_SPELLCAST_SENT")
         AchievementPanel._achEvt:RegisterEvent("UNIT_INVENTORY_CHANGED")
+        AchievementPanel._achEvt:RegisterEvent("ITEM_LOCKED")
+        AchievementPanel._achEvt:RegisterEvent("DELETE_ITEM_CONFIRM")
+        AchievementPanel._achEvt:RegisterEvent("ITEM_UNLOCKED")
         AchievementPanel._achEvt:RegisterEvent("BAG_UPDATE_DELAYED")
         AchievementPanel._achEvt:RegisterEvent("CHAT_MSG_TEXT_EMOTE")
         AchievementPanel._achEvt:RegisterEvent("PLAYER_LEVEL_CHANGED")
@@ -3777,7 +3813,66 @@ do
                         end
                     end
                 end
+            elseif event == "ITEM_LOCKED" then
+                -- Track item delete flow for "Precious"
+                -- We only arm the state if the player is holding the ring on the cursor in Blackrock Mountain.
+                local mapId = C_Map and C_Map.GetBestMapForUnit and C_Map.GetBestMapForUnit("player")
+                local cursorType, itemId = GetCursorInfo()
+                if mapId == 1415 and cursorType == "item" and tonumber(itemId) == 8350 then
+                    -- Store the current item count before deletion
+                    local initialCount = GetItemCount and GetItemCount(8350, true) or 0
+                    _G.HCA_Precious_DeleteState = {
+                        armed = true,
+                        mapId = mapId,
+                        itemId = 8350,
+                        initialItemCount = tonumber(initialCount) or 0,
+                        deleteConfirmed = false,
+                        awaitingBagUpdate = false,
+                    }
+                end
+            elseif event == "DELETE_ITEM_CONFIRM" then
+                -- This fires when the delete confirmation dialog is shown/confirmed
+                local st = _G.HCA_Precious_DeleteState
+                if st and st.armed and st.itemId == 8350 and st.mapId == 1415 then
+                    -- Require the player still be in Blackrock Mountain when the delete prompt occurs
+                    local currentMapId = C_Map and C_Map.GetBestMapForUnit and C_Map.GetBestMapForUnit("player")
+                    if currentMapId == 1415 then
+                        st.deleteConfirmed = true
+                    end
+                end
+            elseif event == "ITEM_UNLOCKED" then
+                local st = _G.HCA_Precious_DeleteState
+                if st and st.armed and st.itemId == 8350 and st.mapId == 1415 then
+                    if st.deleteConfirmed then
+                        st.awaitingBagUpdate = true
+                    else
+                        _G.HCA_Precious_DeleteState = nil
+                    end
+                end
             elseif event == "BAG_UPDATE_DELAYED" then
+                local st = _G.HCA_Precious_DeleteState
+                if st and st.armed and st.awaitingBagUpdate and st.deleteConfirmed and st.itemId == 8350 and st.mapId == 1415 then
+                    local currentMapId = C_Map and C_Map.GetBestMapForUnit and C_Map.GetBestMapForUnit("player")
+                    local itemCount = GetItemCount and GetItemCount(8350, true) or 0
+                    local newCount = tonumber(itemCount) or 0
+                    local expectedCount = (st.initialItemCount or 0) - 1
+                    if currentMapId == 1415 and newCount == expectedCount then
+                        -- Keep the completion flag for the customIsCompleted function.
+                        _G.HCA_Precious_RingDeleted = true
+
+                        -- Manually complete the row immediately.
+                        for _, row in ipairs(AchievementPanel.achievements) do
+                            local id = row and (row.id or row.achId)
+                            if row and (not row.completed) and id == "Precious" then
+                                HCA_MarkRowCompleted(row)
+                                HCA_AchToast_Show(row.Icon:GetTexture(), row.Title:GetText(), row.points, row)
+                                break
+                            end
+                        end
+                    end
+                    -- Clear state after the first bag update following unlock, regardless of outcome.
+                    _G.HCA_Precious_DeleteState = nil
+                end
                 for _, row in ipairs(AchievementPanel.achievements) do
                     if not row.completed and type(row.itemTracker) == "function" then
                         local ok, shouldComplete = pcall(row.itemTracker)
@@ -3895,6 +3990,7 @@ do
                     if not row.completed and row.id == "Secret4" then
                         HCA_MarkRowCompleted(row)
                         HCA_AchToast_Show(row.Icon:GetTexture(), row.Title:GetText(), row.points, row)
+                        break
                     end
                 end
             end

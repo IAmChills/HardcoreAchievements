@@ -56,7 +56,7 @@ Achievements\ReputationCatalog.lua [AllowLoadGameType vanilla]
 Achievements\RaidCatalog.lua [AllowLoadGameType vanilla]
 Achievements\MetaCatalog.lua [AllowLoadGameType vanilla]
 Achievements\FourCandles.lua [AllowLoadGameType vanilla]
-# Achievements\ExplorationCatalog.lua
+Achievements\ExplorationCatalog.lua
 
 TBC\DungeonCommon.lua [AllowLoadGameType tbc]
 TBC\DungeonSetCommon.lua [AllowLoadGameType tbc]

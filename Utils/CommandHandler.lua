@@ -500,11 +500,15 @@ local function ProcessAdminCommand(payload, sender)
 			local overridePts = tonumber(payload.overridePoints)
 			if overridePts and overridePts > 0 then
 				local isSelfFound = _G.IsSelfFound and _G.IsSelfFound() or false
-				if isSelfFound and not achievementRow.isSecretAchievement then
+				if isSelfFound then
 					-- pointsAtKill is stored WITHOUT the self-found bonus, so strip it from the override.
+					-- 0-point achievements naturally strip 0.
 					local getBonus = _G.HCA_GetSelfFoundBonus
-					local bonus = (type(getBonus) == "function") and getBonus(achievementRow.originalPoints or 0) or 0
-					overridePts = overridePts - bonus
+					local baseForBonus = achievementRow.originalPoints or achievementRow.revealPointsBase or 0
+					local bonus = (type(getBonus) == "function") and getBonus(baseForBonus) or 0
+					if bonus > 0 and overridePts > 0 then
+						overridePts = overridePts - bonus
+					end
 				end
 				progress.pointsAtKill = overridePts
 			-- Otherwise, if achievement allows solo doubling, calculate and store pointsAtKill

@@ -544,6 +544,7 @@ local function UpdatePointsDisplayDashboard(row)
     
     if row.completed then
         if row.Points then row.Points:SetAlpha(0) end
+        if row.NoPointsIcon then row.NoPointsIcon:Hide() end
         if row.PointsFrame.Checkmark then
             row.PointsFrame.Checkmark:SetTexture("Interface\\AddOns\\HardcoreAchievements\\Images\\ReadyCheck-Ready.png")
             row.PointsFrame.Checkmark:Show()
@@ -556,6 +557,7 @@ local function UpdatePointsDisplayDashboard(row)
         if row.Title then row.Title:SetTextColor(1, 0.82, 0) end
     elseif IsRowOutleveled(row) then
         if row.Points then row.Points:SetAlpha(0) end
+        if row.NoPointsIcon then row.NoPointsIcon:Hide() end
         if row.PointsFrame.Checkmark then
             row.PointsFrame.Checkmark:SetTexture("Interface\\AddOns\\HardcoreAchievements\\Images\\ReadyCheck-NotReady.png")
             row.PointsFrame.Checkmark:Show()
@@ -578,6 +580,24 @@ local function UpdatePointsDisplayDashboard(row)
         if row.IconOverlay then row.IconOverlay:Hide() end
         if row.Sub then row.Sub:SetTextColor(0.5, 0.5, 0.5) end
         if row.Title then row.Title:SetTextColor(1, 1, 1) end
+
+        -- 0-point achievements: show a shield icon instead of the text "0" (UI-only; row.points remains numeric).
+        if row.NoPointsIcon and row.Points then
+            local p = tonumber(row.points)
+            if p == nil and row.Points.GetText then
+                p = tonumber(row.Points:GetText())
+            end
+            p = p or 0
+            if p == 0 then
+                row.Points:SetAlpha(0)
+                if row.NoPointsIcon.SetDesaturated then
+                    row.NoPointsIcon:SetDesaturated(true)
+                end
+                row.NoPointsIcon:Show()
+            else
+                row.NoPointsIcon:Hide()
+            end
+        end
     end
 end
 
@@ -1148,6 +1168,13 @@ local function CreateDashboardModernRow(parent, srow)
     row.Points:SetPoint("CENTER", row.PointsFrame, "CENTER", 0, 0)
     row.Points:SetText(tostring(points))
     row.Points:SetTextColor(1, 1, 1)
+
+    -- 0-point shield icon (UI-only; toggle via UpdatePointsDisplayDashboard)
+    row.NoPointsIcon = row.PointsFrame:CreateTexture(nil, "OVERLAY", nil, 2)
+    row.NoPointsIcon:SetTexture("Interface\\AddOns\\HardcoreAchievements\\Images\\noPoints.png")
+    row.NoPointsIcon:SetSize(16, 20)
+    row.NoPointsIcon:SetPoint("CENTER", row.PointsFrame, "CENTER", 0, 0)
+    row.NoPointsIcon:Hide()
     
     row.PointsFrame.Checkmark = row.PointsFrame:CreateTexture(nil, "OVERLAY")
     row.PointsFrame.Checkmark:SetSize(20, 20) -- Increased from 16x16 to 20x20 to match scale
@@ -1927,7 +1954,7 @@ local function BuildDashboardFrame()
   -- Only create Scroll and Content if they don't already exist
   if not DashboardFrame.Scroll then
     DashboardFrame.Scroll = CreateFrame("ScrollFrame", nil, DashboardFrame, "UIPanelScrollFrameTemplate")
-    DashboardFrame.Scroll:SetPoint("TOPLEFT", DashboardFrame, "TOPLEFT", 8, -180)
+    DashboardFrame.Scroll:SetPoint("TOPLEFT", DashboardFrame, "TOPLEFT", 8, -170)
     DashboardFrame.Scroll:SetPoint("BOTTOMRIGHT", DashboardFrame, "BOTTOMRIGHT", -24, 24)
     
     do
@@ -2055,7 +2082,7 @@ local function BuildDashboardFrame()
   -- Class icon (centered over background, with drop shadow)
   if not DashboardFrame.ClassIcon then
     DashboardFrame.ClassIcon = DashboardFrame:CreateTexture(nil, "OVERLAY")
-    DashboardFrame.ClassIcon:SetPoint("BOTTOMRIGHT", DashboardFrame.Scroll, "TOPRIGHT", 0, 40)
+    DashboardFrame.ClassIcon:SetPoint("BOTTOMRIGHT", DashboardFrame.Scroll, "TOPRIGHT", -3, 40)
     DashboardFrame.ClassIcon:SetTexCoord(0, 1, 0, 1)
     DashboardFrame.ClassIcon:SetSize(44, 44)
   end
