@@ -1,12 +1,13 @@
 ﻿## Interface: 11508, 20505
 ## Title: HardcoreAchievements
 ## Author: Chills
-## Version: 1.4.8
+## Version: 1.5.3
 ## Notes: Hardcore achievements system
 ## OptionalDeps: Ace3, CallbackHandler-1.0, HereBeDragons, LibDataBroker-1.1, LibDBIcon-1.0, LibStub, LibUIDropDownMenu
 ## SavedVariables: HardcoreAchievementsDB
 ## IconTexture: Interface\AddOns\HardcoreAchievements\Images\HardcoreAchievementsButton.png
 ## X-Category: Achievements
+## Category: Achievements
 
 # Required Libraries for CommandHandler
 Libs\LibStub\LibStub.lua
@@ -34,6 +35,7 @@ Functions\CheckMapDiscovery.lua
 Functions\ProfessionTracker.lua [AllowLoadGameType vanilla]
 TBC\ProfessionTracker.lua [AllowLoadGameType tbc]
 
+Utils\SharedUtils.lua
 Utils\FilterDropdown.lua
 HardcoreAchievements.lua
 Utils\AchievementTracker.lua
@@ -46,12 +48,15 @@ Achievements\RaidCommon.lua [AllowLoadGameType vanilla]
 Achievements\MetaCommon.lua
 Achievements\ProfessionCatalog.lua [AllowLoadGameType vanilla]
 Achievements\Catalog.lua [AllowLoadGameType vanilla]
+Achievements\SecretCatalog.lua [AllowLoadGameType vanilla]
+Achievements\RidiculousCatalog.lua [AllowLoadGameType vanilla]
 Achievements\DungeonCatalog.lua [AllowLoadGameType vanilla]
 Achievements\DungeonSetCatalog.lua [AllowLoadGameType vanilla]
 Achievements\ReputationCatalog.lua [AllowLoadGameType vanilla]
 Achievements\RaidCatalog.lua [AllowLoadGameType vanilla]
 Achievements\MetaCatalog.lua [AllowLoadGameType vanilla]
 Achievements\FourCandles.lua [AllowLoadGameType vanilla]
+Achievements\ExplorationCatalog.lua
 
 TBC\DungeonCommon.lua [AllowLoadGameType tbc]
 TBC\DungeonSetCommon.lua [AllowLoadGameType tbc]
@@ -59,18 +64,18 @@ TBC\ReputationCommon.lua [AllowLoadGameType tbc]
 TBC\RaidCommon.lua [AllowLoadGameType tbc]
 TBC\ProfessionCatalog.lua [AllowLoadGameType tbc]
 TBC\Catalog.lua [AllowLoadGameType tbc]
+TBC\SecretCatalog.lua [AllowLoadGameType tbc]
 TBC\DungeonCatalog.lua [AllowLoadGameType tbc]
 TBC\HeroicDungeonCatalog.lua [AllowLoadGameType tbc]
 TBC\DungeonSetCatalog.lua [AllowLoadGameType tbc]
+TBC\RidiculousCatalog.lua [AllowLoadGameType tbc]
 TBC\ReputationCatalog.lua [AllowLoadGameType tbc]
 TBC\RaidCatalog.lua [AllowLoadGameType tbc]
 TBC\MetaCatalog.lua [AllowLoadGameType tbc]
 
+Utils\Dashboard.lua
 Utils\Embed_UltraHardcore.lua
 Utils\CommandHandler.lua
 Utils\AchievementLinks.lua
 Utils\OptionsPanel.lua
 Utils\CharacterInspection.lua
-
-Admin\AdminPanel.lua
-Admin\AdminPanelTest.lua

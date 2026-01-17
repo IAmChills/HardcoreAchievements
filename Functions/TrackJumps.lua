@@ -51,6 +51,32 @@ jumpTrackingFrame:SetScript("OnEvent", function(self, event, addonName)
                 end
             end
 
+            -- Fail "NoJumpChallenge" achievement if player already has jumps > 0 on load
+            if jumpCount and jumpCount > 0 then
+                cdb.achievements = cdb.achievements or {}
+                local achId = "NoJumpChallenge"
+                local rec = cdb.achievements[achId]
+                if not rec or (not rec.completed and not rec.failed) then
+                    if _G.HCA_EnsureFailureTimestamp then
+                        _G.HCA_EnsureFailureTimestamp(achId)
+                    end
+                end
+            -- If playerJumps is nil (first load), check if player is already max level
+            -- If so, set a flag to prevent awarding "The Disciplined One" achievement
+            -- (can't verify they had 0 jumps when they reached max level)
+            elseif jumpCount == nil then
+                local playerLevel = UnitLevel("player") or 0
+                local expansionLevel = GetExpansionLevel()
+                if (playerLevel >= 60 and expansionLevel == 0) or (playerLevel >= 70 and expansionLevel == 1) then
+                    -- Player is already max level on first load - mark achievement as failed
+                    cdb.achievements = cdb.achievements or {}
+                    local achId = "NoJumpChallenge"
+                    if _G.HCA_EnsureFailureTimestamp then
+                        _G.HCA_EnsureFailureTimestamp(achId)
+                    end
+                end
+            end
+
             -- Set default to 0 if still nil
             local JumpCounter = {}
             JumpCounter.count = jumpCount or 0
@@ -75,6 +101,27 @@ jumpTrackingFrame:SetScript("OnEvent", function(self, event, addonName)
                 if cdb then
                     cdb.stats = cdb.stats or {}
                     cdb.stats.playerJumps = self.count
+                    
+                    -- Fail "NoJumpChallenge" achievement if player jumps (jump count > 0)
+                    if self.count > 0 then
+                        cdb.achievements = cdb.achievements or {}
+                        local achId = "NoJumpChallenge"
+                        local rec = cdb.achievements[achId]
+                        
+                        -- Only fail if not already completed or failed
+                        if not rec or (not rec.completed and not rec.failed) then
+                            if _G.HCA_EnsureFailureTimestamp then
+                                _G.HCA_EnsureFailureTimestamp(achId)
+                            end
+                            
+                            -- Refresh outleveled status to show the failure state
+                            if _G.HCA_RefreshOutleveledAll then
+                                C_Timer.After(0.1, function()
+                                    _G.HCA_RefreshOutleveledAll()
+                                end)
+                            end
+                        end
+                    end
                 end
                 
                 -- Check for custom achievement completions (e.g., Jump Master at 100k jumps)

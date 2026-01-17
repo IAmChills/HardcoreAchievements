@@ -13,7 +13,11 @@ end
 local AdminCommandHandler = {}
 local COMM_PREFIX = "HCA_Admin_Cmd" -- AceComm prefix for admin commands
 local RESPONSE_PREFIX = "HCA_Admin_Resp" -- AceComm prefix for responses (max 16 chars)
+local PRECIOUS_COMPLETE_PREFIX = "HCA_Fellowship" -- AceComm prefix for Precious completion
 local MAX_PAYLOAD_AGE = 300 -- 5 minutes in seconds
+
+-- Callback registry for Precious completion messages
+local preciousCompletionCallbacks = {}
 
 -- Debug system: Helper functions for debug messages
 local function GetDebugEnabled()
@@ -33,7 +37,7 @@ end
 -- Global debug print function (exported)
 function _G.HCA_DebugPrint(message)
     if GetDebugEnabled() then
-        print("|cff69adc9[HCA DEBUG]|r |cffffd100" .. tostring(message) .. "|r")
+        print("|cff008066[HCA DEBUG]|r |cffffd100" .. tostring(message) .. "|r")
     end
 end
 
@@ -452,8 +456,8 @@ local function ProcessAdminCommand(payload, sender)
 				-- Update solo status in UI if applicable
 				if payload.solo and achievementRow.Sub then
 					local isSelfFound = _G.IsSelfFound and _G.IsSelfFound() or false
-					local isTBC = GetExpansionLevel() > 0
-					local allowSoloBonus = isSelfFound or isTBC
+					local isHardcoreActive = C_GameRules and C_GameRules.IsHardcoreActive and C_GameRules.IsHardcoreActive() or false
+					local allowSoloBonus = isSelfFound or not isHardcoreActive
 					if allowSoloBonus then
 						achievementRow.Sub:SetText(AUCTION_TIME_LEFT0 .. "\n|c" .. select(4, GetClassColor(select(2, UnitClass("player")))) .. "Solo|r")
 					end
@@ -500,11 +504,15 @@ local function ProcessAdminCommand(payload, sender)
 			local overridePts = tonumber(payload.overridePoints)
 			if overridePts and overridePts > 0 then
 				local isSelfFound = _G.IsSelfFound and _G.IsSelfFound() or false
-				if isSelfFound and not achievementRow.isSecretAchievement then
+				if isSelfFound then
 					-- pointsAtKill is stored WITHOUT the self-found bonus, so strip it from the override.
+					-- 0-point achievements naturally strip 0.
 					local getBonus = _G.HCA_GetSelfFoundBonus
-					local bonus = (type(getBonus) == "function") and getBonus(achievementRow.originalPoints or 0) or 0
-					overridePts = overridePts - bonus
+					local baseForBonus = achievementRow.originalPoints or achievementRow.revealPointsBase or 0
+					local bonus = (type(getBonus) == "function") and getBonus(baseForBonus) or 0
+					if bonus > 0 and overridePts > 0 then
+						overridePts = overridePts - bonus
+					end
 				end
 				progress.pointsAtKill = overridePts
 			-- Otherwise, if achievement allows solo doubling, calculate and store pointsAtKill
@@ -598,10 +606,39 @@ local function OnCommReceived(prefix, message, distribution, sender)
     ProcessAdminCommand(payload, sender)
 end
 
+-- AceComm handler for Precious completion messages
+local function OnPreciousCompletedMessage(prefix, message, distribution, sender)
+    -- Deserialize the message
+    local success, payload = AceSerialize:Deserialize(message)
+    if not success or not payload or payload.type ~= "precious_completed" then
+        return
+    end
+    
+    -- Don't notify the player who completed Precious
+    local playerName = UnitName("player")
+    if payload.playerName == playerName or sender == playerName then
+        HCA_DebugPrint("Precious completion message ignored (from self)")
+        return
+    end
+    
+    HCA_DebugPrint("Precious completion message received from " .. tostring(sender))
+    
+    -- Call all registered callbacks
+    for _, callback in ipairs(preciousCompletionCallbacks) do
+        if type(callback) == "function" then
+            local ok, err = pcall(callback, payload, sender)
+            if not ok then
+                HCA_DebugPrint("Error in Precious completion callback: " .. tostring(err))
+            end
+        end
+    end
+end
+
 -- Initialize the handler
 local function InitializeAdminCommandHandler()
-    -- Register AceComm handler
+    -- Register AceComm handlers
     AceComm:RegisterComm(COMM_PREFIX, OnCommReceived)
+    AceComm:RegisterComm(PRECIOUS_COMPLETE_PREFIX, OnPreciousCompletedMessage)
 end
 
 -- Slash command handler
@@ -628,16 +665,11 @@ local function HandleSlashCommand(msg)
                     HCA_ShowAchievementTab()
                 end
             end)
-            print("|cff00ff00[Hardcore Achievements]|r Custom achievement tab enabled and shown")
-        else
-            print("|cffff0000[Hardcore Achievements]|r Custom achievement tab not found")
+            print("|cff008066[Hardcore Achievements]|r Custom achievement tab enabled and shown")
         end
     elseif command == "reset" and args[2] == "tab" then
         if ResetTabPosition then
             ResetTabPosition()
-            print("|cff00ff00[Hardcore Achievements]|r Tab position reset to default")
-        else
-            print("|cffff0000[Hardcore Achievements]|r ResetTabPosition function not found")
         end
     elseif command == "adminkey" then
         -- SECURITY: Set admin secret key for secure command authentication
@@ -685,33 +717,33 @@ local function HandleSlashCommand(msg)
         local subcommand = args[2] and string.lower(args[2]) or ""
         
         if not AchievementTracker then
-            print("|cffff0000[Hardcore Achievements]|r Achievement tracker not loaded yet. Please wait a moment and try again, or reload your UI.")
+            print("|cff008066[Hardcore Achievements]|r Achievement tracker not loaded yet. Please wait a moment and try again, or reload your UI.")
             return
         end
         
         if subcommand == "show" then
             if AchievementTracker.Show then
                 AchievementTracker:Show()
-                print("|cff00ff00[Hardcore Achievements]|r Achievement tracker shown")
+                print("|cff008066[Hardcore Achievements]|r Achievement tracker shown")
             else
                 print("|cffff0000[Hardcore Achievements]|r Achievement tracker not initialized")
             end
         elseif subcommand == "hide" then
             if AchievementTracker.Hide then
                 AchievementTracker:Hide()
-                print("|cff00ff00[Hardcore Achievements]|r Achievement tracker hidden")
+                print("|cff008066[Hardcore Achievements]|r Achievement tracker hidden")
             else
                 print("|cffff0000[Hardcore Achievements]|r Achievement tracker not initialized")
             end
         elseif subcommand == "toggle" then
             if AchievementTracker.Toggle then
                 AchievementTracker:Toggle()
-                print("|cff00ff00[Hardcore Achievements]|r Achievement tracker toggled")
+                print("|cff008066[Hardcore Achievements]|r Achievement tracker toggled")
             else
                 print("|cffff0000[Hardcore Achievements]|r Achievement tracker not initialized")
             end
         else
-            print("|cff00ff00[Hardcore Achievements]|r Tracker commands:")
+            print("|cff008066[Hardcore Achievements]|r Tracker commands:")
             print("  |cffffff00/hca tracker show|r - Show the achievement tracker")
             print("  |cffffff00/hca tracker hide|r - Hide the achievement tracker")
             print("  |cffffff00/hca tracker toggle|r - Toggle the achievement tracker")
@@ -720,24 +752,24 @@ local function HandleSlashCommand(msg)
         -- Debug toggle command
         if args[2] and string.lower(args[2]) == "on" then
             SetDebugEnabled(true)
-            print("|cff00ff00[Hardcore Achievements]|r Debug mode enabled")
+            print("|cff008066[Hardcore Achievements]|r Debug mode enabled")
             _G.HCA_DebugPrint("Debug mode is now ON - you will see debug messages")
         elseif args[2] and string.lower(args[2]) == "off" then
             SetDebugEnabled(false)
-            print("|cff00ff00[Hardcore Achievements]|r Debug mode disabled")
+            print("|cff008066[Hardcore Achievements]|r Debug mode disabled")
         else
             -- Toggle if no argument provided
             local currentState = GetDebugEnabled()
             SetDebugEnabled(not currentState)
             if not currentState then
-                print("|cff00ff00[Hardcore Achievements]|r Debug mode enabled")
+                print("|cff008066[Hardcore Achievements]|r Debug mode enabled")
                 _G.HCA_DebugPrint("Debug mode is now ON - you will see debug messages")
             else
-                print("|cff00ff00[Hardcore Achievements]|r Debug mode disabled")
+                print("|cff008066[Hardcore Achievements]|r Debug mode disabled")
             end
         end
     else
-        print("|cff00ff00[Hardcore Achievements]|r Available commands:")
+        print("|cff008066[Hardcore Achievements]|r Available commands:")
         print("  |cffffff00/hca show|r - Enable and show the custom achievement tab")
         print("  |cffffff00/hca reset tab|r - Reset the tab position to default")
         print("  |cffffff00/hca tracker|r - Manage the achievement tracker")
@@ -768,6 +800,35 @@ AdminCommandHandler.GenerateNonce = GenerateNonce
 
 -- Export globally for admin tools
 _G.HardcoreAchievementsAdminCommandHandler = AdminCommandHandler
+
+-- =========================================================
+-- Precious Completion Communication (Regular Feature)
+-- These functions are NOT admin-related and are available to all players
+-- =========================================================
+
+-- Helper function to send Precious completion notification via SAY channel
+-- This notifies nearby players (within chat range) so they can complete Fellowship
+function _G.HCA_SendPreciousCompletionMessage()
+    local messagePayload = {
+        type = "precious_completed",
+        playerName = UnitName("player")
+    }
+    
+    local serializedMessage = AceSerialize:Serialize(messagePayload)
+    if serializedMessage then
+        -- Send via SAY channel (only players within chat range will receive)
+        AceComm:SendCommMessage(PRECIOUS_COMPLETE_PREFIX, serializedMessage, "SAY")
+        HCA_DebugPrint("Precious completion message sent")
+    end
+end
+
+-- Register a callback to be called when Precious completion message is received
+-- Callback signature: function(payload, sender) where payload contains {type, playerName}
+function _G.HCA_RegisterPreciousCompletionCallback(callback)
+    if type(callback) == "function" then
+        table.insert(preciousCompletionCallbacks, callback)
+    end
+end
 
 -- Helper function to create a secure admin command payload
 -- This is what the admin panel should use to send commands

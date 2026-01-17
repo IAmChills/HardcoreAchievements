@@ -4,7 +4,7 @@ local Raids = {
   {
     achId = "UBRS",
     title = "Upper Blackrock Spire",
-    tooltip = "Defeat the bosses of |cff0091e6Upper Blackrock Spire|r",
+    tooltip = "Defeat the bosses of |cff008765Upper Blackrock Spire|r",
     icon = 254648,
     points = 50,
     requiredQuestId = nil,
@@ -24,7 +24,7 @@ local Raids = {
   {
     achId = "MC",
     title = "Molten Core",
-    tooltip = "Defeat the bosses of |cff0091e6Molten Core|r",
+    tooltip = "Defeat the bosses of |cff008765Molten Core|r",
     icon = 254652,
     points = 50,
     requiredQuestId = nil,
@@ -49,7 +49,7 @@ local Raids = {
   {
     achId = "ONY",
     title = "Onyxia's Lair",
-    tooltip = "Defeat |cff0091e6Onyxia|r",
+    tooltip = "Defeat |cff008765Onyxia|r",
     icon = 254650,
     points = 50,
     requiredQuestId = nil,
@@ -65,7 +65,7 @@ local Raids = {
   {
     achId = "BWL",
     title = "Blackwing Lair",
-    tooltip = "Defeat the bosses of |cff0091e6Blackwing Lair|r",
+    tooltip = "Defeat the bosses of |cff008765Blackwing Lair|r",
     icon = 254649,
     points = 50,
     requiredQuestId = nil,
@@ -88,7 +88,7 @@ local Raids = {
   {
     achId = "ZG",
     title = "Zul'Gurub",
-    tooltip = "Defeat the bosses of |cff0091e6Zul'Gurub|r",
+    tooltip = "Defeat the bosses of |cff008765Zul'Gurub|r",
     icon = 236413,
     points = 50,
     requiredQuestId = nil,
@@ -113,7 +113,7 @@ local Raids = {
   {
     achId = "AQ20",
     title = "Ruins of Ahn'Qiraj",
-    tooltip = "Defeat the bosses of |cff0091e6Ruins of Ahn'Qiraj|r",
+    tooltip = "Defeat the bosses of |cff008765Ruins of Ahn'Qiraj|r",
     icon = 236428,
     points = 50,
     requiredQuestId = nil,
@@ -134,7 +134,7 @@ local Raids = {
   {
     achId = "AQ40",
     title = "Temple of Ahn'Qiraj",
-    tooltip = "Defeat the bosses of |cff0091e6Temple of Ahn'Qiraj|r",
+    tooltip = "Defeat the bosses of |cff008765Temple of Ahn'Qiraj|r",
     icon = 236407,
     points = 50,
     requiredQuestId = nil,
@@ -161,7 +161,7 @@ local Raids = {
   {
     achId = "NAXX",
     title = "Naxxramas",
-    tooltip = "Defeat the bosses of |cff0091e6Naxxramas|r",
+    tooltip = "Defeat the bosses of |cff008765Naxxramas|r",
     icon = 254100,
     points = 50,
     requiredQuestId = nil,

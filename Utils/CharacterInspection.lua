@@ -1112,7 +1112,7 @@ function CharacterInspection.CreateInspectionAchievementRow(parent, achId, title
         end
         if achievementData.wasSolo then
             local base = row._defaultSubText or ""
-            local soloText = "|cff69adc9Solo|r"
+            local soloText = "|cff008066Solo|r"
             if base ~= "" then
                 row.Sub:SetText(base .. "\n" .. soloText)
             else
@@ -1193,6 +1193,38 @@ local function HookInspectionEvents()
     end)
 end
 
+-- -- Hook into unit popup menu to add "Inspect Achievements" option
+-- local function HookUnitPopupMenu()
+--     -- Try modern Menu API first (if available, likely Retail)
+--     if Menu and type(Menu.ModifyMenu) == "function" and MENU_UNIT_TARGET then
+--         Menu.ModifyMenu("MENU_UNIT_TARGET", function(ownerRegion, rootDescription, contextData)
+--             -- Only show for friendly players (not self)
+--             local unit = contextData and contextData.unit
+--             if unit and UnitIsPlayer(unit) and UnitIsFriend("player", unit) and not UnitIsUnit(unit, "player") then
+--                 rootDescription:CreateDivider()
+--                 rootDescription:CreateButton("Inspect Achievements", function()
+--                     local targetName = UnitName(unit)
+--                     if targetName then
+--                         -- Open inspection frame and switch to achievements tab
+--                         if InspectUnit then
+--                             InspectUnit(unit)
+--                         end
+--                         -- Wait a frame for InspectFrame to initialize, then show achievement tab
+--                         if C_Timer and C_Timer.After then
+--                             C_Timer.After(0.1, function()
+--                                 if InspectFrame and InspectFrame:IsShown() then
+--                                     CharacterInspection.ShowInspectionAchievementTab()
+--                                 end
+--                             end)
+--                         end
+--                     end
+--                 end)
+--             end
+--         end)
+--         return
+--     end
+-- end
+
 -- Initialize when addon loads
 local initFrame = CreateFrame("Frame")
 initFrame:RegisterEvent("PLAYER_LOGIN")
@@ -1200,6 +1232,7 @@ initFrame:SetScript("OnEvent", function(self, event)
     if event == "PLAYER_LOGIN" then
         InitializeInspectionSystem()
         HookInspectionEvents()
+        --HookUnitPopupMenu()
         self:UnregisterAllEvents()
     end
 end)

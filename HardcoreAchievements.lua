@@ -2,7 +2,6 @@ local ADDON_NAME, addon = ...
 local playerGUID
 -- Legacy constant (historically a flat +5). Kept for backwards-compat, but no longer used in point math.
 HCA_SELF_FOUND_BONUS = HCA_SELF_FOUND_BONUS or 5
-local SETTINGS_ICON_TEXTURE = "Interface\\AddOns\\HardcoreAchievements\\Images\\icon_gear.png"
 
 local EvaluateCustomCompletions
 local RefreshOutleveledAll
@@ -32,6 +31,56 @@ end
 -- Export registry functions globally for use by catalog files
 _G.HardcoreAchievements_RegisterAchievementFunction = RegisterAchievementFunction
 _G.HardcoreAchievements_GetAchievementFunction = GetAchievementFunction
+
+-- =========================================================
+-- Hook System for Addon Integration
+-- =========================================================
+-- Allows other addons to register callbacks for achievement events
+-- 
+-- Usage example for other addons:
+--   if HardcoreAchievements_Hooks then
+--       HardcoreAchievements_Hooks:HookScript("OnAchievement", function(achievementData)
+--           -- achievementData contains:
+--           --   achievementId: string - The achievement ID
+--           --   title: string - The achievement title
+--           --   points: number - Points awarded for this achievement
+--           --   completedAt: number - Timestamp of completion
+--           --   level: number - Player level at completion
+--           --   wasSolo: boolean - Whether it was completed solo
+--           --   completedCount: number - Total number of completed achievements (after this one)
+--           --   totalCount: number - Total number of achievements
+--           --   totalPoints: number - Total points across all completed achievements (after this one)
+--       end)
+--   end
+local HookSystem = {
+    hooks = {}
+}
+
+-- Register callback
+function HookSystem:HookScript(eventName, callback)
+    if type(eventName) ~= "string" or type(callback) ~= "function" then
+        return
+    end
+    self.hooks[eventName] = self.hooks[eventName] or {}
+    table.insert(self.hooks[eventName], callback)
+end
+
+-- Fire event
+function HookSystem:FireEvent(eventName, ...)
+    local eventHooks = self.hooks[eventName]
+    if not eventHooks then return end
+    
+    for _, callback in ipairs(eventHooks) do
+        local success, err = pcall(callback, ...)
+        if not success then
+            -- Log error
+            HCA_DebugPrint("Error in hook callback: " .. tostring(err))
+        end
+    end
+end
+
+-- Expose hook system
+_G.HardcoreAchievements_Hooks = HookSystem
 
 -- =========================================================
 -- Self-Found points bonus
@@ -137,13 +186,13 @@ local function CleanupIncorrectLevelAchievements()
     
     -- Log cleanup if any achievements were removed
     if cleanedCount > 0 then
-        local message = "|cff69adc9[Hardcore Achievements]|r |cffffd100Cleaned up " .. cleanedCount .. " incorrectly completed achievement(s):|r"
+        local message = "|cff008066[Hardcore Achievements]|r |cffffd100Cleaned up " .. cleanedCount .. " incorrectly completed achievement(s):|r"
         print(message)
         for _, cleaned in ipairs(cleanedAchievements) do
             print(string.format("  |cffffd100- %s (completed at level %d, required level %d)|r", 
                 cleaned.achId, cleaned.completionLevel, cleaned.requiredLevel))
         end
-        print("|cffffd100I am chasing a weird bug, thank you for your patience. - |r|cff69adc9Chills|r")
+        --print("|cffffd100I am chasing a weird bug, thank you for your patience. - |r|cff008066Chills|r")
     end
     
     return cleanedCount
@@ -478,15 +527,20 @@ function HCA_AchievementCount()
             local hiddenByProfession = row.hiddenByProfession and not row.completed
             local hiddenUntilComplete = row.hiddenUntilComplete and not row.completed
             
-            -- Exclude variation achievements from the count UNLESS they are completed
-            -- This prevents incomplete variations from inflating the total, but includes
-            -- completed variations so the completed count doesn't exceed the total
-            -- Same logic applies to dungeon set achievements
+            -- Core Achievements (indices 1-6: Quest, Dungeon, Heroic Dungeon, Raid, Professions, Meta) always count
+            -- Miscellaneous Achievements (indices 7-14) only count if completed
+            -- This prevents incomplete miscellaneous achievements from inflating the total, but includes
+            -- completed miscellaneous achievements so the completed count doesn't exceed the total
+            -- Special achievements (like FourCandle) are excluded from count entirely
             local isVariation = row._def and row._def.isVariation
             local isDungeonSet = row._def and row._def.isDungeonSet
             local isReputation = row._def and row._def.isReputation
-            local isRaid = row._def and row._def.isRaid
-            local shouldCount = not hiddenByProfession and not hiddenUntilComplete and (not isVariation or row.completed) and (not isDungeonSet or row.completed) and (not isReputation or row.completed) and (not isRaid or row.completed)
+            local isExploration = row._def and row._def.isExploration
+            local isRidiculous = row._def and row._def.isRidiculous
+            local isSecret = row._def and row._def.isSecret
+            local excludeFromCount = row._def and row._def.excludeFromCount
+            -- Note: isRaid is Core (index 4), so it always counts - don't exclude it
+            local shouldCount = not hiddenByProfession and not hiddenUntilComplete and not excludeFromCount and (not isVariation or row.completed) and (not isDungeonSet or row.completed) and (not isReputation or row.completed) and (not isExploration or row.completed) and (not isRidiculous or row.completed) and (not isSecret or row.completed)
             
             if shouldCount then
                 total = total + 1
@@ -641,32 +695,53 @@ local function UpdatePointsDisplay(row)
     end
     
     -- Show/hide variation overlay based on achievement state
-    if row.PointsFrame.VariationOverlay and row._def and row._def.isVariation then
-        if row.completed then
-            -- Completed: use gold texture
-            row.PointsFrame.VariationOverlay:SetTexture("Interface\\AddOns\\HardcoreAchievements\\Images\\dragon_gold.png")
-            row.PointsFrame.VariationOverlay:Show()
-        elseif IsRowOutleveled(row) then
-            -- Failed/overleveled: use failed texture
-            row.PointsFrame.VariationOverlay:SetTexture("Interface\\AddOns\\HardcoreAchievements\\Images\\dragon_failed.png")
-            row.PointsFrame.VariationOverlay:Show()
+    if row.PointsFrame.VariationOverlay and row._def then
+        if row._def.isVariation or row._def.isHeroicDungeon then
+            if row.completed then
+                -- Completed: use gold texture
+                row.PointsFrame.VariationOverlay:SetTexture("Interface\\AddOns\\HardcoreAchievements\\Images\\dragon_gold.png")
+                row.PointsFrame.VariationOverlay:Show()
+            elseif IsRowOutleveled(row) then
+                -- Failed/overleveled: use failed texture
+                row.PointsFrame.VariationOverlay:SetTexture("Interface\\AddOns\\HardcoreAchievements\\Images\\dragon_failed.png")
+                row.PointsFrame.VariationOverlay:Show()
+            else
+                -- Available (not completed, not failed): use disabled texture
+                row.PointsFrame.VariationOverlay:SetTexture("Interface\\AddOns\\HardcoreAchievements\\Images\\dragon_disabled.png")
+                row.PointsFrame.VariationOverlay:Show()
+            end
         else
-            -- Available (not completed, not failed): use disabled texture
-            row.PointsFrame.VariationOverlay:SetTexture("Interface\\AddOns\\HardcoreAchievements\\Images\\dragon_disabled.png")
-            row.PointsFrame.VariationOverlay:Show()
+            -- No variation or heroic: hide overlay
+            row.PointsFrame.VariationOverlay:Hide()
         end
-    elseif row.PointsFrame.VariationOverlay then
-        row.PointsFrame.VariationOverlay:Hide()
     end
     
     if row.completed then
-        -- Completed: hide points text (make transparent), show green checkmark
+        -- Completed: hide points text (make transparent), show green checkmark (unless 0 points)
         if row.Points then
             row.Points:SetAlpha(0) -- Transparent but still exists for calculations
         end
-        if row.PointsFrame.Checkmark then
-            row.PointsFrame.Checkmark:SetTexture("Interface\\AddOns\\HardcoreAchievements\\Images\\ReadyCheck-Ready.png")
-            row.PointsFrame.Checkmark:Show()
+        local p = tonumber(row.points) or 0
+        if p == 0 then
+            -- 0-point achievements: show shield icon, hide checkmark
+            if row.NoPointsIcon then
+                if row.NoPointsIcon.SetDesaturated then
+                    row.NoPointsIcon:SetDesaturated(false)
+                end
+                row.NoPointsIcon:Show()
+            end
+            if row.PointsFrame.Checkmark then
+                row.PointsFrame.Checkmark:Hide()
+            end
+        else
+            -- Non-zero points: show checkmark, hide shield icon
+            if row.NoPointsIcon then
+                row.NoPointsIcon:Hide()
+            end
+            if row.PointsFrame.Checkmark then
+                row.PointsFrame.Checkmark:SetTexture("Interface\\AddOns\\HardcoreAchievements\\Images\\ReadyCheck-Ready.png")
+                row.PointsFrame.Checkmark:Show()
+            end
         end
         -- Hide icon overlay for completed achievements (they show green checkmark in points circle)
         if row.IconOverlay then
@@ -681,13 +756,31 @@ local function UpdatePointsDisplay(row)
             row.Title:SetTextColor(1, 0.82, 0) -- Yellow (default GameFontNormal)
         end
     elseif IsRowOutleveled(row) then
-        -- Failed: hide points text (make transparent), show red X checkmark
+        -- Failed: hide points text (make transparent), show red X checkmark (unless 0 points)
         if row.Points then
             row.Points:SetAlpha(0) -- Transparent but still exists for calculations
         end
-        if row.PointsFrame.Checkmark then
-            row.PointsFrame.Checkmark:SetTexture("Interface\\AddOns\\HardcoreAchievements\\Images\\ReadyCheck-NotReady.png")
-            row.PointsFrame.Checkmark:Show()
+        local p = tonumber(row.points) or 0
+        if p == 0 then
+            -- 0-point achievements: show shield icon, hide X checkmark
+            if row.NoPointsIcon then
+                if row.NoPointsIcon.SetDesaturated then
+                    row.NoPointsIcon:SetDesaturated(true)
+                end
+                row.NoPointsIcon:Show()
+            end
+            if row.PointsFrame.Checkmark then
+                row.PointsFrame.Checkmark:Hide()
+            end
+        else
+            -- Non-zero points: show X checkmark, hide shield icon
+            if row.NoPointsIcon then
+                row.NoPointsIcon:Hide()
+            end
+            if row.PointsFrame.Checkmark then
+                row.PointsFrame.Checkmark:SetTexture("Interface\\AddOns\\HardcoreAchievements\\Images\\ReadyCheck-NotReady.png")
+                row.PointsFrame.Checkmark:Show()
+            end
         end
         -- Show red X overlay on icon
         if row.IconOverlay then
@@ -705,7 +798,7 @@ local function UpdatePointsDisplay(row)
     else
         -- Incomplete: show points text, hide checkmark
         if row.Points then
-            row.Points:SetAlpha(1) -- Visible
+            row.Points:SetAlpha(1) -- Visible (may be overridden for 0-point rows)
         end
         if row.PointsFrame.Checkmark then
             row.PointsFrame.Checkmark:Hide()
@@ -722,8 +815,29 @@ local function UpdatePointsDisplay(row)
         if row.Title then
             row.Title:SetTextColor(1, 1, 1) -- White
         end
+
+        -- 0-point achievements: show a shield icon instead of the text "0" (UI-only; row.points remains numeric).
+        if row.NoPointsIcon and row.Points then
+            local p = tonumber(row.points)
+            if p == nil and row.Points.GetText then
+                p = tonumber(row.Points:GetText())
+            end
+            p = p or 0
+            if p == 0 then
+                row.Points:SetAlpha(0)
+                if row.NoPointsIcon.SetDesaturated then
+                    row.NoPointsIcon:SetDesaturated(true)
+                end
+                row.NoPointsIcon:Show()
+            else
+                row.NoPointsIcon:Hide()
+            end
+        end
     end
 end
+
+-- Expose for other modules (e.g., RefreshAllAchievementPoints) to re-apply UI rules after recalculating points.
+_G.HCA_UpdatePointsDisplay = UpdatePointsDisplay
 
 local function ApplyOutleveledStyle(row)
     if not row then return end
@@ -744,7 +858,9 @@ local function ApplyOutleveledStyle(row)
         if row.maxLevel then
             row.Sub:SetText((LEVEL or "Level") .. " " .. row.maxLevel)
         else
-            row.Sub:SetText(AUCTION_TIME_LEFT0 or "")
+            -- For achievements without maxLevel (meta achievements), don't show "Completed!" when failed
+            local defaultText = row._defaultSubText
+            row.Sub:SetText(defaultText or "")
         end
     end
     
@@ -772,10 +888,8 @@ local function ApplyOutleveledStyle(row)
             if isOutleveled then
                 local failedAt = GetFailureTimestamp(achId) or EnsureFailureTimestamp(achId) or time()
                 row.TS:SetText(FormatTimestamp(failedAt))
-                row.TS:SetTextColor(0.957, 0.263, 0.212)
             else
                 row.TS:SetText("")
-                row.TS:SetTextColor(1, 1, 1)
             end
         end
     end
@@ -821,19 +935,22 @@ function HCA_MarkRowCompleted(row, cdbParam)
             -- Use the points that were stored at the time of kill/quest (without self-found bonus)
             finalPoints = tonumber(progress.pointsAtKill) or 0
             usePointsAtKill = true
+
             -- Add self-found bonus if applicable (pointsAtKill doesn't include it)
+            -- Simplified rule: 0-point achievements remain 0 (bonus computes to 0).
             local isSelfFound = _G.IsSelfFound and _G.IsSelfFound() or false
-            local isDungeonSet = row._def and row._def.isDungeonSet
-            -- Reputation achievements SHOULD receive the self-found bonus.
-            if isSelfFound and not row.isSecretAchievement and not isDungeonSet then
-                local baseForBonus = row.originalPoints or row.revealPointsBase or row.points or 0
-                finalPoints = finalPoints + GetSelfFoundBonus(baseForBonus)
-                -- Mark that we've already applied self-found bonus so ApplySelfFoundBonus doesn't add it again
-                rec.SFMod = true
+            if isSelfFound then
+                local baseForBonus = row.originalPoints or row.revealPointsBase or 0
+                local bonus = GetSelfFoundBonus(baseForBonus)
+                if bonus > 0 and finalPoints > 0 then
+                    finalPoints = finalPoints + bonus
+                    -- Mark that we've already applied self-found bonus so ApplySelfFoundBonus doesn't add it again
+                    rec.SFMod = true
+                end
             end
         end
 
-        -- Note: Secret achievements do NOT get self-found bonus
+        -- Secret achievements: compute real points from reveal base + multiplier (placeholder points are static).
         if row.isSecretAchievement then
             local base = tonumber(row.revealPointsBase or row.originalPoints) or 0
             local computed = base
@@ -843,6 +960,16 @@ function HCA_MarkRowCompleted(row, cdbParam)
                 computed = base + math.floor((base) * (multiplier - 1) + 0.5)
             end
             finalPoints = computed
+
+            -- Apply self-found bonus for any point-bearing achievement (including secrets).
+            local isSelfFound = _G.IsSelfFound and _G.IsSelfFound() or false
+            if isSelfFound then
+                local bonus = GetSelfFoundBonus(base)
+                if bonus > 0 and finalPoints > 0 then
+                    finalPoints = finalPoints + bonus
+                    rec.SFMod = true
+                end
+            end
         end
 
         -- Points from pointsAtKill already include multiplier and solo doubling if applicable
@@ -856,15 +983,39 @@ function HCA_MarkRowCompleted(row, cdbParam)
 
         ClearProgress(id)
         HCA_UpdateTotalPoints()
+        
+        -- Fire hook event for other addons
+        if _G.HardcoreAchievements_Hooks then
+            -- Get aggregate statistics (after completion, so counts are up-to-date)
+            local completedCount, totalCount = HCA_AchievementCount()
+            local totalPoints = HCA_GetTotalPoints()
+            
+            local achievementData = {
+                achievementId = id,
+                title = row.Title and row.Title:GetText() or nil,
+                points = finalPoints,
+                completedAt = rec.completedAt,
+                level = rec.level,
+                wasSolo = wasSolo,
+                completedCount = completedCount,
+                totalCount = totalCount,
+                totalPoints = totalPoints,
+                playerGUID = UnitGUID("player")
+            }
+            _G.HardcoreAchievements_Hooks:FireEvent("OnAchievement", achievementData)
+        end
     end
     
     -- Set Sub text with "Solo" indicator if achievement was completed solo
-    -- Solo indicators only show if player is self-found
+    -- Solo indicators show based on hardcore status:
+    --   If hardcore is active: requires self-found
+    --   If hardcore is not active: solo achievements allowed without self-found
     -- Completed achievements always show "Solo", never "Solo bonus"
     local isSelfFound = _G.IsSelfFound and _G.IsSelfFound() or false
-    local isTBC = GetExpansionLevel() > 0
+    local isHardcoreActive = C_GameRules and C_GameRules.IsHardcoreActive and C_GameRules.IsHardcoreActive() or false
     if row.Sub then
-        if wasSolo and (isSelfFound or isTBC) then
+        local shouldShowSolo = wasSolo and (isHardcoreActive and isSelfFound or not isHardcoreActive)
+        if shouldShowSolo then
             -- Completed achievements always show "Solo", not "Solo bonus"
             row.Sub:SetText(AUCTION_TIME_LEFT0 .. "\n|c" .. select(4, GetClassColor(select(2, UnitClass("player")))) .. "Solo|r")
         else
@@ -968,12 +1119,15 @@ local function RestoreCompletionsFromDB()
             row.completed = true
             -- Title color will be set by UpdatePointsDisplay
             -- Check if achievement was completed solo and show indicator
-            -- Solo indicators only show if player is self-found
+            -- Solo indicators show based on hardcore status:
+            --   If hardcore is active: requires self-found
+            --   If hardcore is not active: solo achievements allowed without self-found
             -- Completed achievements always show "Solo", never "Solo bonus"
             local isSelfFound = _G.IsSelfFound and _G.IsSelfFound() or false
-            local isTBC = GetExpansionLevel() > 0
+            local isHardcoreActive = C_GameRules and C_GameRules.IsHardcoreActive and C_GameRules.IsHardcoreActive() or false
             if row.Sub then
-                if rec.wasSolo and (isSelfFound or isTBC) then
+                local shouldShowSolo = rec.wasSolo and (isHardcoreActive and isSelfFound or not isHardcoreActive)
+                if shouldShowSolo then
                     -- Completed achievements always show "Solo", not "Solo bonus"
                     row.Sub:SetText(AUCTION_TIME_LEFT0 .. "\n|c" .. select(4, GetClassColor(select(2, UnitClass("player")))) .. "Solo|r")
                 else
@@ -1030,31 +1184,22 @@ end
 
 function ShowHardcoreAchievementWindow()
     local _, cdb = GetCharDB()
-    if cdb and cdb.settings and cdb.settings.showCustomTab then
+    -- Check if user wants to use Character Panel instead of Dashboard (default is Character Panel)
+    local useCharacterPanel = true
+    if cdb and cdb.settings and cdb.settings.useCharacterPanel ~= nil then
+        useCharacterPanel = cdb.settings.useCharacterPanel
+    end
+    if useCharacterPanel then
+        -- Use Character Panel tab (old behavior)
         ToggleAchievementCharacterFrameTab()
-    elseif type(ToggleSettings) == "function" then
-        local container = nil
-        if TabManager and TabManager.getTabContent then
-            container = TabManager.getTabContent(3)
-        end
-        if not container and _G.tabContents and _G.tabContents[3] then
-            container = _G.tabContents[3]
-        end
-        local isContainerShown = container and container.IsShown and container:IsShown()
-        if isContainerShown then
-            ToggleSettings()
-        else
-            ToggleSettings()
-            if TabManager and TabManager.switchToTab then
-                TabManager.switchToTab(3)
-            elseif type(OpenSettingsToTab) == "function" then
-                OpenSettingsToTab(3)
-            end
-        end
-    elseif type(OpenSettingsToTab) == "function" then
-        OpenSettingsToTab(3)
     else
-        ToggleAchievementCharacterFrameTab()
+        -- Default: Use Dashboard (standalone window)
+        if HardcoreAchievements_Dashboard and HardcoreAchievements_Dashboard.Toggle then
+            HardcoreAchievements_Dashboard:Toggle()
+        else
+            -- Fallback to Character Panel if Dashboard not available
+            ToggleAchievementCharacterFrameTab()
+        end
     end
 end
 
@@ -1240,24 +1385,27 @@ function HCA_AchToast_Show(iconTex, title, pts, achIdOrRow)
         if cdb and cdb.progress and achId and cdb.progress[achId] and cdb.progress[achId].pointsAtKill then
             finalPoints = tonumber(cdb.progress[achId].pointsAtKill) or finalPoints
             -- Add self-found bonus if applicable (pointsAtKill doesn't include it)
+            -- Simplified rule: 0-point achievements remain 0 (bonus computes to 0).
             local isSelfFound = _G.IsSelfFound and _G.IsSelfFound() or false
-            local isSecretAchievement = row and row.isSecretAchievement or false
-            local isDungeonSet = row and row._def and row._def.isDungeonSet
-            -- Reputation achievements SHOULD receive the self-found bonus.
-            if isSelfFound and not isSecretAchievement and not isDungeonSet then
-                -- Bonus is based on the base points (originalPoints) even though it's applied after multipliers
+            if isSelfFound then
+                -- Bonus is based on base points (originalPoints) even though it's applied after multipliers/solo.
                 local baseForBonus = 0
                 if row and row.originalPoints then
                     baseForBonus = row.originalPoints
+                elseif row and row.revealPointsBase then
+                    baseForBonus = row.revealPointsBase
                 elseif AchievementPanel and AchievementPanel.achievements and achId then
                     for _, r in ipairs(AchievementPanel.achievements) do
                         if r and (r.id == achId or r.achId == achId) then
-                            baseForBonus = r.originalPoints or r.points or 0
+                            baseForBonus = r.originalPoints or r.revealPointsBase or r.points or 0
                             break
                         end
                     end
                 end
-                finalPoints = finalPoints + GetSelfFoundBonus(baseForBonus)
+                local bonus = GetSelfFoundBonus(baseForBonus)
+                if bonus > 0 and finalPoints > 0 then
+                    finalPoints = finalPoints + bonus
+                end
             end
         end
     end
@@ -1348,37 +1496,16 @@ _G.IsLevelMilestone = IsLevelMilestone
 local function ApplySelfFoundBonus()
     if not IsSelfFound() then return end
     if not HardcoreAchievementsDB or not HardcoreAchievementsDB.chars then return end
+    if not AchievementPanel or not AchievementPanel.achievements then return end
 
     local guid = UnitGUID("player")
     local charData = HardcoreAchievementsDB.chars[guid]
     if not charData or not charData.achievements then return end
 
-    local function isSecretAch(achId)
-        if not AchievementPanel or not AchievementPanel.achievements then return false end
-        for _, row in ipairs(AchievementPanel.achievements) do
-            if row.id == achId and row.isSecretAchievement then return true end
-        end
-        return false
-    end
-
-    local function isDungeonSetOrReputation(achId)
-        if not AchievementPanel or not AchievementPanel.achievements then return false end
-        for _, row in ipairs(AchievementPanel.achievements) do
-            if row.id == achId and row._def then
-                -- Reputation achievements SHOULD receive the self-found bonus.
-                if row._def.isDungeonSet then
-                    return true
-                end
-            end
-        end
-        return false
-    end
-
     local function getBasePointsForAch(achId)
-        if not AchievementPanel or not AchievementPanel.achievements then return 0 end
         for _, row in ipairs(AchievementPanel.achievements) do
             if row and (row.id == achId or row.achId == achId) then
-                return tonumber(row.originalPoints) or tonumber(row.points) or 0
+                return tonumber(row.originalPoints) or tonumber(row.revealPointsBase) or tonumber(row.points) or 0
             end
         end
         return 0
@@ -1387,14 +1514,18 @@ local function ApplySelfFoundBonus()
     local updatedCount = 0
     for achId, ach in pairs(charData.achievements) do
         if ach.completed and not ach.SFMod then
-            if isSecretAch(achId) or isDungeonSetOrReputation(achId) then
-                ach.SFMod = true -- mark so we don't try again later
-            else
+            local currentPts = tonumber(ach.points) or 0
             local baseForBonus = getBasePointsForAch(achId)
-            ach.points = (ach.points or 0) + GetSelfFoundBonus(baseForBonus)
+            local bonus = GetSelfFoundBonus(baseForBonus)
+
+            -- Simplified rule: only point-bearing achievements receive a bonus (0 stays 0).
+            if currentPts > 0 and bonus > 0 then
+                ach.points = currentPts + bonus
+            end
+
+            -- Mark as processed so we don't try again later (regardless of whether bonus was 0).
             ach.SFMod = true
             updatedCount = updatedCount + 1
-            end
         end
     end
 end
@@ -1454,6 +1585,11 @@ function HardcoreAchievements_SetProgress(achId, key, value) SetProgress(achId, 
 function HardcoreAchievements_ClearProgress(achId) ClearProgress(achId) end
 function HardcoreAchievements_GetCharDB() return GetCharDB() end
   
+-- Exported: getter for Tab frame (used by SharedUtils)
+function HardcoreAchievements_GetTab()
+    return Tab
+end
+
 -- Exported: hide custom vertical tab if present (used by embedded UI)
 function HardcoreAchievements_HideVerticalTab()
     if Tab and Tab.squareFrame then
@@ -1507,7 +1643,15 @@ local minimapDataObject = LDB:NewDataObject("HardcoreAchievements", {
     icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\HardcoreAchievementsButton.png",
     OnClick = function(self, button)
         if button == "LeftButton" and not IsShiftKeyDown() then
-            ShowHardcoreAchievementWindow()
+            -- Always open Dashboard, regardless of useCharacterPanel setting
+            if HardcoreAchievements_Dashboard and HardcoreAchievements_Dashboard.Toggle then
+                HardcoreAchievements_Dashboard:Toggle()
+            elseif _G.HCA_ShowDashboard then
+                _G.HCA_ShowDashboard()
+            else
+                -- Fallback to Character Panel if Dashboard not available
+                ShowHardcoreAchievementWindow()
+            end
         elseif button == "RightButton" then
             -- Right-click to open options panel
             OpenOptionsPanel()
@@ -1521,15 +1665,8 @@ local minimapDataObject = LDB:NewDataObject("HardcoreAchievements", {
     OnTooltipShow = function(tooltip)
         tooltip:AddLine("HardcoreAchievements", 1, 1, 1)
         
-        -- Show different tooltip text based on user preference and UltraHardcore availability
-        local _, cdb = GetCharDB()
-        if cdb and cdb.settings and cdb.settings.showCustomTab then
-            tooltip:AddLine("Left-click to open Hardcore Achievements", 0.5, 0.5, 0.5)
-        elseif type(OpenSettingsToTab) == "function" then
-            tooltip:AddLine("Left-click to open UltraHardcore Achievements", 0.5, 0.5, 0.5)
-        else
-            tooltip:AddLine("Left-click to open Hardcore Achievements", 0.5, 0.5, 0.5)
-        end
+        -- Minimap icon always opens Dashboard
+        tooltip:AddLine("Left-click to open Dashboard", 0.5, 0.5, 0.5)
         tooltip:AddLine("Right-click to open Options", 0.5, 0.5, 0.5)
         
         -- Show current achievement count
@@ -1570,7 +1707,7 @@ initFrame:SetScript("OnEvent", function(self, event, ...)
         if cdb then
             -- Ensure settings table exists
             cdb.settings = cdb.settings or {}
-            -- Default showCustomTab to true for new characters
+            -- Default showCustomTab to true (visible by default, synced with useCharacterPanel)
             if cdb.settings.showCustomTab == nil then
                 cdb.settings.showCustomTab = true
             end
@@ -1632,26 +1769,18 @@ end)
 
 -- Function to show welcome message popup on first login or when version changes
 function addon:ShowWelcomeMessage()
-    local WELCOME_MESSAGE_NUMBER = 2
+    local WELCOME_MESSAGE_NUMBER = 3
     local db = EnsureDB()
     db.settings = db.settings or {}
-    
-    -- Migrate old boolean flag to version system
-    if db.settings.showWelcomeMessage == true and not db.settings.welcomeMessageVersion then
-        -- User has already seen the welcome message with old system, set to current version
-        db.settings.welcomeMessageVersion = WELCOME_MESSAGE_NUMBER
-        -- Clean up old flag (optional, for cleanliness)
-        db.settings.showWelcomeMessage = nil
-    end
     
     local storedVersion = db.settings.welcomeMessageVersion or 0
     
     -- Show message if stored version is less than current version
     if storedVersion < WELCOME_MESSAGE_NUMBER then
         if GetExpansionLevel() > 0 then
-            --StaticPopup_Show("Hardcore Achievements TBC")
+            StaticPopup_Show("Hardcore Achievements TBC")
         else
-            StaticPopup_Show("Hardcore Achievements Vanilla 2")
+            StaticPopup_Show("Hardcore Achievements Vanilla")
         end
         db.settings.welcomeMessageVersion = WELCOME_MESSAGE_NUMBER
     end
@@ -1659,39 +1788,9 @@ end
 
 -- Define the welcome message popup
 StaticPopupDialogs["Hardcore Achievements Vanilla"] = {
-    text = "|cff69adc9Hardcore Achievements|r\n\nIf you intend to progress into |cff00ff00The Burning Crusade|r and continue using Hardcore Achievements, it is highly recommended you backup your Hardcore Achievements database before pre patch in case of data loss.\n\nThere is a new backup and restore feature in the options panel.",
-    button1 = "Got it!",
-    button2 = "Show Me!",
-    timeout = 0,
-    whileDead = true,
-    hideOnEscape = true,
-    preferredIndex = 3,
-    OnAccept = function()
-    end,
-    OnCancel = function()
-        OpenOptionsPanel()
-    end,
-}
-
-StaticPopupDialogs["Hardcore Achievements Vanilla 2"] = {
-    text = "|cff69adc9Hardcore Achievements|r\n\nDungeon related achievements have been redesigned and now require all party members to meet the level requirement at entry. Leveling up inside the dungeon is allowed, but leaving and re-entering if overleveled disqualifies the group.\n\nPlease report any issues you encounter.",
-    button1 = "OK",
-    timeout = 0,
-    whileDead = true,
-    hideOnEscape = true,
-    preferredIndex = 3,
-    OnAccept = function()
-        StaticPopup_Show("Hardcore Achievements Vanilla")
-    end,
-    OnCancel = function()
-        StaticPopup_Show("Hardcore Achievements Vanilla")
-    end,
-}
-
-StaticPopupDialogs["Hardcore Achievements TBC"] = {
-    text = "|cff69adc9Hardcore Achievements|r\n\nDungeon related achievements have been redesigned.\n\nDungeon achievements require all party members to meet the level requirement at entry. Leveling up inside the dungeon is allowed, but leaving and re-entering if overleveled disqualifies the group.\n\nPlease report any issues you encounter.",
-    button1 = "Got it!",
-    button2 = "Show Me!",
+    text = "|cff008066Hardcore Achievements|r\n\nDungeon related achievements have been redesigned and now require all party members to meet the level requirement at entry. Leveling up inside the dungeon is allowed, but leaving and re-entering if overleveled disqualifies the group.\n\nPlease report any issues you encounter.",
+    button1 = "Okay",
+    --button2 = "Show Me!",
     timeout = 0,
     whileDead = true,
     hideOnEscape = true,
@@ -1699,9 +1798,25 @@ StaticPopupDialogs["Hardcore Achievements TBC"] = {
     OnAccept = function()
         -- Popup automatically closes
     end,
-    OnCancel = function()
-        OpenOptionsPanel()
+    --OnCancel = function()
+        -- Popup automatically closes
+    --end,
+}
+
+StaticPopupDialogs["Hardcore Achievements TBC"] = {
+    text = "|cff008066Hardcore Achievements|r\n\nDungeon related achievements have been redesigned and now require all party members to meet the level requirement at entry. Leveling up inside the dungeon is allowed, but leaving and re-entering if overleveled disqualifies the group.\n\nPlease report any issues you encounter.",
+    button1 = "Okay",
+    --button2 = "Show Me!",
+    timeout = 0,
+    whileDead = true,
+    hideOnEscape = true,
+    preferredIndex = 3,
+    OnAccept = function()
+        -- Popup automatically closes
     end,
+    --OnCancel = function()
+        -- Popup automatically closes
+    --end,
 }
 
 -- =========================================================
@@ -1761,11 +1876,14 @@ function LoadTabPosition()
         local posX = db.tabSettings.position.x
         local posY = db.tabSettings.position.y
         
-        -- Respect user preference: hide custom tab entirely if disabled
+        -- Respect user preference: hide custom tab if useCharacterPanel is disabled
         local _, cdb = GetCharDB()
-        -- Default to true if not set (for new characters)
-        local showTab = (cdb and cdb.settings and cdb.settings.showCustomTab ~= nil) and cdb.settings.showCustomTab or true
-        if not showTab then
+        -- Check useCharacterPanel setting (default to true - Character Panel mode)
+        local useCharacterPanel = true
+        if cdb and cdb.settings and cdb.settings.useCharacterPanel ~= nil then
+            useCharacterPanel = cdb.settings.useCharacterPanel
+        end
+        if not useCharacterPanel then
             Tab:Hide()
             if Tab.squareFrame then
                 Tab.squareFrame:Hide()
@@ -1808,6 +1926,7 @@ function LoadTabPosition()
                 Tab.squareFrame:EnableMouse(true)
                 -- Only show square frame if CharacterFrame is shown
                 if isCharacterFrameShown then
+                    Tab.squareFrame:SetAlpha(1)
                     Tab.squareFrame:Show()
                 else
                     Tab.squareFrame:Hide()
@@ -1818,9 +1937,12 @@ function LoadTabPosition()
         -- Set the mode on the tab object
         Tab.mode = savedMode
     else
-        -- If no saved data, check showCustomTab setting (default to true for new characters)
+        -- If no saved data, check useCharacterPanel setting (default to true - Character Panel mode)
         local _, cdb = GetCharDB()
-        local shouldShow = (cdb and cdb.settings and cdb.settings.showCustomTab ~= nil) and cdb.settings.showCustomTab or true
+        local shouldShow = true
+        if cdb and cdb.settings and cdb.settings.useCharacterPanel ~= nil then
+            shouldShow = cdb.settings.useCharacterPanel
+        end
         
         if shouldShow then
             -- Show tab at default position if showCustomTab is true
@@ -1844,6 +1966,7 @@ function LoadTabPosition()
                     Tab.squareFrame:EnableMouse(true)
                     -- Only show square frame if CharacterFrame is shown
                     if isCharacterFrameShown then
+                        Tab.squareFrame:SetAlpha(1)
                         Tab.squareFrame:Show()
                     else
                         Tab.squareFrame:Hide()
@@ -1851,6 +1974,7 @@ function LoadTabPosition()
                 end
             else
                 -- Hardcore default: bottom mode
+                local Tabs = CharacterFrame.numTabs
                 Tab:SetPoint("RIGHT", _G["CharacterFrameTab"..Tabs], "RIGHT", 43, 0)
                 Tab:SetAlpha(1)
                 Tab:EnableMouse(true)
@@ -1865,8 +1989,10 @@ function LoadTabPosition()
             -- Only show tab if CharacterFrame is shown
             if isCharacterFrameShown then
                 if not isHardcoreActive and Tab.squareFrame then
+                    Tab.squareFrame:SetAlpha(1)
                     Tab.squareFrame:Show()
                 else
+                    Tab:SetAlpha(1)
                     Tab:Show()
                 end
             else
@@ -1888,15 +2014,49 @@ end
 
 function ResetTabPosition()
     local db = EnsureDB()
-    if db.tabSettings then
-        db.tabSettings = nil
+    -- Clear saved drag position so LoadTabPosition uses its built-in defaults
+    db.tabSettings = nil
+
+    -- Reset should ALWAYS re-enable the Character Panel tab option
+    local _, cdb = GetCharDB()
+    if cdb then
+        cdb.settings = cdb.settings or {}
+        cdb.settings.useCharacterPanel = true
+        cdb.settings.showCustomTab = true
     end
-    
-    -- Reset to default by calling LoadTabPosition (which will use default position since db.tabSettings is now nil)
-    -- LoadTabPosition handles visibility based on CharacterFrame state
+
+    -- Sync Dashboard checkbox if the Dashboard frame is loaded
+    if _G.HardcoreAchievementsDashboard and _G.HardcoreAchievementsDashboard.UseCharacterPanelCheckbox then
+        _G.HardcoreAchievementsDashboard.UseCharacterPanelCheckbox:SetChecked(true)
+    end
+
+    -- Re-apply default positioning logic
     LoadTabPosition()
-    
-    print("HardcoreAchievements: Tab position reset to default")
+
+    -- If the CharacterFrame is currently open, ensure the visible surface is shown.
+    -- In "right" mode, Tab alpha is 0 by design and the squareFrame is the clickable/visible UI.
+    if CharacterFrame and CharacterFrame:IsShown() then
+        if Tab and Tab.mode == "right" then
+            if not Tab.squareFrame then
+                CreateSquareFrame()
+            end
+            if Tab.squareFrame then
+                Tab.squareFrame:SetAlpha(1)
+                Tab.squareFrame:Show()
+                Tab.squareFrame:EnableMouse(true)
+            end
+        elseif Tab and Tab.mode == "bottom" then
+            Tab:SetAlpha(1)
+            Tab:EnableMouse(true)
+            Tab:Show()
+            if Tab.squareFrame then
+                Tab.squareFrame:Hide()
+                Tab.squareFrame:EnableMouse(false)
+            end
+        end
+    end
+
+    print("|cff008066[Hardcore Achievements]|r Tab position reset to default")
 end
 
 -- Keeps default anchoring until the user drags; then constrains motion to bottom or right edge.
@@ -2081,6 +2241,10 @@ do
             -- Show default tab, hide square frame
             Tab:SetAlpha(1) -- Show the default tab
             Tab:EnableMouse(true)   -- Enable tab mouse events in horizontal mode
+            -- Explicitly show the tab when switching to bottom mode (only if CharacterFrame is shown)
+            if CharacterFrame and CharacterFrame:IsShown() then
+                Tab:Show()
+            end
             if Tab.squareFrame then
                 Tab.squareFrame:EnableMouse(false)
                 if keepSquareVisible then
@@ -2355,71 +2519,35 @@ end)
 
 -- Filter dropdown - using shared FilterDropdown module
 
--- Helper function to check if achievement should be shown based on checkbox filter
--- Returns true if should show, false if should hide
-local function ShouldShowByCheckboxFilter(def, isCompleted, currentFilter, checkboxIndex, variationType)
-    -- Completed achievements always show when "all" or "completed" filter is selected
-    if isCompleted and (currentFilter == "all" or currentFilter == "completed") then
-        return true
+-- Use FilterDropdown for checkbox filtering logic
+local FilterDropdown = _G.FilterDropdown
+local function ShouldShowByCheckboxFilter(def, isCompleted, checkboxIndex, variationType)
+    if FilterDropdown and FilterDropdown.ShouldShowByCheckboxFilter then
+        return FilterDropdown.ShouldShowByCheckboxFilter(def, isCompleted, checkboxIndex, variationType)
     end
-    
-    -- Load checkbox states from database
-    local checkboxStates = { false, false, false, false, false, false, false }
-    if type(HardcoreAchievements_GetCharDB) == "function" then
-        local _, cdb = HardcoreAchievements_GetCharDB()
-        if cdb and cdb.settings and cdb.settings.filterCheckboxes then
-            local states = cdb.settings.filterCheckboxes
-            if type(states) == "table" then
-                checkboxStates = {
-                    states[1] == true,  -- Trio
-                    states[2] == true,  -- Duo
-                    states[3] == true,  -- Solo
-                    states[4] == true,  -- Dungeon Sets
-                    states[5] == true,  -- Reputations
-                    states[6] == true,  -- Raids
-                    states[7] == true,  -- Heroic Dungeons
-                }
-            end
-        end
-    end
-    
-    -- For variations, check based on variation type
-    if variationType then
-        if variationType == "Trio" then
-            return checkboxStates[1]
-        elseif variationType == "Duo" then
-            return checkboxStates[2]
-        elseif variationType == "Solo" then
-            return checkboxStates[3]
-        end
-        return false
-    end
-    
-    -- For other types, check the specified checkbox index
-    if checkboxIndex then
-        return checkboxStates[checkboxIndex]
-    end
-    
-    return true -- Default to showing if no checkbox specified
+    return true -- Fallback to showing if FilterDropdown not available
 end
 
 -- Function to apply the current filter to all achievement rows
 local function ApplyFilter()
     if not AchievementPanel or not AchievementPanel.achievements then return end
     
-    local currentFilter = FilterDropdown:GetCurrentFilter(AchievementPanel.filterDropdown)
+    -- Get status filter states (completed, available, failed) - all default to true
+    local statusFilters = FilterDropdown:GetStatusFilterStatesFromDropdown(AchievementPanel.filterDropdown)
+    local showCompleted = statusFilters[1] ~= false
+    local showAvailable = statusFilters[2] ~= false
+    local showFailed = statusFilters[3] ~= false
     
     for _, row in ipairs(AchievementPanel.achievements) do
         local shouldShow = false
         
-        if currentFilter == "all" then
+        local isCompleted = row.completed == true
+        local isFailed = IsRowOutleveled(row)
+        local isAvailable = not isCompleted and not isFailed
+        
+        -- Show based on status filter checkboxes
+        if (isCompleted and showCompleted) or (isAvailable and showAvailable) or (isFailed and showFailed) then
             shouldShow = true
-        elseif currentFilter == "completed" then
-            shouldShow = row.completed == true
-        elseif currentFilter == "not_completed" then
-            shouldShow = row.completed ~= true and not IsRowOutleveled(row)
-        elseif currentFilter == "failed" then
-            shouldShow = IsRowOutleveled(row)
         end
         
         -- Force-hide rows designated as hidden until completion
@@ -2435,31 +2563,69 @@ local function ApplyFilter()
             local isCompleted = row.completed == true
             local def = row._def
             
-            if def.isVariation then
-                -- Variations: check based on variation type
-                if not ShouldShowByCheckboxFilter(def, isCompleted, currentFilter, nil, def.variationType) then
+            if def.isQuest then
+                -- Quest (Catalog non-secret): check index 1
+                if not ShouldShowByCheckboxFilter(def, isCompleted, 1, nil) then
                     shouldShow = false
                 end
-            elseif def.isDungeonSet then
-                -- Dungeon Sets: check index 4
-                if not ShouldShowByCheckboxFilter(def, isCompleted, currentFilter, 4, nil) then
-                    shouldShow = false
-                end
-            elseif def.isReputation then
-                -- Reputations: check index 5
-                if not ShouldShowByCheckboxFilter(def, isCompleted, currentFilter, 5, nil) then
-                    shouldShow = false
-                end
-            elseif def.isRaid then
-                -- Raids: check index 6
-                if not ShouldShowByCheckboxFilter(def, isCompleted, currentFilter, 6, nil) then
+            elseif def.isDungeon then
+                -- Dungeon (DungeonCatalog): check index 2
+                if not ShouldShowByCheckboxFilter(def, isCompleted, 2, nil) then
                     shouldShow = false
                 end
             elseif def.isHeroicDungeon then
-                -- Heroic Dungeons: check index 7
-                if not ShouldShowByCheckboxFilter(def, isCompleted, currentFilter, 7, nil) then
+                -- Heroic Dungeons: check index 3
+                if not ShouldShowByCheckboxFilter(def, isCompleted, 3, nil) then
                     shouldShow = false
                 end
+            elseif def.isRaid then
+                -- Raids: check index 4
+                if not ShouldShowByCheckboxFilter(def, isCompleted, 4, nil) then
+                    shouldShow = false
+                end
+            elseif def.isProfession then
+                -- Professions: check index 5
+                if not ShouldShowByCheckboxFilter(def, isCompleted, 5, nil) then
+                    shouldShow = false
+                end
+            elseif def.isMeta then
+                -- Meta: check index 6
+                if not ShouldShowByCheckboxFilter(def, isCompleted, 6, nil) then
+                    shouldShow = false
+                end
+            elseif def.isReputation then
+                -- Reputations: check index 7
+                if not ShouldShowByCheckboxFilter(def, isCompleted, 7, nil) then
+                    shouldShow = false
+                end
+            elseif def.isExploration then
+                -- Exploration: check index 8
+                if not ShouldShowByCheckboxFilter(def, isCompleted, 8, nil) then
+                    shouldShow = false
+                end
+            elseif def.isDungeonSet then
+                -- Dungeon Sets: check index 9
+                if not ShouldShowByCheckboxFilter(def, isCompleted, 9, nil) then
+                    shouldShow = false
+                end
+            elseif def.isVariation then
+                -- Variations: check based on variation type (Solo=10, Duo=11, Trio=12)
+                if not ShouldShowByCheckboxFilter(def, isCompleted, nil, def.variationType) then
+                    shouldShow = false
+                end
+            elseif def.isRidiculous then
+                -- Ridiculous: check index 13
+                if not ShouldShowByCheckboxFilter(def, isCompleted, 13, nil) then
+                    shouldShow = false
+                end
+            elseif def.isSecret then
+                -- Secret: check index 14
+                if not ShouldShowByCheckboxFilter(def, isCompleted, 14, nil) then
+                    shouldShow = false
+                end
+            else
+                -- Fallback: default to showing if no category flag is set
+                -- (This should not happen, but included for safety)
             end
         end
         
@@ -2476,24 +2642,32 @@ end
 
 _G.HCA_ApplyFilter = ApplyFilter
 
--- Create and initialize the filter dropdown
-local filterDropdown = FilterDropdown:CreateDropdown(AchievementPanel, "TOPRIGHT", AchievementPanel, -20, -52, 60)
-AchievementPanel.filterDropdown = filterDropdown
-
-FilterDropdown:InitializeDropdown(filterDropdown, {
-    currentFilter = "all",
-    -- checkboxStates will be loaded from database automatically
-    checkboxLabels = { "Show Dungeon Trios", "Show Dungeon Duos", "Show Dungeon Solos", "Show Dungeon Sets", "Show Reputations", "Show Raids", "Show Heroic Dungeons" },
-    onFilterChange = function(filterValue)
-        ApplyFilter()
-    end,
-    onCheckboxChange = function(checkboxIndex, newState)
-        -- Checkbox state is automatically saved to database in FilterDropdown
-        -- Variations are always registered but filtered based on checkbox states
-        -- Re-apply filter to show/hide variations when checkbox changes
-        ApplyFilter()
-    end,
-})
+-- Create and initialize the filter dropdown using centralized helper
+AchievementPanel.filterDropdown = FilterDropdown:CreateAndInitializeDropdown(
+    AchievementPanel,
+    {
+        anchorPoint = "TOPRIGHT",
+        anchorTo = AchievementPanel,
+        xOffset = -20,
+        yOffset = -52,
+        width = 60
+    },
+    {
+        onFilterChange = function(filterValue)
+            ApplyFilter()
+        end,
+        onCheckboxChange = function(checkboxIndex, newState)
+            -- Checkbox state is automatically saved to database in FilterDropdown
+            -- Re-apply filter to show/hide achievements when checkbox changes
+            ApplyFilter()
+        end,
+        onStatusFilterChange = function(statusIndex, newState)
+            -- Status filter state is automatically saved to database in FilterDropdown
+            -- Re-apply filter to show/hide achievements when status filter changes
+            ApplyFilter()
+        end
+    }
+)
 
 --AchievementPanel.Text = AchievementPanel:CreateFontString(nil, "OVERLAY", "GameFontNormal")
 --AchievementPanel.Text:SetPoint("TOP", 5, -45)
@@ -2526,11 +2700,12 @@ AchievementPanel.MultiplierText:SetTextColor(0.8, 0.8, 0.8)
 -- Solo mode checkbox
 AchievementPanel.SoloModeCheckbox = CreateFrame("CheckButton", nil, AchievementPanel, "InterfaceOptionsCheckButtonTemplate")
 AchievementPanel.SoloModeCheckbox:SetPoint("TOPLEFT", AchievementPanel, "TOPLEFT", 70, -50)
--- In TBC, use "Solo" instead of "SSF"
-if GetExpansionLevel() > 0 then
-    AchievementPanel.SoloModeCheckbox.Text:SetText("Solo")
-else
+-- In Hardcore mode, use "SSF" instead of "Solo"
+local isHardcoreActive = C_GameRules and C_GameRules.IsHardcoreActive and C_GameRules.IsHardcoreActive() or false
+if isHardcoreActive then
     AchievementPanel.SoloModeCheckbox.Text:SetText("SSF")
+else
+    AchievementPanel.SoloModeCheckbox.Text:SetText("Solo")
 end
 AchievementPanel.SoloModeCheckbox:SetScript("OnClick", function(self)
     if self:IsEnabled() then
@@ -2558,11 +2733,11 @@ end)
 
 AchievementPanel.SettingsButton = CreateFrame("Button", nil, AchievementPanel)
 AchievementPanel.SettingsButton:SetSize(14, 14)
-AchievementPanel.SettingsButton:SetPoint("BOTTOMLEFT", AchievementPanel.SoloModeCheckbox, "TOPLEFT", 6, 18)
+AchievementPanel.SettingsButton:SetPoint("BOTTOMLEFT", AchievementPanel.SoloModeCheckbox, "TOPLEFT", 6, 17)
 AchievementPanel.SettingsButton.Icon = AchievementPanel.SettingsButton:CreateTexture(nil, "ARTWORK")
 AchievementPanel.SettingsButton.Icon:SetAllPoints(AchievementPanel.SettingsButton)
-AchievementPanel.SettingsButton.Icon:SetTexture(SETTINGS_ICON_TEXTURE)
-AchievementPanel.SettingsButton.Icon:SetVertexColor(1, 0.82, 0.0)
+AchievementPanel.SettingsButton.Icon:SetTexture("Interface\\WorldMap\\Gear_64")
+AchievementPanel.SettingsButton.Icon:SetTexCoord(0, 0.5, 0.5, 1)
 AchievementPanel.SettingsButton:SetScript("OnClick", function()
     OpenOptionsPanel()
 end)
@@ -2572,6 +2747,27 @@ AchievementPanel.SettingsButton:SetScript("OnEnter", function(self)
     GameTooltip:Show()
 end)
 AchievementPanel.SettingsButton:SetScript("OnLeave", function()
+    GameTooltip:Hide()
+end)
+
+-- Dashboard button (next to Settings button)
+AchievementPanel.DashboardButton = CreateFrame("Button", nil, AchievementPanel)
+AchievementPanel.DashboardButton:SetSize(24, 24)
+AchievementPanel.DashboardButton:SetPoint("LEFT", AchievementPanel.SettingsButton, "RIGHT", 1, -2)
+AchievementPanel.DashboardButton.Icon = AchievementPanel.DashboardButton:CreateTexture(nil, "ARTWORK")
+AchievementPanel.DashboardButton.Icon:SetAllPoints(AchievementPanel.DashboardButton)
+AchievementPanel.DashboardButton.Icon:SetTexture("Interface\\AchievementFrame\\UI-Achievement-Progressive-Shield-NoPoints")
+AchievementPanel.DashboardButton:SetScript("OnClick", function()
+    if _G.HCA_ShowDashboard then
+        _G.HCA_ShowDashboard()
+    end
+end)
+AchievementPanel.DashboardButton:SetScript("OnEnter", function(self)
+    GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+    GameTooltip:SetText("Open Dashboard", nil, nil, nil, nil, true)
+    GameTooltip:Show()
+end)
+AchievementPanel.DashboardButton:SetScript("OnLeave", function()
     GameTooltip:Hide()
 end)
 
@@ -2680,31 +2876,40 @@ function CreateAchievementRow(parent, achId, title, tooltip, icon, level, points
         row:SetPoint("TOPLEFT", AchievementPanel.achievements[index-1], "BOTTOMLEFT", 0, 0)
     end
 
-    -- icon
-    row.Icon = row:CreateTexture(nil, "ARTWORK")
-    row.Icon:SetSize(30, 30)
-    row.Icon:SetPoint("LEFT", row, "LEFT", 1, 0) -- Shift to account for SSF border
+    -- icon (clipped so oversized textures can't bleed past the frame)
+    local ICON_SIZE = 35
+    row.IconClip = CreateFrame("Frame", nil, row)
+    row.IconClip:SetSize(ICON_SIZE, ICON_SIZE)
+    row.IconClip:SetPoint("LEFT", row, "LEFT", 1, 0) -- Shift to account for SSF border
+    row.IconClip:SetClipsChildren(true)
+
+    row.Icon = row.IconClip:CreateTexture(nil, "ARTWORK")
+    -- Slightly oversized to hide the default Blizzard icon border; clipped by IconClip
+    row.Icon:SetSize(ICON_SIZE - 4, ICON_SIZE - 4)
+    row.Icon:SetPoint("CENTER", row.IconClip, "CENTER", 0, 0)
+    row.Icon:SetTexCoord(0.05, 0.95, 0.05, 0.95)
     row.Icon:SetTexture(icon or 136116)
     
     -- Icon overlay (for failed state - red X)
-    row.IconOverlay = row:CreateTexture(nil, "OVERLAY")
+    row.IconOverlay = row.IconClip:CreateTexture(nil, "OVERLAY")
     row.IconOverlay:SetSize(20, 20) -- Same size as points checkmark
-    row.IconOverlay:SetPoint("CENTER", row.Icon, "CENTER", 0, 0)
+    row.IconOverlay:SetPoint("CENTER", row.IconClip, "CENTER", 0, 0)
     row.IconOverlay:Hide() -- Hidden by default
 
     -- IconFrame overlays (gold for completed, disabled for failed, silver for available)
     -- Gold frame (completed)
-    row.IconFrameGold = row:CreateTexture(nil, "OVERLAY", nil, 7)
-    row.IconFrameGold:SetSize(33, 33)
-    row.IconFrameGold:SetPoint("CENTER", row.Icon, "CENTER", 0, 0)
+    row.IconFrameGold = row.IconClip:CreateTexture(nil, "OVERLAY", nil, 7)
+    -- Match the clip size so the icon can't "peek" outside the frame.
+    row.IconFrameGold:SetSize(ICON_SIZE, ICON_SIZE)
+    row.IconFrameGold:SetPoint("CENTER", row.IconClip, "CENTER", 0, 0)
     row.IconFrameGold:SetTexture("Interface\\AddOns\\HardcoreAchievements\\Images\\frame_gold.png")
     row.IconFrameGold:SetDrawLayer("OVERLAY", 1)
     row.IconFrameGold:Hide()
     
     -- Silver frame (available/failed) - default
-    row.IconFrame = row:CreateTexture(nil, "OVERLAY", nil, 7)
-    row.IconFrame:SetSize(33, 33)
-    row.IconFrame:SetPoint("CENTER", row.Icon, "CENTER", 0, 0)
+    row.IconFrame = row.IconClip:CreateTexture(nil, "OVERLAY", nil, 7)
+    row.IconFrame:SetSize(ICON_SIZE, ICON_SIZE)
+    row.IconFrame:SetPoint("CENTER", row.IconClip, "CENTER", 0, 0)
     row.IconFrame:SetTexture("Interface\\AddOns\\HardcoreAchievements\\Images\\frame_silver.png")
     row.IconFrame:SetDrawLayer("OVERLAY", 1)
     row.IconFrame:Show()
@@ -2766,6 +2971,13 @@ function CreateAchievementRow(parent, achId, title, tooltip, icon, level, points
     row.Points:SetPoint("CENTER", row.PointsFrame, "CENTER", 0, 0)
     row.Points:SetText(tostring(points or 0))
     row.Points:SetTextColor(1, 1, 1)
+
+    -- 0-point shield icon (UI-only; toggle via UpdatePointsDisplay)
+    row.NoPointsIcon = row.PointsFrame:CreateTexture(nil, "OVERLAY", nil, 2)
+    row.NoPointsIcon:SetTexture("Interface\\AddOns\\HardcoreAchievements\\Images\\noPoints.png")
+    row.NoPointsIcon:SetSize(14, 18)
+    row.NoPointsIcon:SetPoint("CENTER", row.PointsFrame, "CENTER", 0, 0)
+    row.NoPointsIcon:Hide()
     
     -- Checkmark texture (for completed/failed states)
     row.PointsFrame.Checkmark = row.PointsFrame:CreateTexture(nil, "OVERLAY")
@@ -2775,11 +2987,11 @@ function CreateAchievementRow(parent, achId, title, tooltip, icon, level, points
 
     -- timestamp
     row.TS = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    row.TS:SetPoint("RIGHT", row.PointsFrame, "LEFT", -10, 0)
+    row.TS:SetPoint("RIGHT", row.PointsFrame, "LEFT", -5, -10)
     row.TS:SetJustifyH("RIGHT")
     row.TS:SetJustifyV("TOP")
     row.TS:SetText("")
-    row.TS:SetTextColor(1, 1, 1)
+    row.TS:SetTextColor(1, 1, 1, 0.5)
 
     -- background + border textures (clipped to BorderClip frame)
     row.Background = AchievementPanel.BorderClip:CreateTexture(nil, "BACKGROUND")
@@ -2850,7 +3062,7 @@ function CreateAchievementRow(parent, achId, title, tooltip, icon, level, points
                 -- Chat edit box is NOT active: track/untrack achievement
                 local AchievementTracker = GetAchievementTracker()
                 if not AchievementTracker then
-                    print("|cffff0000[Hardcore Achievements]|r Achievement tracker not available. Please reload your UI (/reload).")
+                    print("|cff008066[Hardcore Achievements]|r Achievement tracker not available. Please reload your UI (/reload).")
                     return
                 end
                 
@@ -2866,10 +3078,10 @@ function CreateAchievementRow(parent, achId, title, tooltip, icon, level, points
                 
                 if isTracked then
                     AchievementTracker:UntrackAchievement(achId)
-                    --print("|cff69adc9[Hardcore Achievements]|r Stopped tracking: " .. title)
+                    --print("|cff008066[Hardcore Achievements]|r Stopped tracking: " .. title)
                 else
                     AchievementTracker:TrackAchievement(achId, title)
-                    --print("|cff69adc9[Hardcore Achievements]|r Now tracking: " .. title)
+                    --print("|cff008066[Hardcore Achievements]|r Now tracking: " .. title)
                 end
             end
         end
@@ -3258,8 +3470,12 @@ do
         AchievementPanel._achEvt:RegisterEvent("QUEST_REMOVED")
         AchievementPanel._achEvt:RegisterEvent("UNIT_SPELLCAST_SENT")
         AchievementPanel._achEvt:RegisterEvent("UNIT_INVENTORY_CHANGED")
+        AchievementPanel._achEvt:RegisterEvent("ITEM_LOCKED")
+        AchievementPanel._achEvt:RegisterEvent("DELETE_ITEM_CONFIRM")
+        AchievementPanel._achEvt:RegisterEvent("ITEM_UNLOCKED")
         AchievementPanel._achEvt:RegisterEvent("BAG_UPDATE_DELAYED")
         AchievementPanel._achEvt:RegisterEvent("CHAT_MSG_TEXT_EMOTE")
+        AchievementPanel._achEvt:RegisterEvent("GOSSIP_SHOW")
         AchievementPanel._achEvt:RegisterEvent("PLAYER_LEVEL_CHANGED")
         AchievementPanel._achEvt:RegisterEvent("CHAT_MSG_LOOT")
         AchievementPanel._achEvt:RegisterEvent("PLAYER_DEAD")
@@ -3267,6 +3483,7 @@ do
         AchievementPanel._achEvt:RegisterEvent("PLAYER_ENTERING_WORLD")
         AchievementPanel._achEvt:RegisterEvent("UPDATE_FACTION")
         AchievementPanel._achEvt:RegisterEvent("UNIT_AURA")
+        AchievementPanel._achEvt:RegisterEvent("MAP_EXPLORATION_UPDATED")
         AchievementPanel._achEvt:SetScript("OnEvent", function(_, event, ...)
             -- Clean up external player tracking on zone loads
             if event == "PLAYER_ENTERING_WORLD" then
@@ -3638,7 +3855,71 @@ do
                         end
                     end
                 end
+            elseif event == "ITEM_LOCKED" then
+                -- Track item delete flow for "Precious"
+                -- We only arm the state if the player is holding the ring on the cursor in Blackrock Mountain.
+                local mapId = C_Map and C_Map.GetBestMapForUnit and C_Map.GetBestMapForUnit("player")
+                local cursorType, itemId = GetCursorInfo()
+                if mapId == 1415 and cursorType == "item" and tonumber(itemId) == 8350 then
+                    -- Store the current item count before deletion
+                    local initialCount = GetItemCount and GetItemCount(8350, true) or 0
+                    _G.HCA_Precious_DeleteState = {
+                        armed = true,
+                        mapId = mapId,
+                        itemId = 8350,
+                        initialItemCount = tonumber(initialCount) or 0,
+                        deleteConfirmed = false,
+                        awaitingBagUpdate = false,
+                    }
+                end
+            elseif event == "DELETE_ITEM_CONFIRM" then
+                -- This fires when the delete confirmation dialog is shown/confirmed
+                local st = _G.HCA_Precious_DeleteState
+                if st and st.armed and st.itemId == 8350 and st.mapId == 1415 then
+                    -- Require the player still be in Blackrock Mountain when the delete prompt occurs
+                    local currentMapId = C_Map and C_Map.GetBestMapForUnit and C_Map.GetBestMapForUnit("player")
+                    if currentMapId == 1415 then
+                        st.deleteConfirmed = true
+                    end
+                end
+            elseif event == "ITEM_UNLOCKED" then
+                local st = _G.HCA_Precious_DeleteState
+                if st and st.armed and st.itemId == 8350 and st.mapId == 1415 then
+                    if st.deleteConfirmed then
+                        st.awaitingBagUpdate = true
+                    else
+                        _G.HCA_Precious_DeleteState = nil
+                    end
+                end
             elseif event == "BAG_UPDATE_DELAYED" then
+                local st = _G.HCA_Precious_DeleteState
+                if st and st.armed and st.awaitingBagUpdate and st.deleteConfirmed and st.itemId == 8350 and st.mapId == 1415 then
+                    local currentMapId = C_Map and C_Map.GetBestMapForUnit and C_Map.GetBestMapForUnit("player")
+                    local itemCount = GetItemCount and GetItemCount(8350, true) or 0
+                    local newCount = tonumber(itemCount) or 0
+                    local expectedCount = (st.initialItemCount or 0) - 1
+                    if currentMapId == 1415 and newCount == expectedCount then
+                        -- Keep the completion flag for the customIsCompleted function.
+                        _G.HCA_Precious_RingDeleted = true
+
+                        -- Manually complete the row immediately.
+                        for _, row in ipairs(AchievementPanel.achievements) do
+                            local id = row and (row.id or row.achId)
+                            if row and (not row.completed) and id == "Precious" then
+                                HCA_MarkRowCompleted(row)
+                                HCA_AchToast_Show(row.Icon:GetTexture(), row.Title:GetText(), row.points, row)
+                                
+                                -- Send SAY channel message to notify nearby players for Fellowship achievement
+                                if _G.HCA_SendPreciousCompletionMessage then
+                                    _G.HCA_SendPreciousCompletionMessage()
+                                end
+                                break
+                            end
+                        end
+                    end
+                    -- Clear state after the first bag update following unlock, regardless of outcome.
+                    _G.HCA_Precious_DeleteState = nil
+                end
                 for _, row in ipairs(AchievementPanel.achievements) do
                     if not row.completed and type(row.itemTracker) == "function" then
                         local ok, shouldComplete = pcall(row.itemTracker)
@@ -3658,6 +3939,23 @@ do
                         if ok and shouldComplete == true then
                             HCA_MarkRowCompleted(row)
                             HCA_AchToast_Show(row.Icon:GetTexture(), row.Title:GetText(), row.points, row)
+                        end
+                    end
+                end
+            elseif event == "GOSSIP_SHOW" then
+                -- Check for "MessageToKarazhan" achievement when speaking to Archmage Leryda
+                local npcName = UnitName("npc")
+                local playerLevel = UnitLevel("player")
+                if npcName == "Archmage Leryda" and playerLevel <= 60 then
+                    for _, row in ipairs(AchievementPanel.achievements) do
+                        local id = row and (row.id or row.achId)
+                        if row and (not row.completed) and id == "MessageToKarazhan" then
+                            -- Check if the zone is fully discovered and speaking to the correct NPC
+                            if CheckZoneDiscovery and CheckZoneDiscovery(1430) then
+                                HCA_MarkRowCompleted(row)
+                                HCA_AchToast_Show(row.Icon:GetTexture(), row.Title:GetText(), row.points, row)
+                                break
+                            end
                         end
                     end
                 end
@@ -3751,11 +4049,27 @@ do
                         end
                     end
                 end
+            elseif event == "MAP_EXPLORATION_UPDATED" then
+                local playerFaction = select(2, UnitFactionGroup("player"))
+                for _, row in ipairs(AchievementPanel.achievements) do
+                    if not row.completed and row.id == "OrgA" and playerFaction == FACTION_ALLIANCE then
+                        if CheckZoneDiscovery(1411) then
+                            HCA_MarkRowCompleted(row)
+                            HCA_AchToast_Show(row.Icon:GetTexture(), row.Title:GetText(), row.points, row)
+                        end
+                    elseif not row.completed and row.id == "StormH" and playerFaction == FACTION_HORDE then
+                        if CheckZoneDiscovery(1429) then
+                            HCA_MarkRowCompleted(row)
+                            HCA_AchToast_Show(row.Icon:GetTexture(), row.Title:GetText(), row.points, row)
+                        end
+                    end
+                end
             elseif event == "PLAYER_DEAD" then
                 for _, row in ipairs(AchievementPanel.achievements) do
                     if not row.completed and row.id == "Secret4" then
                         HCA_MarkRowCompleted(row)
                         HCA_AchToast_Show(row.Icon:GetTexture(), row.Title:GetText(), row.points, row)
+                        break
                     end
                 end
             end
@@ -3839,15 +4153,15 @@ function HCA_ShowAchievementTab()
         local isChecked = (cdb and cdb.settings and cdb.settings.soloAchievements) or false
         AchievementPanel.SoloModeCheckbox:SetChecked(isChecked)
         
-        local isTBC = GetExpansionLevel() > 0
-        if isTBC then
-            -- In TBC, checkbox is always enabled (Self-Found not available)
+        local isHardcoreActive = C_GameRules and C_GameRules.IsHardcoreActive and C_GameRules.IsHardcoreActive() or false
+        if not isHardcoreActive then
+            -- In Non-Hardcore mode, checkbox is always enabled (Self-Found not available)
             AchievementPanel.SoloModeCheckbox:Enable()
             AchievementPanel.SoloModeCheckbox.Text:SetTextColor(1, 1, 1, 1)
             AchievementPanel.SoloModeCheckbox.Text:SetText("Solo")
             AchievementPanel.SoloModeCheckbox.tooltip = "|cffffffffSolo|r \nToggling this option on will display the total points you will receive if you complete this achievement solo (no help from nearby players)."
         else
-            -- In Classic, checkbox is only enabled if Self-Found is active
+            -- In Hardcore mode, checkbox is only enabled if Self-Found is active
             local isSelfFound = _G.IsSelfFound and _G.IsSelfFound() or false
             if isSelfFound then
                 AchievementPanel.SoloModeCheckbox:Enable()
@@ -3950,7 +4264,12 @@ end)
 -- Hook CharacterFrame OnShow to restore square frame visibility if in vertical mode
 CharacterFrame:HookScript("OnShow", function()
     local _, cdb = GetCharDB()
-    if not (cdb and cdb.settings and cdb.settings.showCustomTab) then
+    -- Check useCharacterPanel setting (default to true - Character Panel mode)
+    local useCharacterPanel = true
+    if cdb and cdb.settings and cdb.settings.useCharacterPanel ~= nil then
+        useCharacterPanel = cdb.settings.useCharacterPanel
+    end
+    if not useCharacterPanel then
         Tab:Hide()
         if Tab.squareFrame then
             Tab.squareFrame:Hide()
@@ -4053,7 +4372,7 @@ do
             
             -- Print "All achievements loaded!" after restorations are marked complete
             -- but before scheduling the completion checks
-            print("|cff69adc9[Hardcore Achievements]|r |cffffd100All achievements loaded!|r")
+            print("|cff008066[Hardcore Achievements]|r |cffffd100All achievements loaded!|r")
         end)
     end
 
@@ -4074,10 +4393,10 @@ do
             if type(registerFunc) == "function" then
                 local success, err = pcall(registerFunc)
                 if not success then
-                    print("|cff69adc9[Hardcore Achievements]|r |cffff0000Error registering achievement: " .. tostring(err) .. "|r")
+                    print("|cff008066[Hardcore Achievements]|r |cffff0000Error registering achievement: " .. tostring(err) .. "|r")
                 end
             end
-            --print("|cff69adc9[Hardcore Achievements]|r |cffffffffProcessing achievement: " .. tostring(registerFunc) .. "|r")
+            --print("|cff008066[Hardcore Achievements]|r |cffffffffProcessing achievement: " .. tostring(registerFunc) .. "|r")
             registrationIndex = registrationIndex + 1
             processed = processed + 1
         end
@@ -4117,6 +4436,7 @@ do
             end
         elseif event == "PLAYER_LOGIN" then
             playerLoggedIn = true
+            print("|cff008066[Hardcore Achievements]|r |cffffd100Loading achievements...|r")
             
             -- If registration already complete, trigger heavy operations
             if registrationComplete then

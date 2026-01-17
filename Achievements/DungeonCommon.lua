@@ -86,9 +86,9 @@ local function CheckAndPrintEligibilityMessages(mapId, entryData)
                 if not isCompleted and not isFailed then
                     local isEligible = CheckAchievementEligibility(mapId, achDef, entryData)
                     if isEligible then
-                        print("|cff69adc9[Hardcore Achievements]|r |cff00ff00Group is eligible for achievement: " .. (achDef.title or achDef.mapName or "Unknown") .. "|r")
+                        print("|cff008066[Hardcore Achievements]|r |cff00ff00Group is eligible for achievement: " .. (achDef.title or achDef.mapName or "Unknown") .. "|r")
                     else
-                        print("|cff69adc9[Hardcore Achievements]|r |cffff0000Group is not eligible for achievement: " .. (achDef.title or achDef.mapName or "Unknown") .. "|r")
+                        print("|cff008066[Hardcore Achievements]|r |cffff0000Group is not eligible for achievement: " .. (achDef.title or achDef.mapName or "Unknown") .. "|r")
                     end
                 end
             end
@@ -509,7 +509,7 @@ local function CreateVariation(baseDef, variation)
     -- Update tooltip to reflect variation (clean, without "Variation" suffix)
     local partySizeText = variation.maxPartySize == 1 and "yourself only" or 
                           (variation.maxPartySize == 2 and "up to 2 party members" or "up to 3 party members")
-    variationDef.tooltip = "Defeat the bosses of |cff0091e6" .. baseDef.title .. "|r before level " .. (variationDef.level + 1) .. 
+    variationDef.tooltip = "Defeat the bosses of |cff008765" .. baseDef.title .. "|r before level " .. (variationDef.level + 1) .. 
                           " (" .. partySizeText .. ")"
     
     -- Mark as variation
@@ -1112,7 +1112,7 @@ function DungeonCommon.registerDungeonAchievement(def)
           
           SaveProgress() -- Save progress after each eligible kill
           UpdateTooltip() -- Update tooltip to show progress
-          print("|cff69adc9[Hardcore Achievements]|r |cffffd100" .. HCA_GetBossName(npcId) .. " killed as part of achievement: " .. title .. "|r")
+          print("|cff008066[Hardcore Achievements]|r |cffffd100" .. HCA_GetBossName(npcId) .. " killed as part of achievement: " .. title .. "|r")
         else
           -- Group is ineligible - don't count this kill
           -- Player can return later with an eligible group to kill this boss
@@ -1120,7 +1120,7 @@ function DungeonCommon.registerDungeonAchievement(def)
           local progress = HardcoreAchievements_GetProgress(achId)
           local isStillAvailable = not state.completed and not (progress and progress.failed)
           if isStillAvailable and _G.HCA_IsAchievementVisible and _G.HCA_IsAchievementVisible(achId) then
-            print("|cff69adc9[Hardcore Achievements]|r |cffffd100" .. HCA_GetBossName(npcId) .. " killed but group is ineligible - kill not counted for achievement: " .. title .. "|r")
+            print("|cff008066[Hardcore Achievements]|r |cffffd100" .. HCA_GetBossName(npcId) .. " killed but group is ineligible - kill not counted for achievement: " .. title .. "|r")
           end
         end
       end
@@ -1178,6 +1178,7 @@ function DungeonCommon.registerDungeonAchievement(def)
     -- Ensure dungeons never have allowSoloDouble enabled
     local dungeonDef = def or {}
     dungeonDef.allowSoloDouble = false
+    dungeonDef.isDungeon = true
     
     _G[rowVarName] = CreateAchievementRow(
       AchievementPanel,

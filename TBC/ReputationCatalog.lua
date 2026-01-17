@@ -7,56 +7,56 @@ local Reputations = {
   {
     achId = "Stormwind",
     title = "Exalted with Stormwind",
-    tooltip = "Reach Exalted reputation with |cff0091e6Stormwind|r",
-    icon = 236681,
+    tooltip = "Reach Exalted reputation with |cff008765Stormwind|r",
+    icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_reputation_01.png", -- 236681
     points = 100,
     factionId = 72,
     staticPoints = true,
   }, {
     achId = "Darnassus",
     title = "Exalted with Darnassus",
-    tooltip = "Reach Exalted reputation with |cff0091e6Darnassus|r",
-    icon = 236681,
+    tooltip = "Reach Exalted reputation with |cff008765Darnassus|r",
+    icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_reputation_01.png", -- 236681
     points = 100,
     factionId = 69,
     staticPoints = true,
   }, {
     achId = "Ironforge",
     title = "Exalted with Ironforge",
-    tooltip = "Reach Exalted reputation with |cff0091e6Ironforge|r",
-    icon = 236681,
+    tooltip = "Reach Exalted reputation with |cff008765Ironforge|r",
+    icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_reputation_01.png", -- 236681
     points = 100,
     factionId = 47,
     staticPoints = true,
   }, {
     achId = "Gnomeregan Exiles",
     title = "Exalted with Gnomeregan Exiles",
-    tooltip = "Reach Exalted reputation with |cff0091e6Gnomeregan Exiles|r",
-    icon = 236681,
+    tooltip = "Reach Exalted reputation with |cff008765Gnomeregan Exiles|r",
+    icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_reputation_01.png", -- 236681
     points = 100,
     factionId = 54,
     staticPoints = true,
   }, {
     achId = "Exodar",
     title = "Exalted with Exodar",
-    tooltip = "Reach Exalted reputation with |cff0091e6Exodar|r",
-    icon = 236683,
+    tooltip = "Reach Exalted reputation with |cff008765Exodar|r",
+    icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_reputation_03.png", -- 236683
     points = 100,
     factionId = 930,
     staticPoints = true,
   }, {
     achId = "Kurenai",
     title = "Exalted with Kurenai",
-    tooltip = "Reach Exalted reputation with |cff0091e6Kurenai|r",
-    icon = 236683,
+    tooltip = "Reach Exalted reputation with |cff008765Kurenai|r",
+    icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_reputation_03.png", -- 236683
     points = 100,
     factionId = 978,
     staticPoints = true,
   }, {
     achId = "Honor Hold",
     title = "Exalted with Honor Hold",
-    tooltip = "Reach Exalted reputation with |cff0091e6Honor Hold|r",
-    icon = 236683,
+    tooltip = "Reach Exalted reputation with |cff008765Honor Hold|r",
+    icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_reputation_03.png", -- 236683
     points = 100,
     factionId = 946,
     staticPoints = true,
@@ -66,56 +66,56 @@ local Reputations = {
   {
     achId = "Orgrimmar",
     title = "Exalted with Orgrimmar",
-    tooltip = "Reach Exalted reputation with |cff0091e6Orgrimmar|r",
-    icon = 236681,
+    tooltip = "Reach Exalted reputation with |cff008765Orgrimmar|r",
+    icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_reputation_01.png", -- 236681
     points = 100,
     factionId = 76,
     staticPoints = true,
   }, {
     achId = "Thunder Bluff",
     title = "Exalted with Thunder Bluff",
-    tooltip = "Reach Exalted reputation with |cff0091e6Thunder Bluff|r",
-    icon = 236681,
+    tooltip = "Reach Exalted reputation with |cff008765Thunder Bluff|r",
+    icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_reputation_01.png", -- 236681
     points = 100,
     factionId = 81,
     staticPoints = true,
   }, {
     achId = "Undercity",
     title = "Exalted with Undercity",
-    tooltip = "Reach Exalted reputation with |cff0091e6Undercity|r",
-    icon = 236681,
+    tooltip = "Reach Exalted reputation with |cff008765Undercity|r",
+    icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_reputation_01.png", -- 236681
     points = 100,
     factionId = 68,
     staticPoints = true,
   }, {
     achId = "Darkspear Trolls",
     title = "Exalted with Darkspear Trolls",
-    tooltip = "Reach Exalted reputation with |cff0091e6Darkspear Trolls|r",
-    icon = 236681,
+    tooltip = "Reach Exalted reputation with |cff008765Darkspear Trolls|r",
+    icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_reputation_01.png", -- 236681
     points = 100,
     factionId = 530,
     staticPoints = true,
   }, {
     achId = "Silvermoon City",
     title = "Exalted with Silvermoon City",
-    tooltip = "Reach Exalted reputation with |cff0091e6Silvermoon City|r",
-    icon = 236683,
+    tooltip = "Reach Exalted reputation with |cff008765Silvermoon City|r",
+    icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_reputation_03.png", -- 236683
     points = 100,
     factionId = 911,
     staticPoints = true,
   }, {
     achId = "Tranquillien",
     title = "Exalted with Tranquillien",
-    tooltip = "Reach Exalted reputation with |cff0091e6Tranquillien|r",
-    icon = 236683,
+    tooltip = "Reach Exalted reputation with |cff008765Tranquillien|r",
+    icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_reputation_03.png", -- 236683
     points = 100,
     factionId = 922,
     staticPoints = true,
   }, {
     achId = "Thrallmar",
     title = "Exalted with Thrallmar",
-    tooltip = "Reach Exalted reputation with |cff0091e6Thrallmar|r",
-    icon = 236683,
+    tooltip = "Reach Exalted reputation with |cff008765Thrallmar|r",
+    icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_reputation_03.png", -- 236683
     points = 100,
     factionId = 947,
     staticPoints = true,
@@ -125,216 +125,216 @@ local Reputations = {
   {
     achId = "BootyBay",
     title = "Exalted with Booty Bay",
-    tooltip = "Reach Exalted reputation with |cff0091e6Booty Bay|r",
-    icon = 236688,
+    tooltip = "Reach Exalted reputation with |cff008765Booty Bay|r",
+    icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_reputation_08.png", -- 236688
     points = 200,
     factionId = 21,
     staticPoints = true,
   }, {
     achId = "Ratchet",
     title = "Exalted with Ratchet",
-    tooltip = "Reach Exalted reputation with |cff0091e6Ratchet|r",
-    icon = 236688,
+    tooltip = "Reach Exalted reputation with |cff008765Ratchet|r",
+    icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_reputation_08.png", -- 236688
     points = 200,
     factionId = 470,
     staticPoints = true,
   }, {
     achId = "Everlook",
     title = "Exalted with Everlook",
-    tooltip = "Reach Exalted reputation with |cff0091e6Everlook|r",
-    icon = 236688,
+    tooltip = "Reach Exalted reputation with |cff008765Everlook|r",
+    icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_reputation_08.png", -- 236688
     points = 200,
     factionId = 577,
     staticPoints = true,
   }, {
     achId = "Gadgetzan",
     title = "Exalted with Gadgetzan",
-    tooltip = "Reach Exalted reputation with |cff0091e6Gadgetzan|r",
-    icon = 236688,
+    tooltip = "Reach Exalted reputation with |cff008765Gadgetzan|r",
+    icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_reputation_08.png", -- 236688
     points = 200,
     factionId = 369,
     staticPoints = true,
   }, {
     achId = "ArgentDawn",
     title = "Exalted with Argent Dawn",
-    tooltip = "Reach Exalted reputation with |cff0091e6Argent Dawn|r",
-    icon = 236688,
+    tooltip = "Reach Exalted reputation with |cff008765Argent Dawn|r",
+    icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_reputation_08.png", -- 236688
     points = 150,
     factionId = 529,
     staticPoints = true,
   }, {
     achId = "Timbermaw",
     title = "Exalted with Timbermaw Hold",
-    tooltip = "Reach Exalted reputation with |cff0091e6Timbermaw Hold|r",
-    icon = 236688,
+    tooltip = "Reach Exalted reputation with |cff008765Timbermaw Hold|r",
+    icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_reputation_08.png", -- 236688
     points = 200,
     factionId = 576,
     staticPoints = true,
   }, {
     achId = "CenarionCircle",
     title = "Exalted with Cenarion Circle",
-    tooltip = "Reach Exalted reputation with |cff0091e6Cenarion Circle|r",
-    icon = 236688,
+    tooltip = "Reach Exalted reputation with |cff008765Cenarion Circle|r",
+    icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_reputation_08.png", -- 236688
     points = 150,
     factionId = 609,
     staticPoints = true,
   }, {
     achId = "ThoriumBrotherhood",
     title = "Exalted with Thorium Brotherhood",
-    tooltip = "Reach Exalted reputation with |cff0091e6Thorium Brotherhood|r",
-    icon = 236688,
+    tooltip = "Reach Exalted reputation with |cff008765Thorium Brotherhood|r",
+    icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_reputation_08.png", -- 236688
     points = 150,
     factionId = 59,
     staticPoints = true,
   }, {
     achId = "Hydraxian",
     title = "Exalted with Hydraxian Waterlords",
-    tooltip = "Reach Exalted reputation with |cff0091e6Hydraxian Waterlords|r",
-    icon = 236688,
+    tooltip = "Reach Exalted reputation with |cff008765Hydraxian Waterlords|r",
+    icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_reputation_08.png", -- 236688
     points = 150,
     factionId = 749,
     staticPoints = true,
   }, {
     achId = "Zandalar",
     title = "Exalted with Zandalar Tribe",
-    tooltip = "Reach Exalted reputation with |cff0091e6Zandalar Tribe|r",
-    icon = 236688,
+    tooltip = "Reach Exalted reputation with |cff008765Zandalar Tribe|r",
+    icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_reputation_08.png", -- 236688
     points = 150,
     factionId = 270,
     staticPoints = true,
   }, {
     achId = "Nozdormu",
     title = "Exalted with Brood of Nozdormu",
-    tooltip = "Reach Exalted reputation with |cff0091e6Brood of Nozdormu|r",
-    icon = 236688,
+    tooltip = "Reach Exalted reputation with |cff008765Brood of Nozdormu|r",
+    icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_reputation_08.png", -- 236688
     points = 150,
     factionId = 910,
     staticPoints = true,
   }, {
     achId = "Ashtongue Deathsworn",
     title = "Exalted with Ashtongue Deathsworn",
-    tooltip = "Reach Exalted reputation with |cff0091e6Ashtongue Deathsworn|r",
-    icon = 236688,
+    tooltip = "Reach Exalted reputation with |cff008765Ashtongue Deathsworn|r",
+    icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_reputation_08.png", -- 236688
     points = 150,
     factionId = 1012,
     staticPoints = true,
   }, {
     achId = "Scale of the Sands",
     title = "Exalted with Scale of the Sands",
-    tooltip = "Reach Exalted reputation with |cff0091e6Scale of the Sands|r",
-    icon = 236688,
+    tooltip = "Reach Exalted reputation with |cff008765Scale of the Sands|r",
+    icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_reputation_08.png", -- 236688
     points = 150,
     factionId = 990,
     staticPoints = true,
   }, {
     achId = "The Violet Eye",
     title = "Exalted with The Violet Eye",
-    tooltip = "Reach Exalted reputation with |cff0091e6The Violet Eye|r",
-    icon = 236688,
+    tooltip = "Reach Exalted reputation with |cff008765The Violet Eye|r",
+    icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_reputation_08.png", -- 236688
     points = 150,
     factionId = 967,
     staticPoints = true,
   }, {
     achId = "Shattered Sun Offensive",
     title = "Exalted with Shattered Sun Offensive",
-    tooltip = "Reach Exalted reputation with |cff0091e6Shattered Sun Offensive|r",
-    icon = 236688,
+    tooltip = "Reach Exalted reputation with |cff008765Shattered Sun Offensive|r",
+    icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_reputation_08.png", -- 236688
     points = 150,
     factionId = 1077,
     staticPoints = true,
   }, {
     achId = "Sha'tari Skyguard",
     title = "Exalted with Sha'tari Skyguard",
-    tooltip = "Reach Exalted reputation with |cff0091e6Sha'tari Skyguard|r",
-    icon = 236688,
+    tooltip = "Reach Exalted reputation with |cff008765Sha'tari Skyguard|r",
+    icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_reputation_08.png", -- 236688
     points = 150,
     factionId = 1031,
     staticPoints = true,
   }, {
     achId = "The Mag'har",
     title = "Exalted with The Mag'har",
-    tooltip = "Reach Exalted reputation with |cff0091e6The Mag'har|r",
-    icon = 236688,
+    tooltip = "Reach Exalted reputation with |cff008765The Mag'har|r",
+    icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_reputation_08.png", -- 236688
     points = 150,
     factionId = 941,
     staticPoints = true,
   }, {
     achId = "Sporeggar",
     title = "Exalted with Sporeggar",
-    tooltip = "Reach Exalted reputation with |cff0091e6Sporeggar|r",
-    icon = 236688,
+    tooltip = "Reach Exalted reputation with |cff008765Sporeggar|r",
+    icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_reputation_08.png", -- 236688
     points = 150,
     factionId = 970,
     staticPoints = true,
   }, {
     achId = "Ogri'la",
     title = "Exalted with Ogri'la",
-    tooltip = "Reach Exalted reputation with |cff0091e6Ogri'la|r",
-    icon = 236688,
+    tooltip = "Reach Exalted reputation with |cff008765Ogri'la|r",
+    icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_reputation_08.png", -- 236688
     points = 150,
     factionId = 1038,
     staticPoints = true,
   }, {
     achId = "Netherwing",
     title = "Exalted with Netherwing",
-    tooltip = "Reach Exalted reputation with |cff0091e6Netherwing|r",
-    icon = 236688,
+    tooltip = "Reach Exalted reputation with |cff008765Netherwing|r",
+    icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_reputation_08.png", -- 236688
     points = 150,
     factionId = 1015,
     staticPoints = true,
   }, {
     achId = "The Consortium",
     title = "Exalted with The Consortium",
-    tooltip = "Reach Exalted reputation with |cff0091e6The Consortium|r",
-    icon = 236688,
+    tooltip = "Reach Exalted reputation with |cff008765The Consortium|r",
+    icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_reputation_08.png", -- 236688
     points = 150,
     factionId = 933,
     staticPoints = true,
   }, {
     achId = "Keepers of Time",
     title = "Exalted with Keepers of Time",
-    tooltip = "Reach Exalted reputation with |cff0091e6Keepers of Time|r",
-    icon = 236688,
+    tooltip = "Reach Exalted reputation with |cff008765Keepers of Time|r",
+    icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_reputation_08.png", -- 236688
     points = 150,
     factionId = 989,
     staticPoints = true,
   }, {
     achId = "Lower City",
     title = "Exalted with Lower City",
-    tooltip = "Reach Exalted reputation with |cff0091e6Lower City|r",
-    icon = 236688,
+    tooltip = "Reach Exalted reputation with |cff008765Lower City|r",
+    icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_reputation_08.png", -- 236688
     points = 150,
     factionId = 1011,
     staticPoints = true,
   }, {
     achId = "Cenarion Expedition",
     title = "Exalted with Cenarion Expedition",
-    tooltip = "Reach Exalted reputation with |cff0091e6Cenarion Expedition|r",
-    icon = 236688,
+    tooltip = "Reach Exalted reputation with |cff008765Cenarion Expedition|r",
+    icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_reputation_08.png", -- 236688
     points = 150,
     factionId = 942,
     staticPoints = true,
   }, {
     achId = "The Sha'tar",
     title = "Exalted with The Sha'tar",
-    tooltip = "Reach Exalted reputation with |cff0091e6The Sha'tar|r",
-    icon = 236688,
+    tooltip = "Reach Exalted reputation with |cff008765The Sha'tar|r",
+    icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_reputation_08.png", -- 236688
     points = 150,
     factionId = 935,
     staticPoints = true,
   }, {
     achId = "The Aldor",
     title = "Exalted with The Aldor",
-    tooltip = "Reach Exalted reputation with |cff0091e6The Aldor|r",
-    icon = 236688,
+    tooltip = "Reach Exalted reputation with |cff008765The Aldor|r",
+    icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_reputation_08.png", -- 236688
     points = 150,
     factionId = 932,
     staticPoints = true,
   }, {
     achId = "The Scryers",
     title = "Exalted with The Scryers",
-    tooltip = "Reach Exalted reputation with |cff0091e6The Scryers|r",
-    icon = 236688,
+    tooltip = "Reach Exalted reputation with |cff008765The Scryers|r",
+    icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_reputation_08.png", -- 236688
     points = 150,
     factionId = 934,
     staticPoints = true,
@@ -344,16 +344,16 @@ local Reputations = {
   {
     achId = "Bloodsail",
     title = "Exalted with Bloodsail Buccaneers",
-    tooltip = "Reach Exalted reputation with |cff0091e6Bloodsail Buccaneers|r",
-    icon = 236685,
+    tooltip = "Reach Exalted reputation with |cff008765Bloodsail Buccaneers|r",
+    icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_reputation_05.png", -- 236685
     points = 200,
     factionId = 87,
     staticPoints = true,
   }, {
     achId = "Wintersaber",
     title = "Exalted with Wintersaber Trainers",
-    tooltip = "Reach Exalted reputation with |cff0091e6Wintersaber Trainers|r",
-    icon = 236685,
+    tooltip = "Reach Exalted reputation with |cff008765Wintersaber Trainers|r",
+    icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_reputation_05.png", -- 236685
     points = 200,
     factionId = 589,
     staticPoints = true,
@@ -363,8 +363,8 @@ local Reputations = {
   {
     achId = "Ravenholdt",
     title = "Exalted with Ravenholdt |cfffff468[Rogue]|r",
-    tooltip = "Reach Exalted reputation with |cff0091e6Ravenholdt|r",
-    icon = 236686,
+    tooltip = "Reach Exalted reputation with |cff008765Ravenholdt|r",
+    icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_reputation_06.png", -- 236686
     points = 200,
     factionId = 349,
     staticPoints = true,

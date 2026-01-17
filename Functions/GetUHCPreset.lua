@@ -120,6 +120,67 @@ function GetPresetMultiplier(preset)
     return POINT_MULTIPLIER[normalizedPreset] or 1.00
 end
 
+-- Centralized function to update multiplier text for any frame
+-- multiplierTextElement: FontString element to update (e.g., DashboardFrame.MultiplierText)
+-- textColor: Optional color table {r, g, b} or nil for default (0.8, 0.8, 0.8)
+function UpdateMultiplierText(multiplierTextElement, textColor)
+    if not multiplierTextElement then
+        return
+    end
+    
+    local preset = GetPlayerPresetFromSettings()
+    
+    -- Check if hardcore is active (for Self Found detection)
+    -- In TBC, this will be false, so Self Found will never be active
+    local isHardcoreActive = C_GameRules and C_GameRules.IsHardcoreActive and C_GameRules.IsHardcoreActive() or false
+    local isSelfFound = false
+    if isHardcoreActive and IsSelfFound and IsSelfFound() then
+        isSelfFound = true
+    end
+    
+    -- Check solo mode from character database (works in both Hardcore and TBC)
+    -- This checks the soloAchievements setting from character database
+    local isSoloMode = _G.HardcoreAchievements_IsSoloModeEnabled and _G.HardcoreAchievements_IsSoloModeEnabled() or false
+    
+    local labelText = ""
+    local modifiers = {}
+    
+    -- In TBC (non-hardcore), Self Found is never available, so we only check Solo
+    -- Build array of modifiers (preset goes last)
+    if isSoloMode and not isSelfFound then
+        table.insert(modifiers, "Solo")
+    elseif isSelfFound and not isSoloMode then
+        table.insert(modifiers, "Self Found")
+    elseif isSoloMode and isSelfFound then
+        table.insert(modifiers, "Solo Self Found")
+    end
+    
+    if preset then
+        table.insert(modifiers, preset)
+    end
+    
+    -- Show text if there are any modifiers (preset or solo/self-found)
+    if #modifiers > 0 then
+        labelText = "Point Multiplier (" .. table.concat(modifiers, ", ") .. ")"
+    end
+    
+    multiplierTextElement:SetText(labelText)
+    
+    -- Use provided color or default
+    if textColor then
+        if type(textColor) == "table" then
+            multiplierTextElement:SetTextColor(textColor[1] or textColor.r or 0.8, 
+                                               textColor[2] or textColor.g or 0.8, 
+                                               textColor[3] or textColor.b or 0.8)
+        end
+    else
+        multiplierTextElement:SetTextColor(0.8, 0.8, 0.8)
+    end
+end
+
+-- Export UpdateMultiplierText globally for use by other files
+_G.UpdateMultiplierText = UpdateMultiplierText
+
 -- Event frame for ADDON_LOADED
 local eventFrame = CreateFrame("Frame")
 eventFrame:RegisterEvent("ADDON_LOADED")
@@ -129,66 +190,26 @@ eventFrame:SetScript("OnEvent", function(self, event, addonName)
         C_Timer.After(3, function()
             -- Update multiplier text in embedded UI if it exists
             if DEST and DEST.MultiplierText then
-                local preset = GetPlayerPresetFromSettings()
-                local isSelfFound = IsSelfFound()
-                local isSoloMode = _G.HardcoreAchievements_IsSoloModeEnabled and _G.HardcoreAchievements_IsSoloModeEnabled() or false
-                
-                local labelText = ""
-                if preset or isSelfFound or isSoloMode then
-                    -- Build array of modifiers (preset goes last)
-                    local modifiers = {}
-                    if isSelfFound and not isSoloMode then
-                        table.insert(modifiers, "Self Found")
-                    end
-                    if isSoloMode and not isSelfFound then
-                        table.insert(modifiers, "Solo")
-                    end
-                    if isSoloMode and isSelfFound then
-                        table.insert(modifiers, "Solo Self Found")
-                    end
-                    if preset then
-                        table.insert(modifiers, preset)
-                    end
-                    
-                    labelText = "Point Multiplier (" .. table.concat(modifiers, ", ") .. ")"
-                end
-                
-                DEST.MultiplierText:SetText(labelText)
-                DEST.MultiplierText:SetTextColor(0.8, 0.8, 0.8)
+                UpdateMultiplierText(DEST.MultiplierText)
+            end
+            -- Update multiplier text in Dashboard if it exists
+            if DashboardFrame and DashboardFrame.MultiplierText then
+                UpdateMultiplierText(DashboardFrame.MultiplierText, {0.922, 0.871, 0.761})
             end
         end)
     elseif addonName == "HardcoreAchievements" then        
         C_Timer.After(3, function()
-            -- Update multiplier text in standalone UI if it exists
+            -- Update multiplier text in Character Panel if it exists
             if AchievementPanel and AchievementPanel.MultiplierText then
-                local preset = GetPlayerPresetFromSettings()
-                local isSelfFound = IsSelfFound()
-                local isSoloMode = _G.HardcoreAchievements_IsSoloModeEnabled and _G.HardcoreAchievements_IsSoloModeEnabled() or false
-                
-                local labelText = ""
-                if preset or isSelfFound or isSoloMode then
-                    -- Build array of modifiers (preset goes last)
-                    local modifiers = {}
-                    if isSelfFound and not isSoloMode then
-                        table.insert(modifiers, "Self Found")
-                    end
-                    if isSoloMode and not isSelfFound then
-                        table.insert(modifiers, "Solo")
-                    end
-                    if isSoloMode and isSelfFound then
-                        table.insert(modifiers, "Solo Self Found")
-                    end
-                    if preset then
-                        table.insert(modifiers, preset)
-                    end
-                    
-                    labelText = "Point Multiplier (" .. table.concat(modifiers, ", ") .. ")"
-                end
-                
-                AchievementPanel.MultiplierText:SetText(labelText)
-                AchievementPanel.MultiplierText:SetTextColor(0.8, 0.8, 0.8)
+                UpdateMultiplierText(AchievementPanel.MultiplierText)
+            end
+            -- Update multiplier text in Dashboard if it exists
+            if DashboardFrame and DashboardFrame.MultiplierText then
+                UpdateMultiplierText(DashboardFrame.MultiplierText, {0.922, 0.871, 0.761})
+            end
 
-                -- Update all achievement points with new multiplier and bonus
+            -- Update all achievement points with new multiplier and bonus
+            if RefreshAllAchievementPoints then
                 RefreshAllAchievementPoints()
             end
         end)

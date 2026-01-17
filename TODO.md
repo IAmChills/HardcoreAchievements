@@ -1,34 +1,16 @@
 # TODO List
 
+NOT USED BUT COULD HAVE USE (Already added to Icons)
+Achievement_Dungeon_Outland_Dungeon_Hero
+
 ## Active Tasks
 - Expand on comms to allow achievement related statistics where data is propogated for realm-first, % of players completed style info
-- Meta achievements for finishing large genres
-- Show achievement locations on map
 
 ## Bugs
  - empty
 
-## Helpful Code Snippets
-
-### Class-colored text
-```lua
-|c" .. select(4, GetClassColor(select(2, UnitClass("player")))) .. "PlayerName|r
-```
-
-### Print player's assigned group role
-```lua
-/script print(UnitGroupRolesAssigned('player'))
-```
-
-### Reset Progress or Achievement in database
-```lua
-/run HardcoreAchievementsDB.chars[UnitGUID("player")].progress["Test3"] = nil; ReloadUI()
-```
-
 ## TBC TODO List
 
-- Catalog
-  - NEED LEVEL 70 MILESTONE ICON
 - Dungeon Set Catalog
   - Already implemented, needs updated to include TBC sets
 - Dungeon Set Common
@@ -37,12 +19,9 @@
 ## Quests
  - The Dying Balance (Boglash) at 58
    - Something like this might suck because its so low level for Outlands
- - ...Gonna need all hands on deck to get notable difficult Outlands quests. Too many might make it annoying since you never get a break and bounce from one to the next
 
 ## Explorer Achievements
- - Discover Karazhan before level 25 and speak to archmage leryda
  - Get Light’s Hope Chapel flight path before level 25
- - Enter Stormwind (as horde)
 
 ## Titles? (I can fake titles in tooltips / chat but that's it. Requires addon)
  - The Eager Explorer title
@@ -67,9 +46,27 @@
    - hearth out of an instance while in combat
  - Warlord of the Rings
    - Destroy the 1 ring in black rock mountain as a level 1 gnome must be carrying the ring the entire way from the starting zone
+   - May require tracking for when item is picked up (set flag) player is in BRM, all else satisfied, destroy popup displays, and count goes to 0?
    - “and my axe…” for being in the raid with the person who does it
+   - Use a hook?
  - Destroy your light of elune (giga hardcore achievement)
 
 ## Class challenges
  - paladin, hunter, mage (likely not do-able with the nerfs)
-   - zg solo pull (kill x number of zombies in y amount of time solo)
+
+ ## Helpful Code Snippets
+
+### Class-colored text
+```lua
+|c" .. select(4, GetClassColor(select(2, UnitClass("player")))) .. "PlayerName|r
+```
+
+### Print player's assigned group role
+```lua
+/script print(UnitGroupRolesAssigned('player'))
+```
+
+### Reset Progress or Achievement in database
+```lua
+/run HardcoreAchievementsDB.chars[UnitGUID("player")].progress["Test3"] = nil; ReloadUI()
+```

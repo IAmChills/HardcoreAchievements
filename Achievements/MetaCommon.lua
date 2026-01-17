@@ -22,6 +22,11 @@ function MetaCommon.registerMetaAchievement(def)
     achievementOrder = achievementOrder,
     isMetaAchievement = true,
   }
+  
+  -- Meta achievements only allow solo bonuses when hardcore is active (self-found buff)
+  -- Set allowSoloDouble on def to control this behavior
+  local isHardcoreActive = C_GameRules and C_GameRules.IsHardcoreActive and C_GameRules.IsHardcoreActive() or false
+  def.allowSoloDouble = isHardcoreActive
 
   -- State for the current achievement session only
   local state = {
@@ -149,6 +154,10 @@ function MetaCommon.registerMetaAchievement(def)
     -- Check completion before creating row
     CheckComplete()
     
+    -- Set meta flag on def
+    local metaDef = def or {}
+    metaDef.isMeta = true
+    
     -- Create the achievement row (meta achievements don't need level or questTracker)
     _G[rowVarName] = CreateAchievementRow(
       AchievementPanel,
@@ -162,7 +171,7 @@ function MetaCommon.registerMetaAchievement(def)
       nil,  -- No quest tracker
       false,  -- staticPoints
       nil,  -- zone
-      def  -- Pass def for tooltip
+      metaDef  -- Pass def with isMeta flag
     )
     
     -- Store requiredAchievements on the row for tooltip access

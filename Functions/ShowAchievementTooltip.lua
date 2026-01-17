@@ -116,10 +116,10 @@ function HCA_ShowAchievementTooltip(frame, data)
         end
         local pointsText = ""
         if points and points > 0 then
-            pointsText = tostring(points)
+            pointsText = ACHIEVEMENT_POINTS .. ": " .. tostring(points)
         end
         if levelText ~= "" or pointsText ~= "" then
-            GameTooltip:AddDoubleLine(levelText, ACHIEVEMENT_POINTS .. ": " .. pointsText, 1, 1, 1, 0.6, 0.9, 0.6)
+            GameTooltip:AddDoubleLine(levelText, pointsText, 1, 1, 1, 0.6, 0.9, 0.6)
         end
     end
     
@@ -157,9 +157,8 @@ function HCA_ShowAchievementTooltip(frame, data)
     
     -- For achievements without level requirements (secret, profession, or no level), show points below the description
     if showPointsInBody then
-        local pointsText = ""
-        if points and points >= 0 then
-            pointsText = ACHIEVEMENT_POINTS .. ": " .. tostring(points)
+        if points and points > 0 then
+            local pointsText = ACHIEVEMENT_POINTS .. ": " .. tostring(points)
             GameTooltip:AddLine(pointsText, 0.6, 0.9, 0.6)
         end
     end
@@ -427,8 +426,23 @@ function HCA_ShowAchievementTooltip(frame, data)
             end
             
             -- Check if required achievement is completed
+            -- First check progress database
             local reqProgress = _G.HardcoreAchievements_GetProgress and _G.HardcoreAchievements_GetProgress(reqAchId)
             local reqCompleted = reqProgress and reqProgress.completed
+            
+            -- Also check the row's completed status directly (for profession achievements and others)
+            if not reqCompleted and _G.AchievementPanel and _G.AchievementPanel.achievements then
+                for _, row in ipairs(_G.AchievementPanel.achievements) do
+                    local rowId = row.id or row.achId
+                    if rowId and tostring(rowId) == tostring(reqAchId) then
+                        if row.completed then
+                            reqCompleted = true
+                        end
+                        break
+                    end
+                end
+            end
+            
             local done = achievementCompleted or reqCompleted
             
             if done then

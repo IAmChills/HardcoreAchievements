@@ -552,7 +552,7 @@ function RaidCommon.registerRaidAchievement(def)
           end
         end
 
-        print("|cff69adc9[Hardcore Achievements]|r |cffffd100" .. HCA_GetRaidBossName(npcId) .. " killed as part of achievement: " .. title .. "|r")
+        print("|cff008066[Hardcore Achievements]|r |cffffd100" .. HCA_GetRaidBossName(npcId) .. " killed as part of achievement: " .. title .. "|r")
       end
     end
 

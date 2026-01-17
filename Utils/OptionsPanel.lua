@@ -591,7 +591,7 @@ local function CreateOptionsPanel()
     -- =========================================================
     local miscCategoryTitle = panel:CreateFontString(nil, "ARTWORK", "GameFontNormalLarge")
     miscCategoryTitle:SetPoint("TOPLEFT", subtitle, "BOTTOMLEFT", 0, -40)
-    miscCategoryTitle:SetText("|cff69adc9Miscellaneous|r")
+    miscCategoryTitle:SetText("|cff008066Miscellaneous|r")
     
     -- Helper function to add tooltip to checkboxes
     local function AddTooltipToCheckbox(cb, tooltipText)
@@ -646,7 +646,7 @@ local function CreateOptionsPanel()
     -- =========================================================
     local uiCategoryTitle = panel:CreateFontString(nil, "ARTWORK", "GameFontNormalLarge")
     uiCategoryTitle:SetPoint("TOPLEFT", announceInGuildChatCB, "BOTTOMLEFT", 0, -15)
-    uiCategoryTitle:SetText("|cff69adc9User Interface|r")
+    uiCategoryTitle:SetText("|cff008066User Interface|r")
     
     -- Reset Achievements Tab button
     local resetTabButton = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
@@ -666,7 +666,7 @@ local function CreateOptionsPanel()
     -- =========================================================
     local backupCategoryTitle = panel:CreateFontString(nil, "ARTWORK", "GameFontNormalLarge")
     backupCategoryTitle:SetPoint("TOPLEFT", resetTabButton, "BOTTOMLEFT", 0, -15)
-    backupCategoryTitle:SetText("|cff69adc9Backup & Restore|r")
+    backupCategoryTitle:SetText("|cff008066Backup & Restore|r")
     
     -- Backup and Restore Database button (opens unified frame with tabs)
     local backupRestoreButton = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
@@ -687,7 +687,7 @@ local function CreateOptionsPanel()
     -- =========================================================
     local supportCategoryTitle = panel:CreateFontString(nil, "ARTWORK", "GameFontNormalLarge")
     supportCategoryTitle:SetPoint("TOPLEFT", backupRestoreButton, "BOTTOMLEFT", 0, -15)
-    supportCategoryTitle:SetText("|cff69adc9Support & Contact|r")
+    supportCategoryTitle:SetText("|cff008066Support & Contact|r")
     
     -- Support text
     local supportText = panel:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
@@ -715,7 +715,7 @@ local function CreateOptionsPanel()
     -- =========================================================
     local creditsCategoryTitle = panel:CreateFontString(nil, "ARTWORK", "GameFontNormalLarge")
     creditsCategoryTitle:SetPoint("TOPLEFT", discordButton, "BOTTOMLEFT", 0, -15)
-    creditsCategoryTitle:SetText("|cff69adc9Credits|r")
+    creditsCategoryTitle:SetText("|cff008066Credits|r")
     
     -- Credits text
     local creditsText = panel:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")

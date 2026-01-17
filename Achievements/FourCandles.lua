@@ -3,7 +3,7 @@ local MAX_LEVEL = 30
 
 local achId = "FourCandle"
 local title = "Four Candles"
-local tooltip = "Light all four candles at once within |cff0091e6Blackfathom Deeps|r and survive before level 31 (including party members)"
+local tooltip = "Light all four candles at once within |cff008765Blackfathom Deeps|r and survive before any party member reaches level 31"
 local icon = 133750
 local level = MAX_LEVEL
 local points = 25
@@ -76,27 +76,27 @@ local function IsGroupEligible()
   return true
 end
 
-local function IsFeigningDeath()
-  for i = 1, 40 do
-    local name, _, _, _, _, _, _, _, _, spellId = UnitBuff("player", i)
-    if not name then break end
-    if spellId == 5384 or name == "Feign Death" then
-      return true
-    end
-  end
-  return false
-end
+-- local function IsFeigningDeath()
+--   for i = 1, 40 do
+--     local name, _, _, _, _, _, _, _, _, spellId = UnitBuff("player", i)
+--     if not name then break end
+--     if spellId == 5384 or name == "Feign Death" then
+--       return true
+--     end
+--   end
+--   return false
+-- end
 
-local function IsStealthing()
-  for i = 1, 40 do
-    local name, _, _, _, _, _, _, _, _, spellId = UnitBuff("player", i)
-    if not name then break end
-    if spellId == 1784 or spellId == 1785 or spellId == 1786 or spellId == 1787 or name == "Stealth" then
-      return true
-    end
-  end
-  return false
-end
+-- local function IsStealthing()
+--   for i = 1, 40 do
+--     local name, _, _, _, _, _, _, _, _, spellId = UnitBuff("player", i)
+--     if not name then break end
+--     if spellId == 1784 or spellId == 1785 or spellId == 1786 or spellId == 1787 or name == "Stealth" then
+--       return true
+--     end
+--   end
+--   return false
+-- end
 
 local function IsPartyInCombat()
   local members = GetNumGroupMembers()
@@ -114,7 +114,7 @@ function FourCandle(destGUID)
   if not IsOnRequiredMap() then return false end
 
   -- Allow counting if player is feigning/Stealthing or party is in combat
-  if not UnitAffectingCombat("player") and not IsFeigningDeath() and not IsStealthing() and not IsPartyInCombat() then
+  if not UnitAffectingCombat("player") and not UnitIsFeignDeath("player") and not IsStealthed() and not IsPartyInCombat() then
     return false
   end
 
@@ -144,7 +144,7 @@ f:SetScript("OnEvent", function(_, event)
     state.inCombat = true
   elseif event == "PLAYER_REGEN_ENABLED" then
     -- Only reset if neither player nor party is in combat, and not feigning/Stealthing
-    if not IsFeigningDeath() and not IsStealthing() and not IsPartyInCombat() then
+    if not UnitIsFeignDeath("player") and not IsStealthed() and not IsPartyInCombat() then
       ResetState()
       state.inCombat = false
     end
@@ -170,6 +170,12 @@ local function HCA_RegisterFourCandles()
   if not _G.CreateAchievementRow or not _G.AchievementPanel then return end
   if _G.FourCandle_Row then return end
 
+  -- Create def object with isDungeon flag so it shows with dungeons
+  local def = {
+    isDungeon = true,
+    excludeFromCount = true,  -- Exclude from total count
+  }
+
   _G.FourCandle_Row = CreateAchievementRow(
     AchievementPanel,
     achId,
@@ -179,9 +185,10 @@ local function HCA_RegisterFourCandles()
     level,
     points,
     FourCandle,  -- killTracker (custom completion function)
-    questTracker,
+    nil,  -- No quest tracker
     staticPoints,
-    zone
+    zone,
+    def
   )
 end
 

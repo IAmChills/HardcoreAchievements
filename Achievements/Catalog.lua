@@ -1,6 +1,6 @@
 local Achievements = {
 
---{ achId="Test",  title="Boar Test",  level=4, tooltip="Kill |cff0091e6a boar", icon=134400, points=10, requiredQuestId=nil, targetNpcId=3098, faction="Horde", zone="Durotar" },
+--{ achId="Test",  title="Boar Test",  level=4, tooltip="Kill |cff008765a boar", icon=134400, points=10, requiredQuestId=nil, targetNpcId=3098, faction="Horde", zone="Durotar" },
 --{ achId="Test2", title="Easy Quest Test", level=2, tooltip="Orc starter quest", icon=134400, points=10, requiredQuestId=4641, targetNpcId=nil, faction="Horde", zone="Durotar" },
 --{ achId="Test3", title="Kill + Quest", level=2, tooltip="Kill a boar and complete the orc starter quest", icon=134400, points=10, requiredQuestId=4641, targetNpcId=3098, faction="Horde", zone="Durotar" },
 --{ achId="Test4", title="Kill 3 Boars", level=2, tooltip="Kill 3 boars", icon=134400, points=10, requiredQuestId=nil, requiredKills = { [3098] = 3, }, faction="Horde", zone="Durotar" },
@@ -10,7 +10,7 @@ local Achievements = {
     achId = "Rageclaw",
     title = "Claw of the Wilds",
     level = 9,
-    tooltip = "Complete |cff0091e6Druid of the Claw|r before level 10",
+    tooltip = "Complete |cff008765Druid of the Claw|r before level 10",
     icon = 134297,
     points = 10,
     requiredQuestId = 2561,
@@ -21,7 +21,7 @@ local Achievements = {
     achId = "Vagash",
     title = "The Alpha's End",
     level = 10,
-    tooltip = "Complete |cff0091e6Protecting the Herd|r before level 11",
+    tooltip = "Complete |cff008765Protecting the Herd|r before level 11",
     icon = 132189,
     points = 10,
     requiredQuestId = 314,
@@ -32,7 +32,7 @@ local Achievements = {
     achId = "Hogger",
     title = "Hogger? Never Heard of Her",
     level = 11,
-    tooltip = "Complete |cff0091e6Wanted: 'Hogger'|r before level 12",
+    tooltip = "Complete |cff008765Wanted: 'Hogger'|r before level 12",
     icon = 134163,
     points = 10,
     requiredQuestId = 176,
@@ -43,7 +43,7 @@ local Achievements = {
     achId = "Grawmug",
     title = "Defender of Dun Algaz",
     level = 16,
-    tooltip = "Complete |cff0091e6In Defense of the King's Land Pt. 4|r before level 17",
+    tooltip = "Complete |cff008765In Defense of the King's Land Pt. 4|r before level 17",
     icon = 236421,
     points = 10,
     requiredQuestId = 217,
@@ -54,7 +54,7 @@ local Achievements = {
     achId = "AbsentMindedProspector",
     title = "Absent-Minded Savior",
     level = 19,
-    tooltip = "Complete |cff0091e6Absent Minded Prospector Pt. 1|r before level 20",
+    tooltip = "Complete |cff008765Absent Minded Prospector Pt. 1|r before level 20",
     icon = 236444,
     points = 10,
     allowSoloDouble = true,
@@ -66,7 +66,7 @@ local Achievements = {
     achId = "Fangore",
     title = "Lieutenant’s Downfall",
     level = 23,
-    tooltip = "Complete |cff0091e6Wanted: Lieutenant Fangore|r before level 24",
+    tooltip = "Complete |cff008765Wanted: Lieutenant Fangore|r before level 24",
     icon = 134296,
     points = 10,
     requiredQuestId = 180,
@@ -77,7 +77,7 @@ local Achievements = {
     achId = "Foulborne",
     title = "Summoner’s Bane",
     level = 23,
-    tooltip = "Complete |cff0091e6Mage Summoner|r before level 24",
+    tooltip = "Complete |cff008765Mage Summoner|r before level 24",
     icon = 134173,
     points = 10,
     requiredQuestId = 1017,
@@ -88,7 +88,7 @@ local Achievements = {
     achId = "Nekrosh",
     title = "Nek’rosh No More",
     level = 31,
-    tooltip = "Complete |cff0091e6Defeat Nek'rosh|r before level 32",
+    tooltip = "Complete |cff008765Defeat Nek'rosh|r before level 32",
     icon = 134170,
     points = 10,
     requiredQuestId = 474,
@@ -99,7 +99,7 @@ local Achievements = {
     achId = "Morbent",
     title = "Morbent Has Fallen",
     level = 32,
-    tooltip = "Complete |cff0091e6Morbent Fel|r before level 33",
+    tooltip = "Complete |cff008765Morbent Fel|r before level 33",
     icon = 236225,
     points = 10,
     requiredQuestId = 55,
@@ -110,7 +110,7 @@ local Achievements = {
     achId = "Eliza",
     title = "The Alchemist's Wife",
     level = 32,
-    tooltip = "Complete |cff0091e6Bride of the Embalmer|r before level 33",
+    tooltip = "Complete |cff008765Bride of the Embalmer|r before level 33",
     icon = 236399,
     points = 10,
     requiredQuestId = 253,
@@ -121,8 +121,8 @@ local Achievements = {
     achId = "MorLadim",
     title = "Mor’Ladim’s Rest",
     level = 33,
-    tooltip = "Complete |cff0091e6Mor'Ladim|r before level 34",
-    icon = 133730,
+    tooltip = "Complete |cff008765Mor'Ladim|r before level 34",
+    icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_Dungeon_TheNecroticWake_StitchFlesh.png", -- ??
     points = 10,
     requiredQuestId = 228,
     targetNpcId = 522,
@@ -132,7 +132,7 @@ local Achievements = {
     achId = "ForsakenCourier",
     title = "Courier of Death",
     level = 34,
-    tooltip = "Complete |cff0091e6Hints of a New Plague|r before level 35",
+    tooltip = "Complete |cff008765Hints of a New Plague|r before level 35",
     icon = 133470,
     points = 10,
     requiredQuestId = 658,
@@ -143,7 +143,7 @@ local Achievements = {
     achId = "StinkysEscapeA",
     title = "Stinky Situation",
     level = 34,
-    tooltip = "Complete |cff0091e6Stinky’s Escape|r before level 35",
+    tooltip = "Complete |cff008765Stinky’s Escape|r before level 35",
     icon = 236758,
     points = 10,
     allowSoloDouble = true,
@@ -155,7 +155,7 @@ local Achievements = {
     achId = "ThogrunAlliance",
     title = "Tremors Beneath",
     level = 40,
-    tooltip = "Complete |cff0091e6Tremors of the Earth Pt. 1|r before level 41",
+    tooltip = "Complete |cff008765Tremors of the Earth Pt. 1|r before level 41",
     icon = 254093,
     points = 10,
     requiredQuestId = 732,
@@ -166,7 +166,7 @@ local Achievements = {
     achId = "Kurzen",
     title = "Kurzen's Fall",
     level = 41,
-    tooltip = "Complete |cff0091e6Colonel Kurzen|r before level 42",
+    tooltip = "Complete |cff008765Colonel Kurzen|r before level 42",
     icon = 236844,
     points = 10,
     requiredQuestId = 202,
@@ -177,7 +177,7 @@ local Achievements = {
     achId = "LordShalzaru",
     title = "Lord of the Depths",
     level = 43,
-    tooltip = "Complete |cff0091e6Against Lord Shalzaru|r before level 44",
+    tooltip = "Complete |cff008765Against Lord Shalzaru|r before level 44",
     icon = 136098,
     points = 10,
     requiredQuestId = 2870,
@@ -188,7 +188,7 @@ local Achievements = {
     achId = "DragonkinMenace",
     title = "Wrath of the Dragonkin",
     level = 57,
-    tooltip = "Complete |cff0091e6Dragonkin Menace|r before level 58",
+    tooltip = "Complete |cff008765Dragonkin Menace|r before level 58",
     icon = 236734,
     points = 10,
     requiredQuestId = 4182,
@@ -207,7 +207,7 @@ local Achievements = {
     achId = "Dargol",
     title = "Crypt Commander",
     level = 11,
-    tooltip = "Complete |cff0091e6The Family Crypt|r before level 12",
+    tooltip = "Complete |cff008765The Family Crypt|r before level 12",
     icon = 236458,
     points = 10,
     requiredQuestId = 408,
@@ -218,7 +218,7 @@ local Achievements = {
     achId = "Arrachea",
     title = "Spirit of the Earthmother",
     level = 11,
-    tooltip = "Complete |cff0091e6Rites of the Earthmother|r before level 12",
+    tooltip = "Complete |cff008765Rites of the Earthmother|r before level 12",
     icon = 132243,
     points = 10,
     requiredQuestId = 776,
@@ -229,7 +229,7 @@ local Achievements = {
     achId = "Gazzuz",
     title = "Slayer of Gazz’uz",
     level = 12,
-    tooltip = "Complete |cff0091e6Burning Shadows|r before level 13",
+    tooltip = "Complete |cff008765Burning Shadows|r before level 13",
     icon = 134085,
     points = 10,
     requiredQuestId = 832,
@@ -241,7 +241,7 @@ local Achievements = {
     achId = "Fizzle",
     title = "Fo' Rizzle My Fizzle!",
     level = 12,
-    tooltip = "Complete |cff0091e6Dark Storms|r before level 13",
+    tooltip = "Complete |cff008765Dark Storms|r before level 13",
     icon = 236290,
     points = 10,
     requiredQuestId = 806,
@@ -252,7 +252,7 @@ local Achievements = {
     achId = "Goggeroc",
     title = "Stone and Soil",
     level = 20,
-    tooltip = "Complete |cff0091e6Earthen Arise|r before level 21",
+    tooltip = "Complete |cff008765Earthen Arise|r before level 21",
     icon = 236831,
     points = 10,
     requiredQuestId = 6481,
@@ -263,7 +263,7 @@ local Achievements = {
     achId = "Kromzar",
     title = "Counterattack!",
     level = 20,
-    tooltip = "Complete |cff0091e6Counterattack!|r before level 21",
+    tooltip = "Complete |cff008765Counterattack!|r before level 21",
     icon = 132484,
     points = 10,
     requiredQuestId = 4021,
@@ -274,7 +274,7 @@ local Achievements = {
     achId = "Ataeric",
     title = "Thread of the Weaver",
     level = 20,
-    tooltip = "Complete |cff0091e6The Weaver|r before level 21",
+    tooltip = "Complete |cff008765The Weaver|r before level 21",
     icon = 135144,
     points = 10,
     requiredQuestId = 480,
@@ -285,7 +285,7 @@ local Achievements = {
     achId = "TheHunt",
     title = "The Great Hunt",
     level = 26,
-    tooltip = "Complete |cff0091e6The Hunt Completed|r by slaying |cff0091e6Sharptalon|r, |cff0091e6Shadumbra|r, and |cff0091e6Ursangous|r before level 27",
+    tooltip = "Complete |cff008765The Hunt Completed|r by slaying |cff008765Sharptalon|r, |cff008765Shadumbra|r, and |cff008765Ursangous|r before level 27",
     icon = 236713,
     points = 10,
     requiredQuestId = 247,
@@ -296,7 +296,7 @@ local Achievements = {
     achId = "Gizmo",
     title = "Flux-Hypercapacitor",
     level = 28,
-    tooltip = "Complete |cff0091e6Hypercapacitor Gizmo|r before level 29",
+    tooltip = "Complete |cff008765Hypercapacitor Gizmo|r before level 29",
     icon = 133236,
     points = 10,
     requiredQuestId = 5151,
@@ -307,7 +307,7 @@ local Achievements = {
     achId = "Grenka",
     title = "What's in the Box!?",
     level = 30,
-    tooltip = "Complete |cff0091e6Test of Endurance|r before level 31",
+    tooltip = "Complete |cff008765Test of Endurance|r before level 31",
     icon = 236848,
     points = 10,
     requiredQuestId = 1150,
@@ -318,7 +318,7 @@ local Achievements = {
     achId = "Ironhill",
     title = "Hillsbrad Commander",
     level = 33,
-    tooltip = "Complete |cff0091e6Battle of Hillsbrad|r before level 34",
+    tooltip = "Complete |cff008765Battle of Hillsbrad|r before level 34",
     icon = 236779,
     points = 10,
     requiredQuestId = 541,
@@ -329,7 +329,7 @@ local Achievements = {
     achId = "StinkysEscapeH",
     title = "Stinky Situation",
     level = 34,
-    tooltip = "Complete |cff0091e6Stinky’s Escape|r before level 35",
+    tooltip = "Complete |cff008765Stinky’s Escape|r before level 35",
     icon = 236758,
     points = 10,
     allowSoloDouble = true,
@@ -341,7 +341,7 @@ local Achievements = {
     achId = "ThogrunHorde",
     title = "Sign of the Earth",
     level = 40,
-    tooltip = "Complete |cff0091e6Broken Alliances Pt. 1|r before level 41",
+    tooltip = "Complete |cff008765Broken Alliances Pt. 1|r before level 41",
     icon = 254093,
     points = 10,
     requiredQuestId = 782,
@@ -352,7 +352,7 @@ local Achievements = {
     achId = "NothingButTruth",
     title = "Truth Seeker",
     level = 40,
-    tooltip = "Complete |cff0091e6Nothing but the Truth Pt. 4|r before level 41",
+    tooltip = "Complete |cff008765Nothing but the Truth Pt. 4|r before level 41",
     icon = 132800,
     points = 10,
     requiredQuestId = 1383,
@@ -363,7 +363,7 @@ local Achievements = {
     achId = "Mugthol",
     title = "Crowned",
     level = 43,
-    tooltip = "Complete |cff0091e6The Crown of Will Pt. 4|r before level 44",
+    tooltip = "Complete |cff008765The Crown of Will Pt. 4|r before level 44",
     icon = 132768,
     points = 10,
     requiredQuestId = 520,
@@ -374,7 +374,7 @@ local Achievements = {
     achId = "Hatetalon",
     title = "Dark Heart of the Wild",
     level = 48,
-    tooltip = "Complete |cff0091e6Dark Heart|r before level 49",
+    tooltip = "Complete |cff008765Dark Heart|r before level 49",
     icon = 134131,
     points = 10,
     requiredQuestId = 3062,
@@ -385,7 +385,7 @@ local Achievements = {
     achId = "Kromgrul",
     title = "Crushing the Grul",
     level = 51,
-    tooltip = "Complete |cff0091e6Krom'Grul|r before level 52",
+    tooltip = "Complete |cff008765Krom'Grul|r before level 52",
     icon = 236695,
     points = 10,
     requiredQuestId = 3822,
@@ -400,7 +400,7 @@ local Achievements = {
     title = "This Isn't Too Bad...",
     level = 10,
     tooltip = "Reach level 10 without dying",
-    icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\milestone_square_10.png",
+    icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\milestone_square_10.png",
     points = 10,
     customIsCompleted = function(newLevel) return (newLevel or UnitLevel("player") or 1) >= 10 end,
     staticPoints = true,
@@ -409,7 +409,7 @@ local Achievements = {
     title = "Roaring Twenties",
     level = 20,
     tooltip = "Reach level 20 without dying",
-    icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\milestone_square_20.png",
+    icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\milestone_square_20.png",
     points = 20,
     customIsCompleted = function(newLevel) return (newLevel or UnitLevel("player") or 1) >= 20 end,
     staticPoints = true,
@@ -418,7 +418,7 @@ local Achievements = {
     title = "Thirty and Flirty",
     level = 30,
     tooltip = "Reach level 30 without dying",
-    icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\milestone_square_30.png",
+    icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\milestone_square_30.png",
     points = 30,
     customIsCompleted = function(newLevel) return (newLevel or UnitLevel("player") or 1) >= 30 end,
     staticPoints = true,
@@ -427,7 +427,7 @@ local Achievements = {
     title = "Over the Hill",
     level = 40,
     tooltip = "Reach level 40 without dying",
-    icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\milestone_square_40.png",
+    icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\milestone_square_40.png",
     points = 40,
     customIsCompleted = function(newLevel) return (newLevel or UnitLevel("player") or 1) >= 40 end,
     staticPoints = true,
@@ -436,7 +436,7 @@ local Achievements = {
     title = "Lock In",
     level = 50,
     tooltip = "Reach level 50 without dying",
-    icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\milestone_square_50.png",
+    icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\milestone_square_50.png",
     points = 50,
     customIsCompleted = function(newLevel) return (newLevel or UnitLevel("player") or 1) >= 50 end,
     staticPoints = true,
@@ -445,7 +445,7 @@ local Achievements = {
     title = "Locked In and Dialed",
     level = 60,
     tooltip = "Reach level 60 without dying",
-    icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\milestone_square_60.png",
+    icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\milestone_square_60.png",
     points = 60,
     customIsCompleted = function(newLevel) return (newLevel or UnitLevel("player") or 1) >= 60 end,
     staticPoints = true,
@@ -453,7 +453,7 @@ local Achievements = {
     achId = "GalensEscape",
     title = "Galen's Freedom",
     level = 38,
-    tooltip = "Complete |cff0091e6Galen's Escape|r before level 39",
+    tooltip = "Complete |cff008765Galen's Escape|r before level 39",
     icon = 236845,
     points = 10,
     allowSoloDouble = true,
@@ -464,7 +464,7 @@ local Achievements = {
     achId = "GetMeOutOfHere",
     title = "Outta Here!",
     level = 41,
-    tooltip = "Complete |cff0091e6Get Me Out of Here!|r before level 42",
+    tooltip = "Complete |cff008765Get Me Out of Here!|r before level 42",
     icon = 236742,
     points = 10,
     allowSoloDouble = true,
@@ -475,7 +475,7 @@ local Achievements = {
     achId = "KingBangalash",
     title = "King of the Jungle",
     level = 42,
-    tooltip = "Complete |cff0091e6Big Game Hunter|r before level 43",
+    tooltip = "Complete |cff008765Big Game Hunter|r before level 43",
     icon = 134176,
     points = 10,
     requiredQuestId = 208,
@@ -485,7 +485,7 @@ local Achievements = {
     achId = "OOX",
     title = "Oox I Did It Again",
     level = 45,
-    tooltip = "Complete |cff0091e6An OOX of Your Own|r before level 46",
+    tooltip = "Complete |cff008765An OOX of Your Own|r before level 46",
     icon = 133883,
     points = 10,
     allowSoloDouble = true,
@@ -496,7 +496,7 @@ local Achievements = {
     achId = "CuergosGold",
     title = "Cuergo’s Fortune",
     level = 45,
-    tooltip = "Complete |cff0091e6Cuergo’s Gold|r before level 46",
+    tooltip = "Complete |cff008765Cuergo’s Gold|r before level 46",
     icon = 237387,
     points = 10,
     allowSoloDouble = true,
@@ -507,7 +507,7 @@ local Achievements = {
     achId = "Mokk",
     title = "This Isn't Worth It",
     level = 47,
-    tooltip = "Complete |cff0091e6Stranglethorn Fever|r before level 48",
+    tooltip = "Complete |cff008765Stranglethorn Fever|r before level 48",
     icon = 134338,
     points = 10,
     allowSoloDouble = true,
@@ -518,7 +518,7 @@ local Achievements = {
     achId = "MalletZF",
     title = string.format("%s the Keeper", GetUnitName("player")),
     level = 49,
-    tooltip = "Obtain the |cff0091e6Mallet of Zul'Farrak|r before level 50",
+    tooltip = "Obtain the |cff008765Mallet of Zul'Farrak|r before level 50",
     icon = 134559,
     points = 10,
     allowSoloDouble = true,
@@ -529,7 +529,7 @@ local Achievements = {
     achId = "Mukla",
     title = "Kong of the Jungle",
     level = 50,
-    tooltip = "Complete |cff0091e6Message in a Bottle|r before level 51",
+    tooltip = "Complete |cff008765Message in a Bottle|r before level 51",
     icon = 132159,
     points = 10,
     allowSoloDouble = true,
@@ -540,7 +540,7 @@ local Achievements = {
     achId = "KimJaelIndeed",
     title = "Booty Bay Genius",
     level = 51,
-    tooltip = "Complete |cff0091e6Kim’Jael Indeed!|r before level 52",
+    tooltip = "Complete |cff008765Kim’Jael Indeed!|r before level 52",
     icon = 236714,
     points = 10,
     allowSoloDouble = true,
@@ -551,7 +551,7 @@ local Achievements = {
     achId = "StonesThatBindUs",
     title = "Stonebound Savior",
     level = 51,
-    tooltip = "Complete |cff0091e6The Stones That Bind Us|r before level 52",
+    tooltip = "Complete |cff008765The Stones That Bind Us|r before level 52",
     icon = 236720,
     points = 10,
     allowSoloDouble = true,
@@ -562,7 +562,7 @@ local Achievements = {
     achId = "Hakkar",
     title = "Spirits, Tablets, and Eggs, Oh My!",
     level = 53,
-    tooltip = "Complete |cff0091e6The God Hakkar|r before level 54",
+    tooltip = "Complete |cff008765The God Hakkar|r before level 54",
     icon = 132209,
     points = 10,
     requiredQuestId = 3528,
@@ -572,7 +572,7 @@ local Achievements = {
     achId = "ShadowLordFeldan",
     title = "Shadow’s End",
     level = 55,
-    tooltip = "Complete |cff0091e6A Final Blow|r before level 56",
+    tooltip = "Complete |cff008765A Final Blow|r before level 56",
     icon = 236763,
     points = 10,
     requiredQuestId = 5242,
@@ -582,8 +582,8 @@ local Achievements = {
     achId = "SummoningThePrincess",
     title = "Shards of Myzrael",
     level = 55,
-    tooltip = "Complete |cff0091e6Summoning the Princess|r before level 56",
-    icon = 4571434,
+    tooltip = "Complete |cff008765Summoning the Princess|r before level 56",
+    icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\INV_Enchanting_Shard.png", -- ??
     points = 10,
     requiredQuestId = 656,
     targetNpcId = 2755,
@@ -592,7 +592,7 @@ local Achievements = {
     achId = "GorishiHiveQueen",
     title = "Queen’s Gambit",
     level = 56,
-    tooltip = "Complete |cff0091e6Pawn Captures Queen|r before level 57",
+    tooltip = "Complete |cff008765Pawn Captures Queen|r before level 57",
     icon = 134340,
     points = 10,
     requiredQuestId = 4507,
@@ -602,7 +602,7 @@ local Achievements = {
     achId = "OverseerMaltorius",
     title = "Master of the Forge",
     level = 56,
-    tooltip = "Complete |cff0091e6WANTED: Overseer Maltorius|r before level 57",
+    tooltip = "Complete |cff008765WANTED: Overseer Maltorius|r before level 57",
     icon = 134159,
     points = 10,
     requiredQuestId = 7701,
@@ -612,7 +612,7 @@ local Achievements = {
     achId = "MercutioFilthgorger",
     title = "Mercutio’s Memory",
     level = 57,
-    tooltip = "Complete |cff0091e6Of Forgotten Memories|r before level 58",
+    tooltip = "Complete |cff008765Of Forgotten Memories|r before level 58",
     icon = 133038,
     points = 10,
     requiredQuestId = 5781,
@@ -622,7 +622,7 @@ local Achievements = {
     achId = "HighChiefWinterfall",
     title = "Winter is Coming",
     level = 59,
-    tooltip = "Complete |cff0091e6High Chief Winterfall|r before level 60",
+    tooltip = "Complete |cff008765High Chief Winterfall|r before level 60",
     icon = 236696,
     points = 10,
     requiredQuestId = 5121,
@@ -632,7 +632,7 @@ local Achievements = {
     achId = "Deathclasp",
     title = "Deathclasp Down",
     level = 59,
-    tooltip = "Complete |cff0091e6Wanted: Deathclasp, Terror of the Sands|r before level 60",
+    tooltip = "Complete |cff008765Wanted: Deathclasp, Terror of the Sands|r before level 60",
     icon = 133708,
     points = 10,
     requiredQuestId = 8283,
@@ -645,8 +645,8 @@ local Achievements = {
     achId = "Gallywix",
     title = "Get Gallywix or Die Tryin |cfffff468[Rogue]|r",
     level = 23,
-    tooltip = "Complete |cff0091e6Mission: Possible But Not Probable|r before level 24",
-    icon = 236281,
+    tooltip = "Complete |cff008765Mission: Possible But Not Probable|r before level 24",
+    icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Ability_Rogue_StayofExecution.PNG.png", -- 236281
     points = 10,
     requiredQuestId = 2478,
     targetNpcId = 7288,
@@ -657,7 +657,7 @@ local Achievements = {
     achId = "DefiasMask",
     title = "One of Us! |cfffff468[Rogue]|r",
     level = nil,
-    tooltip = "Equip a |cff0091e6Red Defias Mask|r and join the ranks of the Defias Brotherhood",
+    tooltip = "Equip a |cff008765Red Defias Mask|r and join the ranks of the Defias Brotherhood",
     icon = 133694,
     points = 0,
     customIsCompleted = function() return false end,
@@ -671,7 +671,7 @@ local Achievements = {
     achId = "AlchemistShopH",
     title = "Back to Brill! |cff3FC7EB[Mage]|r",
     level = 18,
-    tooltip = "Complete |cff0091e6Investigate the Alchemist Shop|r before level 19",
+    tooltip = "Complete |cff008765Investigate the Alchemist Shop|r before level 19",
     icon = 135734,
     points = 10,
     allowSoloDouble = true,
@@ -684,7 +684,7 @@ local Achievements = {
     achId = "AlchemistShopA",
     title = "Back to Elwynn! |cff3FC7EB[Mage]|r",
     level = 18,
-    tooltip = "Complete |cff0091e6Investigate the Blue Recluse|r before level 19",
+    tooltip = "Complete |cff008765Investigate the Blue Recluse|r before level 19",
     icon = 135734,
     points = 10,
     allowSoloDouble = true,
@@ -700,7 +700,7 @@ local Achievements = {
     achId = "Whirlwind",
     title = "Cyclonian's Collapse |cffc69b6d[Warrior]|r",
     level = 38,
-    tooltip = "Complete |cff0091e6The Summoning|r before level 39",
+    tooltip = "Complete |cff008765The Summoning|r before level 39",
     icon = 134131,
     points = 10,
     requiredQuestId = 1713,
@@ -708,297 +708,7 @@ local Achievements = {
     class = "WARRIOR",
     zone = "Alterac Mountains"
 },
-
--- Secret Achievements
-{
-    achId = "SnowballHorde",
-    title = "Snowball at Thrall",
-    level = nil,
-    tooltip = "Throw a snowball at Thrall",
-    icon = 236710,
-    points = 0,
-    faction = FACTION_HORDE,
-    zone = "Orgrimmar",
-    customIsCompleted = function() return false end,
-    customSpell = function(spellId, targetName)
-        if targetName == "Thrall" and spellId == 21343 then
-            return true
-        end
-        return false
-    end,
-    -- Secret presentation before completion
-    secret = true,
-    secretTitle = "Who Threw That?",
-    secretTooltip = "I wonder who to throw a snowball at...",
-    secretIcon = 132387,
-    --secretPoints = 1,
-    staticPoints = true,
-}, {
-    achId = "SnowballAlliance",
-    title = "Snowball at Highlord Bolvar Fordragon",
-    level = nil,
-    tooltip = "Throw a snowball at Highlord Bolvar Fordragon",
-    icon = 133169,
-    points = 0,
-    faction = FACTION_ALLIANCE,
-    zone = "Stormwind City",
-    customIsCompleted = function() return false end,
-    customSpell = function(spellId, targetName)
-        if targetName == "Highlord Bolvar Fordragon" and spellId == 21343 then
-            return true
-        end
-        return false
-    end,
-    -- Secret presentation before completion
-    secret = true,
-    secretTitle = "Who Threw That?",
-    secretTooltip = "I wonder who to throw a snowball at...",
-    secretIcon = 132387,
-    --secretPoints = 1,
-    staticPoints = true,
-}, {
-    achId = "Secret1",
-    title = "Rats! Rats! Rats!",
-    level = nil,
-    tooltip = "You have completed the secret achievement: |cff0091e6Kill a rat|r",
-    icon = 294480,
-    points = 0,
-    targetNpcId = {4075, 13016, 2110},
-    secret = true,
-    secretTitle = "Secret Achievement",
-    secretTooltip = "You will probably complete this achievement by accident",
-    --secretIcon = 132387,
-    secretPoints = 0,
-    staticPoints = true,
-}, {
-    achId = "Secret2",
-    title = "Taking the Edge Off",
-    level = nil,
-    tooltip = "You have completed the secret achievement: |cff0091e6Drink some Noggenfogger|r",
-    icon = 134863,
-    points = 0,
-    customIsCompleted = function() return false end,
-    customSpell = function(spellId, targetName)
-        if spellId == 16589 then
-            return true
-        end
-        return false
-    end,
-    secret = true,
-    secretTitle = "Secret Achievement",
-    secretTooltip = "You will probably complete this achievement by accident",
-    --secretIcon = 132387,
-    secretPoints = 0,
-    staticPoints = true,
-}, {
-    achId = "Secret3",
-    title = "Who's A Good Boy?",
-    level = nil,
-    tooltip = "You have completed the secret achievement: |cff0091e6Pet Spot the Wolf|r",
-    icon = 132203,
-    points = 0,
-    faction = FACTION_ALLIANCE,
-    customIsCompleted = function() return false end,
-    customEmote = function(token)
-        if token ~= "PET" then
-            return false
-        end
-
-        local targetGuid = UnitGUID("target")
-        if not targetGuid then
-            return false
-        end
-
-        local _, _, _, _, _, npcIdStr = strsplit("-", targetGuid)
-        local npcId = npcIdStr and tonumber(npcIdStr) or nil
-        return npcId == 4950
-    end,
-    secret = true,
-    secretTitle = "Secret Achievement",
-    secretTooltip = "I spot a good boy!",
-    --secretIcon = 132387,
-    secretPoints = 0,
-    staticPoints = true,
-}, {
-    achId = "Secret4",
-    title = "The Last Achievement",
-    level = nil,
-    tooltip = string.format("%s... your tale slips quietly into forgotten pages. Only echoes will remember your name now.", GetUnitName("player")),
-    icon = 237542,
-    points = 0,
-    customIsCompleted = function() return UnitIsDeadOrGhost("player") end,
-    secret = true,
-    staticPoints = true,
-    hiddenUntilComplete = true,
-}, {
-    achId = "Secret5",
-    title = "Mak'gora",
-    level = nil,
-    tooltip = "Obtain an ear by winning a |cff0091e6Mak'gora|r",
-    icon = 133854,
-    points = 0,
-    customIsCompleted = function() return false end,
-    customAura = function()
-        for i = 1, 40 do
-            local name, _, _, _, _, _, _, _, _, spellId = UnitBuff("player", i)
-            if not name then break end
-            if spellId == 419126 or name == "String of Ears" then
-                return true
-            end
-        end
-        return false
-    end,
-    secret = true,
-    staticPoints = true,
-    hiddenUntilComplete = true,
-}, {
-    achId = "Secret93",
-    title = "The Disciplined One",
-    level = nil,
-    tooltip = "You have completed the secret achievement: |cff0091e6Reach level 60 without jumping|r",
-    icon = 413584,
-    points = 0,
-    customIsCompleted = function()
-        if not _G.HardcoreAchievements_GetCharDB then
-            return false
-        end
-        local _, cdb = _G.HardcoreAchievements_GetCharDB()
-        if not cdb or not cdb.stats or not cdb.stats.playerJumps then
-            return false
-        end
-        return UnitLevel("player") >= 60 and cdb.stats.playerJumps == 0
-    end,
-    secret = true,
-    staticPoints = true,
-    hiddenUntilComplete = true,
-}, {
-    achId = "Secret94",
-    title = "Mok'rash",
-    level = 50,
-    tooltip = "You have completed the secret achievement: |cffff8000Kill Mok'rash and complete the quest: 'The Monogrammed Sash' before level 51|r",
-    icon = 133345,
-    points = 0,
-    requiredQuestId = 8552,
-    secret = true,
-    staticPoints = true,
-    hiddenUntilComplete = true,
-}, {
-    achId = "Secret95",
-    title = "Jump Master",
-    level = nil,
-    tooltip = "You have completed the secret achievement: |cff0091e6Jump 100,000 times|r",
-    icon = 134478,
-    points = 0,
-    customIsCompleted = function()
-        if not _G.HardcoreAchievements_GetCharDB then
-            return false
-        end
-        local _, cdb = _G.HardcoreAchievements_GetCharDB()
-        if not cdb or not cdb.stats or not cdb.stats.playerJumps then
-            return false
-        end
-        return cdb.stats.playerJumps >= 100000
-    end,
-    secret = true,
-    staticPoints = true,
-    hiddenUntilComplete = true,
-}, {
-    achId = "Secret96",
-    title = "The Warlord of the Rings",
-    level = nil,
-    tooltip = "You have completed the secret achievement: |cffff8000Obtain The 1 Ring|r",
-    icon = 133345,
-    points = 0,
-    customIsCompleted = function() return false end,
-    customItem = function() return GetItemCount(8350, true) > 0 end,
-    -- Secret presentation before completion
-    secret = true,
-    staticPoints = true,
-    hiddenUntilComplete = true,
-}, {
-    achId = "Secret97",
-    title = "Scarlet Crusade",
-    level = nil,
-    tooltip = "You have completed the secret achievement: |cffff8000Obtain the Tabard of the Scarlet Crusade|r",
-    icon = 133770,
-    points = 0,
-    customIsCompleted = function() return false end,
-    customItem = function() return GetItemCount(23192, true) > 0 end,
-    -- Secret presentation before completion
-    secret = true,
-    staticPoints = true,
-    hiddenUntilComplete = true,
-}, {
-    achId = "Secret98",
-    title = "Legendary Resonance",
-    level = nil,
-    tooltip = "You have completed the secret achievement: |cffff8000Obtain the Black Qiraji Resonating Crystal|r",
-    icon = 134399,
-    points = 0,
-    customIsCompleted = function() return false end,
-    customItem = function() return GetItemCount(21176, true) > 0 end,
-    -- Secret presentation before completion
-    secret = true,
-    staticPoints = true,
-    hiddenUntilComplete = true,
-}, {
-    achId = "Secret99",
-    title = "Level 18? Ughhh",
-    level = nil,
-    tooltip = "You have completed the secret achievement: |cff0091e6Obtain the Forest Leather Belt|r",
-    icon = 132492,
-    points = 0,
-    customIsCompleted = function() return false end,
-    customItem = function() return GetItemCount(6382, true) > 0 end,
-    -- Secret presentation before completion
-    secret = true,
-    staticPoints = true,
-    hiddenUntilComplete = true,
-}, {
-    achId = "Secret100",
-    title = "You've Got the Chills",
-    level = nil,
-    tooltip = "You've unlocked the authors hidden achievement",
-    icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Chills.png",
-    points = 0,
-    customIsCompleted = function() return false end,
-    customEmote = function(token)
-        return token == "COLD"
-      end,
-    -- Secret presentation before completion
-    secret = true,
-    staticPoints = true,
-    hiddenUntilComplete = true,
 }
--- {
---     achId = "Sylvanas",
---     title = "Something for Sylvanas",
---     level = 60,
---     tooltip = "Give Sylvanas a gift",
---     icon = 236560,
---     points = 1,
---     faction = FACTION_HORDE,
---     zone = "Undercity",
---     customIsCompleted = function() return false end,
---     customEmote = function(token, targetName)
---         return token == "BOW" and targetName == "Lady Sylvanas Windrunner"
---       end,
---     -- Secret presentation before completion
---     secret = true,
---     secretTitle = "Secret",
---     secretTooltip = "I wonder who to give a gift to...",
---     secretIcon = 132387,
---     --secretPoints = 1,
---     staticPoints = true,
---     hiddenUntilComplete = true,
--- }
-}
-
-if _G.HCA_AppendProfessionAchievements then
-  _G.HCA_AppendProfessionAchievements(function(def)
-    Achievements[#Achievements + 1] = def
-  end)
-end
 
 local function IsEligible(def)
   -- Faction: "Alliance" / "Horde"
@@ -1058,6 +768,8 @@ _G.HCA_RegistrationQueue = _G.HCA_RegistrationQueue or {}
 -- Queue all achievements for deferred registration
 for _, def in ipairs(Achievements) do
   if IsEligible(def) then
+    -- Mark as quest achievement for filtering
+    def.isQuest = true
     table.insert(_G.HCA_RegistrationQueue, function()
       local killFn  = def.customKill or ((def.targetNpcId or def.requiredKills) and _G.HardcoreAchievements_GetAchievementFunction(def.achId, "Kill")) or nil
       local questFn = (def.requiredQuestId and _G.HardcoreAchievements_GetAchievementFunction(def.achId, "Quest")) or nil

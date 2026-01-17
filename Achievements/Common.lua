@@ -35,32 +35,17 @@ function _G.HCA_IsAchievementVisible(achId)
             -- Check checkbox filter state for variations (same logic as ApplyFilter/ShouldShowByCheckboxFilter)
             -- This works even if the panel hasn't been opened and filter hasn't been applied yet
             if row._def and row._def.isVariation and row._def.variationType then
-                local checkboxStates = { false, false, false, false, false, false, false }
-                if type(HardcoreAchievements_GetCharDB) == "function" then
-                    local _, cdb = HardcoreAchievements_GetCharDB()
-                    if cdb and cdb.settings and cdb.settings.filterCheckboxes then
-                        local states = cdb.settings.filterCheckboxes
-                        if type(states) == "table" then
-                            checkboxStates = {
-                                states[1] == true,  -- Trio
-                                states[2] == true,  -- Duo
-                                states[3] == true,  -- Solo
-                                states[4] == true,  -- Dungeon Sets
-                                states[5] == true,  -- Reputations
-                                states[6] == true,  -- Raids
-                                states[7] == true,  -- Heroic Dungeons
-                            }
-                        end
-                    end
-                end
+                -- Use FilterDropdown for checkbox states
+                local FilterDropdown = _G.FilterDropdown
+                local checkboxStates = FilterDropdown and FilterDropdown.GetCheckboxStates and FilterDropdown.GetCheckboxStates() or { true, true, true, true, true, true, false, false, false, false, false, false, false, false }
                 
                 local shouldShow = false
                 if row._def.variationType == "Trio" then
-                    shouldShow = checkboxStates[1]
+                    shouldShow = checkboxStates[12]
                 elseif row._def.variationType == "Duo" then
-                    shouldShow = checkboxStates[2]
+                    shouldShow = checkboxStates[11]
                 elseif row._def.variationType == "Solo" then
-                    shouldShow = checkboxStates[3]
+                    shouldShow = checkboxStates[10]
                 end
                 
                 -- Completed achievements always show (same as ShouldShowByCheckboxFilter logic)
@@ -209,10 +194,10 @@ function M.registerQuestAchievement(cfg)
                 
                 if not existingPointsAtKill then
                     -- No existing pointsAtKill, check if quest completion was solo (check at time of topUp)
-                    -- Solo points apply if player is self-found (Classic) or in TBC
+                    -- Solo points apply: requires self-found if hardcore is active, otherwise solo is allowed
                     local isSelfFound = _G.IsSelfFound and _G.IsSelfFound() or false
-                    local isTBC = GetExpansionLevel() > 0
-                    local allowSoloBonus = isSelfFound or isTBC
+                    local isHardcoreActive = C_GameRules and C_GameRules.IsHardcoreActive and C_GameRules.IsHardcoreActive() or false
+                    local allowSoloBonus = isSelfFound or not isHardcoreActive
                     local isSoloQuest = allowSoloBonus and (_G.PlayerIsSolo and _G.PlayerIsSolo() or false) or false
                     
                     if AchievementPanel and AchievementPanel.achievements then
@@ -252,12 +237,15 @@ function M.registerQuestAchievement(cfg)
                                     pointsToStore = basePoints * 2
                                     -- Update points display to show doubled value (including self-found bonus for display)
                                     local displayPoints = pointsToStore
-                                    local isDungeonSet = row._def and row._def.isDungeonSet
-                                    -- Reputation achievements SHOULD receive the self-found bonus.
-                                    if isSelfFound and not row.isSecretAchievement and not isDungeonSet then
+                                    if isSelfFound then
+                                        -- pointsAtKill is stored WITHOUT self-found bonus; display includes it.
+                                        -- 0-point achievements naturally add 0.
                                         local getBonus = _G.HCA_GetSelfFoundBonus
-                                        local bonus = (type(getBonus) == "function") and getBonus(tonumber(row.originalPoints) or 0) or 0
-                                        displayPoints = displayPoints + bonus
+                                        local baseForBonus = row.originalPoints or row.revealPointsBase or 0
+                                        local bonus = (type(getBonus) == "function") and getBonus(tonumber(baseForBonus) or 0) or 0
+                                        if bonus > 0 and displayPoints > 0 then
+                                            displayPoints = displayPoints + bonus
+                                        end
                                     end
                                     row.points = displayPoints
                                     if row.Points then
@@ -499,10 +487,10 @@ function M.registerQuestAchievement(cfg)
         end
         topUpFromServer()
         -- Check if we have solo status from previous kills/quests and update UI
-        -- Solo indicators show if player is self-found (Classic) or in TBC
+        -- Solo indicators show: requires self-found if hardcore is active, otherwise solo is allowed
         local isSelfFound = _G.IsSelfFound and _G.IsSelfFound() or false
-        local isTBC = GetExpansionLevel() > 0
-        local allowSoloBonus = isSelfFound or isTBC
+        local isHardcoreActive = C_GameRules and C_GameRules.IsHardcoreActive and C_GameRules.IsHardcoreActive() or false
+        local allowSoloBonus = isSelfFound or not isHardcoreActive
         if p and (p.soloKill or p.soloQuest) and allowSoloBonus then
             if AchievementPanel and AchievementPanel.achievements then
                 for _, row in ipairs(AchievementPanel.achievements) do
@@ -693,7 +681,7 @@ function M.registerQuestAchievement(cfg)
                 
                 -- Only print message if the achievement is visible (not filtered out)
                 if isAchievementVisible(ACH_ID) then
-                    print("|cff69adc9[Hardcore Achievements]|r |cffffd100Achievement " .. (ACH_ID or "Unknown") .. " cannot be fulfilled: An ineligible player contributed.|r")
+                    print("|cff008066[Hardcore Achievements]|r |cffffd100Achievement " .. (ACH_ID or "Unknown") .. " cannot be fulfilled: An ineligible player contributed.|r")
                 end
                 
                 -- Track the kill progress, but mark as ineligible (don't increment eligible counts)
@@ -900,11 +888,11 @@ function M.registerQuestAchievement(cfg)
                 return checkComplete()
             else
                 -- TARGET_NPC_ID: track kill normally (eligible kill)
-                -- Solo points apply if player is self-found (Classic) or in TBC
+                -- Solo points apply: requires self-found if hardcore is active, otherwise solo is allowed
                 -- Use stored solo status from combat tracking (more accurate than checking at kill time)
                 local isSelfFound = _G.IsSelfFound and _G.IsSelfFound() or false
-                local isTBC = GetExpansionLevel() > 0
-                local allowSoloBonus = isSelfFound or isTBC
+                local isHardcoreActive = C_GameRules and C_GameRules.IsHardcoreActive and C_GameRules.IsHardcoreActive() or false
+                local allowSoloBonus = isSelfFound or not isHardcoreActive
                 local storedSoloStatus = nil
                 if destGUID and _G.PlayerIsSoloForGUID then
                     storedSoloStatus = _G.PlayerIsSoloForGUID(destGUID)
@@ -1018,12 +1006,15 @@ function M.registerQuestAchievement(cfg)
                             if effectiveSoloKill then
                                 -- Update points display to show doubled value (including self-found bonus for display)
                                 local displayPoints = effectivePoints
-                                local isDungeonSet = row._def and row._def.isDungeonSet
-                                -- Reputation achievements SHOULD receive the self-found bonus.
-                                if isSelfFound and not row.isSecretAchievement and not isDungeonSet then
+                                if isSelfFound then
+                                    -- pointsAtKill is stored WITHOUT self-found bonus; display includes it.
+                                    -- 0-point achievements naturally add 0.
                                     local getBonus = _G.HCA_GetSelfFoundBonus
-                                    local bonus = (type(getBonus) == "function") and getBonus(tonumber(row.originalPoints) or 0) or 0
-                                    displayPoints = displayPoints + bonus
+                                    local baseForBonus = row.originalPoints or row.revealPointsBase or 0
+                                    local bonus = (type(getBonus) == "function") and getBonus(tonumber(baseForBonus) or 0) or 0
+                                    if bonus > 0 and displayPoints > 0 then
+                                        displayPoints = displayPoints + bonus
+                                    end
                                 end
                                 row.points = displayPoints
                                 if row.Points then
@@ -1212,10 +1203,10 @@ function M.registerQuestAchievement(cfg)
             
             if not existingPointsAtKill then
                 -- No existing pointsAtKill, check if quest completion was solo
-                -- Solo points apply if player is self-found (Classic) or in TBC
+                -- Solo points apply: requires self-found if hardcore is active, otherwise solo is allowed
                 local isSelfFound = _G.IsSelfFound and _G.IsSelfFound() or false
-                local isTBC = GetExpansionLevel() > 0
-                local allowSoloBonus = isSelfFound or isTBC
+                local isHardcoreActive = C_GameRules and C_GameRules.IsHardcoreActive and C_GameRules.IsHardcoreActive() or false
+                local allowSoloBonus = isSelfFound or not isHardcoreActive
                 local isSoloQuest = allowSoloBonus and (_G.PlayerIsSolo and _G.PlayerIsSolo() or false) or false
                 
                 if AchievementPanel and AchievementPanel.achievements then
@@ -1255,13 +1246,16 @@ function M.registerQuestAchievement(cfg)
                                 pointsToStore = basePoints * 2
                                 -- Update points display to show doubled value (including self-found bonus for display)
                                 local displayPoints = pointsToStore
-                                local isDungeonSet = row._def and row._def.isDungeonSet
-                                -- Reputation achievements SHOULD receive the self-found bonus.
-                                    if isSelfFound and not row.isSecretAchievement and not isDungeonSet then
-                                        local getBonus = _G.HCA_GetSelfFoundBonus
-                                        local bonus = (type(getBonus) == "function") and getBonus(tonumber(row.originalPoints) or 0) or 0
+                                if isSelfFound then
+                                    -- pointsAtKill is stored WITHOUT self-found bonus; display includes it.
+                                    -- 0-point achievements naturally add 0.
+                                    local getBonus = _G.HCA_GetSelfFoundBonus
+                                    local baseForBonus = row.originalPoints or row.revealPointsBase or 0
+                                    local bonus = (type(getBonus) == "function") and getBonus(tonumber(baseForBonus) or 0) or 0
+                                    if bonus > 0 and displayPoints > 0 then
                                         displayPoints = displayPoints + bonus
                                     end
+                                end
                                 row.points = displayPoints
                                 if row.Points then
                                     row.Points:SetText(tostring(displayPoints))
@@ -1301,10 +1295,10 @@ function M.registerQuestAchievement(cfg)
                 else
                     -- We have existing pointsAtKill from NPC kill, preserve it
                     -- But still update solo status if quest was solo (for indicator purposes)
-                    -- Solo points apply if player is self-found (Classic) or in TBC
+                    -- Solo points apply: requires self-found if hardcore is active, otherwise solo is allowed
                     local isSelfFound = _G.IsSelfFound and _G.IsSelfFound() or false
-                    local isTBC = GetExpansionLevel() > 0
-                    local allowSoloBonus = isSelfFound or isTBC
+                    local isHardcoreActive = C_GameRules and C_GameRules.IsHardcoreActive and C_GameRules.IsHardcoreActive() or false
+                    local allowSoloBonus = isSelfFound or not isHardcoreActive
                     local isSoloQuest = allowSoloBonus and (_G.PlayerIsSolo and _G.PlayerIsSolo() or false) or false
                     if isSoloQuest then
                     -- Update solo quest status and indicator (only if not completed)
@@ -1318,12 +1312,15 @@ function M.registerQuestAchievement(cfg)
                                 if progressTable and progressTable.pointsAtKill then
                                     local storedPoints = tonumber(progressTable.pointsAtKill) or row.points
                                     local isSelfFound = _G.IsSelfFound and _G.IsSelfFound() or false
-                                    local isDungeonSet = row._def and row._def.isDungeonSet
-                                    -- Reputation achievements SHOULD receive the self-found bonus.
-                                    if isSelfFound and not row.isSecretAchievement and not isDungeonSet then
+                                    if isSelfFound then
+                                        -- pointsAtKill is stored WITHOUT self-found bonus; display includes it.
+                                        -- 0-point achievements naturally add 0.
                                         local getBonus = _G.HCA_GetSelfFoundBonus
-                                        local bonus = (type(getBonus) == "function") and getBonus(tonumber(row.originalPoints) or 0) or 0
-                                        storedPoints = storedPoints + bonus
+                                        local baseForBonus = row.originalPoints or row.revealPointsBase or 0
+                                        local bonus = (type(getBonus) == "function") and getBonus(tonumber(baseForBonus) or 0) or 0
+                                        if bonus > 0 and storedPoints > 0 then
+                                            storedPoints = storedPoints + bonus
+                                        end
                                     end
                                     row.points = storedPoints
                                     if row.Points then

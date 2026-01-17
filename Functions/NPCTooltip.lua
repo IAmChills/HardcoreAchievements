@@ -73,7 +73,7 @@ local function HookNPCTooltip()
             local achievements = GetAchievementsForNPC(npcId)
             if #achievements > 0 then
                 GameTooltip:AddLine(" ")  -- Add spacing
-                GameTooltip:AddLine("Required for Achievement:", 0.4, 0.8, 1)
+                GameTooltip:AddLine("Required for Achievement:", 0, 0.5, 0.4)
                 for _, ach in ipairs(achievements) do
                     GameTooltip:AddLine(ach.title, 1, 1, 1)
                 end

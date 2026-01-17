@@ -26,62 +26,57 @@ function RefreshAllAchievementPoints()
                 local staticPoints = row.staticPoints or false
                 local finalPoints = originalPoints
                 
-                if not staticPoints then
+                -- Check if we have stored pointsAtKill (solo kill/quest) - use those points first
+                local progress = HardcoreAchievements_GetProgress and HardcoreAchievements_GetProgress(rowId)
+                local hasStoredPoints = progress and progress.pointsAtKill
+                
+                if hasStoredPoints then
+                    -- Use stored points (already doubled if solo, includes multiplier if applicable)
+                    finalPoints = tonumber(progress.pointsAtKill) or finalPoints
+                elseif not staticPoints then
                     -- Apply preset multiplier (replaces base points)
                     local multiplier = (_G.GetPresetMultiplier and _G.GetPresetMultiplier(preset)) or 1.0
                     finalPoints = math.floor(originalPoints * multiplier + 0.5)
                     
                     -- Visual preview: if solo mode toggle is on and no stored points, show doubled points
                     -- This is just a preview - actual points are determined at kill/quest time
-                    -- Solo preview applies if player is self-found (Classic) or in TBC
-                    local isTBC = GetExpansionLevel() > 0
-                    local allowSoloBonus = isSelfFound or isTBC
-                    local progress = HardcoreAchievements_GetProgress and HardcoreAchievements_GetProgress(rowId)
-                    if isSoloMode and row.allowSoloDouble and allowSoloBonus and not (progress and progress.pointsAtKill) then
+                    -- Solo preview applies: requires self-found if hardcore is active, otherwise solo is allowed
+                    local isHardcoreActive = C_GameRules and C_GameRules.IsHardcoreActive and C_GameRules.IsHardcoreActive() or false
+                    local allowSoloBonus = isSelfFound or not isHardcoreActive
+                    if isSoloMode and row.allowSoloDouble and allowSoloBonus then
                         finalPoints = finalPoints * 2
                     end
                 end
                 
-                -- Apply self-found bonus: +0.5x base points (rounded), applied after multiplier/solo preview.
-                local isDungeonSet = row._def and row._def.isDungeonSet
-                -- Reputation achievements SHOULD receive the self-found bonus.
-                if isSelfFound and not row.isSecretAchievement and not isDungeonSet then
+                -- Self-found bonus should be reflected in the displayed points (preview + stored),
+                -- with a simple rule: 0-point achievements remain 0 (bonus computes to 0).
+                if isSelfFound then
                     local getBonus = _G.HCA_GetSelfFoundBonus
                     local bonus = (type(getBonus) == "function") and getBonus(originalPoints) or 0
-                    finalPoints = finalPoints + bonus
+                    if bonus > 0 and finalPoints > 0 then
+                        finalPoints = finalPoints + bonus
+                    end
                 end
                 
                 row.points = finalPoints
                 if row.Points then
                     row.Points:SetText(tostring(finalPoints))
                 end
+                -- Re-apply point-circle UI rules (e.g., 0-point shield icon) after recalculation.
+                if _G.HCA_UpdatePointsDisplay then
+                    _G.HCA_UpdatePointsDisplay(row)
+                end
                 
                 -- Update Sub text - check if we have stored solo status or ineligible status from previous kills/quests
                 -- Only update Sub text for incomplete achievements to preserve completed achievement solo indicators
                 if not row.completed and row.Sub and row.maxLevel and row.maxLevel > 0 then
                     local levelText = LEVEL .. " " .. row.maxLevel
-                    -- Check progress for solo status and ineligible status
-                    local progress = HardcoreAchievements_GetProgress and HardcoreAchievements_GetProgress(rowId)
-                local hasSoloStatus = progress and (progress.soloKill or progress.soloQuest)
-                local hasIneligibleKill = progress and progress.ineligibleKill
-                
-                -- If we have stored pointsAtKill (solo kill/quest), use those points
-                -- pointsAtKill doesn't include self-found bonus, so add it if applicable
-                if progress and progress.pointsAtKill then
-                    finalPoints = tonumber(progress.pointsAtKill) or finalPoints
-                    -- Add self-found bonus if applicable (pointsAtKill doesn't include it)
-                    local isDungeonSet = row._def and row._def.isDungeonSet
-                    -- Reputation achievements SHOULD receive the self-found bonus.
-                    if isSelfFound and not row.isSecretAchievement and not isDungeonSet then
-                        local getBonus = _G.HCA_GetSelfFoundBonus
-                        local bonus = (type(getBonus) == "function") and getBonus(originalPoints) or 0
-                        finalPoints = finalPoints + bonus
+                    -- Check progress for solo status and ineligible status (reuse progress from above)
+                    if not progress then
+                        progress = HardcoreAchievements_GetProgress and HardcoreAchievements_GetProgress(rowId)
                     end
-                    row.points = finalPoints
-                    if row.Points then
-                        row.Points:SetText(tostring(finalPoints))
-                    end
-                end
+                    local hasSoloStatus = progress and (progress.soloKill or progress.soloQuest)
+                    local hasIneligibleKill = progress and progress.ineligibleKill
                 
                 -- Use helper function to set status text
                 if _G.HCA_SetStatusTextOnRow then
@@ -179,8 +174,8 @@ function RefreshAllAchievementPoints()
                     end
                 else
                     -- Fallback if helper not available
-                    local isTBC = GetExpansionLevel() > 0
-                    local allowSoloBonus = isSelfFound or isTBC
+                    local isHardcoreActive = C_GameRules and C_GameRules.IsHardcoreActive and C_GameRules.IsHardcoreActive() or false
+                    local allowSoloBonus = isSelfFound or not isHardcoreActive
                     if hasIneligibleKill then
                         local requiresBoth = row.questTracker and row.killTracker
                         local message = requiresBoth and "|cffff4646Ineligible Kill|r"
@@ -210,30 +205,13 @@ function RefreshAllAchievementPoints()
         HCA_UpdateTotalPoints()
     end
     
-    -- Update multiplier text if it exists
-    if AchievementPanel and AchievementPanel.MultiplierText then
-        local labelText = ""
-        if preset or isSelfFound or isSoloMode then
-            -- Build array of modifiers (preset goes last)
-            local modifiers = {}
-            if isSelfFound and not isSoloMode then
-                table.insert(modifiers, "Self Found")
-            end
-            if isSoloMode and not isSelfFound then
-                table.insert(modifiers, "Solo")
-            end
-            if isSoloMode and isSelfFound then
-                table.insert(modifiers, "Solo Self Found")
-            end
-            if preset then
-                table.insert(modifiers, preset)
-            end
-            
-            labelText = "Point Multiplier (" .. table.concat(modifiers, ", ") .. ")"
-        end
-        
-        AchievementPanel.MultiplierText:SetText(labelText)
-        AchievementPanel.MultiplierText:SetTextColor(0.8, 0.8, 0.8)
+    -- Update multiplier text if it exists (using centralized function)
+    if AchievementPanel and AchievementPanel.MultiplierText and _G.UpdateMultiplierText then
+        _G.UpdateMultiplierText(AchievementPanel.MultiplierText)
+    end
+    -- Update Dashboard multiplier text if it exists
+    if DashboardFrame and DashboardFrame.MultiplierText and _G.UpdateMultiplierText then
+        _G.UpdateMultiplierText(DashboardFrame.MultiplierText, {0.922, 0.871, 0.761})
     end
     
     -- Sync character panel checkbox state if it exists

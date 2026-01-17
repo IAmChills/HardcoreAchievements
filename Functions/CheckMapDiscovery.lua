@@ -38,6 +38,8 @@ local ZoneMapIDs = {
     ["Deadwind Pass"] = 1430,
     ["Eastern Plaguelands"] = 1423,
     ["Ghostlands"] = 1942,
+    ["Durotar"] = 1411,
+    ["Elwynn Forest"] = 1429,
     ["Swamp of Sorrows"] = 1435,
     ["Shadowmoon Valley"] = 1948,
 }
@@ -61,6 +63,12 @@ local LocationMap = {
     ["Ghostlands"] = {
         ["Amani Pass"] = {x = 0.70, y = 0.56},
         ["Thalassian Pass"] = {x = 0.48, y = 0.85},
+    },
+    ["Durotar"] = {
+        ["Orgrimmar"] = {x = 0.45, y = 0.06},
+    },
+    ["Elwynn Forest"] = {
+        ["Stormwind City"] = {x = 0.28, y = 0.42},
     },
     ["Swamp of Sorrows"] = {
         ["Stonard"] = {x = 0.45, y = 0.53},
