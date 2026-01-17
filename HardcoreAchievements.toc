@@ -79,3 +79,6 @@ Utils\CommandHandler.lua
 Utils\AchievementLinks.lua
 Utils\OptionsPanel.lua
 Utils\CharacterInspection.lua
+
+Admin\AdminPanel.lua
+Admin\AdminPanelTest.lua
