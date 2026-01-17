@@ -116,10 +116,10 @@ function HCA_ShowAchievementTooltip(frame, data)
         end
         local pointsText = ""
         if points and points > 0 then
-            pointsText = tostring(points)
+            pointsText = ACHIEVEMENT_POINTS .. ": " .. tostring(points)
         end
         if levelText ~= "" or pointsText ~= "" then
-            GameTooltip:AddDoubleLine(levelText, ACHIEVEMENT_POINTS .. ": " .. pointsText, 1, 1, 1, 0.6, 0.9, 0.6)
+            GameTooltip:AddDoubleLine(levelText, pointsText, 1, 1, 1, 0.6, 0.9, 0.6)
         end
     end
     
@@ -157,9 +157,8 @@ function HCA_ShowAchievementTooltip(frame, data)
     
     -- For achievements without level requirements (secret, profession, or no level), show points below the description
     if showPointsInBody then
-        local pointsText = ""
-        if points and points >= 0 then
-            pointsText = ACHIEVEMENT_POINTS .. ": " .. tostring(points)
+        if points and points > 0 then
+            local pointsText = ACHIEVEMENT_POINTS .. ": " .. tostring(points)
             GameTooltip:AddLine(pointsText, 0.6, 0.9, 0.6)
         end
     end

@@ -19,7 +19,7 @@ local Dungeons = {
   {
     achId = "RFC",
     title = DUNGEON_FLOOR_RAGEFIRE1,
-    tooltip = "Defeat the bosses of |cff0091e6"..DUNGEON_FLOOR_RAGEFIRE1.."|r with every party member at level 14 or lower upon entering the dungeon",
+    tooltip = "Defeat the bosses of |cff008765"..DUNGEON_FLOOR_RAGEFIRE1.."|r with every party member at level 14 or lower upon entering the dungeon",
     icon = 136216,
     level = 14,
     points = 10,
@@ -40,7 +40,7 @@ local Dungeons = {
   {
     achId = "VC",
     title = DUNGEON_FLOOR_THEDEADMINES1,
-    tooltip = "Defeat the bosses of |cff0091e6"..DUNGEON_FLOOR_THEDEADMINES1.."|r with every party member at level 19 or lower upon entering the dungeon",
+    tooltip = "Defeat the bosses of |cff008765"..DUNGEON_FLOOR_THEDEADMINES1.."|r with every party member at level 19 or lower upon entering the dungeon",
     icon = 236409,
     level = 19,
     points = 10,
@@ -62,7 +62,7 @@ local Dungeons = {
   {
     achId = "WC",
     title = DUNGEON_FLOOR_WAILINGCAVERNS1,
-    tooltip = "Defeat the bosses of |cff0091e6"..DUNGEON_FLOOR_WAILINGCAVERNS1.."|r with every party member at level 20 or lower upon entering the dungeon",
+    tooltip = "Defeat the bosses of |cff008765"..DUNGEON_FLOOR_WAILINGCAVERNS1.."|r with every party member at level 20 or lower upon entering the dungeon",
     icon = 236425,
     level = 20,
     points = 10,
@@ -86,7 +86,7 @@ local Dungeons = {
   {
     achId = "SFK",
     title = "Shadowfang Keep",
-    tooltip = "Defeat the bosses of |cff0091e6Shadowfang Keep|r with every party member at level 24 or lower upon entering the dungeon",
+    tooltip = "Defeat the bosses of |cff008765Shadowfang Keep|r with every party member at level 24 or lower upon entering the dungeon",
     icon = 254646,
     level = 24,
     points = 10,
@@ -111,7 +111,7 @@ local Dungeons = {
   {
     achId = "BFD",
     title = "Blackfathom Deeps",
-    tooltip = "Defeat the bosses of |cff0091e6Blackfathom Deeps|r with every party member at level 26 or lower upon entering the dungeon",
+    tooltip = "Defeat the bosses of |cff008765Blackfathom Deeps|r with every party member at level 26 or lower upon entering the dungeon",
     icon = 236403,
     level = 26,
     points = 10,
@@ -135,7 +135,7 @@ local Dungeons = {
   {
     achId = "STOCK",
     title = DUNGEON_FLOOR_THESTOCKADE1,
-    tooltip = "Defeat the bosses of |cff0091e6"..DUNGEON_FLOOR_THESTOCKADE1.."|r with every party member at level 27 or lower upon entering the dungeon",
+    tooltip = "Defeat the bosses of |cff008765"..DUNGEON_FLOOR_THESTOCKADE1.."|r with every party member at level 27 or lower upon entering the dungeon",
     icon = 236404,
     level = 27,
     points = 10,
@@ -157,7 +157,7 @@ local Dungeons = {
   {
     achId = "RFK",
     title = DUNGEON_FLOOR_RAZORFENKRAUL1,
-    tooltip = "Defeat the bosses of |cff0091e6"..DUNGEON_FLOOR_RAZORFENKRAUL1.."|r with every party member at level 31 or lower upon entering the dungeon",
+    tooltip = "Defeat the bosses of |cff008765"..DUNGEON_FLOOR_RAZORFENKRAUL1.."|r with every party member at level 31 or lower upon entering the dungeon",
     icon = 236405,
     level = 31,
     points = 10,
@@ -179,7 +179,7 @@ local Dungeons = {
   {
     achId = "GNOM",
     title = DUNGEON_FLOOR_DUNMOROGH10,
-    tooltip = "Defeat the bosses of |cff0091e6"..DUNGEON_FLOOR_DUNMOROGH10.."|r with every party member at level 32 or lower upon entering the dungeon",
+    tooltip = "Defeat the bosses of |cff008765"..DUNGEON_FLOOR_DUNMOROGH10.."|r with every party member at level 32 or lower upon entering the dungeon",
     icon = 236424,
     level = 32,
     points = 10,
@@ -201,7 +201,7 @@ local Dungeons = {
   --  {
   --   achId = "CurseOfDuskwood",
   --   title = "The Curse of Duskwood",
-  --   tooltip = "Defeat the enemies of |cff0091e6Duskwood|r with every party member at level 35 or lower upon entering the dungeon",
+  --   tooltip = "Defeat the enemies of |cff008765Duskwood|r with every party member at level 35 or lower upon entering the dungeon",
   --   icon = 236757,
   --   level = 35,
   --   points = 10,
@@ -222,7 +222,7 @@ local Dungeons = {
   {
     achId = "SM",
     title = "Scarlet Monastery",
-    tooltip = "Defeat the bosses of |cff0091e6Scarlet Monastery|r with every party member at level 40 or lower upon entering the dungeon",
+    tooltip = "Defeat the bosses of |cff008765Scarlet Monastery|r with every party member at level 40 or lower upon entering the dungeon",
     icon = 133154,
     level = 40,
     points = 10,
@@ -246,7 +246,7 @@ local Dungeons = {
   {
     achId = "RFD",
     title = DUNGEON_FLOOR_RAZORFENDOWNS1,
-    tooltip = "Defeat the bosses of |cff0091e6"..DUNGEON_FLOOR_RAZORFENDOWNS1.."|r with every party member at level 39 or lower upon entering the dungeon",
+    tooltip = "Defeat the bosses of |cff008765"..DUNGEON_FLOOR_RAZORFENDOWNS1.."|r with every party member at level 39 or lower upon entering the dungeon",
     icon = 236400,
     level = 39,
     points = 10,
@@ -268,7 +268,7 @@ local Dungeons = {
   {
     achId = "ULD",
     title = "Uldaman",
-    tooltip = "Defeat the bosses of |cff0091e6Uldaman|r with every party member at level 45 or lower upon entering the dungeon",
+    tooltip = "Defeat the bosses of |cff008765Uldaman|r with every party member at level 45 or lower upon entering the dungeon",
     icon = 236401, --254106 also looks good
     level = 45,
     points = 10,
@@ -292,7 +292,7 @@ local Dungeons = {
   {
     achId = "ZF",
     title = DUNGEON_FLOOR_ZULFARRAK,
-    tooltip = "Defeat the bosses of |cff0091e6"..DUNGEON_FLOOR_ZULFARRAK.."|r with every party member at level 46 or lower upon entering the dungeon",
+    tooltip = "Defeat the bosses of |cff008765"..DUNGEON_FLOOR_ZULFARRAK.."|r with every party member at level 46 or lower upon entering the dungeon",
     icon = 236406,
     level = 46,
     points = 10,
@@ -317,7 +317,7 @@ local Dungeons = {
   {
     achId = "MARA",
     title = "Maraudon",
-    tooltip = "Defeat the bosses of |cff0091e6Maraudon|r with every party member at level 50 or lower upon entering the dungeon",
+    tooltip = "Defeat the bosses of |cff008765Maraudon|r with every party member at level 50 or lower upon entering the dungeon",
     icon = 236432,
     level = 50,
     points = 10,
@@ -341,7 +341,7 @@ local Dungeons = {
   {
     achId = "ST",
     title = DUNGEON_FLOOR_THETEMPLEOFATALHAKKAR1,
-    tooltip = "Defeat the bosses of |cff0091e6"..DUNGEON_FLOOR_THETEMPLEOFATALHAKKAR1.."|r with every party member at level 54 or lower upon entering the dungeon",
+    tooltip = "Defeat the bosses of |cff008765"..DUNGEON_FLOOR_THETEMPLEOFATALHAKKAR1.."|r with every party member at level 54 or lower upon entering the dungeon",
     icon = 236434,
     level = 54,
     points = 10,
@@ -366,7 +366,7 @@ local Dungeons = {
   {
     achId = "BRD",
     title = DUNGEON_FLOOR_BURNINGSTEPPES16,
-    tooltip = "Defeat the bosses of |cff0091e6"..DUNGEON_FLOOR_BURNINGSTEPPES16.."|r with every party member at level 58 or lower upon entering the dungeon",
+    tooltip = "Defeat the bosses of |cff008765"..DUNGEON_FLOOR_BURNINGSTEPPES16.."|r with every party member at level 58 or lower upon entering the dungeon",
     icon = 236410,
     level = 58,
     points = 10,
@@ -398,7 +398,7 @@ local Dungeons = {
   {
     achId = "BRS",
     title = "Lower Blackrock Spire",
-    tooltip = "Defeat the bosses of |cff0091e6Lower Blackrock Spire|r with every party member at level 59 or lower upon entering the dungeon",
+    tooltip = "Defeat the bosses of |cff008765Lower Blackrock Spire|r with every party member at level 59 or lower upon entering the dungeon",
     icon = 236429,
     level = 59,
     points = 10,
@@ -423,7 +423,7 @@ local Dungeons = {
   {
     achId = "STRAT",
     title = "Stratholme",
-    tooltip = "Defeat the bosses of |cff0091e6Stratholme|r",
+    tooltip = "Defeat the bosses of |cff008765Stratholme|r",
     icon = 237511,
     level = 60,
     points = 10,
@@ -458,7 +458,7 @@ local Dungeons = {
   {
     achId = "DM",
     title = "Dire Maul",
-    tooltip = "Defeat the bosses of |cff0091e6Dire Maul|r",
+    tooltip = "Defeat the bosses of |cff008765Dire Maul|r",
     icon = 132340,
     level = 60,
     points = 10,
@@ -492,7 +492,7 @@ local Dungeons = {
   {
     achId = "SCHOLO",
     title = "Scholomance",
-    tooltip = "Defeat the bosses of |cff0091e6Scholomance|r",
+    tooltip = "Defeat the bosses of |cff008765Scholomance|r",
     icon = 135974,
     level = 60,
     points = 10,

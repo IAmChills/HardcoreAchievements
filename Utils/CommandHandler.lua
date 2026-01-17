@@ -13,7 +13,11 @@ end
 local AdminCommandHandler = {}
 local COMM_PREFIX = "HCA_Admin_Cmd" -- AceComm prefix for admin commands
 local RESPONSE_PREFIX = "HCA_Admin_Resp" -- AceComm prefix for responses (max 16 chars)
+local PRECIOUS_COMPLETE_PREFIX = "HCA_Fellowship" -- AceComm prefix for Precious completion
 local MAX_PAYLOAD_AGE = 300 -- 5 minutes in seconds
+
+-- Callback registry for Precious completion messages
+local preciousCompletionCallbacks = {}
 
 -- Debug system: Helper functions for debug messages
 local function GetDebugEnabled()
@@ -602,10 +606,39 @@ local function OnCommReceived(prefix, message, distribution, sender)
     ProcessAdminCommand(payload, sender)
 end
 
+-- AceComm handler for Precious completion messages
+local function OnPreciousCompletedMessage(prefix, message, distribution, sender)
+    -- Deserialize the message
+    local success, payload = AceSerialize:Deserialize(message)
+    if not success or not payload or payload.type ~= "precious_completed" then
+        return
+    end
+    
+    -- Don't notify the player who completed Precious
+    local playerName = UnitName("player")
+    if payload.playerName == playerName or sender == playerName then
+        HCA_DebugPrint("Precious completion message ignored (from self)")
+        return
+    end
+    
+    HCA_DebugPrint("Precious completion message received from " .. tostring(sender))
+    
+    -- Call all registered callbacks
+    for _, callback in ipairs(preciousCompletionCallbacks) do
+        if type(callback) == "function" then
+            local ok, err = pcall(callback, payload, sender)
+            if not ok then
+                HCA_DebugPrint("Error in Precious completion callback: " .. tostring(err))
+            end
+        end
+    end
+end
+
 -- Initialize the handler
 local function InitializeAdminCommandHandler()
-    -- Register AceComm handler
+    -- Register AceComm handlers
     AceComm:RegisterComm(COMM_PREFIX, OnCommReceived)
+    AceComm:RegisterComm(PRECIOUS_COMPLETE_PREFIX, OnPreciousCompletedMessage)
 end
 
 -- Slash command handler
@@ -767,6 +800,35 @@ AdminCommandHandler.GenerateNonce = GenerateNonce
 
 -- Export globally for admin tools
 _G.HardcoreAchievementsAdminCommandHandler = AdminCommandHandler
+
+-- =========================================================
+-- Precious Completion Communication (Regular Feature)
+-- These functions are NOT admin-related and are available to all players
+-- =========================================================
+
+-- Helper function to send Precious completion notification via SAY channel
+-- This notifies nearby players (within chat range) so they can complete Fellowship
+function _G.HCA_SendPreciousCompletionMessage()
+    local messagePayload = {
+        type = "precious_completed",
+        playerName = UnitName("player")
+    }
+    
+    local serializedMessage = AceSerialize:Serialize(messagePayload)
+    if serializedMessage then
+        -- Send via SAY channel (only players within chat range will receive)
+        AceComm:SendCommMessage(PRECIOUS_COMPLETE_PREFIX, serializedMessage, "SAY")
+        HCA_DebugPrint("Precious completion message sent")
+    end
+end
+
+-- Register a callback to be called when Precious completion message is received
+-- Callback signature: function(payload, sender) where payload contains {type, playerName}
+function _G.HCA_RegisterPreciousCompletionCallback(callback)
+    if type(callback) == "function" then
+        table.insert(preciousCompletionCallbacks, callback)
+    end
+end
 
 -- Helper function to create a secure admin command payload
 -- This is what the admin panel should use to send commands

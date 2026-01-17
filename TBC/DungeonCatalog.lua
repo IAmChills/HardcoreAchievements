@@ -19,7 +19,7 @@ local Dungeons = {
   {
     achId = "RFC",
     title = DUNGEON_FLOOR_RAGEFIRE1,
-    tooltip = "Defeat the bosses of |cff0091e6"..DUNGEON_FLOOR_RAGEFIRE1.."|r with every party member at level 14 or lower upon entering the dungeon",
+    tooltip = "Defeat the bosses of |cff008765"..DUNGEON_FLOOR_RAGEFIRE1.."|r with every party member at level 14 or lower upon entering the dungeon",
     icon = 136216,
     level = 14,
     points = 10,
@@ -40,7 +40,7 @@ local Dungeons = {
   {
     achId = "VC",
     title = DUNGEON_FLOOR_THEDEADMINES1,
-    tooltip = "Defeat the bosses of |cff0091e6"..DUNGEON_FLOOR_THEDEADMINES1.."|r with every party member at level 18 or lower upon entering the dungeon",
+    tooltip = "Defeat the bosses of |cff008765"..DUNGEON_FLOOR_THEDEADMINES1.."|r with every party member at level 18 or lower upon entering the dungeon",
     icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_boss_edwinvancleef.png", -- 236409
     level = 18,
     points = 10,
@@ -62,7 +62,7 @@ local Dungeons = {
   {
     achId = "WC",
     title = DUNGEON_FLOOR_WAILINGCAVERNS1,
-    tooltip = "Defeat the bosses of |cff0091e6"..DUNGEON_FLOOR_WAILINGCAVERNS1.."|r with every party member at level 18 or lower upon entering the dungeon",
+    tooltip = "Defeat the bosses of |cff008765"..DUNGEON_FLOOR_WAILINGCAVERNS1.."|r with every party member at level 18 or lower upon entering the dungeon",
     icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_boss_mutanus_the_devourer.png", -- 236425
     level = 18,
     points = 10,
@@ -86,7 +86,7 @@ local Dungeons = {
   {
     achId = "SFK",
     title = "Shadowfang Keep",
-    tooltip = "Defeat the bosses of |cff0091e6Shadowfang Keep|r with every party member at level 19 or lower upon entering the dungeon",
+    tooltip = "Defeat the bosses of |cff008765Shadowfang Keep|r with every party member at level 19 or lower upon entering the dungeon",
     icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_boss_archmagearugal.png", -- 254646
     level = 19,
     points = 10,
@@ -111,7 +111,7 @@ local Dungeons = {
   {
     achId = "BFD",
     title = "Blackfathom Deeps",
-    tooltip = "Defeat the bosses of |cff0091e6Blackfathom Deeps|r with every party member at level 22 or lower upon entering the dungeon",
+    tooltip = "Defeat the bosses of |cff008765Blackfathom Deeps|r with every party member at level 22 or lower upon entering the dungeon",
     icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_boss_bazil_akumai.png", -- 236403
     level = 22,
     points = 10,
@@ -135,7 +135,7 @@ local Dungeons = {
   {
     achId = "STOCK",
     title = DUNGEON_FLOOR_THESTOCKADE1,
-    tooltip = "Defeat the bosses of |cff0091e6"..DUNGEON_FLOOR_THESTOCKADE1.."|r with every party member at level 23 or lower upon entering the dungeon",
+    tooltip = "Defeat the bosses of |cff008765"..DUNGEON_FLOOR_THESTOCKADE1.."|r with every party member at level 23 or lower upon entering the dungeon",
     icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_boss_bazil_thredd.png", -- 236404
     level = 23,
     points = 10,
@@ -157,7 +157,7 @@ local Dungeons = {
   {
     achId = "RFK",
     title = DUNGEON_FLOOR_RAZORFENKRAUL1,
-    tooltip = "Defeat the bosses of |cff0091e6"..DUNGEON_FLOOR_RAZORFENKRAUL1.."|r with every party member at level 25 or lower upon entering the dungeon",
+    tooltip = "Defeat the bosses of |cff008765"..DUNGEON_FLOOR_RAZORFENKRAUL1.."|r with every party member at level 25 or lower upon entering the dungeon",
     icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_boss_charlgarazorflank.png", -- 236405
     level = 25,
     points = 10,
@@ -179,7 +179,7 @@ local Dungeons = {
   {
     achId = "GNOM",
     title = DUNGEON_FLOOR_DUNMOROGH10,
-    tooltip = "Defeat the bosses of |cff0091e6"..DUNGEON_FLOOR_DUNMOROGH10.."|r with every party member at level 26 or lower upon entering the dungeon",
+    tooltip = "Defeat the bosses of |cff008765"..DUNGEON_FLOOR_DUNMOROGH10.."|r with every party member at level 26 or lower upon entering the dungeon",
     icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_Boss_Mekgineer_Thermaplugg.png", -- 236424
     level = 26,
     points = 10,
@@ -201,7 +201,7 @@ local Dungeons = {
   --  {
   --   achId = "CurseOfDuskwood",
   --   title = "The Curse of Duskwood",
-  --   tooltip = "Defeat the enemies of |cff0091e6Duskwood|r with every party member at level 35 or lower upon entering the dungeon",
+  --   tooltip = "Defeat the enemies of |cff008765Duskwood|r with every party member at level 35 or lower upon entering the dungeon",
   --   icon = 236757,
   --   level = 35,
   --   points = 10,
@@ -222,7 +222,7 @@ local Dungeons = {
   {
     achId = "SM",
     title = "Scarlet Monastery",
-    tooltip = "Defeat the bosses of |cff0091e6Scarlet Monastery|r with every party member at level 38 or lower upon entering the dungeon",
+    tooltip = "Defeat the bosses of |cff008765Scarlet Monastery|r with every party member at level 38 or lower upon entering the dungeon",
     icon = 133154,
     level = 38,
     points = 10,
@@ -246,7 +246,7 @@ local Dungeons = {
   {
     achId = "RFD",
     title = DUNGEON_FLOOR_RAZORFENDOWNS1,
-    tooltip = "Defeat the bosses of |cff0091e6"..DUNGEON_FLOOR_RAZORFENDOWNS1.."|r with every party member at level 35 or lower upon entering the dungeon",
+    tooltip = "Defeat the bosses of |cff008765"..DUNGEON_FLOOR_RAZORFENDOWNS1.."|r with every party member at level 35 or lower upon entering the dungeon",
     icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_boss_amnennar_the_coldbringer.png", -- 236400
     level = 35,
     points = 10,
@@ -268,7 +268,7 @@ local Dungeons = {
   {
     achId = "ULD",
     title = "Uldaman",
-    tooltip = "Defeat the bosses of |cff0091e6Uldaman|r with every party member at level 38 or lower upon entering the dungeon",
+    tooltip = "Defeat the bosses of |cff008765Uldaman|r with every party member at level 38 or lower upon entering the dungeon",
     icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_boss_archaedas.png", -- 236401
     level = 38,
     points = 10,
@@ -292,7 +292,7 @@ local Dungeons = {
   {
     achId = "ZF",
     title = DUNGEON_FLOOR_ZULFARRAK,
-    tooltip = "Defeat the bosses of |cff0091e6"..DUNGEON_FLOOR_ZULFARRAK.."|r with every party member at level 44 or lower upon entering the dungeon",
+    tooltip = "Defeat the bosses of |cff008765"..DUNGEON_FLOOR_ZULFARRAK.."|r with every party member at level 44 or lower upon entering the dungeon",
     icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_boss_chiefukorzsandscalp.png", -- 236406
     level = 44,
     points = 10,
@@ -317,7 +317,7 @@ local Dungeons = {
   {
     achId = "MARA",
     title = "Maraudon",
-    tooltip = "Defeat the bosses of |cff0091e6Maraudon|r with every party member at level 46 or lower upon entering the dungeon",
+    tooltip = "Defeat the bosses of |cff008765Maraudon|r with every party member at level 46 or lower upon entering the dungeon",
     icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_boss_princesstheradras.png", -- 236432
     level = 46,
     points = 10,
@@ -341,7 +341,7 @@ local Dungeons = {
   {
     achId = "ST",
     title = DUNGEON_FLOOR_THETEMPLEOFATALHAKKAR1,
-    tooltip = "Defeat the bosses of |cff0091e6"..DUNGEON_FLOOR_THETEMPLEOFATALHAKKAR1.."|r with every party member at level 48 or lower upon entering the dungeon",
+    tooltip = "Defeat the bosses of |cff008765"..DUNGEON_FLOOR_THETEMPLEOFATALHAKKAR1.."|r with every party member at level 48 or lower upon entering the dungeon",
     icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_boss_shadeoferanikus.png", -- 236434
     level = 48,
     points = 10,
@@ -366,7 +366,7 @@ local Dungeons = {
   {
     achId = "BRD",
     title = DUNGEON_FLOOR_BURNINGSTEPPES16,
-    tooltip = "Defeat the bosses of |cff0091e6"..DUNGEON_FLOOR_BURNINGSTEPPES16.."|r with every party member at level 54 or lower upon entering the dungeon",
+    tooltip = "Defeat the bosses of |cff008765"..DUNGEON_FLOOR_BURNINGSTEPPES16.."|r with every party member at level 54 or lower upon entering the dungeon",
     icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_boss_emperordagranthaurissan.png", -- 236410
     level = 54,
     points = 10,
@@ -398,7 +398,7 @@ local Dungeons = {
   {
     achId = "BRS",
     title = "Lower Blackrock Spire",
-    tooltip = "Defeat the bosses of |cff0091e6Lower Blackrock Spire|r with every party member at level 59 or lower upon entering the dungeon",
+    tooltip = "Defeat the bosses of |cff008765Lower Blackrock Spire|r with every party member at level 59 or lower upon entering the dungeon",
     icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_boss_overlord_wyrmthalak.png", -- 236429
     level = 59,
     points = 10,
@@ -423,7 +423,7 @@ local Dungeons = {
   {
     achId = "STRAT",
     title = "Stratholme",
-    tooltip = "Defeat the bosses of |cff0091e6Stratholme|r with every party member at level 60 or lower upon entering the dungeon",
+    tooltip = "Defeat the bosses of |cff008765Stratholme|r with every party member at level 60 or lower upon entering the dungeon",
     icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Spell_deathknight_armyofthedead.png", -- 237511
     level = 60,
     points = 10,
@@ -458,7 +458,7 @@ local Dungeons = {
   {
     achId = "DM",
     title = "Dire Maul",
-    tooltip = "Defeat the bosses of |cff0091e6Dire Maul|r with every party member at level 60 or lower upon entering the dungeon",
+    tooltip = "Defeat the bosses of |cff008765Dire Maul|r with every party member at level 60 or lower upon entering the dungeon",
     icon = 132340,
     level = 60,
     points = 10,
@@ -492,7 +492,7 @@ local Dungeons = {
   {
     achId = "SCHOLO",
     title = "Scholomance",
-    tooltip = "Defeat the bosses of |cff0091e6Scholomance|r with every party member at level 60 or lower upon entering the dungeon",
+    tooltip = "Defeat the bosses of |cff008765Scholomance|r with every party member at level 60 or lower upon entering the dungeon",
     icon = 135974,
     level = 60,
     points = 10,
@@ -521,7 +521,7 @@ local Dungeons = {
   {
     achId = "RAMPARTS",
     title = "Hellfire Ramparts",
-    tooltip = "Defeat the bosses of |cff0091e6Hellfire Ramparts|r with every party member at level 60 or lower upon entering the dungeon",
+    tooltip = "Defeat the bosses of |cff008765Hellfire Ramparts|r with every party member at level 60 or lower upon entering the dungeon",
     icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_boss_omartheunscarred_01.png", -- 236427
     level = 60,
     points = 10,
@@ -541,7 +541,7 @@ local Dungeons = {
   {
     achId = "BLOODFURNACE",
     title = "Blood Furnace",
-    tooltip = "Defeat the bosses of |cff0091e6Blood Furnace|r with every party member at level 61 or lower upon entering the dungeon",
+    tooltip = "Defeat the bosses of |cff008765Blood Furnace|r with every party member at level 61 or lower upon entering the dungeon",
     icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_boss_kelidanthebreaker.png", -- 236417
     level = 61,
     points = 10,
@@ -560,7 +560,7 @@ local Dungeons = {
   {
     achId = "SLAVEPENS",
     title = "The Slave Pens",
-    tooltip = "Defeat the bosses of |cff0091e6The Slave Pens|r with every party member at level 62 or lower upon entering the dungeon",
+    tooltip = "Defeat the bosses of |cff008765The Slave Pens|r with every party member at level 62 or lower upon entering the dungeon",
     icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_boss_quagmirran.png", -- 236433
     level = 62,
     points = 10,
@@ -579,7 +579,7 @@ local Dungeons = {
   {
     achId = "UNDERBOG",
     title = "The Underbog",
-    tooltip = "Defeat the bosses of |cff0091e6The Underbog|r with every party member at level 63 or lower upon entering the dungeon",
+    tooltip = "Defeat the bosses of |cff008765The Underbog|r with every party member at level 63 or lower upon entering the dungeon",
     icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_boss_theblackstalker.png", -- 254502
     level = 63,
     points = 10,
@@ -599,7 +599,7 @@ local Dungeons = {
   {
     achId = "MANATOMBS",
     title = "Mana-Tombs",
-    tooltip = "Defeat the bosses of |cff0091e6Mana-Tombs|r with every party member at level 64 or lower upon entering the dungeon",
+    tooltip = "Defeat the bosses of |cff008765Mana-Tombs|r with every party member at level 64 or lower upon entering the dungeon",
     icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_boss_nexus_prince_shaffar.png", -- 236426
     level = 64,
     points = 10,
@@ -618,7 +618,7 @@ local Dungeons = {
   {
     achId = "AC",
     title = "Auchenai Crypts",
-    tooltip = "Defeat the bosses of |cff0091e6Auchenai Crypts|r with every party member at level 65 or lower upon entering the dungeon",
+    tooltip = "Defeat the bosses of |cff008765Auchenai Crypts|r with every party member at level 65 or lower upon entering the dungeon",
     icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_boss_exarch_maladaar.png", -- 236411
     level = 65,
     points = 10,
@@ -636,7 +636,7 @@ local Dungeons = {
   {
     achId = "OLDHILLSBRAD",
     title = "Old Hillsbrad Foothills",
-    tooltip = "Defeat the bosses of |cff0091e6Old Hillsbrad Foothills|r with every party member at level 66 or lower upon entering the dungeon",
+    tooltip = "Defeat the bosses of |cff008765Old Hillsbrad Foothills|r with every party member at level 66 or lower upon entering the dungeon",
     icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_boss_epochhunter.png", -- 254647
     level = 66,
     points = 10,
@@ -655,7 +655,7 @@ local Dungeons = {
   {
     achId = "SETHEKK",
     title = "Sethekk Halls",
-    tooltip = "Defeat the bosses of |cff0091e6Sethekk Halls|r",
+    tooltip = "Defeat the bosses of |cff008765Sethekk Halls|r",
     icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_boss_talonkingikiss.png", -- 236435
     level = 70,
     points = 10,
@@ -673,7 +673,7 @@ local Dungeons = {
   {
     achId = "BLACKMORASS",
     title = "The Black Morass",
-    tooltip = "Defeat the bosses of |cff0091e6The Black Morass|r",
+    tooltip = "Defeat the bosses of |cff008765The Black Morass|r",
     icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_boss_aeonus_01.png", -- 254086
     level = 70,
     points = 10,
@@ -692,7 +692,7 @@ local Dungeons = {
   {
     achId = "MECHANAR",
     title = "The Mechanar",
-    tooltip = "Defeat the bosses of |cff0091e6The Mechanar|r",
+    tooltip = "Defeat the bosses of |cff008765The Mechanar|r",
     icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_boss_pathaleonthecalculator.png", -- 236430
     level = 70,
     points = 10,
@@ -711,7 +711,7 @@ local Dungeons = {
   {
     achId = "SHATTEREDHALLS",
     title = "The Shattered Halls",
-    tooltip = "Defeat the bosses of |cff0091e6The Shattered Halls|r",
+    tooltip = "Defeat the bosses of |cff008765The Shattered Halls|r",
     icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_boss_kargathbladefist_01.png", -- 254093
     level = 70,
     points = 10,
@@ -730,7 +730,7 @@ local Dungeons = {
   {
     achId = "SLABS",
     title = "Shadow Labyrinth",
-    tooltip = "Defeat the bosses of |cff0091e6Shadow Labyrinth|r",
+    tooltip = "Defeat the bosses of |cff008765Shadow Labyrinth|r",
     icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_boss_murmur.png", -- 254501
     level = 70,
     points = 10,
@@ -750,7 +750,7 @@ local Dungeons = {
   {
     achId = "STEAMVAULT",
     title = "The Steamvault",
-    tooltip = "Defeat the bosses of |cff0091e6The Steamvault|r",
+    tooltip = "Defeat the bosses of |cff008765The Steamvault|r",
     icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_boss_warlord_kalithresh.png", -- 236436
     level = 70,
     points = 10,
@@ -769,7 +769,7 @@ local Dungeons = {
   {
     achId = "BOTANICA",
     title = "The Botanica",
-    tooltip = "Defeat the bosses of |cff0091e6The Botanica|r",
+    tooltip = "Defeat the bosses of |cff008765The Botanica|r",
     icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_boss_warpsplinter.png", -- 236437
     level = 70,
     points = 10,
@@ -790,7 +790,7 @@ local Dungeons = {
   {
     achId = "MT",
     title = "Magisters' Terrace",
-    tooltip = "Defeat the bosses of |cff0091e6Magisters' Terrace|r",
+    tooltip = "Defeat the bosses of |cff008765Magisters' Terrace|r",
     icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_Boss_Kael'thasSunstrider_01.png", -- 250117
     level = 70,
     points = 10,
@@ -810,7 +810,7 @@ local Dungeons = {
   {
     achId = "ARCATRAZ",
     title = "The Arcatraz",
-    tooltip = "Defeat the bosses of |cff0091e6The Arcatraz|r",
+    tooltip = "Defeat the bosses of |cff008765The Arcatraz|r",
     icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_boss_harbinger_skyriss.png", -- 236414
     level = 70,
     points = 10,

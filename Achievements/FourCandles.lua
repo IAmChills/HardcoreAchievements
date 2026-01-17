@@ -3,7 +3,7 @@ local MAX_LEVEL = 30
 
 local achId = "FourCandle"
 local title = "Four Candles"
-local tooltip = "Light all four candles at once within |cff0091e6Blackfathom Deeps|r and survive before any party member reaches level 31"
+local tooltip = "Light all four candles at once within |cff008765Blackfathom Deeps|r and survive before any party member reaches level 31"
 local icon = 133750
 local level = MAX_LEVEL
 local points = 25

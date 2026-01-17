@@ -695,35 +695,53 @@ local function UpdatePointsDisplay(row)
     end
     
     -- Show/hide variation overlay based on achievement state
-    if row.PointsFrame.VariationOverlay and row._def and row._def.isVariation then
-        if row.completed then
-            -- Completed: use gold texture
-            row.PointsFrame.VariationOverlay:SetTexture("Interface\\AddOns\\HardcoreAchievements\\Images\\dragon_gold.png")
-            row.PointsFrame.VariationOverlay:Show()
-        elseif IsRowOutleveled(row) then
-            -- Failed/overleveled: use failed texture
-            row.PointsFrame.VariationOverlay:SetTexture("Interface\\AddOns\\HardcoreAchievements\\Images\\dragon_failed.png")
-            row.PointsFrame.VariationOverlay:Show()
+    if row.PointsFrame.VariationOverlay and row._def then
+        if row._def.isVariation or row._def.isHeroicDungeon then
+            if row.completed then
+                -- Completed: use gold texture
+                row.PointsFrame.VariationOverlay:SetTexture("Interface\\AddOns\\HardcoreAchievements\\Images\\dragon_gold.png")
+                row.PointsFrame.VariationOverlay:Show()
+            elseif IsRowOutleveled(row) then
+                -- Failed/overleveled: use failed texture
+                row.PointsFrame.VariationOverlay:SetTexture("Interface\\AddOns\\HardcoreAchievements\\Images\\dragon_failed.png")
+                row.PointsFrame.VariationOverlay:Show()
+            else
+                -- Available (not completed, not failed): use disabled texture
+                row.PointsFrame.VariationOverlay:SetTexture("Interface\\AddOns\\HardcoreAchievements\\Images\\dragon_disabled.png")
+                row.PointsFrame.VariationOverlay:Show()
+            end
         else
-            -- Available (not completed, not failed): use disabled texture
-            row.PointsFrame.VariationOverlay:SetTexture("Interface\\AddOns\\HardcoreAchievements\\Images\\dragon_disabled.png")
-            row.PointsFrame.VariationOverlay:Show()
+            -- No variation or heroic: hide overlay
+            row.PointsFrame.VariationOverlay:Hide()
         end
-    elseif row.PointsFrame.VariationOverlay then
-        row.PointsFrame.VariationOverlay:Hide()
     end
     
     if row.completed then
-        -- Completed: hide points text (make transparent), show green checkmark
+        -- Completed: hide points text (make transparent), show green checkmark (unless 0 points)
         if row.Points then
             row.Points:SetAlpha(0) -- Transparent but still exists for calculations
         end
-        if row.NoPointsIcon then
-            row.NoPointsIcon:Hide()
-        end
-        if row.PointsFrame.Checkmark then
-            row.PointsFrame.Checkmark:SetTexture("Interface\\AddOns\\HardcoreAchievements\\Images\\ReadyCheck-Ready.png")
-            row.PointsFrame.Checkmark:Show()
+        local p = tonumber(row.points) or 0
+        if p == 0 then
+            -- 0-point achievements: show shield icon, hide checkmark
+            if row.NoPointsIcon then
+                if row.NoPointsIcon.SetDesaturated then
+                    row.NoPointsIcon:SetDesaturated(false)
+                end
+                row.NoPointsIcon:Show()
+            end
+            if row.PointsFrame.Checkmark then
+                row.PointsFrame.Checkmark:Hide()
+            end
+        else
+            -- Non-zero points: show checkmark, hide shield icon
+            if row.NoPointsIcon then
+                row.NoPointsIcon:Hide()
+            end
+            if row.PointsFrame.Checkmark then
+                row.PointsFrame.Checkmark:SetTexture("Interface\\AddOns\\HardcoreAchievements\\Images\\ReadyCheck-Ready.png")
+                row.PointsFrame.Checkmark:Show()
+            end
         end
         -- Hide icon overlay for completed achievements (they show green checkmark in points circle)
         if row.IconOverlay then
@@ -738,16 +756,31 @@ local function UpdatePointsDisplay(row)
             row.Title:SetTextColor(1, 0.82, 0) -- Yellow (default GameFontNormal)
         end
     elseif IsRowOutleveled(row) then
-        -- Failed: hide points text (make transparent), show red X checkmark
+        -- Failed: hide points text (make transparent), show red X checkmark (unless 0 points)
         if row.Points then
             row.Points:SetAlpha(0) -- Transparent but still exists for calculations
         end
-        if row.NoPointsIcon then
-            row.NoPointsIcon:Hide()
-        end
-        if row.PointsFrame.Checkmark then
-            row.PointsFrame.Checkmark:SetTexture("Interface\\AddOns\\HardcoreAchievements\\Images\\ReadyCheck-NotReady.png")
-            row.PointsFrame.Checkmark:Show()
+        local p = tonumber(row.points) or 0
+        if p == 0 then
+            -- 0-point achievements: show shield icon, hide X checkmark
+            if row.NoPointsIcon then
+                if row.NoPointsIcon.SetDesaturated then
+                    row.NoPointsIcon:SetDesaturated(true)
+                end
+                row.NoPointsIcon:Show()
+            end
+            if row.PointsFrame.Checkmark then
+                row.PointsFrame.Checkmark:Hide()
+            end
+        else
+            -- Non-zero points: show X checkmark, hide shield icon
+            if row.NoPointsIcon then
+                row.NoPointsIcon:Hide()
+            end
+            if row.PointsFrame.Checkmark then
+                row.PointsFrame.Checkmark:SetTexture("Interface\\AddOns\\HardcoreAchievements\\Images\\ReadyCheck-NotReady.png")
+                row.PointsFrame.Checkmark:Show()
+            end
         end
         -- Show red X overlay on icon
         if row.IconOverlay then
@@ -855,10 +888,8 @@ local function ApplyOutleveledStyle(row)
             if isOutleveled then
                 local failedAt = GetFailureTimestamp(achId) or EnsureFailureTimestamp(achId) or time()
                 row.TS:SetText(FormatTimestamp(failedAt))
-                row.TS:SetTextColor(0.957, 0.263, 0.212)
             else
                 row.TS:SetText("")
-                row.TS:SetTextColor(1, 1, 1)
             end
         end
     end
@@ -968,7 +999,8 @@ function HCA_MarkRowCompleted(row, cdbParam)
                 wasSolo = wasSolo,
                 completedCount = completedCount,
                 totalCount = totalCount,
-                totalPoints = totalPoints
+                totalPoints = totalPoints,
+                playerGUID = UnitGUID("player")
             }
             _G.HardcoreAchievements_Hooks:FireEvent("OnAchievement", achievementData)
         end
@@ -2489,9 +2521,9 @@ end)
 
 -- Use FilterDropdown for checkbox filtering logic
 local FilterDropdown = _G.FilterDropdown
-local function ShouldShowByCheckboxFilter(def, isCompleted, currentFilter, checkboxIndex, variationType)
+local function ShouldShowByCheckboxFilter(def, isCompleted, checkboxIndex, variationType)
     if FilterDropdown and FilterDropdown.ShouldShowByCheckboxFilter then
-        return FilterDropdown.ShouldShowByCheckboxFilter(def, isCompleted, currentFilter, checkboxIndex, variationType)
+        return FilterDropdown.ShouldShowByCheckboxFilter(def, isCompleted, checkboxIndex, variationType)
     end
     return true -- Fallback to showing if FilterDropdown not available
 end
@@ -2500,19 +2532,22 @@ end
 local function ApplyFilter()
     if not AchievementPanel or not AchievementPanel.achievements then return end
     
-    local currentFilter = FilterDropdown:GetCurrentFilter(AchievementPanel.filterDropdown)
+    -- Get status filter states (completed, available, failed) - all default to true
+    local statusFilters = FilterDropdown:GetStatusFilterStatesFromDropdown(AchievementPanel.filterDropdown)
+    local showCompleted = statusFilters[1] ~= false
+    local showAvailable = statusFilters[2] ~= false
+    local showFailed = statusFilters[3] ~= false
     
     for _, row in ipairs(AchievementPanel.achievements) do
         local shouldShow = false
         
-        if currentFilter == "all" then
+        local isCompleted = row.completed == true
+        local isFailed = IsRowOutleveled(row)
+        local isAvailable = not isCompleted and not isFailed
+        
+        -- Show based on status filter checkboxes
+        if (isCompleted and showCompleted) or (isAvailable and showAvailable) or (isFailed and showFailed) then
             shouldShow = true
-        elseif currentFilter == "completed" then
-            shouldShow = row.completed == true
-        elseif currentFilter == "not_completed" then
-            shouldShow = row.completed ~= true and not IsRowOutleveled(row)
-        elseif currentFilter == "failed" then
-            shouldShow = IsRowOutleveled(row)
         end
         
         -- Force-hide rows designated as hidden until completion
@@ -2528,64 +2563,64 @@ local function ApplyFilter()
             local isCompleted = row.completed == true
             local def = row._def
             
-            if def.isVariation then
-                -- Variations: check based on variation type (Solo=10, Duo=11, Trio=12)
-                if not ShouldShowByCheckboxFilter(def, isCompleted, currentFilter, nil, def.variationType) then
-                    shouldShow = false
-                end
-            elseif def.isReputation then
-                -- Reputations: check index 7
-                if not ShouldShowByCheckboxFilter(def, isCompleted, currentFilter, 7, nil) then
-                    shouldShow = false
-                end
-            elseif def.isExploration then
-                -- Exploration: check index 8
-                if not ShouldShowByCheckboxFilter(def, isCompleted, currentFilter, 8, nil) then
-                    shouldShow = false
-                end
-            elseif def.isDungeonSet then
-                -- Dungeon Sets: check index 9
-                if not ShouldShowByCheckboxFilter(def, isCompleted, currentFilter, 9, nil) then
-                    shouldShow = false
-                end
-            elseif def.isRaid then
-                -- Raids: check index 4
-                if not ShouldShowByCheckboxFilter(def, isCompleted, currentFilter, 4, nil) then
-                    shouldShow = false
-                end
-            elseif def.isHeroicDungeon then
-                -- Heroic Dungeons: check index 3
-                if not ShouldShowByCheckboxFilter(def, isCompleted, currentFilter, 3, nil) then
-                    shouldShow = false
-                end
-            elseif def.isRidiculous then
-                -- Ridiculous: check index 13
-                if not ShouldShowByCheckboxFilter(def, isCompleted, currentFilter, 13, nil) then
-                    shouldShow = false
-                end
-            elseif def.isSecret then
-                -- Secret: check index 14
-                if not ShouldShowByCheckboxFilter(def, isCompleted, currentFilter, 14, nil) then
-                    shouldShow = false
-                end
-            elseif def.isQuest then
+            if def.isQuest then
                 -- Quest (Catalog non-secret): check index 1
-                if not ShouldShowByCheckboxFilter(def, isCompleted, currentFilter, 1, nil) then
+                if not ShouldShowByCheckboxFilter(def, isCompleted, 1, nil) then
                     shouldShow = false
                 end
             elseif def.isDungeon then
                 -- Dungeon (DungeonCatalog): check index 2
-                if not ShouldShowByCheckboxFilter(def, isCompleted, currentFilter, 2, nil) then
+                if not ShouldShowByCheckboxFilter(def, isCompleted, 2, nil) then
+                    shouldShow = false
+                end
+            elseif def.isHeroicDungeon then
+                -- Heroic Dungeons: check index 3
+                if not ShouldShowByCheckboxFilter(def, isCompleted, 3, nil) then
+                    shouldShow = false
+                end
+            elseif def.isRaid then
+                -- Raids: check index 4
+                if not ShouldShowByCheckboxFilter(def, isCompleted, 4, nil) then
                     shouldShow = false
                 end
             elseif def.isProfession then
                 -- Professions: check index 5
-                if not ShouldShowByCheckboxFilter(def, isCompleted, currentFilter, 5, nil) then
+                if not ShouldShowByCheckboxFilter(def, isCompleted, 5, nil) then
                     shouldShow = false
                 end
             elseif def.isMeta then
                 -- Meta: check index 6
-                if not ShouldShowByCheckboxFilter(def, isCompleted, currentFilter, 6, nil) then
+                if not ShouldShowByCheckboxFilter(def, isCompleted, 6, nil) then
+                    shouldShow = false
+                end
+            elseif def.isReputation then
+                -- Reputations: check index 7
+                if not ShouldShowByCheckboxFilter(def, isCompleted, 7, nil) then
+                    shouldShow = false
+                end
+            elseif def.isExploration then
+                -- Exploration: check index 8
+                if not ShouldShowByCheckboxFilter(def, isCompleted, 8, nil) then
+                    shouldShow = false
+                end
+            elseif def.isDungeonSet then
+                -- Dungeon Sets: check index 9
+                if not ShouldShowByCheckboxFilter(def, isCompleted, 9, nil) then
+                    shouldShow = false
+                end
+            elseif def.isVariation then
+                -- Variations: check based on variation type (Solo=10, Duo=11, Trio=12)
+                if not ShouldShowByCheckboxFilter(def, isCompleted, nil, def.variationType) then
+                    shouldShow = false
+                end
+            elseif def.isRidiculous then
+                -- Ridiculous: check index 13
+                if not ShouldShowByCheckboxFilter(def, isCompleted, 13, nil) then
+                    shouldShow = false
+                end
+            elseif def.isSecret then
+                -- Secret: check index 14
+                if not ShouldShowByCheckboxFilter(def, isCompleted, 14, nil) then
                     shouldShow = false
                 end
             else
@@ -2624,6 +2659,11 @@ AchievementPanel.filterDropdown = FilterDropdown:CreateAndInitializeDropdown(
         onCheckboxChange = function(checkboxIndex, newState)
             -- Checkbox state is automatically saved to database in FilterDropdown
             -- Re-apply filter to show/hide achievements when checkbox changes
+            ApplyFilter()
+        end,
+        onStatusFilterChange = function(statusIndex, newState)
+            -- Status filter state is automatically saved to database in FilterDropdown
+            -- Re-apply filter to show/hide achievements when status filter changes
             ApplyFilter()
         end
     }
@@ -2947,11 +2987,11 @@ function CreateAchievementRow(parent, achId, title, tooltip, icon, level, points
 
     -- timestamp
     row.TS = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    row.TS:SetPoint("RIGHT", row.PointsFrame, "LEFT", -10, 0)
+    row.TS:SetPoint("RIGHT", row.PointsFrame, "LEFT", -5, -10)
     row.TS:SetJustifyH("RIGHT")
     row.TS:SetJustifyV("TOP")
     row.TS:SetText("")
-    row.TS:SetTextColor(1, 1, 1)
+    row.TS:SetTextColor(1, 1, 1, 0.5)
 
     -- background + border textures (clipped to BorderClip frame)
     row.Background = AchievementPanel.BorderClip:CreateTexture(nil, "BACKGROUND")
@@ -3435,6 +3475,7 @@ do
         AchievementPanel._achEvt:RegisterEvent("ITEM_UNLOCKED")
         AchievementPanel._achEvt:RegisterEvent("BAG_UPDATE_DELAYED")
         AchievementPanel._achEvt:RegisterEvent("CHAT_MSG_TEXT_EMOTE")
+        AchievementPanel._achEvt:RegisterEvent("GOSSIP_SHOW")
         AchievementPanel._achEvt:RegisterEvent("PLAYER_LEVEL_CHANGED")
         AchievementPanel._achEvt:RegisterEvent("CHAT_MSG_LOOT")
         AchievementPanel._achEvt:RegisterEvent("PLAYER_DEAD")
@@ -3866,6 +3907,11 @@ do
                             if row and (not row.completed) and id == "Precious" then
                                 HCA_MarkRowCompleted(row)
                                 HCA_AchToast_Show(row.Icon:GetTexture(), row.Title:GetText(), row.points, row)
+                                
+                                -- Send SAY channel message to notify nearby players for Fellowship achievement
+                                if _G.HCA_SendPreciousCompletionMessage then
+                                    _G.HCA_SendPreciousCompletionMessage()
+                                end
                                 break
                             end
                         end
@@ -3892,6 +3938,23 @@ do
                         if ok and shouldComplete == true then
                             HCA_MarkRowCompleted(row)
                             HCA_AchToast_Show(row.Icon:GetTexture(), row.Title:GetText(), row.points, row)
+                        end
+                    end
+                end
+            elseif event == "GOSSIP_SHOW" then
+                -- Check for "MessageToKarazhan" achievement when speaking to Archmage Leryda
+                local npcName = UnitName("npc")
+                local playerLevel = UnitLevel("player")
+                if npcName == "Archmage Leryda" and playerLevel <= 60 then
+                    for _, row in ipairs(AchievementPanel.achievements) do
+                        local id = row and (row.id or row.achId)
+                        if row and (not row.completed) and id == "MessageToKarazhan" then
+                            -- Check if the zone is fully discovered and speaking to the correct NPC
+                            if CheckZoneDiscovery and CheckZoneDiscovery(1430) then
+                                HCA_MarkRowCompleted(row)
+                                HCA_AchToast_Show(row.Icon:GetTexture(), row.Title:GetText(), row.points, row)
+                                break
+                            end
                         end
                     end
                 end
@@ -4357,6 +4420,7 @@ do
             end
         elseif event == "PLAYER_LOGIN" then
             playerLoggedIn = true
+            print("|cff008066[Hardcore Achievements]|r |cffffd100Loading achievements...|r")
             
             -- If registration already complete, trigger heavy operations
             if registrationComplete then

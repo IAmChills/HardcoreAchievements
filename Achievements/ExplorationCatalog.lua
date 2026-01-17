@@ -3,7 +3,7 @@ local ExplorationAchievements = {
     achId = "Precious",
     title = "The Precious",
     level = nil,
-    tooltip = "Starting as a level 1 character, journey on foot to |cff0091e6Blackrock Mountain|r and destroy |cff0091e6The 1 Ring|r",
+    tooltip = "Starting as a level 1 character, journey on foot to |cff008765Blackrock Mountain|r and destroy |cffff8000The 1 Ring|r",
     icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\INV_DARKMOON_EYE.png",
     points = 0,
     customIsCompleted = function()
@@ -13,6 +13,24 @@ local ExplorationAchievements = {
         return _G.HCA_Precious_RingDeleted == true
     end,
     staticPoints = true,
+}, {
+  achId = "Fellowship",
+  title = "Fellowship of the Journey",
+  level = nil,
+  tooltip = "Stand with another adventurer and aid them in their perilous journey to |cff008765Blackrock Mountain|r to destroy |cffff8000The 1 Ring|r, sharing in the burden and seeing the quest through.\n\nMust be within 25 yards of the player at completion.",
+  icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\ThePrecious.png",
+  points = 0,
+  customIsCompleted = function() return false end,
+  staticPoints = true,
+}, {
+  achId = "MessageToKarazhan",
+  title = "Urgent Message to Karazhan",
+  level = nil,
+  tooltip = "Discover all of |cff008765Deadwind Pass|r and speak to |cff008765Archmage Leryda|r at the entrance of |cff008765Karazhan|r at or before level 25",
+  icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_Raid_Karazhan.png",
+  points = 0,
+  customIsCompleted = function() return CheckZoneDiscovery(1430) and UnitName("npc") == "Archmage Leryda" and UnitLevel("player") <= 60 end,
+  staticPoints = true,
 },
 }
 
@@ -45,3 +63,40 @@ for _, def in ipairs(ExplorationAchievements) do
     )
   end)
 end
+
+-- Handle Fellowship achievement when someone nearby completes Precious
+-- Register callback with CommandHandler to receive Precious completion messages
+local fellowshipFrame = CreateFrame("Frame")
+fellowshipFrame:RegisterEvent("PLAYER_LOGIN")
+fellowshipFrame:SetScript("OnEvent", function(self, event)
+    if event == "PLAYER_LOGIN" then
+        if _G.HCA_RegisterPreciousCompletionCallback then
+            _G.HCA_RegisterPreciousCompletionCallback(function(payload, sender)
+                -- Only check if Fellowship isn't already completed
+                local fellowshipRow = nil
+                if AchievementPanel and AchievementPanel.achievements then
+                    for _, row in ipairs(AchievementPanel.achievements) do
+                        local id = row and (row.id or row.achId)
+                        if row and id == "Fellowship" then
+                            fellowshipRow = row
+                            break
+                        end
+                    end
+                end
+                
+                -- If Fellowship is already completed, don't do anything
+                if not fellowshipRow or fellowshipRow.completed then
+                    return
+                end
+                
+                -- If we received the message via SAY, we're within chat range (approximately 40 yards)
+                -- Complete Fellowship for the nearby player
+                if _G.HCA_MarkRowCompleted and _G.HCA_AchToast_Show then
+                    _G.HCA_MarkRowCompleted(fellowshipRow)
+                    _G.HCA_AchToast_Show(fellowshipRow.Icon:GetTexture(), fellowshipRow.Title:GetText(), fellowshipRow.points, fellowshipRow)
+                end
+            end)
+        end
+        self:UnregisterAllEvents()
+    end
+end)

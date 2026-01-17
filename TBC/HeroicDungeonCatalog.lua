@@ -4,7 +4,7 @@ local HeroicDungeons = {
   {
     achId = "HRAMPARTS",
     title = "Hellfire Ramparts |cff820000(Heroic)|r",
-    tooltip = "Defeat the bosses of |cff0091e6Hellfire Ramparts (Heroic)|r",
+    tooltip = "Defeat the bosses of |cff008765Hellfire Ramparts (Heroic)|r",
     icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_boss_omartheunscarred_01.png", -- 236427
     level = 70,
     points = 10,
@@ -24,7 +24,7 @@ local HeroicDungeons = {
   {
     achId = "HBLOODFURNACE",
     title = "Blood Furnace |cff820000(Heroic)|r",
-    tooltip = "Defeat the bosses of |cff0091e6Blood Furnace (Heroic)|r",
+    tooltip = "Defeat the bosses of |cff008765Blood Furnace (Heroic)|r",
     icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_boss_kelidanthebreaker.png", -- 236417
     level = 70,
     points = 10,
@@ -43,7 +43,7 @@ local HeroicDungeons = {
   {
     achId = "HSLAVEPENS",
     title = "The Slave Pens |cff820000(Heroic)|r",
-    tooltip = "Defeat the bosses of |cff0091e6The Slave Pens (Heroic)|r",
+    tooltip = "Defeat the bosses of |cff008765The Slave Pens (Heroic)|r",
     icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_boss_quagmirran.png", -- 236433
     level = 70,
     points = 10,
@@ -62,7 +62,7 @@ local HeroicDungeons = {
   {
     achId = "HUNDERBOG",
     title = "The Underbog |cff820000(Heroic)|r",
-    tooltip = "Defeat the bosses of |cff0091e6The Underbog (Heroic)|r",
+    tooltip = "Defeat the bosses of |cff008765The Underbog (Heroic)|r",
     icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_boss_theblackstalker.png", -- 254502
     level = 70,
     points = 10,
@@ -82,7 +82,7 @@ local HeroicDungeons = {
   {
     achId = "HMANATOMBS",
     title = "Mana-Tombs |cff820000(Heroic)|r",
-    tooltip = "Defeat the bosses of |cff0091e6Mana-Tombs (Heroic)|r",
+    tooltip = "Defeat the bosses of |cff008765Mana-Tombs (Heroic)|r",
     icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_boss_nexus_prince_shaffar.png", -- 236426
     level = 70,
     points = 10,
@@ -101,7 +101,7 @@ local HeroicDungeons = {
   {
     achId = "HAC",
     title = "Auchenai Crypts |cff820000(Heroic)|r",
-    tooltip = "Defeat the bosses of |cff0091e6Auchenai Crypts (Heroic)|r",
+    tooltip = "Defeat the bosses of |cff008765Auchenai Crypts (Heroic)|r",
     icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_boss_exarch_maladaar.png", -- 236411
     level = 70,
     points = 10,
@@ -119,7 +119,7 @@ local HeroicDungeons = {
   {
     achId = "HOLDHILLSBRAD",
     title = "Old Hillsbrad Foothills |cff820000(Heroic)|r",
-    tooltip = "Defeat the bosses of |cff0091e6Old Hillsbrad Foothills (Heroic)|r",
+    tooltip = "Defeat the bosses of |cff008765Old Hillsbrad Foothills (Heroic)|r",
     icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_boss_epochhunter.png", -- 254647
     level = 70,
     points = 10,
@@ -138,7 +138,7 @@ local HeroicDungeons = {
   {
     achId = "HSETHEKK",
     title = "Sethekk Halls |cff820000(Heroic)|r",
-    tooltip = "Defeat the bosses of |cff0091e6Sethekk Halls (Heroic)|r",
+    tooltip = "Defeat the bosses of |cff008765Sethekk Halls (Heroic)|r",
     icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_boss_talonkingikiss.png", -- 236435
     level = 70,
     points = 10,
@@ -157,7 +157,7 @@ local HeroicDungeons = {
   {
     achId = "HBLACKMORASS",
     title = "The Black Morass |cff820000(Heroic)|r",
-    tooltip = "Defeat the bosses of |cff0091e6The Black Morass (Heroic)|r",
+    tooltip = "Defeat the bosses of |cff008765The Black Morass (Heroic)|r",
     icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_boss_aeonus_01.png", -- 254086
     level = 70,
     points = 10,
@@ -176,7 +176,7 @@ local HeroicDungeons = {
   {
     achId = "HMECHANAR",
     title = "The Mechanar |cff820000(Heroic)|r",
-    tooltip = "Defeat the bosses of |cff0091e6The Mechanar (Heroic)|r",
+    tooltip = "Defeat the bosses of |cff008765The Mechanar (Heroic)|r",
     icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_boss_pathaleonthecalculator.png", -- 236430
     level = 70,
     points = 10,
@@ -195,7 +195,7 @@ local HeroicDungeons = {
   {
     achId = "HSHATTEREDHALLS",
     title = "The Shattered Halls |cff820000(Heroic)|r",
-    tooltip = "Defeat the bosses of |cff0091e6The Shattered Halls (Heroic)|r",
+    tooltip = "Defeat the bosses of |cff008765The Shattered Halls (Heroic)|r",
     icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_boss_kargathbladefist_01.png", -- 254093
     level = 70,
     points = 10,
@@ -215,7 +215,7 @@ local HeroicDungeons = {
   {
     achId = "HSLABS",
     title = "Shadow Labyrinth |cff820000(Heroic)|r",
-    tooltip = "Defeat the bosses of |cff0091e6Shadow Labyrinth (Heroic)|r",
+    tooltip = "Defeat the bosses of |cff008765Shadow Labyrinth (Heroic)|r",
     icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_boss_murmur.png", -- 254501
     level = 70,
     points = 10,
@@ -235,7 +235,7 @@ local HeroicDungeons = {
   {
     achId = "HSTEAMVAULT",
     title = "The Steamvault |cff820000(Heroic)|r",
-    tooltip = "Defeat the bosses of |cff0091e6The Steamvault (Heroic)|r",
+    tooltip = "Defeat the bosses of |cff008765The Steamvault (Heroic)|r",
     icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_boss_warlord_kalithresh.png", -- 236436
     level = 70,
     points = 10,
@@ -254,7 +254,7 @@ local HeroicDungeons = {
   {
     achId = "HBOTANICA",
     title = "The Botanica |cff820000(Heroic)|r",
-    tooltip = "Defeat the bosses of |cff0091e6The Botanica (Heroic)|r",
+    tooltip = "Defeat the bosses of |cff008765The Botanica (Heroic)|r",
     icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_boss_warpsplinter.png", -- 236437
     level = 70,
     points = 10,
@@ -275,7 +275,7 @@ local HeroicDungeons = {
   {
     achId = "HMT",
     title = "Magisters' Terrace |cff820000(Heroic)|r",
-    tooltip = "Defeat the bosses of |cff0091e6Magisters' Terrace (Heroic)|r",
+    tooltip = "Defeat the bosses of |cff008765Magisters' Terrace (Heroic)|r",
     icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_Boss_Kael'thasSunstrider_01.png", -- 250117
     level = 70,
     points = 10,
@@ -295,7 +295,7 @@ local HeroicDungeons = {
   {
     achId = "HARCATRAZ",
     title = "The Arcatraz |cff820000(Heroic)|r",
-    tooltip = "Defeat the bosses of |cff0091e6The Arcatraz (Heroic)|r",
+    tooltip = "Defeat the bosses of |cff008765The Arcatraz (Heroic)|r",
     icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_boss_harbinger_skyriss.png", -- 236414
     level = 70,
     points = 10,

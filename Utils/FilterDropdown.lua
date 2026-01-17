@@ -8,6 +8,40 @@ local FilterDropdown = {}
 -- Checkbox Filter Logic (Core Business Logic)
 -- =========================================================
 
+-- Get status filter states (completed, available, failed) from database with proper defaults
+function FilterDropdown.GetStatusFilterStates()
+    local statusFilters = { true, true, true }  -- completed, available, failed (all default to true)
+    if type(HardcoreAchievements_GetCharDB) == "function" then
+        local _, cdb = HardcoreAchievements_GetCharDB()
+        if cdb and cdb.settings and cdb.settings.statusFilters then
+            local states = cdb.settings.statusFilters
+            if type(states) == "table" then
+                statusFilters = {
+                    states[1] ~= false,  -- Completed (default true)
+                    states[2] ~= false,  -- Available (default true)
+                    states[3] ~= false,  -- Failed (default true)
+                }
+            end
+        end
+    end
+    return statusFilters
+end
+
+-- Save status filter states to character database
+function FilterDropdown.SaveStatusFilterStates(statusFilters)
+    if type(HardcoreAchievements_GetCharDB) == "function" then
+        local _, cdb = HardcoreAchievements_GetCharDB()
+        if cdb then
+            cdb.settings = cdb.settings or {}
+            cdb.settings.statusFilters = {
+                statusFilters[1] == true,  -- Completed
+                statusFilters[2] == true,  -- Available
+                statusFilters[3] == true,  -- Failed
+            }
+        end
+    end
+end
+
 -- Get checkbox states from database with proper defaults
 function FilterDropdown.GetCheckboxStates()
     local checkboxStates = { true, true, true, true, true, true, false, false, false, false, false, false, false, false }
@@ -66,12 +100,7 @@ end
 
 -- Check if achievement should be shown based on checkbox filter
 -- Returns true if should show, false if should hide
-function FilterDropdown.ShouldShowByCheckboxFilter(def, isCompleted, currentFilter, checkboxIndex, variationType)
-    -- Completed achievements always show when "all" or "completed" filter is selected
-    if isCompleted and (currentFilter == "all" or currentFilter == "completed") then
-        return true
-    end
-    
+function FilterDropdown.ShouldShowByCheckboxFilter(def, isCompleted, checkboxIndex, variationType)
     local checkboxStates = FilterDropdown.GetCheckboxStates()
     
     -- For variations, check based on variation type
@@ -108,14 +137,9 @@ local function SaveCheckboxStatesToDB(checkboxStates)
     FilterDropdown.SaveCheckboxStates(checkboxStates)
 end
 
--- Default filter list
+-- Default filter list (no longer used - status filters are now checkboxes)
 local function GetDefaultFilterList()
-    return {
-        { text = ACHIEVEMENTFRAME_FILTER_ALL, value = "all" },
-        { text = ACHIEVEMENTFRAME_FILTER_COMPLETED, value = "completed" },
-        { text = ACHIEVEMENTFRAME_FILTER_INCOMPLETE, value = "not_completed" },
-        { text = FAILED, value = "failed" },
-    }
+    return {}
 end
 
 -- Helper function to get player class color
@@ -145,7 +169,7 @@ function FilterDropdown:CreateDropdown(parent, anchorPoint, anchorTo, xOffset, y
     -- Position the dropdown
     dropdown:SetPoint(anchorPoint or "TOPRIGHT", anchorTo or parent, anchorPoint or "TOPRIGHT", xOffset or -17, yOffset or -50)
     UIDropDownMenu_SetWidth(dropdown, width or 85)
-    UIDropDownMenu_SetText(dropdown, ACHIEVEMENTFRAME_FILTER_ALL)
+    UIDropDownMenu_SetText(dropdown, "Filters")
     
     -- Style the button with custom arrow
     local button = dropdown.Button
@@ -180,20 +204,26 @@ function FilterDropdown:InitializeDropdown(dropdown, config)
     -- Get callbacks and state
     local onFilterChange = config.onFilterChange or function() end
     local onCheckboxChange = config.onCheckboxChange or function() end
-    local currentFilter = config.currentFilter or "all"
+    local onStatusFilterChange = config.onStatusFilterChange or function() end
     -- Load checkbox states from database if not provided in config
     local checkboxStates = config.checkboxStates
     if not checkboxStates then
         checkboxStates = GetCheckboxStatesFromDB()
     end
+    -- Load status filter states from database if not provided in config
+    local statusFilters = config.statusFilters
+    if not statusFilters then
+        statusFilters = FilterDropdown.GetStatusFilterStates()
+    end
     local checkboxLabels = config.checkboxLabels or { "Show Dungeon Trios", "Show Dungeon Duos", "Show Dungeon Solos" }
     local filterList = config.filterList or GetDefaultFilterList()
     
     -- Store state on the dropdown for access in callbacks
-    dropdown._currentFilter = currentFilter
     dropdown._checkboxStates = checkboxStates  -- Initial state, will be reloaded from DB on each open
+    dropdown._statusFilters = statusFilters  -- Initial state, will be reloaded from DB on each open
     dropdown._onFilterChange = onFilterChange
     dropdown._onCheckboxChange = onCheckboxChange
+    dropdown._onStatusFilterChange = onStatusFilterChange
     dropdown._checkboxLabels = checkboxLabels
     dropdown._filterList = filterList
     
@@ -201,6 +231,8 @@ function FilterDropdown:InitializeDropdown(dropdown, config)
         if level == 1 then
             -- Reload checkbox states from database each time dropdown opens (for sync between frames)
             dropdown._checkboxStates = GetCheckboxStatesFromDB()
+            -- Reload status filter states from database each time dropdown opens
+            dropdown._statusFilters = FilterDropdown.GetStatusFilterStates()
             
             -- Add "Filter By" section title
             local filterByTitleInfo = UIDropDownMenu_CreateInfo()
@@ -211,17 +243,43 @@ function FilterDropdown:InitializeDropdown(dropdown, config)
             filterByTitleInfo.disabled = true
             UIDropDownMenu_AddButton(filterByTitleInfo)
             
-            -- Add filter options
-            for _, filter in ipairs(filterList) do
+            -- Add status filter checkboxes (Completed, Available, Failed)
+            local statusFilterLabels = { "Completed", "Available", "Failed" }
+            for i = 1, 3 do
                 local info = UIDropDownMenu_CreateInfo()
-                info.text = filter.text
-                info.value = filter.value
-                info.func = function()
-                    UIDropDownMenu_SetSelectedValue(dropdown, filter.value)
-                    UIDropDownMenu_SetText(dropdown, filter.text)
-                    dropdown._currentFilter = filter.value
-                    if dropdown._onFilterChange then
-                        dropdown._onFilterChange(filter.value)
+                local statusIndex = i  -- Capture index in local variable
+                info.text = statusFilterLabels[statusIndex]
+                info.checked = dropdown._statusFilters[statusIndex]
+                info.isNotRadio = true
+                info.keepShownOnClick = true
+                info.func = function(self)
+                    -- Toggle the state
+                    dropdown._statusFilters[statusIndex] = not dropdown._statusFilters[statusIndex]
+                    local newState = dropdown._statusFilters[statusIndex]
+                    
+                    -- Update the button's checked property
+                    self.checked = newState
+                    
+                    -- Manually toggle the checkmark textures for immediate visual feedback
+                    local buttonName = self:GetName()
+                    local checkTexture = _G[buttonName .. "Check"]
+                    local uncheckTexture = _G[buttonName .. "UnCheck"]
+                    if checkTexture and uncheckTexture then
+                        if newState then
+                            checkTexture:Show()
+                            uncheckTexture:Hide()
+                        else
+                            checkTexture:Hide()
+                            uncheckTexture:Show()
+                        end
+                    end
+                    
+                    -- Save to database
+                    FilterDropdown.SaveStatusFilterStates(dropdown._statusFilters)
+                    
+                    -- Call the callback
+                    if dropdown._onStatusFilterChange then
+                        dropdown._onStatusFilterChange(statusIndex, newState)
                     end
                 end
                 UIDropDownMenu_AddButton(info)
@@ -363,14 +421,22 @@ function FilterDropdown:InitializeDropdown(dropdown, config)
         end
     end)
     
-    -- Set initial selected value
-    UIDropDownMenu_SetSelectedValue(dropdown, currentFilter)
-    UIDropDownMenu_SetText(dropdown, filterList[1].text)
+    -- Set initial dropdown text (no selection for radio buttons, so just show "Filters")
+    UIDropDownMenu_SetText(dropdown, "Filters")
 end
 
--- Get current filter value
+-- Get current filter value (deprecated - use GetStatusFilterStates instead)
 function FilterDropdown:GetCurrentFilter(dropdown)
-    return dropdown._currentFilter or "all"
+    -- Return empty string as we no longer use a single filter value
+    return ""
+end
+
+-- Get status filter states from dropdown (method)
+function FilterDropdown:GetStatusFilterStatesFromDropdown(dropdown)
+    if dropdown and dropdown._statusFilters then
+        return dropdown._statusFilters
+    end
+    return FilterDropdown.GetStatusFilterStates()
 end
 
 -- Get checkbox state
@@ -400,7 +466,7 @@ end
 -- Helper function to create and initialize a complete filter dropdown with standard configuration
 -- parent: Frame to attach dropdown to
 -- positionConfig: Table with {anchorPoint, anchorTo, xOffset, yOffset, width} or defaults will be used
--- callbacks: Table with {onFilterChange, onCheckboxChange} functions
+-- callbacks: Table with {onFilterChange, onCheckboxChange, onStatusFilterChange} functions
 -- Returns: The created dropdown frame
 function FilterDropdown:CreateAndInitializeDropdown(parent, positionConfig, callbacks)
     positionConfig = positionConfig or {}
@@ -425,10 +491,10 @@ function FilterDropdown:CreateAndInitializeDropdown(parent, positionConfig, call
     
     -- Initialize the dropdown
     FilterDropdown:InitializeDropdown(dropdown, {
-        currentFilter = "all",
         checkboxLabels = checkboxLabels,
         onFilterChange = callbacks.onFilterChange or function() end,
         onCheckboxChange = callbacks.onCheckboxChange or function() end,
+        onStatusFilterChange = callbacks.onStatusFilterChange or function() end,
     })
     
     return dropdown
