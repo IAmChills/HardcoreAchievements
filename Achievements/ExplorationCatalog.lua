@@ -31,37 +31,73 @@ local ExplorationAchievements = {
   points = 0,
   customIsCompleted = function() return CheckZoneDiscovery(1430) and UnitName("npc") == "Archmage Leryda" and UnitLevel("player") <= 60 end,
   staticPoints = true,
+}, {
+  achId = "OrgA",
+  title = "Discover Orgrimmar",
+  level = nil,
+  tooltip = "Discover |cff008765Orgrimmar|r",
+  icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_PVP_Legion05.png",
+  points = 0,
+  customIsCompleted = function()
+      return CheckZoneDiscovery(1411)
+  end,
+  faction = FACTION_ALLIANCE,
+  staticPoints = true,
+}, {
+  achId = "StormH",
+  title = "Discover Stormwind City",
+  level = nil,
+  tooltip = "Discover |cff008765Stormwind City|r",
+  icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_PVP_Legion05.png",
+  points = 0,
+  customIsCompleted = function()
+      return CheckZoneDiscovery(1429)
+  end,
+  faction = FACTION_HORDE,
+  staticPoints = true,
 },
 }
 
 -- Defer registration until PLAYER_LOGIN to prevent load timeouts
 _G.HCA_RegistrationQueue = _G.HCA_RegistrationQueue or {}
 
+-- Check faction eligibility (same pattern as Catalog.lua and SecretCatalog.lua)
+local function IsEligible(def)
+  -- Faction: "Alliance" / "Horde"
+  if def.faction and select(2, UnitFactionGroup("player")) ~= def.faction then
+    return false
+  end
+  return true
+end
+
 -- Queue all exploration achievements for deferred registration
 for _, def in ipairs(ExplorationAchievements) do
-  -- Mark as exploration for filtering
-  def.isExploration = true
-  -- Queue achievement registration
-  table.insert(_G.HCA_RegistrationQueue, function()
-    if def.customIsCompleted then
-      _G[def.achId .. "_IsCompleted"] = def.customIsCompleted
-    end
+  -- Only register achievements the player is eligible for
+  if IsEligible(def) then
+    -- Mark as exploration for filtering
+    def.isExploration = true
+    -- Queue achievement registration
+    table.insert(_G.HCA_RegistrationQueue, function()
+      if def.customIsCompleted then
+        _G[def.achId .. "_IsCompleted"] = def.customIsCompleted
+      end
 
-    CreateAchievementRow(
-      AchievementPanel,
-      def.achId,
-      def.title,
-      def.tooltip,
-      def.icon,
-      def.level,
-      def.points or 0,
-      nil,
-      nil,
-      def.staticPoints,
-      nil,
-      def
-    )
-  end)
+      CreateAchievementRow(
+        AchievementPanel,
+        def.achId,
+        def.title,
+        def.tooltip,
+        def.icon,
+        def.level,
+        def.points or 0,
+        nil,
+        nil,
+        def.staticPoints,
+        nil,
+        def
+      )
+    end)
+  end
 end
 
 -- Handle Fellowship achievement when someone nearby completes Precious

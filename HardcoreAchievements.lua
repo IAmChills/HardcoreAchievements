@@ -3483,6 +3483,7 @@ do
         AchievementPanel._achEvt:RegisterEvent("PLAYER_ENTERING_WORLD")
         AchievementPanel._achEvt:RegisterEvent("UPDATE_FACTION")
         AchievementPanel._achEvt:RegisterEvent("UNIT_AURA")
+        AchievementPanel._achEvt:RegisterEvent("MAP_EXPLORATION_UPDATED")
         AchievementPanel._achEvt:SetScript("OnEvent", function(_, event, ...)
             -- Clean up external player tracking on zone loads
             if event == "PLAYER_ENTERING_WORLD" then
@@ -4045,6 +4046,21 @@ do
                         RefreshOutleveledAll()
                         if SortAchievementRows then
                             SortAchievementRows()
+                        end
+                    end
+                end
+            elseif event == "MAP_EXPLORATION_UPDATED" then
+                local playerFaction = select(2, UnitFactionGroup("player"))
+                for _, row in ipairs(AchievementPanel.achievements) do
+                    if not row.completed and row.id == "OrgA" and playerFaction == FACTION_ALLIANCE then
+                        if CheckZoneDiscovery(1411) then
+                            HCA_MarkRowCompleted(row)
+                            HCA_AchToast_Show(row.Icon:GetTexture(), row.Title:GetText(), row.points, row)
+                        end
+                    elseif not row.completed and row.id == "StormH" and playerFaction == FACTION_HORDE then
+                        if CheckZoneDiscovery(1429) then
+                            HCA_MarkRowCompleted(row)
+                            HCA_AchToast_Show(row.Icon:GetTexture(), row.Title:GetText(), row.points, row)
                         end
                     end
                 end

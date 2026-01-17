@@ -2,7 +2,6 @@
 
 NOT USED BUT COULD HAVE USE (Already added to Icons)
 Achievement_Dungeon_Outland_Dungeon_Hero
-INV_DARKMOON_EYE (could be LOTR alternative)
 
 ## Active Tasks
 - Expand on comms to allow achievement related statistics where data is propogated for realm-first, % of players completed style info
@@ -22,9 +21,7 @@ INV_DARKMOON_EYE (could be LOTR alternative)
    - Something like this might suck because its so low level for Outlands
 
 ## Explorer Achievements
- - Discover Karazhan before level 25 and speak to archmage leryda
  - Get Light’s Hope Chapel flight path before level 25
- - Enter Stormwind (as horde)
 
 ## Titles? (I can fake titles in tooltips / chat but that's it. Requires addon)
  - The Eager Explorer title
