@@ -957,6 +957,12 @@ function DASHBOARD:BuildClassicGrid(srcRows)
           if not ShouldShowByCheckboxFilter(def, isCompleted, 1, nil) then
             shouldShow = false
           end
+        elseif def.isVariation then
+          -- Variations: check based on variation type (Solo=10, Duo=11, Trio=12)
+          -- Check this BEFORE isDungeon since variations inherit isDungeon from base
+          if not ShouldShowByCheckboxFilter(def, isCompleted, nil, def.variationType) then
+            shouldShow = false
+          end
         elseif def.isDungeon then
           -- Dungeon (DungeonCatalog): check index 2
           if not ShouldShowByCheckboxFilter(def, isCompleted, 2, nil) then
@@ -995,11 +1001,6 @@ function DASHBOARD:BuildClassicGrid(srcRows)
         elseif def.isDungeonSet then
           -- Dungeon Sets: check index 9
           if not ShouldShowByCheckboxFilter(def, isCompleted, 9, nil) then
-            shouldShow = false
-          end
-        elseif def.isVariation then
-          -- Variations: check based on variation type (Solo=10, Duo=11, Trio=12)
-          if not ShouldShowByCheckboxFilter(def, isCompleted, nil, def.variationType) then
             shouldShow = false
           end
         elseif def.isRidiculous then
@@ -1567,6 +1568,12 @@ function DASHBOARD:BuildModernRows(srcRows)
           if not ShouldShowByCheckboxFilter(def, isCompleted, 1, nil) then
             shouldShow = false
           end
+        elseif def.isVariation then
+          -- Variations: check based on variation type (Solo=10, Duo=11, Trio=12)
+          -- Check this BEFORE isDungeon since variations inherit isDungeon from base
+          if not ShouldShowByCheckboxFilter(def, isCompleted, nil, def.variationType) then
+            shouldShow = false
+          end
         elseif def.isDungeon then
           -- Dungeon (DungeonCatalog): check index 2
           if not ShouldShowByCheckboxFilter(def, isCompleted, 2, nil) then
@@ -1605,11 +1612,6 @@ function DASHBOARD:BuildModernRows(srcRows)
         elseif def.isDungeonSet then
           -- Dungeon Sets: check index 9
           if not ShouldShowByCheckboxFilter(def, isCompleted, 9, nil) then
-            shouldShow = false
-          end
-        elseif def.isVariation then
-          -- Variations: check based on variation type (Solo=10, Duo=11, Trio=12)
-          if not ShouldShowByCheckboxFilter(def, isCompleted, nil, def.variationType) then
             shouldShow = false
           end
         elseif def.isRidiculous then

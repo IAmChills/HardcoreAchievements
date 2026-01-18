@@ -568,6 +568,14 @@ function RaidCommon.registerRaidAchievement(def)
     -- Store the ProcessBossKillByEncounterID function on the row for BOSS_KILL event handler
     _G[rowVarName].processBossKillByEncounterID = ProcessBossKillByEncounterID
     
+    -- Load completion status from database on registration
+    -- If the achievement was previously completed, mark the row as completed without showing toast
+    if state.completed then
+      if _G.HCA_MarkRowCompleted then
+        _G.HCA_MarkRowCompleted(_G[rowVarName])
+      end
+    end
+    
     -- Refresh points with multipliers after creation
     if RefreshAllAchievementPoints then
       RefreshAllAchievementPoints()
