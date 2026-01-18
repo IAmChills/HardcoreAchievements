@@ -2568,6 +2568,12 @@ local function ApplyFilter()
                 if not ShouldShowByCheckboxFilter(def, isCompleted, 1, nil) then
                     shouldShow = false
                 end
+            elseif def.isVariation then
+                -- Variations: check based on variation type (Solo=10, Duo=11, Trio=12)
+                -- Check this BEFORE isDungeon since variations inherit isDungeon from base
+                if not ShouldShowByCheckboxFilter(def, isCompleted, nil, def.variationType) then
+                    shouldShow = false
+                end
             elseif def.isDungeon then
                 -- Dungeon (DungeonCatalog): check index 2
                 if not ShouldShowByCheckboxFilter(def, isCompleted, 2, nil) then
@@ -2606,11 +2612,6 @@ local function ApplyFilter()
             elseif def.isDungeonSet then
                 -- Dungeon Sets: check index 9
                 if not ShouldShowByCheckboxFilter(def, isCompleted, 9, nil) then
-                    shouldShow = false
-                end
-            elseif def.isVariation then
-                -- Variations: check based on variation type (Solo=10, Duo=11, Trio=12)
-                if not ShouldShowByCheckboxFilter(def, isCompleted, nil, def.variationType) then
                     shouldShow = false
                 end
             elseif def.isRidiculous then
@@ -3498,7 +3499,12 @@ do
                     -- Process boss kill for all raid achievements that have processBossKillByEncounterID function
                     for _, row in ipairs(AchievementPanel.achievements) do
                         if not row.completed and type(row.processBossKillByEncounterID) == "function" then
-                            row.processBossKillByEncounterID(encounterID)
+                            local shouldComplete = row.processBossKillByEncounterID(encounterID)
+                            -- If the function indicates completion, mark the achievement as complete
+                            if shouldComplete then
+                                HCA_MarkRowCompleted(row)
+                                HCA_AchToast_Show(row.Icon:GetTexture(), row.Title:GetText(), row.points, row)
+                            end
                         end
                     end
                 end
