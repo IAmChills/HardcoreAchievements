@@ -2434,6 +2434,7 @@ local function HideCharacterFrameContentsForCombat()
     if _G["HonorFrame"]        then _G["HonorFrame"]:Hide()        end
     if _G["SkillFrame"]        then _G["SkillFrame"]:Hide()        end
     if _G["ReputationFrame"]   then _G["ReputationFrame"]:Hide()   end
+    if _G["PvPFrame"]          then _G["PvPFrame"]:Hide()          end
     if _G["TokenFrame"]        then _G["TokenFrame"]:Hide()        end
     if type(_G.CSC_HideStatsPanel) == "function" then
         _G.CSC_HideStatsPanel()
@@ -4142,6 +4143,7 @@ function HCA_ShowAchievementTab()
     if _G["HonorFrame"]        then _G["HonorFrame"]:Hide()        end
     if _G["SkillFrame"]        then _G["SkillFrame"]:Hide()        end
     if _G["ReputationFrame"]   then _G["ReputationFrame"]:Hide()   end
+    if _G["PvPFrame"]          then _G["PvPFrame"]:Hide()          end
     if _G["TokenFrame"]        then _G["TokenFrame"]:Hide()        end
 
     -- Hide CharacterStatsClassic panel

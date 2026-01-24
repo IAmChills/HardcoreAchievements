@@ -321,45 +321,17 @@ local function HookDashboardSubTextUpdates(row)
     fontString._hcaSetTextWrapped = true
 end
 
--- Helper function to check if row is outleveled (must be defined before functions that use it)
+-- Helper function to check if row is outleveled
+-- Use the global function from HardcoreAchievements.lua if available, otherwise fallback to local logic
 local function IsRowOutleveled(row)
+  -- Use the global function if available (it has all the proper checks)
+  if _G.IsRowOutleveled and type(_G.IsRowOutleveled) == "function" then
+    return _G.IsRowOutleveled(row)
+  end
+  
+  -- Fallback to basic check if global function not available
   if not row or row.completed then return false end
   if not row.maxLevel then return false end
-  
-  -- Check if there's pending turn-in progress (kill completed but quest not turned in)
-  -- If so, don't mark as outleveled - player can still complete it
-  if row.questTracker and (row.killTracker or row.requiredKills) then
-    -- Achievement requires both kill and quest
-    local progress = _G.HardcoreAchievements_GetProgress and _G.HardcoreAchievements_GetProgress(row.achId or row.id)
-    if progress then
-      local hasKill = false
-      if row.requiredKills then
-        -- Check if all required kills are satisfied
-        if progress.eligibleCounts then
-          local allSatisfied = true
-          for npcId, requiredCount in pairs(row.requiredKills) do
-            local idNum = tonumber(npcId) or npcId
-            local current = progress.eligibleCounts[idNum] or progress.eligibleCounts[tostring(idNum)] or 0
-            local required = tonumber(requiredCount) or 1
-            if current < required then
-              allSatisfied = false
-              break
-            end
-          end
-          hasKill = allSatisfied
-        end
-      else
-        -- Single kill achievement
-        hasKill = progress.killed or false
-      end
-      
-      local questNotTurnedIn = not progress.quest
-      -- If kills are satisfied but quest is not turned in, keep achievement available
-      if hasKill and questNotTurnedIn then
-        return false
-      end
-    end
-  end
   
   local lvl = UnitLevel("player") or 1
   return lvl > row.maxLevel
@@ -927,7 +899,14 @@ function DASHBOARD:BuildClassicGrid(srcRows)
       local shouldShow = false
       
       local isCompleted = data.completed == true
-      local isFailed = data.outleveled
+      -- Use the global IsRowOutleveled function directly on the source row for accurate failure detection
+      local isFailed = false
+      if _G.IsRowOutleveled and type(_G.IsRowOutleveled) == "function" then
+        isFailed = _G.IsRowOutleveled(srow)
+      else
+        -- Fallback to data.outleveled if global function not available
+        isFailed = data.outleveled or false
+      end
       local isAvailable = not isCompleted and not isFailed
       
       -- Get status filter states (completed, available, failed) - all default to true
@@ -1046,12 +1025,14 @@ function DASHBOARD:BuildClassicGrid(srcRows)
         end
 
         -- Set icon appearance based on status
-        local playerLevel = UnitLevel("player") or 0
-        local isOverLeveled = false
-        if data.maxLevel and data.maxLevel > 0 then
-          isOverLeveled = playerLevel > data.maxLevel
+        -- Use the global IsRowOutleveled function directly on the source row for accurate failure detection
+        local isFailed = false
+        if _G.IsRowOutleveled and type(_G.IsRowOutleveled) == "function" then
+          isFailed = _G.IsRowOutleveled(srow)
+        else
+          -- Fallback to data.outleveled if global function not available
+          isFailed = data.outleveled or false
         end
-        local isFailed = data.outleveled or isOverLeveled
 
         if data.completed then
           -- Completed: full color
@@ -1538,7 +1519,14 @@ function DASHBOARD:BuildModernRows(srcRows)
       local shouldShow = false
       
       local isCompleted = data.completed == true
-      local isFailed = data.outleveled
+      -- Use the global IsRowOutleveled function directly on the source row for accurate failure detection
+      local isFailed = false
+      if _G.IsRowOutleveled and type(_G.IsRowOutleveled) == "function" then
+        isFailed = _G.IsRowOutleveled(srow)
+      else
+        -- Fallback to data.outleveled if global function not available
+        isFailed = data.outleveled or false
+      end
       local isAvailable = not isCompleted and not isFailed
       
       -- Get status filter states (completed, available, failed) - all default to true
