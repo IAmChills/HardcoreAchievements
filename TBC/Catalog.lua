@@ -212,8 +212,8 @@ local Achievements = {
 {
     achId = "Dargol",
     title = "Crypt Commander",
-    level = 10,
-    tooltip = "Complete " .. HCA_SharedUtils.GetClassColor() .. "The Family Crypt|r before level 11",
+    level = 11,
+    tooltip = "Complete " .. HCA_SharedUtils.GetClassColor() .. "The Family Crypt|r before level 12",
     icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_character_undead_male.png", -- 236458
     points = 10,
     requiredQuestId = 408, -- Quest available at level 7
@@ -223,8 +223,8 @@ local Achievements = {
 }, {
     achId = "Arrachea",
     title = "Spirit of the Earthmother",
-    level = 8,
-    tooltip = "Complete " .. HCA_SharedUtils.GetClassColor() .. "Rites of the Earthmother (Arra'chea)|r before level 9",
+    level = 9,
+    tooltip = "Complete " .. HCA_SharedUtils.GetClassColor() .. "Rites of the Earthmother (Arra'chea)|r before level 10",
     icon = 132243,
     points = 10,
     requiredQuestId = 776, -- Quest available at level 3

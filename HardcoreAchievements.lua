@@ -4077,35 +4077,37 @@ do
                 
                 for _, row in ipairs(AchievementPanel.achievements) do
                     if not row.completed and type(row.questTracker) == "function" then
-                        -- Before calling questTracker, ensure we have a level stored for validation
-                        -- Check if player just leveled up within the window - if so, use the previous level
-                        if HardcoreAchievements_SetProgress then
-                            local progressTable = HardcoreAchievements_GetProgress and HardcoreAchievements_GetProgress(row.id)
-                            -- Only set levelAtTurnIn if we don't already have levelAtKill (for achievements without kill requirements)
-                            if not (progressTable and progressTable.levelAtKill) then
-                                local currentLevel = UnitLevel("player") or 1
-                                local levelToStore = currentLevel
-                                
-                                -- Check if there was a recent level-up within the time window
-                                if recentLevelUpCache and (currentTime - recentLevelUpCache.timestamp) <= LEVEL_UP_WINDOW then
-                                    -- Player leveled up recently - use the previous level as the "true" turn-in level
-                                    -- This handles the case where the quest XP causes the level-up
-                                    levelToStore = recentLevelUpCache.previousLevel
-                                else
-                                    -- No recent level-up, or it was outside the window - check if levelAtAccept might be better
-                                    -- Only use levelAtAccept if current level matches (player hasn't leveled since accept)
-                                    local levelAtAccept = progressTable and progressTable.levelAtAccept
-                                    if levelAtAccept and currentLevel == levelAtAccept then
-                                        levelToStore = levelAtAccept
-                                    end
-                                end
-                                
-                                HardcoreAchievements_SetProgress(row.id, "levelAtTurnIn", levelToStore)
-                            end
-                        end
-                        
+                        -- First check if the quest matches this achievement
                         local questMatched = row.questTracker(questID)
+                        
+                        -- Only set levelAtTurnIn if the quest actually matches this achievement
                         if questMatched then
+                            -- Check if player just leveled up within the window - if so, use the previous level
+                            if HardcoreAchievements_SetProgress then
+                                local progressTable = HardcoreAchievements_GetProgress and HardcoreAchievements_GetProgress(row.id)
+                                -- Only set levelAtTurnIn if we don't already have levelAtKill (for achievements without kill requirements)
+                                if not (progressTable and progressTable.levelAtKill) then
+                                    local currentLevel = UnitLevel("player") or 1
+                                    local levelToStore = currentLevel
+                                    
+                                    -- Check if there was a recent level-up within the time window
+                                    if recentLevelUpCache and (currentTime - recentLevelUpCache.timestamp) <= LEVEL_UP_WINDOW then
+                                        -- Player leveled up recently - use the previous level as the "true" turn-in level
+                                        -- This handles the case where the quest XP causes the level-up
+                                        levelToStore = recentLevelUpCache.previousLevel
+                                    else
+                                        -- No recent level-up, or it was outside the window - check if levelAtAccept might be better
+                                        -- Only use levelAtAccept if current level matches (player hasn't leveled since accept)
+                                        local levelAtAccept = progressTable and progressTable.levelAtAccept
+                                        if levelAtAccept and currentLevel == levelAtAccept then
+                                            levelToStore = levelAtAccept
+                                        end
+                                    end
+                                    
+                                    HardcoreAchievements_SetProgress(row.id, "levelAtTurnIn", levelToStore)
+                                end
+                            end
+                            
                             HCA_MarkRowCompleted(row)
                             HCA_AchToast_Show(row.Icon:GetTexture(), row.Title:GetText(), row.points, row)
                         end
