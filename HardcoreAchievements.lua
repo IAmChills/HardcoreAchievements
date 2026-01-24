@@ -198,6 +198,109 @@ local function CleanupIncorrectLevelAchievements()
     return cleanedCount
 end
 
+-- DELETE ME AFTER SOME TIME IF YOU WANT
+-- Cleanup function to fix incorrectly failed meta achievements
+-- Fixes a bug where meta achievements were marked as failed when dungeon achievements
+-- were incorrectly marked as failed due to leveling up inside dungeons
+local function CleanupIncorrectlyFailedMetaAchievements()
+    local _, cdb = GetCharDB()
+    if not cdb or not cdb.achievements then
+        return
+    end
+    
+    -- Need AchievementPanel to be loaded to check IsRowOutleveled
+    if not _G.AchievementPanel or not _G.AchievementPanel.achievements then
+        return
+    end
+    
+    local fixedCount = 0
+    local fixedAchievements = {}
+    
+    -- Check each achievement in the database
+    for achId, achievementData in pairs(cdb.achievements) do
+        -- Only check meta achievements (marked as failed but not completed)
+        if achId and achievementData.failed and not achievementData.completed then
+            -- Check if this is a meta achievement by looking at HCA_AchievementDefs
+            if _G.HCA_AchievementDefs then
+                local achDef = _G.HCA_AchievementDefs[tostring(achId)]
+                if achDef and achDef.isMetaAchievement and achDef.requiredAchievements then
+                    -- This is a meta achievement - check if all required achievements are actually available
+                    local allRequiredAvailable = true
+                    local anyRequiredFailed = false
+                    
+                    -- Check each required achievement
+                    for _, reqAchId in ipairs(achDef.requiredAchievements) do
+                        local reqAchDef = _G.HCA_AchievementDefs and _G.HCA_AchievementDefs[tostring(reqAchId)]
+                        if reqAchDef then
+                            local reqData = cdb.achievements[tostring(reqAchId)]
+                            
+                            -- Check if required achievement is completed (if so, it's fine)
+                            if reqData and reqData.completed then
+                                -- This required achievement is completed, so it's available for the meta
+                                -- Continue checking other requirements
+                            else
+                                -- Required achievement is not completed - check if it's failed
+                                local isFailed = false
+                                
+                                -- Find the row for this achievement to check current status
+                                local reqRow = nil
+                                for _, row in ipairs(_G.AchievementPanel.achievements) do
+                                    local rowId = row.id or row.achId
+                                    if rowId and tostring(rowId) == tostring(reqAchId) then
+                                        reqRow = row
+                                        break
+                                    end
+                                end
+                                
+                                if reqRow and _G.IsRowOutleveled then
+                                    -- Use IsRowOutleveled to check current status (most accurate)
+                                    isFailed = _G.IsRowOutleveled(reqRow)
+                                elseif reqData and reqData.failed then
+                                    -- Fallback: check database directly
+                                    isFailed = true
+                                end
+                                
+                                if isFailed then
+                                    -- This required achievement is actually failed
+                                    allRequiredAvailable = false
+                                    anyRequiredFailed = true
+                                    break
+                                end
+                            end
+                        end
+                    end
+                    
+                    -- If all required achievements are available (not failed), clear the failed status
+                    if allRequiredAvailable and not anyRequiredFailed then
+                        -- Store for logging
+                        table.insert(fixedAchievements, {
+                            achId = achId,
+                            title = achDef.title or achId
+                        })
+                        
+                        -- Clear failed status
+                        achievementData.failed = nil
+                        achievementData.failedAt = nil
+                        fixedCount = fixedCount + 1
+                    end
+                end
+            end
+        end
+    end
+    
+    -- Log cleanup if any achievements were fixed
+    if fixedCount > 0 then
+        local message = "|cff008066[Hardcore Achievements]|r |cffffd100Fixed " .. fixedCount .. " incorrectly failed meta achievement(s):|r"
+        print(message)
+        for _, fixed in ipairs(fixedAchievements) do
+            print(string.format("  |cffffd100- %s|r", fixed.title or fixed.achId))
+        end
+    end
+    
+    return fixedCount
+end
+-- END OF META ACHIEVEMENT CLEANUP
+
 local function ClearProgress(achId)
     local _, cdb = GetCharDB()
     if cdb and cdb.progress then cdb.progress[achId] = nil end
@@ -336,6 +439,34 @@ local function IsRowOutleveled(row)
     
     local lvl = UnitLevel("player") or 1
     local isOverLevel = lvl > row.maxLevel
+    
+    -- Check if this is a dungeon achievement (has isDungeon flag or mapID)
+    -- If player is currently in a dungeon/raid, don't mark as failed even if over level
+    -- This allows players to level up inside dungeons as long as they entered at the required level
+    if isOverLevel then
+        local isDungeonAchievement = false
+        
+        -- Check if row has isDungeon flag
+        if row._def and row._def.isDungeon then
+            isDungeonAchievement = true
+        end
+        
+        -- Check if achievement definition has mapID (dungeon achievements have mapID)
+        if not isDungeonAchievement then
+            local achId = row.achId or row.id
+            if achId and _G.HCA_AchievementDefs then
+                local achDef = _G.HCA_AchievementDefs[tostring(achId)]
+                if achDef and achDef.mapID then
+                    isDungeonAchievement = true
+                end
+            end
+        end
+        
+        -- If it's a dungeon achievement and player is in a dungeon/raid, don't mark as failed
+        if isDungeonAchievement and _G.HCA_IsInDungeonOrRaid and _G.HCA_IsInDungeonOrRaid() then
+            return false
+        end
+    end
     
     -- Check if there's pending turn-in progress (kill completed but quest not turned in)
     -- If so, check if quest is still in quest log - if not, mark as failed
@@ -4357,6 +4488,12 @@ do
                     if RefreshOutleveledAll then
                         RefreshOutleveledAll()
                     end
+                    
+                    -- Fix incorrectly failed meta achievements after refreshing outleveled status
+                    -- This must run after RefreshOutleveledAll so IsRowOutleveled returns correct values
+                    C_Timer.After(0.1, function()
+                        CleanupIncorrectlyFailedMetaAchievements()
+                    end)
                     
                     C_Timer.After(0.1, function()
                         if SortAchievementRows then
