@@ -213,76 +213,256 @@ local function CleanupIncorrectlyFailedMetaAchievements()
         return
     end
     
-    local fixedCount = 0
-    local fixedAchievements = {}
+    if not _G.HCA_AchievementDefs then
+        return
+    end
     
-    -- Check each achievement in the database
+    -- Step 1: Collect all failed meta achievements and build dependency graph
+    local failedMetaAchievements = {}
+    local metaDependencies = {} -- Maps achId -> array of meta achievement IDs it depends on
+    
     for achId, achievementData in pairs(cdb.achievements) do
         -- Only check meta achievements (marked as failed but not completed)
         if achId and achievementData.failed and not achievementData.completed then
-            -- Check if this is a meta achievement by looking at HCA_AchievementDefs
-            if _G.HCA_AchievementDefs then
-                local achDef = _G.HCA_AchievementDefs[tostring(achId)]
-                if achDef and achDef.isMetaAchievement and achDef.requiredAchievements then
-                    -- This is a meta achievement - check if all required achievements are actually available
-                    local allRequiredAvailable = true
-                    local anyRequiredFailed = false
+            local achDef = _G.HCA_AchievementDefs[tostring(achId)]
+            if achDef and achDef.isMetaAchievement and achDef.requiredAchievements then
+                table.insert(failedMetaAchievements, {
+                    achId = tostring(achId),
+                    data = achievementData,
+                    def = achDef
+                })
+                
+                -- Build dependency list (only include meta achievements)
+                local metaDeps = {}
+                for _, reqAchId in ipairs(achDef.requiredAchievements) do
+                    local reqAchDef = _G.HCA_AchievementDefs[tostring(reqAchId)]
+                    if reqAchDef and reqAchDef.isMetaAchievement then
+                        table.insert(metaDeps, tostring(reqAchId))
+                    end
+                end
+                metaDependencies[tostring(achId)] = metaDeps
+            end
+        end
+    end
+    
+    if #failedMetaAchievements == 0 then
+        return 0
+    end
+    
+    -- Step 2: Topologically sort meta achievements (process dependencies first)
+    -- Use Kahn's algorithm: process achievements with no unmet dependencies
+    local sortedAchievements = {}
+    local processed = {}
+    local remaining = {}
+    for _, meta in ipairs(failedMetaAchievements) do
+        remaining[meta.achId] = meta
+    end
+    
+    local function hasUnmetDependencies(achId)
+        local deps = metaDependencies[achId] or {}
+        for _, depId in ipairs(deps) do
+            -- Check if dependency is in remaining (not yet processed)
+            if remaining[depId] then
+                return true
+            end
+        end
+        return false
+    end
+    
+    -- Process in dependency order
+    local changed = true
+    while changed and next(remaining) do
+        changed = false
+        for achId, meta in pairs(remaining) do
+            if not hasUnmetDependencies(achId) then
+                -- All dependencies are processed (or this has no meta dependencies)
+                table.insert(sortedAchievements, meta)
+                remaining[achId] = nil
+                changed = true
+            end
+        end
+    end
+    
+    -- Add any remaining (circular dependencies or orphaned) at the end
+    for _, meta in pairs(remaining) do
+        table.insert(sortedAchievements, meta)
+    end
+    
+    -- Step 3: Process achievements in sorted order
+    local fixedCount = 0
+    local fixedAchievements = {}
+    
+    for _, meta in ipairs(sortedAchievements) do
+        local achId = meta.achId
+        local achievementData = meta.data
+        local achDef = meta.def
+        
+        -- Check if all required achievements are actually available
+        local allRequiredAvailable = true
+        local anyRequiredFailed = false
+        
+        -- Check each required achievement
+        for _, reqAchId in ipairs(achDef.requiredAchievements) do
+            local reqAchDef = _G.HCA_AchievementDefs[tostring(reqAchId)]
+            if reqAchDef then
+                local reqData = cdb.achievements[tostring(reqAchId)]
+                
+                -- Check if required achievement is completed (if so, it's fine)
+                if reqData and reqData.completed then
+                    -- This required achievement is completed, so it's available for the meta
+                    -- Continue checking other requirements
+                else
+                    -- Required achievement is not completed - check if it's failed
+                    local isFailed = false
                     
-                    -- Check each required achievement
-                    for _, reqAchId in ipairs(achDef.requiredAchievements) do
-                        local reqAchDef = _G.HCA_AchievementDefs and _G.HCA_AchievementDefs[tostring(reqAchId)]
-                        if reqAchDef then
+                    -- If it's a meta achievement, check if we already fixed it in this pass
+                    if reqAchDef.isMetaAchievement then
+                        -- Check if it was in our fixed list
+                        local wasFixed = false
+                        for _, fixed in ipairs(fixedAchievements) do
+                            if fixed.achId == tostring(reqAchId) then
+                                wasFixed = true
+                                break
+                            end
+                        end
+                        if wasFixed then
+                            -- This meta dependency was just fixed, so it's not failed
+                            isFailed = false
+                        else
+                            -- Check current status
                             local reqData = cdb.achievements[tostring(reqAchId)]
-                            
-                            -- Check if required achievement is completed (if so, it's fine)
-                            if reqData and reqData.completed then
-                                -- This required achievement is completed, so it's available for the meta
-                                -- Continue checking other requirements
-                            else
-                                -- Required achievement is not completed - check if it's failed
-                                local isFailed = false
-                                
-                                -- Find the row for this achievement to check current status
-                                local reqRow = nil
-                                for _, row in ipairs(_G.AchievementPanel.achievements) do
-                                    local rowId = row.id or row.achId
-                                    if rowId and tostring(rowId) == tostring(reqAchId) then
-                                        reqRow = row
-                                        break
-                                    end
-                                end
-                                
-                                if reqRow and _G.IsRowOutleveled then
-                                    -- Use IsRowOutleveled to check current status (most accurate)
-                                    isFailed = _G.IsRowOutleveled(reqRow)
-                                elseif reqData and reqData.failed then
-                                    -- Fallback: check database directly
-                                    isFailed = true
-                                end
-                                
-                                if isFailed then
-                                    -- This required achievement is actually failed
-                                    allRequiredAvailable = false
-                                    anyRequiredFailed = true
+                            if reqData and reqData.failed then
+                                isFailed = true
+                            end
+                        end
+                    else
+                        -- Non-meta achievement - check current status comprehensively
+                        -- Priority: database failed flag > IsRowOutleveled > level check
+                        -- Check database failed flag first (most reliable source of truth)
+                        if reqData and reqData.failed then
+                            isFailed = true
+                        end
+                        
+                        -- If not failed in database, check row status
+                        if not isFailed then
+                            local reqRow = nil
+                            for _, row in ipairs(_G.AchievementPanel.achievements) do
+                                local rowId = row.id or row.achId
+                                if rowId and tostring(rowId) == tostring(reqAchId) then
+                                    reqRow = row
                                     break
+                                end
+                            end
+                            
+                            if reqRow and _G.IsRowOutleveled then
+                                -- Use IsRowOutleveled to check current status (most accurate)
+                                isFailed = _G.IsRowOutleveled(reqRow)
+                            end
+                        end
+                        
+                        -- If still not failed, check if player is over the achievement's max level
+                        if not isFailed then
+                            local maxLevel = nil
+                            -- Try to get maxLevel from multiple sources
+                            local reqRow = nil
+                            for _, row in ipairs(_G.AchievementPanel.achievements) do
+                                local rowId = row.id or row.achId
+                                if rowId and tostring(rowId) == tostring(reqAchId) then
+                                    reqRow = row
+                                    break
+                                end
+                            end
+                            
+                            if reqRow and reqRow.maxLevel then
+                                maxLevel = reqRow.maxLevel
+                            elseif reqAchDef and reqAchDef.maxLevel then
+                                maxLevel = reqAchDef.maxLevel
+                            end
+                            
+                            if maxLevel and maxLevel > 0 then
+                                local playerLevel = UnitLevel("player") or 1
+                                if playerLevel > maxLevel then
+                                    -- Only mark as failed if achievement is not completed
+                                    if not (reqData and reqData.completed) then
+                                        isFailed = true
+                                    end
                                 end
                             end
                         end
                     end
                     
-                    -- If all required achievements are available (not failed), clear the failed status
-                    if allRequiredAvailable and not anyRequiredFailed then
-                        -- Store for logging
-                        table.insert(fixedAchievements, {
-                            achId = achId,
-                            title = achDef.title or achId
-                        })
-                        
-                        -- Clear failed status
-                        achievementData.failed = nil
-                        achievementData.failedAt = nil
-                        fixedCount = fixedCount + 1
+                    if isFailed then
+                        -- This required achievement is actually failed
+                        allRequiredAvailable = false
+                        anyRequiredFailed = true
+                        break
                     end
+                end
+            end
+        end
+        
+        -- If all required achievements are available (not failed), clear the failed status
+        -- Double-check: make sure we didn't miss any failed requirements
+        if allRequiredAvailable and not anyRequiredFailed then
+            -- Final verification: check one more time that no required achievements are failed
+            -- This catches cases where IsRowOutleveled might have been called before rows were fully initialized
+            local finalCheckPassed = true
+            for _, reqAchId in ipairs(achDef.requiredAchievements) do
+                local reqData = cdb.achievements[tostring(reqAchId)]
+                if reqData and not reqData.completed then
+                    -- Check database failed flag one more time
+                    if reqData.failed then
+                        finalCheckPassed = false
+                        break
+                    end
+                    
+                    -- Check if player is over level for this achievement
+                    local reqAchDef = _G.HCA_AchievementDefs[tostring(reqAchId)]
+                    if reqAchDef and reqAchDef.maxLevel and reqAchDef.maxLevel > 0 then
+                        local playerLevel = UnitLevel("player") or 1
+                        if playerLevel > reqAchDef.maxLevel then
+                            finalCheckPassed = false
+                            break
+                        end
+                    end
+                end
+            end
+            
+            if not finalCheckPassed then
+                -- Found a failed requirement on final check, don't fix this meta achievement
+                allRequiredAvailable = false
+            end
+        end
+        
+        if allRequiredAvailable and not anyRequiredFailed then
+            -- Store for logging
+            table.insert(fixedAchievements, {
+                achId = achId,
+                title = achDef.title or achId
+            })
+            
+            -- Clear failed status
+            achievementData.failed = nil
+            achievementData.failedAt = nil
+            fixedCount = fixedCount + 1
+            
+            -- Update the UI row if it exists
+            local metaRow = nil
+            for _, row in ipairs(_G.AchievementPanel.achievements) do
+                local rowId = row.id or row.achId
+                if rowId and tostring(rowId) == achId then
+                    metaRow = row
+                    break
+                end
+            end
+            
+            if metaRow then
+                -- Refresh the row's styling to reflect the cleared failed status
+                if _G.ApplyOutleveledStyle then
+                    _G.ApplyOutleveledStyle(metaRow)
+                end
+                if _G.UpdatePointsDisplay then
+                    _G.UpdatePointsDisplay(metaRow)
                 end
             end
         end
@@ -294,6 +474,14 @@ local function CleanupIncorrectlyFailedMetaAchievements()
         print(message)
         for _, fixed in ipairs(fixedAchievements) do
             print(string.format("  |cffffd100- %s|r", fixed.title or fixed.achId))
+        end
+        
+        -- Refresh UI to reflect the changes
+        if RefreshOutleveledAll then
+            RefreshOutleveledAll()
+        end
+        if SortAchievementRows then
+            SortAchievementRows()
         end
     end
     
