@@ -7,7 +7,7 @@ local Reputations = {
   {
     achId = "Stormwind",
     title = "Exalted with Stormwind",
-    tooltip = "Reach Exalted reputation with |cff008765Stormwind|r",
+    tooltip = "Reach Exalted reputation with " .. HCA_SharedUtils.GetClassColor() .. "Stormwind|r",
     icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_reputation_01.png", -- 236681
     points = 100,
     factionId = 72,
@@ -15,7 +15,7 @@ local Reputations = {
   }, {
     achId = "Darnassus",
     title = "Exalted with Darnassus",
-    tooltip = "Reach Exalted reputation with |cff008765Darnassus|r",
+    tooltip = "Reach Exalted reputation with " .. HCA_SharedUtils.GetClassColor() .. "Darnassus|r",
     icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_reputation_01.png", -- 236681
     points = 100,
     factionId = 69,
@@ -23,7 +23,7 @@ local Reputations = {
   }, {
     achId = "Ironforge",
     title = "Exalted with Ironforge",
-    tooltip = "Reach Exalted reputation with |cff008765Ironforge|r",
+    tooltip = "Reach Exalted reputation with " .. HCA_SharedUtils.GetClassColor() .. "Ironforge|r",
     icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_reputation_01.png", -- 236681
     points = 100,
     factionId = 47,
@@ -31,7 +31,7 @@ local Reputations = {
   }, {
     achId = "Gnomeregan Exiles",
     title = "Exalted with Gnomeregan Exiles",
-    tooltip = "Reach Exalted reputation with |cff008765Gnomeregan Exiles|r",
+    tooltip = "Reach Exalted reputation with " .. HCA_SharedUtils.GetClassColor() .. "Gnomeregan Exiles|r",
     icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_reputation_01.png", -- 236681
     points = 100,
     factionId = 54,
@@ -39,7 +39,7 @@ local Reputations = {
   }, {
     achId = "Exodar",
     title = "Exalted with Exodar",
-    tooltip = "Reach Exalted reputation with |cff008765Exodar|r",
+    tooltip = "Reach Exalted reputation with " .. HCA_SharedUtils.GetClassColor() .. "Exodar|r",
     icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_reputation_03.png", -- 236683
     points = 100,
     factionId = 930,
@@ -47,7 +47,7 @@ local Reputations = {
   }, {
     achId = "Kurenai",
     title = "Exalted with Kurenai",
-    tooltip = "Reach Exalted reputation with |cff008765Kurenai|r",
+    tooltip = "Reach Exalted reputation with " .. HCA_SharedUtils.GetClassColor() .. "Kurenai|r",
     icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_reputation_03.png", -- 236683
     points = 100,
     factionId = 978,
@@ -55,7 +55,7 @@ local Reputations = {
   }, {
     achId = "Honor Hold",
     title = "Exalted with Honor Hold",
-    tooltip = "Reach Exalted reputation with |cff008765Honor Hold|r",
+    tooltip = "Reach Exalted reputation with " .. HCA_SharedUtils.GetClassColor() .. "Honor Hold|r",
     icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_reputation_03.png", -- 236683
     points = 100,
     factionId = 946,
@@ -66,7 +66,7 @@ local Reputations = {
   {
     achId = "Orgrimmar",
     title = "Exalted with Orgrimmar",
-    tooltip = "Reach Exalted reputation with |cff008765Orgrimmar|r",
+    tooltip = "Reach Exalted reputation with " .. HCA_SharedUtils.GetClassColor() .. "Orgrimmar|r",
     icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_reputation_01.png", -- 236681
     points = 100,
     factionId = 76,
@@ -74,7 +74,7 @@ local Reputations = {
   }, {
     achId = "Thunder Bluff",
     title = "Exalted with Thunder Bluff",
-    tooltip = "Reach Exalted reputation with |cff008765Thunder Bluff|r",
+    tooltip = "Reach Exalted reputation with " .. HCA_SharedUtils.GetClassColor() .. "Thunder Bluff|r",
     icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_reputation_01.png", -- 236681
     points = 100,
     factionId = 81,
@@ -82,7 +82,7 @@ local Reputations = {
   }, {
     achId = "Undercity",
     title = "Exalted with Undercity",
-    tooltip = "Reach Exalted reputation with |cff008765Undercity|r",
+    tooltip = "Reach Exalted reputation with " .. HCA_SharedUtils.GetClassColor() .. "Undercity|r",
     icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_reputation_01.png", -- 236681
     points = 100,
     factionId = 68,
@@ -90,7 +90,7 @@ local Reputations = {
   }, {
     achId = "Darkspear Trolls",
     title = "Exalted with Darkspear Trolls",
-    tooltip = "Reach Exalted reputation with |cff008765Darkspear Trolls|r",
+    tooltip = "Reach Exalted reputation with " .. HCA_SharedUtils.GetClassColor() .. "Darkspear Trolls|r",
     icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_reputation_01.png", -- 236681
     points = 100,
     factionId = 530,
@@ -98,7 +98,7 @@ local Reputations = {
   }, {
     achId = "Silvermoon City",
     title = "Exalted with Silvermoon City",
-    tooltip = "Reach Exalted reputation with |cff008765Silvermoon City|r",
+    tooltip = "Reach Exalted reputation with " .. HCA_SharedUtils.GetClassColor() .. "Silvermoon City|r",
     icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_reputation_03.png", -- 236683
     points = 100,
     factionId = 911,
@@ -106,7 +106,7 @@ local Reputations = {
   }, {
     achId = "Tranquillien",
     title = "Exalted with Tranquillien",
-    tooltip = "Reach Exalted reputation with |cff008765Tranquillien|r",
+    tooltip = "Reach Exalted reputation with " .. HCA_SharedUtils.GetClassColor() .. "Tranquillien|r",
     icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_reputation_03.png", -- 236683
     points = 100,
     factionId = 922,
@@ -114,7 +114,7 @@ local Reputations = {
   }, {
     achId = "Thrallmar",
     title = "Exalted with Thrallmar",
-    tooltip = "Reach Exalted reputation with |cff008765Thrallmar|r",
+    tooltip = "Reach Exalted reputation with " .. HCA_SharedUtils.GetClassColor() .. "Thrallmar|r",
     icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_reputation_03.png", -- 236683
     points = 100,
     factionId = 947,
@@ -125,7 +125,7 @@ local Reputations = {
   {
     achId = "BootyBay",
     title = "Exalted with Booty Bay",
-    tooltip = "Reach Exalted reputation with |cff008765Booty Bay|r",
+    tooltip = "Reach Exalted reputation with " .. HCA_SharedUtils.GetClassColor() .. "Booty Bay|r",
     icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_reputation_08.png", -- 236688
     points = 200,
     factionId = 21,
@@ -133,7 +133,7 @@ local Reputations = {
   }, {
     achId = "Ratchet",
     title = "Exalted with Ratchet",
-    tooltip = "Reach Exalted reputation with |cff008765Ratchet|r",
+    tooltip = "Reach Exalted reputation with " .. HCA_SharedUtils.GetClassColor() .. "Ratchet|r",
     icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_reputation_08.png", -- 236688
     points = 200,
     factionId = 470,
@@ -141,7 +141,7 @@ local Reputations = {
   }, {
     achId = "Everlook",
     title = "Exalted with Everlook",
-    tooltip = "Reach Exalted reputation with |cff008765Everlook|r",
+    tooltip = "Reach Exalted reputation with " .. HCA_SharedUtils.GetClassColor() .. "Everlook|r",
     icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_reputation_08.png", -- 236688
     points = 200,
     factionId = 577,
@@ -149,7 +149,7 @@ local Reputations = {
   }, {
     achId = "Gadgetzan",
     title = "Exalted with Gadgetzan",
-    tooltip = "Reach Exalted reputation with |cff008765Gadgetzan|r",
+    tooltip = "Reach Exalted reputation with " .. HCA_SharedUtils.GetClassColor() .. "Gadgetzan|r",
     icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_reputation_08.png", -- 236688
     points = 200,
     factionId = 369,
@@ -157,7 +157,7 @@ local Reputations = {
   }, {
     achId = "ArgentDawn",
     title = "Exalted with Argent Dawn",
-    tooltip = "Reach Exalted reputation with |cff008765Argent Dawn|r",
+    tooltip = "Reach Exalted reputation with " .. HCA_SharedUtils.GetClassColor() .. "Argent Dawn|r",
     icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_reputation_08.png", -- 236688
     points = 150,
     factionId = 529,
@@ -165,7 +165,7 @@ local Reputations = {
   }, {
     achId = "Timbermaw",
     title = "Exalted with Timbermaw Hold",
-    tooltip = "Reach Exalted reputation with |cff008765Timbermaw Hold|r",
+    tooltip = "Reach Exalted reputation with " .. HCA_SharedUtils.GetClassColor() .. "Timbermaw Hold|r",
     icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_reputation_08.png", -- 236688
     points = 200,
     factionId = 576,
@@ -173,7 +173,7 @@ local Reputations = {
   }, {
     achId = "CenarionCircle",
     title = "Exalted with Cenarion Circle",
-    tooltip = "Reach Exalted reputation with |cff008765Cenarion Circle|r",
+    tooltip = "Reach Exalted reputation with " .. HCA_SharedUtils.GetClassColor() .. "Cenarion Circle|r",
     icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_reputation_08.png", -- 236688
     points = 150,
     factionId = 609,
@@ -181,7 +181,7 @@ local Reputations = {
   }, {
     achId = "ThoriumBrotherhood",
     title = "Exalted with Thorium Brotherhood",
-    tooltip = "Reach Exalted reputation with |cff008765Thorium Brotherhood|r",
+    tooltip = "Reach Exalted reputation with " .. HCA_SharedUtils.GetClassColor() .. "Thorium Brotherhood|r",
     icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_reputation_08.png", -- 236688
     points = 150,
     factionId = 59,
@@ -189,7 +189,7 @@ local Reputations = {
   }, {
     achId = "Hydraxian",
     title = "Exalted with Hydraxian Waterlords",
-    tooltip = "Reach Exalted reputation with |cff008765Hydraxian Waterlords|r",
+    tooltip = "Reach Exalted reputation with " .. HCA_SharedUtils.GetClassColor() .. "Hydraxian Waterlords|r",
     icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_reputation_08.png", -- 236688
     points = 150,
     factionId = 749,
@@ -197,7 +197,7 @@ local Reputations = {
   }, {
     achId = "Zandalar",
     title = "Exalted with Zandalar Tribe",
-    tooltip = "Reach Exalted reputation with |cff008765Zandalar Tribe|r",
+    tooltip = "Reach Exalted reputation with " .. HCA_SharedUtils.GetClassColor() .. "Zandalar Tribe|r",
     icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_reputation_08.png", -- 236688
     points = 150,
     factionId = 270,
@@ -205,7 +205,7 @@ local Reputations = {
   }, {
     achId = "Nozdormu",
     title = "Exalted with Brood of Nozdormu",
-    tooltip = "Reach Exalted reputation with |cff008765Brood of Nozdormu|r",
+    tooltip = "Reach Exalted reputation with " .. HCA_SharedUtils.GetClassColor() .. "Brood of Nozdormu|r",
     icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_reputation_08.png", -- 236688
     points = 150,
     factionId = 910,
@@ -213,7 +213,7 @@ local Reputations = {
   }, {
     achId = "Ashtongue Deathsworn",
     title = "Exalted with Ashtongue Deathsworn",
-    tooltip = "Reach Exalted reputation with |cff008765Ashtongue Deathsworn|r",
+    tooltip = "Reach Exalted reputation with " .. HCA_SharedUtils.GetClassColor() .. "Ashtongue Deathsworn|r",
     icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_reputation_08.png", -- 236688
     points = 150,
     factionId = 1012,
@@ -221,7 +221,7 @@ local Reputations = {
   }, {
     achId = "Scale of the Sands",
     title = "Exalted with Scale of the Sands",
-    tooltip = "Reach Exalted reputation with |cff008765Scale of the Sands|r",
+    tooltip = "Reach Exalted reputation with " .. HCA_SharedUtils.GetClassColor() .. "Scale of the Sands|r",
     icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_reputation_08.png", -- 236688
     points = 150,
     factionId = 990,
@@ -229,7 +229,7 @@ local Reputations = {
   }, {
     achId = "The Violet Eye",
     title = "Exalted with The Violet Eye",
-    tooltip = "Reach Exalted reputation with |cff008765The Violet Eye|r",
+    tooltip = "Reach Exalted reputation with " .. HCA_SharedUtils.GetClassColor() .. "The Violet Eye|r",
     icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_reputation_08.png", -- 236688
     points = 150,
     factionId = 967,
@@ -237,7 +237,7 @@ local Reputations = {
   }, {
     achId = "Shattered Sun Offensive",
     title = "Exalted with Shattered Sun Offensive",
-    tooltip = "Reach Exalted reputation with |cff008765Shattered Sun Offensive|r",
+    tooltip = "Reach Exalted reputation with " .. HCA_SharedUtils.GetClassColor() .. "Shattered Sun Offensive|r",
     icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_reputation_08.png", -- 236688
     points = 150,
     factionId = 1077,
@@ -245,7 +245,7 @@ local Reputations = {
   }, {
     achId = "Sha'tari Skyguard",
     title = "Exalted with Sha'tari Skyguard",
-    tooltip = "Reach Exalted reputation with |cff008765Sha'tari Skyguard|r",
+    tooltip = "Reach Exalted reputation with " .. HCA_SharedUtils.GetClassColor() .. "Sha'tari Skyguard|r",
     icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_reputation_08.png", -- 236688
     points = 150,
     factionId = 1031,
@@ -253,7 +253,7 @@ local Reputations = {
   }, {
     achId = "The Mag'har",
     title = "Exalted with The Mag'har",
-    tooltip = "Reach Exalted reputation with |cff008765The Mag'har|r",
+    tooltip = "Reach Exalted reputation with " .. HCA_SharedUtils.GetClassColor() .. "The Mag'har|r",
     icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_reputation_08.png", -- 236688
     points = 150,
     factionId = 941,
@@ -261,7 +261,7 @@ local Reputations = {
   }, {
     achId = "Sporeggar",
     title = "Exalted with Sporeggar",
-    tooltip = "Reach Exalted reputation with |cff008765Sporeggar|r",
+    tooltip = "Reach Exalted reputation with " .. HCA_SharedUtils.GetClassColor() .. "Sporeggar|r",
     icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_reputation_08.png", -- 236688
     points = 150,
     factionId = 970,
@@ -269,7 +269,7 @@ local Reputations = {
   }, {
     achId = "Ogri'la",
     title = "Exalted with Ogri'la",
-    tooltip = "Reach Exalted reputation with |cff008765Ogri'la|r",
+    tooltip = "Reach Exalted reputation with " .. HCA_SharedUtils.GetClassColor() .. "Ogri'la|r",
     icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_reputation_08.png", -- 236688
     points = 150,
     factionId = 1038,
@@ -277,7 +277,7 @@ local Reputations = {
   }, {
     achId = "Netherwing",
     title = "Exalted with Netherwing",
-    tooltip = "Reach Exalted reputation with |cff008765Netherwing|r",
+    tooltip = "Reach Exalted reputation with " .. HCA_SharedUtils.GetClassColor() .. "Netherwing|r",
     icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_reputation_08.png", -- 236688
     points = 150,
     factionId = 1015,
@@ -285,7 +285,7 @@ local Reputations = {
   }, {
     achId = "The Consortium",
     title = "Exalted with The Consortium",
-    tooltip = "Reach Exalted reputation with |cff008765The Consortium|r",
+    tooltip = "Reach Exalted reputation with " .. HCA_SharedUtils.GetClassColor() .. "The Consortium|r",
     icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_reputation_08.png", -- 236688
     points = 150,
     factionId = 933,
@@ -293,7 +293,7 @@ local Reputations = {
   }, {
     achId = "Keepers of Time",
     title = "Exalted with Keepers of Time",
-    tooltip = "Reach Exalted reputation with |cff008765Keepers of Time|r",
+    tooltip = "Reach Exalted reputation with " .. HCA_SharedUtils.GetClassColor() .. "Keepers of Time|r",
     icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_reputation_08.png", -- 236688
     points = 150,
     factionId = 989,
@@ -301,7 +301,7 @@ local Reputations = {
   }, {
     achId = "Lower City",
     title = "Exalted with Lower City",
-    tooltip = "Reach Exalted reputation with |cff008765Lower City|r",
+    tooltip = "Reach Exalted reputation with " .. HCA_SharedUtils.GetClassColor() .. "Lower City|r",
     icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_reputation_08.png", -- 236688
     points = 150,
     factionId = 1011,
@@ -309,7 +309,7 @@ local Reputations = {
   }, {
     achId = "Cenarion Expedition",
     title = "Exalted with Cenarion Expedition",
-    tooltip = "Reach Exalted reputation with |cff008765Cenarion Expedition|r",
+    tooltip = "Reach Exalted reputation with " .. HCA_SharedUtils.GetClassColor() .. "Cenarion Expedition|r",
     icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_reputation_08.png", -- 236688
     points = 150,
     factionId = 942,
@@ -317,7 +317,7 @@ local Reputations = {
   }, {
     achId = "The Sha'tar",
     title = "Exalted with The Sha'tar",
-    tooltip = "Reach Exalted reputation with |cff008765The Sha'tar|r",
+    tooltip = "Reach Exalted reputation with " .. HCA_SharedUtils.GetClassColor() .. "The Sha'tar|r",
     icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_reputation_08.png", -- 236688
     points = 150,
     factionId = 935,
@@ -325,7 +325,7 @@ local Reputations = {
   }, {
     achId = "The Aldor",
     title = "Exalted with The Aldor",
-    tooltip = "Reach Exalted reputation with |cff008765The Aldor|r",
+    tooltip = "Reach Exalted reputation with " .. HCA_SharedUtils.GetClassColor() .. "The Aldor|r",
     icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_reputation_08.png", -- 236688
     points = 150,
     factionId = 932,
@@ -333,7 +333,7 @@ local Reputations = {
   }, {
     achId = "The Scryers",
     title = "Exalted with The Scryers",
-    tooltip = "Reach Exalted reputation with |cff008765The Scryers|r",
+    tooltip = "Reach Exalted reputation with " .. HCA_SharedUtils.GetClassColor() .. "The Scryers|r",
     icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_reputation_08.png", -- 236688
     points = 150,
     factionId = 934,
@@ -344,7 +344,7 @@ local Reputations = {
   {
     achId = "Bloodsail",
     title = "Exalted with Bloodsail Buccaneers",
-    tooltip = "Reach Exalted reputation with |cff008765Bloodsail Buccaneers|r",
+    tooltip = "Reach Exalted reputation with " .. HCA_SharedUtils.GetClassColor() .. "Bloodsail Buccaneers|r",
     icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_reputation_05.png", -- 236685
     points = 200,
     factionId = 87,
@@ -352,7 +352,7 @@ local Reputations = {
   }, {
     achId = "Wintersaber",
     title = "Exalted with Wintersaber Trainers",
-    tooltip = "Reach Exalted reputation with |cff008765Wintersaber Trainers|r",
+    tooltip = "Reach Exalted reputation with " .. HCA_SharedUtils.GetClassColor() .. "Wintersaber Trainers|r",
     icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_reputation_05.png", -- 236685
     points = 200,
     factionId = 589,
@@ -363,7 +363,7 @@ local Reputations = {
   {
     achId = "Ravenholdt",
     title = "Exalted with Ravenholdt |cfffff468[Rogue]|r",
-    tooltip = "Reach Exalted reputation with |cff008765Ravenholdt|r",
+    tooltip = "Reach Exalted reputation with " .. HCA_SharedUtils.GetClassColor() .. "Ravenholdt|r",
     icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_reputation_06.png", -- 236686
     points = 200,
     factionId = 349,

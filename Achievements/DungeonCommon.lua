@@ -555,7 +555,7 @@ local function CreateVariation(baseDef, variation)
     -- Update tooltip to reflect variation (clean, without "Variation" suffix)
     local partySizeText = variation.maxPartySize == 1 and "yourself only" or 
                           (variation.maxPartySize == 2 and "up to 2 party members" or "up to 3 party members")
-    variationDef.tooltip = "Defeat the bosses of |cff008765" .. baseDef.title .. "|r with every party member at level " .. variationDef.level .. " or lower upon entering the dungeon" .. " (" .. partySizeText .. ")"
+    variationDef.tooltip = "Defeat the bosses of " .. HCA_SharedUtils.GetClassColor() .. "" .. baseDef.title .. "|r with every party member at level " .. variationDef.level .. " or lower upon entering the dungeon" .. " (" .. partySizeText .. ")"
     
     -- Mark as variation
     variationDef.isVariation = true

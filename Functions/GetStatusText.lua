@@ -45,24 +45,24 @@ local function GetStatusText(params)
     local allowSoloBonus = isSelfFound or not isHardcoreActive
     
     if completed and wasSolo and allowSoloBonus then
-        return "|c" .. select(4, GetClassColor(select(2, UnitClass("player")))) .. "Solo|r"
+        return HCA_SharedUtils.GetClassColor() .. "Solo|r"
     end
     
     -- Check if kills are satisfied but quest is pending (for achievements requiring both)
     if not completed and requiresBoth and killsSatisfied then
         if hasSoloStatus and allowSoloBonus then
-            return "|c" .. select(4, GetClassColor(select(2, UnitClass("player")))) .. "Pending Turn-in (solo)|r"
+            return HCA_SharedUtils.GetClassColor() .. "Pending Turn-in (solo)|r"
         else
-            return "|c" .. select(4, GetClassColor(select(2, UnitClass("player")))) .. "Pending Turn-in|r"
+            return HCA_SharedUtils.GetClassColor() .. "Pending Turn-in|r"
         end
     end
     
     if not completed and requiresBoth and hasSoloStatus and allowSoloBonus then
-        return "|c" .. select(4, GetClassColor(select(2, UnitClass("player")))) .. "Pending Turn-in (solo)|r"
+        return HCA_SharedUtils.GetClassColor() .. "Pending Turn-in (solo)|r"
     end
     
     if not completed and isSoloMode and allowSoloDouble and not hasSoloStatus and allowSoloBonus then
-        return "|cff808080Solo bonus|r"
+        return HCA_SharedUtils.GetClassColor() .. "Solo bonus|r"
     end
     
     -- No special status

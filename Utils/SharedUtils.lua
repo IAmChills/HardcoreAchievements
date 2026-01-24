@@ -1,15 +1,15 @@
--- SharedUtils.lua
+-- HCA_SharedUtils.lua
 -- Shared utility functions used across multiple files in the Hardcore Achievements addon
 -- This reduces code duplication and centralizes common logic
 
-local SharedUtils = {}
+HCA_SharedUtils = {}
 
 -- =========================================================
 -- Settings Helpers
 -- =========================================================
 
 -- Get a setting value from character database
-function SharedUtils.GetSetting(settingName, defaultValue)
+function HCA_SharedUtils.GetSetting(settingName, defaultValue)
     if type(HardcoreAchievements_GetCharDB) == "function" then
         local _, cdb = HardcoreAchievements_GetCharDB()
         if cdb and cdb.settings then
@@ -23,7 +23,7 @@ function SharedUtils.GetSetting(settingName, defaultValue)
 end
 
 -- Set a setting value in character database
-function SharedUtils.SetSetting(settingName, value)
+function HCA_SharedUtils.SetSetting(settingName, value)
     if type(HardcoreAchievements_GetCharDB) == "function" then
         local _, cdb = HardcoreAchievements_GetCharDB()
         if cdb then
@@ -34,16 +34,50 @@ function SharedUtils.SetSetting(settingName, value)
 end
 
 -- =========================================================
+-- Class Color Helper
+-- =========================================================
+
+-- Cache the class color string (player's class doesn't change during session)
+local cachedClassColor = nil
+
+-- Initialize class color cache
+local function InitializeClassColor()
+    if not cachedClassColor then
+        -- Use the same method as the original implementation for compatibility
+        cachedClassColor = "|c" .. select(4, GetClassColor(select(2, UnitClass("player"))))
+    end
+    return cachedClassColor
+end
+
+function HCA_SharedUtils.GetClassColor()
+    -- Return cached value, initializing if needed
+    if not cachedClassColor then
+        InitializeClassColor()
+    end
+    return cachedClassColor
+end
+
+-- Initialize on PLAYER_LOGIN event
+local classColorFrame = CreateFrame("Frame")
+classColorFrame:RegisterEvent("PLAYER_LOGIN")
+classColorFrame:SetScript("OnEvent", function(self, event)
+    if event == "PLAYER_LOGIN" then
+        InitializeClassColor()
+        self:UnregisterAllEvents()
+    end
+end)
+
+-- =========================================================
 -- Character Panel Tab Management
 -- =========================================================
 
 -- Get the Character Frame achievement tab
-function SharedUtils.GetAchievementTab()
+function HCA_SharedUtils.GetAchievementTab()
     return _G["CharacterFrameTab" .. (CharacterFrame.numTabs + 1)]
 end
 
 -- Check if tab is the achievement tab
-function SharedUtils.IsAchievementTab(tab)
+function HCA_SharedUtils.IsAchievementTab(tab)
     if not tab or not tab.GetText then return false end
     local tabText = tab:GetText()
     if not tabText then return false end
@@ -51,7 +85,7 @@ function SharedUtils.IsAchievementTab(tab)
 end
 
 -- Show or hide the Character Panel achievement tab based on useCharacterPanel setting
-function SharedUtils.UpdateCharacterPanelTabVisibility()
+function HCA_SharedUtils.UpdateCharacterPanelTabVisibility()
     -- Get the actual Tab frame directly (more reliable than searching by name)
     local tab = nil
     if type(_G.HardcoreAchievements_GetTab) == "function" then
@@ -60,8 +94,8 @@ function SharedUtils.UpdateCharacterPanelTabVisibility()
     
     -- Fallback to finding by name if getter not available
     if not tab then
-        tab = SharedUtils.GetAchievementTab()
-        if not tab or not SharedUtils.IsAchievementTab(tab) then 
+        tab = HCA_SharedUtils.GetAchievementTab()
+        if not tab or not HCA_SharedUtils.IsAchievementTab(tab) then 
             -- Tab not found, but still call LoadTabPosition which will handle it
             if type(_G.HardcoreAchievements_LoadTabPosition) == "function" then
                 _G.HardcoreAchievements_LoadTabPosition()
@@ -70,7 +104,7 @@ function SharedUtils.UpdateCharacterPanelTabVisibility()
         end
     end
     
-    local useCharacterPanel = SharedUtils.GetSetting("useCharacterPanel", true)
+    local useCharacterPanel = HCA_SharedUtils.GetSetting("useCharacterPanel", true)
     
     if useCharacterPanel then
         -- Show custom tab (Character Panel mode) - LoadTabPosition will handle the actual showing
@@ -96,8 +130,8 @@ function SharedUtils.UpdateCharacterPanelTabVisibility()
 end
 
 -- Set useCharacterPanel setting and update tab visibility
-function SharedUtils.SetUseCharacterPanel(enabled)
-    SharedUtils.SetSetting("useCharacterPanel", enabled)
+function HCA_SharedUtils.SetUseCharacterPanel(enabled)
+    HCA_SharedUtils.SetSetting("useCharacterPanel", enabled)
     
     -- Sync showCustomTab with useCharacterPanel to keep them in sync
     if type(HardcoreAchievements_GetCharDB) == "function" then
@@ -108,17 +142,10 @@ function SharedUtils.SetUseCharacterPanel(enabled)
         end
     end
     
-    SharedUtils.UpdateCharacterPanelTabVisibility()
+    HCA_SharedUtils.UpdateCharacterPanelTabVisibility()
     
     -- Reload tab position only when enabling (positioning). When disabling, we already hid it directly.
     if enabled and type(_G.HardcoreAchievements_LoadTabPosition) == "function" then
         _G.HardcoreAchievements_LoadTabPosition()
     end
 end
-
--- =========================================================
--- Export Globally
--- =========================================================
-
--- Export as global for use by other files
-_G.HardcoreAchievements_SharedUtils = SharedUtils

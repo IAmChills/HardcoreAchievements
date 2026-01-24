@@ -4,7 +4,7 @@ local Raids = {
   {
     achId = "UBRS",
     title = "Upper Blackrock Spire",
-    tooltip = "Defeat the bosses of |cff008765Upper Blackrock Spire|r",
+    tooltip = "Defeat the bosses of " .. HCA_SharedUtils.GetClassColor() .. "Upper Blackrock Spire|r",
     icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_boss_generaldrakkisath.png", -- 254648
     points = 50,
     requiredQuestId = nil,
@@ -24,7 +24,7 @@ local Raids = {
   {
     achId = "MC",
     title = "Molten Core",
-    tooltip = "Defeat the bosses of |cff008765Molten Core|r",
+    tooltip = "Defeat the bosses of " .. HCA_SharedUtils.GetClassColor() .. "Molten Core|r",
     icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_boss_ragnaros.png", -- 254652
     points = 50,
     requiredQuestId = nil,
@@ -49,7 +49,7 @@ local Raids = {
   {
     achId = "ONY",
     title = "Onyxia's Lair",
-    tooltip = "Defeat |cff008765Onyxia|r",
+    tooltip = "Defeat " .. HCA_SharedUtils.GetClassColor() .. "Onyxia|r",
     icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_boss_onyxia.png", -- 254650
     points = 50,
     requiredQuestId = nil,
@@ -65,7 +65,7 @@ local Raids = {
   {
     achId = "BWL",
     title = "Blackwing Lair",
-    tooltip = "Defeat the bosses of |cff008765Blackwing Lair|r",
+    tooltip = "Defeat the bosses of " .. HCA_SharedUtils.GetClassColor() .. "Blackwing Lair|r",
     icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_boss_nefarion.png", -- 254649
     points = 50,
     requiredQuestId = nil,
@@ -88,7 +88,7 @@ local Raids = {
   {
     achId = "ZG",
     title = "Zul'Gurub",
-    tooltip = "Defeat the bosses of |cff008765Zul'Gurub|r",
+    tooltip = "Defeat the bosses of " .. HCA_SharedUtils.GetClassColor() .. "Zul'Gurub|r",
     icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_boss_hakkar.png", -- 236413
     points = 50,
     requiredQuestId = nil,
@@ -113,7 +113,7 @@ local Raids = {
   {
     achId = "AQ20",
     title = "Ruins of Ahn'Qiraj",
-    tooltip = "Defeat the bosses of |cff008765Ruins of Ahn'Qiraj|r",
+    tooltip = "Defeat the bosses of " .. HCA_SharedUtils.GetClassColor() .. "Ruins of Ahn'Qiraj|r",
     icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_boss_ossiriantheunscarred.png", -- 236428
     points = 50,
     requiredQuestId = nil,
@@ -134,7 +134,7 @@ local Raids = {
   {
     achId = "AQ40",
     title = "Temple of Ahn'Qiraj",
-    tooltip = "Defeat the bosses of |cff008765Temple of Ahn'Qiraj|r",
+    tooltip = "Defeat the bosses of " .. HCA_SharedUtils.GetClassColor() .. "Temple of Ahn'Qiraj|r",
     icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_boss_cthun.png", -- 236407
     points = 50,
     requiredQuestId = nil,
@@ -161,7 +161,7 @@ local Raids = {
   {
     achId = "NAXX",
     title = "Naxxramas",
-    tooltip = "Defeat the bosses of |cff008765Naxxramas|r",
+    tooltip = "Defeat the bosses of " .. HCA_SharedUtils.GetClassColor() .. "Naxxramas|r",
     icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_boss_sapphiron_01.png", -- 254100
     points = 50,
     requiredQuestId = nil,
@@ -194,7 +194,7 @@ local Raids = {
   {
     achId = "KARA",
     title = "Karazhan",
-    tooltip = "Defeat the bosses of |cff008765Karazhan|r",
+    tooltip = "Defeat the bosses of " .. HCA_SharedUtils.GetClassColor() .. "Karazhan|r",
     icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_boss_princemalchezaar_02.png", -- 254651
     points = 25,
     requiredQuestId = nil,
@@ -219,7 +219,7 @@ local Raids = {
   {
     achId = "GRUUL",
     title = "Gruul's Lair",
-    tooltip = "Defeat the bosses of |cff008765Gruul's Lair|r",
+    tooltip = "Defeat the bosses of " .. HCA_SharedUtils.GetClassColor() .. "Gruul's Lair|r",
     icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_boss_gruulthedragonkiller.png", -- 236412
     points = 50,
     requiredQuestId = nil,
@@ -236,7 +236,7 @@ local Raids = {
   {
     achId = "MAGTHERIDON",
     title = "Magtheridon's Lair",
-    tooltip = "Defeat the bosses of |cff008765Magtheridon's Lair|r",
+    tooltip = "Defeat the bosses of " .. HCA_SharedUtils.GetClassColor() .. "Magtheridon's Lair|r",
     icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_boss_magtheridon.png", -- 236423
     points = 50,
     requiredQuestId = nil,
@@ -252,7 +252,7 @@ local Raids = {
   {
     achId = "SSC",
     title = "Serpentshrine Cavern",
-    tooltip = "Defeat the bosses of |cff008765Serpentshrine Cavern|r",
+    tooltip = "Defeat the bosses of " .. HCA_SharedUtils.GetClassColor() .. "Serpentshrine Cavern|r",
     icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_boss_ladyvashj.png", -- 236422
     points = 50,
     requiredQuestId = nil,
@@ -273,7 +273,7 @@ local Raids = {
   {
     achId = "TK",
     title = "Tempest Keep",
-    tooltip = "Defeat the bosses of |cff008765Tempest Keep|r",
+    tooltip = "Defeat the bosses of " .. HCA_SharedUtils.GetClassColor() .. "Tempest Keep|r",
     icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_Boss_Kael'thasSunstrider_01.png", -- 250117
     points = 50,
     requiredQuestId = nil,
@@ -292,7 +292,7 @@ local Raids = {
   {
     achId = "HYJAL",
     title = "Hyjal Summit",
-    tooltip = "Defeat the bosses of |cff008765Hyjal Summit|r",
+    tooltip = "Defeat the bosses of " .. HCA_SharedUtils.GetClassColor() .. "Hyjal Summit|r",
     icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_boss_archimonde.png", -- 236402
     points = 50,
     requiredQuestId = nil,
@@ -312,7 +312,7 @@ local Raids = {
   {
     achId = "BT",
     title = "Black Temple",
-    tooltip = "Defeat the bosses of |cff008765Black Temple|r",
+    tooltip = "Defeat the bosses of " .. HCA_SharedUtils.GetClassColor() .. "Black Temple|r",
     icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_boss_illidan.png", -- 236415
     points = 50,
     requiredQuestId = nil,
@@ -336,7 +336,7 @@ local Raids = {
   {
     achId = "ZA",
     title = "Zul'Aman",
-    tooltip = "Defeat the bosses of |cff008765Zul'Aman|r",
+    tooltip = "Defeat the bosses of " .. HCA_SharedUtils.GetClassColor() .. "Zul'Aman|r",
     icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_boss_zuljin.png", -- 236438
     points = 50,
     requiredQuestId = nil,
@@ -357,7 +357,7 @@ local Raids = {
   {
     achId = "SWP",
     title = "Sunwell Plateau",
-    tooltip = "Defeat the bosses of |cff008765Sunwell Plateau|r",
+    tooltip = "Defeat the bosses of " .. HCA_SharedUtils.GetClassColor() .. "Sunwell Plateau|r",
     icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_boss_kiljaedan.png", -- 236418
     points = 50,
     requiredQuestId = nil,

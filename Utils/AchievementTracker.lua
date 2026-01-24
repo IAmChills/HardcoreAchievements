@@ -1138,7 +1138,7 @@ local function GetAchievementStatus(achievementId)
         end
         
         if isPendingTurnIn then
-            return " (Pending Turn-In)", select(4, GetClassColor(select(2, UnitClass("player"))))
+            return " (Pending Turn-In)", HCA_SharedUtils.GetClassColor()
         end
     end
     
@@ -1437,9 +1437,9 @@ function AchievementTracker:Update()
 
     -- Update header (yellow color)
     if isExpanded then
-        trackerHeaderFrame.label:SetText("|cFFFFFF00Achievement Tracker: " .. numTracked .. "/10|r")
+        trackerHeaderFrame.label:SetText("|CFFFFD100Achievement Tracker: " .. numTracked .. "/10|r")
     else
-        trackerHeaderFrame.label:SetText("|cFFFFFF00Achievement Tracker +|r")
+        trackerHeaderFrame.label:SetText("|CFFFFD100Achievement Tracker +|r")
     end
 
     -- Calculate header width including icon, spacing, and label
@@ -1583,7 +1583,7 @@ function AchievementTracker:Update()
                 -- Get achievement status (Completed, Failed, Pending Turn-In)
                 local statusText, statusColor = GetAchievementStatus(achievementId)
                 if statusText then
-                    displayTitle = displayTitle .. "|c" .. statusColor .. statusText .. "|r"
+                    displayTitle = displayTitle .. statusColor .. statusText .. "|r"
                 end
                 
                 -- Set title with color coding based on player level vs required level

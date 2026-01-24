@@ -295,7 +295,7 @@ local function ProcessDeleteAchievementCommand(payload, sender)
         SendResponseToAdmin(sender, "|cff00ff00[Hardcore Achievements]|r Achievement '" .. payload.achievementId .. "' deleted successfully for " .. currentCharacter)
         print("|cffff0000[Hardcore Achievements]|r Achievement '" .. payload.achievementId .. "' has been deleted by admin")
     else
-        SendResponseToAdmin(sender, "|cffffff00[Hardcore Achievements]|r Achievement '" .. payload.achievementId .. "' was not in database for " .. currentCharacter .. " (already deleted)")
+        SendResponseToAdmin(sender, "|CFFFFD100[Hardcore Achievements]|r Achievement '" .. payload.achievementId .. "' was not in database for " .. currentCharacter .. " (already deleted)")
     end
     
     return true
@@ -346,7 +346,7 @@ local function ProcessClearSecretKeyCommand(payload, sender)
             SendResponseToAdmin(sender, "|cff00ff00[Hardcore Achievements]|r Secret key cleared successfully for " .. currentCharacter)
             print("|cffff0000[Hardcore Achievements]|r Your admin secret key has been cleared by the admin. This is intentional, to prevent you from receiving admin commands unless you set another key.")
         else
-            SendResponseToAdmin(sender, "|cffffff00[Hardcore Achievements]|r Secret key was not set for " .. currentCharacter .. " (already cleared)")
+            SendResponseToAdmin(sender, "|CFFFFD100[Hardcore Achievements]|r Secret key was not set for " .. currentCharacter .. " (already cleared)")
         end
         return true
     else
@@ -379,7 +379,7 @@ local function ProcessAdminCommand(payload, sender)
             -- But if it fails for other reasons (invalid hash, etc.), reject it
             if reason == "Admin secret key not configured" then
                 -- Key is already cleared, return success (idempotent operation)
-                SendResponseToAdmin(sender, "|cffffff00[Hardcore Achievements]|r Secret key was already cleared for " .. payload.targetCharacter)
+                SendResponseToAdmin(sender, "|CFFFFD100[Hardcore Achievements]|r Secret key was already cleared for " .. payload.targetCharacter)
                 return true
             else
                 SendResponseToAdmin(sender, "|cffff0000[Hardcore Achievements]|r Clear key command rejected: " .. reason)
@@ -459,7 +459,7 @@ local function ProcessAdminCommand(payload, sender)
 					local isHardcoreActive = C_GameRules and C_GameRules.IsHardcoreActive and C_GameRules.IsHardcoreActive() or false
 					local allowSoloBonus = isSelfFound or not isHardcoreActive
 					if allowSoloBonus then
-						achievementRow.Sub:SetText(AUCTION_TIME_LEFT0 .. "\n|c" .. select(4, GetClassColor(select(2, UnitClass("player")))) .. "Solo|r")
+						achievementRow.Sub:SetText(AUCTION_TIME_LEFT0 .. "\n" .. HCA_SharedUtils.GetClassColor() .. "Solo|r")
 					end
 				end
 				if type(HCA_UpdateTotalPoints) == "function" then
@@ -678,7 +678,7 @@ local function HandleSlashCommand(msg)
             if #key >= 16 then
                 if SetAdminSecretKey(key) then
                     print("|cff00ff00[Hardcore Achievements]|r Admin secret key set successfully")
-                    print("|cffffff00[Hardcore Achievements]|r Keep this key secret! Anyone with this key can send admin commands.")
+                    print("|CFFFFD100[Hardcore Achievements]|r Keep this key secret! Anyone with this key can send admin commands.")
                     if UpdateKeyStatus then
                         UpdateKeyStatus()
                     end
@@ -694,8 +694,8 @@ local function HandleSlashCommand(msg)
                 print("|cff00ff00[Hardcore Achievements]|r Admin secret key is set (length: " .. #key .. ")")
             else
                 print("|cffff0000[Hardcore Achievements]|r Admin secret key is NOT set")
-                print("|cffffff00[Hardcore Achievements]|r Use: /hca adminkey set <your-secret-key-here>")
-                print("|cffffff00[Hardcore Achievements]|r Key must be at least 16 characters long")
+                print("|CFFFFD100[Hardcore Achievements]|r Use: /hca adminkey set <your-secret-key-here>")
+                print("|CFFFFD100[Hardcore Achievements]|r Key must be at least 16 characters long")
             end
         elseif args[2] == "clear" then
             if HardcoreAchievementsDB then
@@ -707,9 +707,9 @@ local function HandleSlashCommand(msg)
             end
         else
             print("|cff00ff00[Hardcore Achievements]|r Admin key commands:")
-            print("  |cffffff00/hca adminkey set <key>|r - Set admin secret key (min 16 chars)")
-            print("  |cffffff00/hca adminkey check|r - Check if admin key is set")
-            print("  |cffffff00/hca adminkey clear|r - Clear admin secret key")
+            print("  |CFFFFD100/hca adminkey set <key>|r - Set admin secret key (min 16 chars)")
+            print("  |CFFFFD100/hca adminkey check|r - Check if admin key is set")
+            print("  |CFFFFD100/hca adminkey clear|r - Clear admin secret key")
         end
     elseif command == "tracker" then
         -- Tracker commands
@@ -744,9 +744,9 @@ local function HandleSlashCommand(msg)
             end
         else
             print("|cff008066[Hardcore Achievements]|r Tracker commands:")
-            print("  |cffffff00/hca tracker show|r - Show the achievement tracker")
-            print("  |cffffff00/hca tracker hide|r - Hide the achievement tracker")
-            print("  |cffffff00/hca tracker toggle|r - Toggle the achievement tracker")
+            print("  |CFFFFD100/hca tracker show|r - Show the achievement tracker")
+            print("  |CFFFFD100/hca tracker hide|r - Hide the achievement tracker")
+            print("  |CFFFFD100/hca tracker toggle|r - Toggle the achievement tracker")
         end
     elseif command == "debug" then
         -- Debug toggle command
@@ -770,11 +770,11 @@ local function HandleSlashCommand(msg)
         end
     else
         print("|cff008066[Hardcore Achievements]|r Available commands:")
-        print("  |cffffff00/hca show|r - Enable and show the custom achievement tab")
-        print("  |cffffff00/hca reset tab|r - Reset the tab position to default")
-        print("  |cffffff00/hca tracker|r - Manage the achievement tracker")
-        print("  |cffffff00/hca debug|r - Toggle debug mode (on/off)")
-        --print("  |cffffff00/hca adminkey|r - Manage admin secret key for secure commands")
+        print("  |CFFFFD100/hca show|r - Enable and show the custom achievement tab")
+        print("  |CFFFFD100/hca reset tab|r - Reset the tab position to default")
+        print("  |CFFFFD100/hca tracker|r - Manage the achievement tracker")
+        print("  |CFFFFD100/hca debug|r - Toggle debug mode (on/off)")
+        --print("  |CFFFFD100/hca adminkey|r - Manage admin secret key for secure commands")
     end
 end
 

@@ -1336,7 +1336,7 @@ function HCA_MarkRowCompleted(row, cdbParam)
         local shouldShowSolo = wasSolo and (isHardcoreActive and isSelfFound or not isHardcoreActive)
         if shouldShowSolo then
             -- Completed achievements always show "Solo", not "Solo bonus"
-            row.Sub:SetText(AUCTION_TIME_LEFT0 .. "\n|c" .. select(4, GetClassColor(select(2, UnitClass("player")))) .. "Solo|r")
+            row.Sub:SetText(AUCTION_TIME_LEFT0 .. "\n" .. HCA_SharedUtils.GetClassColor() .. "Solo|r")
         else
             row.Sub:SetText(AUCTION_TIME_LEFT0)
         end
@@ -1448,7 +1448,7 @@ local function RestoreCompletionsFromDB()
                 local shouldShowSolo = rec.wasSolo and (isHardcoreActive and isSelfFound or not isHardcoreActive)
                 if shouldShowSolo then
                     -- Completed achievements always show "Solo", not "Solo bonus"
-                    row.Sub:SetText(AUCTION_TIME_LEFT0 .. "\n|c" .. select(4, GetClassColor(select(2, UnitClass("player")))) .. "Solo|r")
+                    row.Sub:SetText(AUCTION_TIME_LEFT0 .. "\n" .. HCA_SharedUtils.GetClassColor() .. "Solo|r")
                 else
                     row.Sub:SetText(AUCTION_TIME_LEFT0)
                 end

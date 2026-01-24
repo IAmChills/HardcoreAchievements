@@ -2377,23 +2377,23 @@ local function BuildDashboardFrame()
     
     -- Initialize checkbox state
     local SharedUtils = _G.HardcoreAchievements_SharedUtils
-    local useCharacterPanel = SharedUtils and SharedUtils.GetSetting("useCharacterPanel", true) or true
+    local useCharacterPanel = SharedUtils and HCA_SharedUtils.GetSetting("useCharacterPanel", true) or true
     DashboardFrame.UseCharacterPanelCheckbox:SetChecked(useCharacterPanel)
     
     -- Handle checkbox changes
     DashboardFrame.UseCharacterPanelCheckbox:SetScript("OnClick", function(self)
       local isChecked = self:GetChecked()
       local SharedUtils = _G.HardcoreAchievements_SharedUtils
-      if SharedUtils and SharedUtils.SetUseCharacterPanel then
-        SharedUtils.SetUseCharacterPanel(isChecked)
+      if SharedUtils and HCA_SharedUtils.SetUseCharacterPanel then
+        HCA_SharedUtils.SetUseCharacterPanel(isChecked)
       end
     end)
   end
 
   -- Apply saved state on initialization
   local SharedUtils = _G.HardcoreAchievements_SharedUtils
-  if SharedUtils and SharedUtils.UpdateCharacterPanelTabVisibility then
-    SharedUtils.UpdateCharacterPanelTabVisibility()
+  if SharedUtils and HCA_SharedUtils.UpdateCharacterPanelTabVisibility then
+    HCA_SharedUtils.UpdateCharacterPanelTabVisibility()
   end
 
   -- Only hook once to prevent duplicate scripts

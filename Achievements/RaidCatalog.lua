@@ -4,7 +4,7 @@ local Raids = {
   {
     achId = "UBRS",
     title = "Upper Blackrock Spire",
-    tooltip = "Defeat the bosses of |cff008765Upper Blackrock Spire|r",
+    tooltip = "Defeat the bosses of " .. HCA_SharedUtils.GetClassColor() .. "Upper Blackrock Spire|r",
     icon = 254648,
     points = 50,
     requiredQuestId = nil,
@@ -24,7 +24,7 @@ local Raids = {
   {
     achId = "MC",
     title = "Molten Core",
-    tooltip = "Defeat the bosses of |cff008765Molten Core|r",
+    tooltip = "Defeat the bosses of " .. HCA_SharedUtils.GetClassColor() .. "Molten Core|r",
     icon = 254652,
     points = 50,
     requiredQuestId = nil,
@@ -49,7 +49,7 @@ local Raids = {
   {
     achId = "ONY",
     title = "Onyxia's Lair",
-    tooltip = "Defeat |cff008765Onyxia|r",
+    tooltip = "Defeat " .. HCA_SharedUtils.GetClassColor() .. "Onyxia|r",
     icon = 254650,
     points = 50,
     requiredQuestId = nil,
@@ -65,7 +65,7 @@ local Raids = {
   {
     achId = "BWL",
     title = "Blackwing Lair",
-    tooltip = "Defeat the bosses of |cff008765Blackwing Lair|r",
+    tooltip = "Defeat the bosses of " .. HCA_SharedUtils.GetClassColor() .. "Blackwing Lair|r",
     icon = 254649,
     points = 50,
     requiredQuestId = nil,
@@ -88,7 +88,7 @@ local Raids = {
   {
     achId = "ZG",
     title = "Zul'Gurub",
-    tooltip = "Defeat the bosses of |cff008765Zul'Gurub|r",
+    tooltip = "Defeat the bosses of " .. HCA_SharedUtils.GetClassColor() .. "Zul'Gurub|r",
     icon = 236413,
     points = 50,
     requiredQuestId = nil,
@@ -113,7 +113,7 @@ local Raids = {
   {
     achId = "AQ20",
     title = "Ruins of Ahn'Qiraj",
-    tooltip = "Defeat the bosses of |cff008765Ruins of Ahn'Qiraj|r",
+    tooltip = "Defeat the bosses of " .. HCA_SharedUtils.GetClassColor() .. "Ruins of Ahn'Qiraj|r",
     icon = 236428,
     points = 50,
     requiredQuestId = nil,
@@ -134,7 +134,7 @@ local Raids = {
   {
     achId = "AQ40",
     title = "Temple of Ahn'Qiraj",
-    tooltip = "Defeat the bosses of |cff008765Temple of Ahn'Qiraj|r",
+    tooltip = "Defeat the bosses of " .. HCA_SharedUtils.GetClassColor() .. "Temple of Ahn'Qiraj|r",
     icon = 236407,
     points = 50,
     requiredQuestId = nil,
@@ -161,7 +161,7 @@ local Raids = {
   {
     achId = "NAXX",
     title = "Naxxramas",
-    tooltip = "Defeat the bosses of |cff008765Naxxramas|r",
+    tooltip = "Defeat the bosses of " .. HCA_SharedUtils.GetClassColor() .. "Naxxramas|r",
     icon = 254100,
     points = 50,
     requiredQuestId = nil,
