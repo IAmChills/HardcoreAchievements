@@ -2083,12 +2083,19 @@ local function RestoreOnLogin()
 end
 
 -- Register for PLAYER_LOGIN event to restore tracked achievements
+-- Also register for PLAYER_LEVEL_UP to refresh title colors when player levels up
 local restoreFrame = CreateFrame("Frame")
 restoreFrame:RegisterEvent("PLAYER_LOGIN")
+restoreFrame:RegisterEvent("PLAYER_LEVEL_UP")
 restoreFrame:SetScript("OnEvent", function(self, event)
     if event == "PLAYER_LOGIN" then
         -- Wait a moment for registration to start, then check and restore
         C_Timer.After(0.1, RestoreOnLogin)
+    elseif event == "PLAYER_LEVEL_UP" then
+        -- Refresh tracker to update title colors based on new player level
+        if AchievementTracker and AchievementTracker.Update then
+            AchievementTracker:Update()
+        end
     end
 end)
 
