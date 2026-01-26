@@ -1217,9 +1217,36 @@ local function ApplyOutleveledStyle(row)
     UpdatePointsDisplay(row)
 end
 
+-- Helper function to check if an achievement is already completed (in row or database)
+local function IsAchievementAlreadyCompleted(row)
+    if not row then return false end
+    
+    -- Check row.completed flag first (fastest check)
+    if row.completed then
+        return true
+    end
+    
+    -- Check database to ensure we don't re-complete achievements
+    local id = row.id or row.achId
+    if id then
+        local _, cdb = GetCharDB()
+        if cdb and cdb.achievements then
+            local achIdStr = tostring(id)
+            local rec = cdb.achievements[achIdStr]
+            if rec and rec.completed then
+                -- Achievement is completed in database but row.completed is false - sync it
+                row.completed = true
+                return true
+            end
+        end
+    end
+    
+    return false
+end
+
 -- Small utility: mark a UI row as completed visually + persist in DB
 function HCA_MarkRowCompleted(row, cdbParam)
-    if row.completed then 
+    if IsAchievementAlreadyCompleted(row) then 
         return 
     end
     row.completed = true
@@ -1404,7 +1431,8 @@ function CheckPendingCompletions()
     local currentLevel = UnitLevel("player") or 1
 
     for _, row in ipairs(AchievementPanel.achievements) do
-        if not row.completed then
+        -- Check both row.completed and database to prevent re-completion
+        if not IsAchievementAlreadyCompleted(row) then
             -- Check row.customIsCompleted first (most common for milestone/profession achievements)
             local fn = row.customIsCompleted
             if type(fn) ~= "function" then
@@ -3526,7 +3554,8 @@ EvaluateCustomCompletions = function(newLevel)
     local anyCompleted = false
     
     for _, row in ipairs(AchievementPanel.achievements) do
-        if not row.completed then
+        -- Check both row.completed and database to prevent re-completion
+        if not IsAchievementAlreadyCompleted(row) then
             local fn = row.customIsCompleted
             if type(fn) ~= "function" then
                 local id = row.id or row.achId
@@ -4122,7 +4151,8 @@ do
                 if unit ~= "player" then return end
                 if spellId ~= 21343 and spellId ~= 16589 then return end
                 for _, row in ipairs(AchievementPanel.achievements) do
-                    if not row.completed and type(row.spellTracker) == "function" then
+                    -- Check both row.completed and database to prevent re-completion
+                    if not IsAchievementAlreadyCompleted(row) and type(row.spellTracker) == "function" then
                         -- Evaluate tracker and require true return value
                         local ok, shouldComplete = pcall(row.spellTracker, tonumber(spellId), tostring(targetName or ""))
                         if ok and shouldComplete == true then
@@ -4135,7 +4165,8 @@ do
                 local unit = select(1, ...)
                 if unit ~= "player" then return end
                 for _, row in ipairs(AchievementPanel.achievements) do
-                    if not row.completed and type(row.auraTracker) == "function" then
+                    -- Check both row.completed and database to prevent re-completion
+                    if not IsAchievementAlreadyCompleted(row) and type(row.auraTracker) == "function" then
                         local ok, shouldComplete = pcall(row.auraTracker)
                         if ok and shouldComplete == true then
                             HCA_MarkRowCompleted(row)
@@ -4154,7 +4185,8 @@ do
                     local headSlotItemId = GetInventoryItemID("player", 1)
                     if headSlotItemId == 7997 then
                         for _, row in ipairs(AchievementPanel.achievements) do
-                            if not row.completed and (row.id == "DefiasMask" or row.achId == "DefiasMask") then
+                            -- Check both row.completed and database to prevent re-completion
+                            if not IsAchievementAlreadyCompleted(row) and (row.id == "DefiasMask" or row.achId == "DefiasMask") then
                                 HCA_MarkRowCompleted(row)
                                 HCA_AchToast_Show(row.Icon:GetTexture(), row.Title:GetText(), row.points, row)
                             end
@@ -4166,7 +4198,8 @@ do
                 -- The tracker checks if ALL required items are owned, so we call it for all incomplete sets
                 -- This is efficient because GetItemCount is fast and the tracker only completes when ALL items are owned
                 for _, row in ipairs(AchievementPanel.achievements) do
-                    if not row.completed and row._def and row._def.isDungeonSet then
+                    -- Check both row.completed and database to prevent re-completion
+                    if not IsAchievementAlreadyCompleted(row) and row._def and row._def.isDungeonSet then
                         local achId = row.achId or row.id
                         if achId then
                             -- Check if this achievement has an item tracker function (dungeon sets)
@@ -4233,7 +4266,8 @@ do
                         -- Manually complete the row immediately.
                         for _, row in ipairs(AchievementPanel.achievements) do
                             local id = row and (row.id or row.achId)
-                            if row and (not row.completed) and id == "Precious" then
+                            -- Check both row.completed and database to prevent re-completion
+                            if row and not IsAchievementAlreadyCompleted(row) and id == "Precious" then
                                 HCA_MarkRowCompleted(row)
                                 HCA_AchToast_Show(row.Icon:GetTexture(), row.Title:GetText(), row.points, row)
                                 
@@ -4249,7 +4283,8 @@ do
                     _G.HCA_Precious_DeleteState = nil
                 end
                 for _, row in ipairs(AchievementPanel.achievements) do
-                    if not row.completed and type(row.itemTracker) == "function" then
+                    -- Check both row.completed and database to prevent re-completion
+                    if not IsAchievementAlreadyCompleted(row) and type(row.itemTracker) == "function" then
                         local ok, shouldComplete = pcall(row.itemTracker)
                         if ok and shouldComplete == true then
                             HCA_MarkRowCompleted(row)
@@ -4262,7 +4297,8 @@ do
                 local msg, unit = ...
                 if unit ~= UnitName("player") then return end
                 for _, row in ipairs(AchievementPanel.achievements) do
-                    if not row.completed and type(row.chatTracker) == "function" then
+                    -- Check both row.completed and database to prevent re-completion
+                    if not IsAchievementAlreadyCompleted(row) and type(row.chatTracker) == "function" then
                         local ok, shouldComplete = pcall(row.chatTracker, tostring(msg or ""))
                         if ok and shouldComplete == true then
                             HCA_MarkRowCompleted(row)
@@ -4313,7 +4349,8 @@ do
                 local itemID = tonumber(itemLink:match("|Hitem:(%d+)"))
                 if itemID ~= 6382 then return end  -- Forest Leather Belt
                     for _, row in ipairs(AchievementPanel.achievements) do
-                        if not row.completed and row.id == "Secret99" then
+                        -- Check both row.completed and database to prevent re-completion
+                        if not IsAchievementAlreadyCompleted(row) and row.id == "Secret99" then
                             HCA_MarkRowCompleted(row)
                             HCA_AchToast_Show(row.Icon:GetTexture(), row.Title:GetText(), row.points, row)
                         end
@@ -4394,7 +4431,8 @@ do
                 end
             elseif event == "PLAYER_DEAD" then
                 for _, row in ipairs(AchievementPanel.achievements) do
-                    if not row.completed and row.id == "Secret4" then
+                    -- Check both row.completed and database to prevent re-completion
+                    if not IsAchievementAlreadyCompleted(row) and (row.id == "Secret4" or row.id == "Secret004" or row.achId == "Secret4" or row.achId == "Secret004") then
                         HCA_MarkRowCompleted(row)
                         HCA_AchToast_Show(row.Icon:GetTexture(), row.Title:GetText(), row.points, row)
                         break
@@ -4423,7 +4461,8 @@ do
 
                 if not AchievementPanel or not AchievementPanel.achievements then return end
                 for _, row in ipairs(AchievementPanel.achievements) do
-                    if not row.completed and type(row.emoteTracker) == "function" then
+                    -- Check both row.completed and database to prevent re-completion
+                    if not IsAchievementAlreadyCompleted(row) and type(row.emoteTracker) == "function" then
                         local ok, shouldComplete = pcall(row.emoteTracker, tostring(token or ""), tostring(targetName or ""), tostring(unit or ""))
                         if ok and shouldComplete == true then
                             HCA_MarkRowCompleted(row)

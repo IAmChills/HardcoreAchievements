@@ -224,12 +224,11 @@ local Achievements = {
     achId = "Arrachea",
     title = "Spirit of the Earthmother",
     level = 9,
-    tooltip = "Complete " .. HCA_SharedUtils.GetClassColor() .. "Rites of the Earthmother (Arra'chea)|r before level 10",
+    tooltip = "Complete " .. HCA_SharedUtils.GetClassColor() .. "Rites of the Earthmother|r before level 10",
     icon = 132243,
     points = 10,
     requiredQuestId = 776, -- Quest available at level 3
-    targetNpcId = 3058, -- Arrachea level 11 (quest item drops from this NPC)
-    allowKillsBeforeQuest = true, -- Allow tracking kill before quest acceptance (quest item drops from NPC)
+    targetNpcId = 3058, -- Arrachea level 11
     faction = FACTION_HORDE,
     zone = "Thunder Bluff"
 }, {
@@ -809,6 +808,9 @@ for _, def in ipairs(Achievements) do
     table.insert(_G.HCA_RegistrationQueue, function()
       local killFn  = def.customKill or ((def.targetNpcId or def.requiredKills) and _G.HardcoreAchievements_GetAchievementFunction(def.achId, "Kill")) or nil
       local questFn = (def.requiredQuestId and _G.HardcoreAchievements_GetAchievementFunction(def.achId, "Quest")) or nil
+
+      -- Expose this definition for external lookups (e.g., NPC tooltips, chat links)
+      HCA_SharedUtils.RegisterAchievementDef(def)
 
       CreateAchievementRow(
         AchievementPanel,

@@ -98,21 +98,20 @@ function RaidCommon.registerRaidAchievement(def)
   local faction = def.faction
 
   -- Expose this definition for external lookups (e.g., chat link tooltips)
-  _G.HCA_AchievementDefs = _G.HCA_AchievementDefs or {}
-  _G.HCA_AchievementDefs[tostring(achId)] = {
+  HCA_SharedUtils.RegisterAchievementDef({
     achId = achId,
     title = title,
     tooltip = tooltip,
     icon = icon,
     points = points,
-    level = nil,  -- Raids have no level requirement
-    mapID = def.requiredMapId,
+    level = def.level,  -- Will be overridden to nil below
+    requiredMapId = def.requiredMapId,
     mapName = def.title,
     requiredKills = requiredKills,
-    bossOrder = bossOrder,  -- Store boss order for tooltip display
+    bossOrder = bossOrder,
     faction = faction,
     isRaid = true,
-  }
+  }, { level = nil })  -- Raids have no level requirement
 
   -- State for the current achievement session only
   local state = {

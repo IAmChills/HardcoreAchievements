@@ -149,3 +149,62 @@ function HCA_SharedUtils.SetUseCharacterPanel(enabled)
         _G.HardcoreAchievements_LoadTabPosition()
     end
 end
+
+-- =========================================================
+-- Achievement Definition Registration
+-- =========================================================
+
+-- Unified function to register achievement definitions to HCA_AchievementDefs
+-- This ensures all achievement types (quest, dungeon, raid, meta, etc.) use the same structure
+-- Parameters:
+--   def: The achievement definition table (from Catalog files)
+--   overrides: Optional table of field overrides (e.g., { level = nil } for raids)
+function HCA_SharedUtils.RegisterAchievementDef(def, overrides)
+    if not def or not def.achId then
+        return
+    end
+    
+    _G.HCA_AchievementDefs = _G.HCA_AchievementDefs or {}
+    
+    -- Build the definition entry with all common fields
+    local achDef = {
+        achId = def.achId,
+        title = def.title,
+        tooltip = def.tooltip,
+        icon = def.icon,
+        points = def.points or 0,
+        level = def.level,
+        -- Quest-specific fields
+        targetNpcId = def.targetNpcId,
+        requiredKills = def.requiredKills,
+        requiredQuestId = def.requiredQuestId,
+        -- Dungeon/Raid-specific fields
+        mapID = def.requiredMapId or def.mapID,
+        mapName = def.mapName or def.title,
+        bossOrder = def.bossOrder,
+        -- Meta-specific fields
+        requiredAchievements = def.requiredAchievements,
+        achievementOrder = def.achievementOrder,
+        -- Common fields
+        faction = def.faction,
+        race = def.race,
+        class = def.class,
+        zone = def.zone,
+        -- Type flags
+        isQuest = def.isQuest or false,
+        isRaid = def.isRaid or false,
+        isHeroicDungeon = def.isHeroicDungeon or false,
+        isMetaAchievement = def.isMetaAchievement or false,
+        isVariation = def.isVariation or false,
+        baseAchId = def.baseAchId,
+    }
+    
+    -- Apply any overrides (e.g., raids might set level = nil)
+    if overrides then
+        for key, value in pairs(overrides) do
+            achDef[key] = value
+        end
+    end
+    
+    _G.HCA_AchievementDefs[tostring(def.achId)] = achDef
+end

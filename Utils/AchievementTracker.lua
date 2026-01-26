@@ -547,8 +547,12 @@ function AchievementTracker:InitializeHeader(baseFrame)
     end)
 
     headerFrame:SetScript("OnLeave", function(self)
-        self:SetAlpha(0.8)
+        -- Keep header at full opacity regardless of hover state
+        self:SetAlpha(1)
     end)
+    
+    -- Ensure header always starts at full opacity
+    headerFrame:SetAlpha(1)
     
     -- Note: Sizer visibility will be handled after all frames are initialized
 
@@ -1076,9 +1080,9 @@ local function GetAchievementStatus(achievementId)
     end
     
     if isCompleted then
-        return " (Completed)", "FF00FF00"  -- Green
+        return " (Completed)", "|cFF00FF00"  -- Green
     elseif isFailed then
-        return " (Failed)", "FFFF0000"  -- Red
+        return " (Failed)", "|cFFFF0000"  -- Red
     else
         -- Check for pending turn-in status
         local isPendingTurnIn = false
@@ -1148,7 +1152,7 @@ end
 -- Helper function to get title color based on player level vs required level
 local function GetTitleColor(requiredLevel)
     if not requiredLevel or requiredLevel <= 0 then
-        return "FFFF00"  -- Yellow (default) if no level requirement
+        return "FFFFFF00"  -- Yellow (default) if no level requirement
     end
     
     local playerLevel = UnitLevel("player") or 1
@@ -1156,13 +1160,13 @@ local function GetTitleColor(requiredLevel)
     
     if levelDiff <= 1 then
         -- Within 1 level or equal/above: Yellow
-        return "FFFF00"
+        return "FFFFFF00"
     elseif levelDiff == 2 then
         -- 2 levels below: Orange (#f26000)
-        return "F26000"
+        return "FFF26000"
     else
         -- 3+ levels below: Red (#ff0000)
-        return "FF0000"
+        return "FFFF0000"
     end
 end
 
@@ -1575,20 +1579,23 @@ function AchievementTracker:Update()
                 
                 -- Get achievement level and format title with level prefix
                 local achievementLevel = GetAchievementLevel(achievementId)
-                local displayTitle = achieveName
+                local baseTitle = achieveName
                 if achievementLevel then
-                    displayTitle = "[" .. achievementLevel .. "] " .. achieveName
+                    baseTitle = "[" .. achievementLevel .. "] " .. achieveName
                 end
                 
                 -- Get achievement status (Completed, Failed, Pending Turn-In)
                 local statusText, statusColor = GetAchievementStatus(achievementId)
+                
+                -- Set title with color coding based on player level vs required level
+                -- Apply title color to base title, then append status text with its own color
+                local titleColor = GetTitleColor(achievementLevel)
+                local displayTitle = "|c" .. titleColor .. baseTitle .. "|r"
                 if statusText then
                     displayTitle = displayTitle .. statusColor .. statusText .. "|r"
                 end
                 
-                -- Set title with color coding based on player level vs required level
-                local titleColor = GetTitleColor(achievementLevel)
-                line.label:SetText("|cff" .. titleColor .. displayTitle .. "|r")
+                line.label:SetText(displayTitle)
                 
                 -- Get and set description (gray color)
                 local description = GetAchievementDescription(achievementId)

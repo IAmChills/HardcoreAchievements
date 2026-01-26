@@ -13,16 +13,31 @@ local function GetAchievementsForNPC(npcId)
     
     local achievements = {}
     
-    -- Check HCA_AchievementDefs (dungeon and raid achievements)
+    -- Check HCA_AchievementDefs (all achievement types: quest, dungeon, raid)
     if _G.HCA_AchievementDefs then
         for achId, achDef in pairs(_G.HCA_AchievementDefs) do
             -- Skip variations (Solo, Duo, Trio) - only show base achievements
-            if achDef.isVariation then
-                -- Skip this variation
-            else
-                if achDef.requiredKills then
-                    local found = false
-                    -- Check if NPC ID is in requiredKills (supports both single IDs and arrays)
+            if not achDef.isVariation then
+                local found = false
+                
+                -- Check targetNpcId (single ID or array)
+                if achDef.targetNpcId then
+                    if type(achDef.targetNpcId) == "table" then
+                        for _, id in pairs(achDef.targetNpcId) do
+                            if tonumber(id) == npcId then
+                                found = true
+                                break
+                            end
+                        end
+                    else
+                        if tonumber(achDef.targetNpcId) == npcId then
+                            found = true
+                        end
+                    end
+                end
+                
+                -- Check requiredKills (supports both single IDs and arrays)
+                if not found and achDef.requiredKills then
                     for killNpcId, need in pairs(achDef.requiredKills) do
                         if type(need) == "table" then
                             -- Array of NPC IDs
@@ -40,13 +55,13 @@ local function GetAchievementsForNPC(npcId)
                         end
                         if found then break end
                     end
-                    
-                    if found then
-                        table.insert(achievements, {
-                            achId = achId,
-                            title = achDef.title or achDef.mapName or tostring(achId)
-                        })
-                    end
+                end
+                
+                if found then
+                    table.insert(achievements, {
+                        achId = achId,
+                        title = achDef.title or achDef.mapName or tostring(achId)
+                    })
                 end
             end
         end
@@ -73,10 +88,13 @@ local function HookNPCTooltip()
             local achievements = GetAchievementsForNPC(npcId)
             if #achievements > 0 then
                 GameTooltip:AddLine(" ")  -- Add spacing
-                GameTooltip:AddLine("Required for Achievement:", 0, 0.5, 0.4)
                 for _, ach in ipairs(achievements) do
-                    GameTooltip:AddLine(ach.title, 1, 1, 1)
+                    -- Prefix achievement title with logo icon
+                    local iconPath = "Interface\\AddOns\\HardcoreAchievements\\Images\\HardcoreAchievementsButton.png"
+                    local iconSize = 16  -- Size of the icon in pixels
+                    local iconString = "|T" .. iconPath .. ":" .. iconSize .. ":" .. iconSize .. "|t "
                 end
+                GameTooltip:AddLine(" ")  -- Add spacing
             end
         end)
     end

@@ -581,22 +581,21 @@ function DungeonCommon.registerDungeonAchievement(def)
   local faction = def.faction
 
   -- Expose this definition for external lookups (e.g., chat link tooltips)
-  _G.HCA_AchievementDefs = _G.HCA_AchievementDefs or {}
-  _G.HCA_AchievementDefs[tostring(achId)] = {
+  HCA_SharedUtils.RegisterAchievementDef({
     achId = achId,
     title = title,
     tooltip = tooltip,
     icon = icon,
     points = points,
     level = level,
-    mapID = def.requiredMapId,
+    requiredMapId = def.requiredMapId,
     mapName = def.title,
     requiredKills = requiredKills,
-    bossOrder = bossOrder,  -- Store boss order for tooltip display
+    bossOrder = bossOrder,
     faction = faction,
-    isVariation = def.isVariation,  -- Store variation flag for filtering
-    baseAchId = def.baseAchId,  -- Store base achievement ID for variations
-  }
+    isVariation = def.isVariation,
+    baseAchId = def.baseAchId,
+  })
 
   -- State for the current achievement session only
   local state = {
