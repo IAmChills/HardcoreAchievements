@@ -629,14 +629,23 @@ local function IsRowOutleveled(row)
     local isOverLevel = lvl > row.maxLevel
     
     -- Check if this is a dungeon achievement (has isDungeon flag or mapID)
-    -- If player is currently in a dungeon/raid, don't mark as failed even if over level
+    -- If player is currently in the specific dungeon, don't mark as failed
     -- This allows players to level up inside dungeons as long as they entered at the required level
     if isOverLevel then
         local isDungeonAchievement = false
+        local dungeonMapId = nil
         
         -- Check if row has isDungeon flag
         if row._def and row._def.isDungeon then
             isDungeonAchievement = true
+            -- Get mapID from achievement definition
+            local achId = row.achId or row.id
+            if achId and _G.HCA_AchievementDefs then
+                local achDef = _G.HCA_AchievementDefs[tostring(achId)]
+                if achDef and achDef.mapID then
+                    dungeonMapId = achDef.mapID
+                end
+            end
         end
         
         -- Check if achievement definition has mapID (dungeon achievements have mapID)
@@ -646,12 +655,13 @@ local function IsRowOutleveled(row)
                 local achDef = _G.HCA_AchievementDefs[tostring(achId)]
                 if achDef and achDef.mapID then
                     isDungeonAchievement = true
+                    dungeonMapId = achDef.mapID
                 end
             end
         end
         
-        -- If it's a dungeon achievement and player is in a dungeon/raid, don't mark as failed
-        if isDungeonAchievement and _G.HCA_IsInDungeonOrRaid and _G.HCA_IsInDungeonOrRaid() then
+        -- If it's a dungeon achievement and player is in that specific dungeon, don't mark as failed
+        if isDungeonAchievement and dungeonMapId and _G.HCA_IsInDungeon and _G.HCA_IsInDungeon(dungeonMapId) then
             return false
         end
     end

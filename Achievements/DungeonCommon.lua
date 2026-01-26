@@ -1341,7 +1341,19 @@ function DungeonCommon.IsInDungeonOrRaid()
     return isInDungeonOrRaid
 end
 
--- Export the function globally for use in IsRowOutleveled
+-- Export function to check if player is currently in a specific dungeon (by mapId)
+function DungeonCommon.IsInDungeon(mapId)
+    if not mapId then return false end
+    local inInstance, instanceType = IsInInstance()
+    if inInstance and instanceType == "party" then
+        local currentMapId = select(8, GetInstanceInfo())
+        return currentMapId == mapId
+    end
+    return false
+end
+
+-- Export the functions globally for use in IsRowOutleveled
 _G.HCA_IsInDungeonOrRaid = DungeonCommon.IsInDungeonOrRaid
+_G.HCA_IsInDungeon = DungeonCommon.IsInDungeon
 
 _G.DungeonCommon = DungeonCommon
