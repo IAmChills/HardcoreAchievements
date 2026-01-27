@@ -2225,7 +2225,7 @@ local function BuildDashboardFrame()
   if not DashboardFrame.LayoutLabel then
     local parent = DashboardFrame.UIOverlayFrame or DashboardFrame
     DashboardFrame.LayoutLabel = parent:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    DashboardFrame.LayoutLabel:SetPoint("LEFT", DashboardFrame.SettingsButton, "RIGHT", 25, 0)
+    DashboardFrame.LayoutLabel:SetPoint("LEFT", DashboardFrame.SettingsButton, "RIGHT", 25, 2)
     DashboardFrame.LayoutLabel:SetText("Layout:")
     DashboardFrame.LayoutLabel:SetTextColor(0.922, 0.871, 0.761)
     DashboardFrame.LayoutLabel:SetDrawLayer("OVERLAY", 7)
