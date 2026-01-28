@@ -93,8 +93,9 @@ local function HookNPCTooltip()
                     local iconPath = "Interface\\AddOns\\HardcoreAchievements\\Images\\HardcoreAchievementsButton.png"
                     local iconSize = 16  -- Size of the icon in pixels
                     local iconString = "|T" .. iconPath .. ":" .. iconSize .. ":" .. iconSize .. "|t "
+                    GameTooltip:AddLine(iconString .. ach.title)
                 end
-                GameTooltip:AddLine(" ")  -- Add spacing
+                --GameTooltip:AddLine(" ")  -- Add spacing
             end
         end)
     end

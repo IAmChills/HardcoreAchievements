@@ -3612,6 +3612,21 @@ do
         -- Only process kills if the player was actually fighting the NPC
         local npcsInCombat = {}  -- [destGUID] = true when player is fighting this NPC
         
+        -- Track tap denial status for NPCs we're fighting
+        -- [destGUID] = true if tap denied, false if not tap denied, nil if unknown
+        local npcTapDenied = {}
+        
+        -- Helper function to check and store tap denial status for an NPC
+        local function checkAndStoreTapDenied(destGUID)
+            if UnitExists("target") and UnitGUID("target") == destGUID then
+                local isTapDenied = UnitIsTapDenied("target")
+                npcTapDenied[destGUID] = isTapDenied
+                return isTapDenied
+            end
+            -- Return stored value if we can't check right now
+            return npcTapDenied[destGUID]
+        end
+        
         -- Track external players (non-party) that are fighting tracked NPCs
         -- externalPlayersByNPC[destGUID] = { [playerGUID] = { lastSeen = time, threat = nil } }
         local externalPlayersByNPC = {}
@@ -3849,6 +3864,7 @@ do
             if event == "PLAYER_ENTERING_WORLD" then
                 externalPlayersByNPC = {}
                 npcsInCombat = {}
+                npcTapDenied = {}
                 return
             end
             -- Handle BOSS_KILL event for raid achievements (fires regardless of who delivered final blow)
@@ -3876,6 +3892,7 @@ do
                     -- Only clear if we're not in combat anymore
                     if not UnitAffectingCombat("player") then
                         npcsInCombat = {}
+                        npcTapDenied = {}
                         -- Clean up old external player tracking (keep recent ones for a bit longer)
                         cleanupExternalPlayers()
                     end
@@ -3892,15 +3909,17 @@ do
                     -- PARTY_KILL fires for player/party member kills
                     -- Only process if we were fighting this NPC (prevents tracking kills we had no part in)
                     -- Check if player tagged the enemy (prevents credit for killing untagged mobs when awardOnKill is enabled)
-                    if UnitExists("target") and UnitGUID("target") == destGUID then
-                        if UnitIsTapDenied("target") then
-                            return
-                        end
+                    -- Use stored tap denial status (NPC is cleared from target when it dies, so we can't check at kill time)
+                    local isTapDenied = npcTapDenied[destGUID]
+                    if isTapDenied == true then
+                        print("|cff008066[Hardcore Achievements]|r |cffffd100Achievement cannot be fulfilled: Unit was not your tag.|r")
+                        return
                     end
                     if npcsInCombat[destGUID] then
                         processKill(destGUID)
                         -- Clean up combat tracking
                         npcsInCombat[destGUID] = nil
+                        npcTapDenied[destGUID] = nil
                     end
                 elseif subevent == "UNIT_DIED" then
                     -- UNIT_DIED is a fallback for dungeon/raid bosses when PARTY_KILL doesn't fire
@@ -3920,6 +3939,7 @@ do
                                     processKill(destGUID)
                                     -- Clean up combat tracking
                                     npcsInCombat[destGUID] = nil
+                                    npcTapDenied[destGUID] = nil
                                 end
                             end
                         end
@@ -3970,9 +3990,21 @@ do
                             end
                             -- Mark that we're fighting this tracked NPC
                             if isTracked or (npcId and RAT_NPC_IDS[npcId]) then
-                                npcsInCombat[destGUID] = true
-                                -- Update threat for any tracked external players
-                                updateExternalPlayerThreat(destGUID)
+                                -- Check tap denial status whenever we can (not just when first engaging)
+                                -- This ensures we catch tap denial status even if NPC wasn't targeted initially
+                                local isTapDenied = checkAndStoreTapDenied(destGUID)
+                                
+                                -- If we discover the NPC is tap denied, don't track it (or remove it if already tracked)
+                                if isTapDenied == true then
+                                    npcsInCombat[destGUID] = nil
+                                    npcTapDenied[destGUID] = true
+                                else
+                                    -- Only track if we know it's NOT tap denied (false) or haven't checked yet (nil)
+                                    -- But we'll verify at kill time
+                                    npcsInCombat[destGUID] = true
+                                    -- Update threat for any tracked external players
+                                    updateExternalPlayerThreat(destGUID)
+                                end
                             end
                         end
                         
@@ -3986,9 +4018,23 @@ do
                                 updateExternalPlayerThreat(destGUID)
                             end
                             
+                            -- Check if player tagged the enemy (prevents credit for killing untagged mobs when awardOnKill is enabled)
+                            -- Use stored tap denial status (NPC is cleared from target when it dies, so we can't check at kill time)
+                            local isTapDenied = npcTapDenied[destGUID]
+                            if isTapDenied == true then
+                                print("|cff008066[Hardcore Achievements]|r |cffffd100Achievement cannot be fulfilled: Unit was not your tag.|r")
+                                -- Clean up combat tracking
+                                npcsInCombat[destGUID] = nil
+                                npcTapDenied[destGUID] = nil
+                                return
+                            end
+                            
                             -- Check for Rats achievement NPCs
                             if npcId and RAT_NPC_IDS[npcId] then
                                 processKill(destGUID)
+                                -- Clean up combat tracking
+                                npcsInCombat[destGUID] = nil
+                                npcTapDenied[destGUID] = nil
                             -- Check if this is a tracked boss (any achievement with a killTracker)
                             elseif npcId then
                                 -- Check if any achievement tracks this NPC
@@ -4004,6 +4050,9 @@ do
                                 end
                                 if isTracked then
                                     processKill(destGUID)
+                                    -- Clean up combat tracking
+                                    npcsInCombat[destGUID] = nil
+                                    npcTapDenied[destGUID] = nil
                                 end
                             end
                         end
@@ -4057,6 +4106,7 @@ do
                                         
                                         -- Clean up combat tracking
                                         npcsInCombat[destGUID] = nil
+                                        npcTapDenied[destGUID] = nil
                                     end
                                 end
                             end
