@@ -3891,6 +3891,12 @@ do
                 if subevent == "PARTY_KILL" then
                     -- PARTY_KILL fires for player/party member kills
                     -- Only process if we were fighting this NPC (prevents tracking kills we had no part in)
+                    -- Check if player tagged the enemy (prevents credit for killing untagged mobs when awardOnKill is enabled)
+                    if UnitExists("target") and UnitGUID("target") == destGUID then
+                        if UnitIsTapDenied("target") then
+                            return
+                        end
+                    end
                     if npcsInCombat[destGUID] then
                         processKill(destGUID)
                         -- Clean up combat tracking
