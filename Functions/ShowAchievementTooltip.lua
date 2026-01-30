@@ -99,7 +99,7 @@ function HCA_ShowAchievementTooltip(frame, data)
     if isSoloMode and allowSoloDouble and not isSecretAchievement then
         -- Show title with "Solo bonus" on the right when SSF is enabled
         local soloText = "Solo bonus"
-        GameTooltip:AddDoubleLine(title, "|c" .. select(4, GetClassColor(select(2, UnitClass("player")))) .. soloText .. "|r", 1, 1, 1, 0.5, 0.3, 0.9)
+        GameTooltip:AddDoubleLine(title, HCA_SharedUtils.GetClassColor() .. soloText .. "|r", 1, 1, 1, 0.5, 0.3, 0.9)
     else
         GameTooltip:SetText(title, 1, 1, 1)
     end

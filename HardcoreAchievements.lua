@@ -198,6 +198,297 @@ local function CleanupIncorrectLevelAchievements()
     return cleanedCount
 end
 
+-- DELETE ME AFTER SOME TIME IF YOU WANT
+-- Cleanup function to fix incorrectly failed meta achievements
+-- Fixes a bug where meta achievements were marked as failed when dungeon achievements
+-- were incorrectly marked as failed due to leveling up inside dungeons
+local function CleanupIncorrectlyFailedMetaAchievements()
+    local _, cdb = GetCharDB()
+    if not cdb or not cdb.achievements then
+        return
+    end
+    
+    -- Need AchievementPanel to be loaded to check IsRowOutleveled
+    if not _G.AchievementPanel or not _G.AchievementPanel.achievements then
+        return
+    end
+    
+    if not _G.HCA_AchievementDefs then
+        return
+    end
+    
+    -- Step 1: Collect all failed meta achievements and build dependency graph
+    local failedMetaAchievements = {}
+    local metaDependencies = {} -- Maps achId -> array of meta achievement IDs it depends on
+    
+    for achId, achievementData in pairs(cdb.achievements) do
+        -- Only check meta achievements (marked as failed but not completed)
+        if achId and achievementData.failed and not achievementData.completed then
+            local achDef = _G.HCA_AchievementDefs[tostring(achId)]
+            if achDef and achDef.isMetaAchievement and achDef.requiredAchievements then
+                table.insert(failedMetaAchievements, {
+                    achId = tostring(achId),
+                    data = achievementData,
+                    def = achDef
+                })
+                
+                -- Build dependency list (only include meta achievements)
+                local metaDeps = {}
+                for _, reqAchId in ipairs(achDef.requiredAchievements) do
+                    local reqAchDef = _G.HCA_AchievementDefs[tostring(reqAchId)]
+                    if reqAchDef and reqAchDef.isMetaAchievement then
+                        table.insert(metaDeps, tostring(reqAchId))
+                    end
+                end
+                metaDependencies[tostring(achId)] = metaDeps
+            end
+        end
+    end
+    
+    if #failedMetaAchievements == 0 then
+        return 0
+    end
+    
+    -- Step 2: Topologically sort meta achievements (process dependencies first)
+    -- Use Kahn's algorithm: process achievements with no unmet dependencies
+    local sortedAchievements = {}
+    local processed = {}
+    local remaining = {}
+    for _, meta in ipairs(failedMetaAchievements) do
+        remaining[meta.achId] = meta
+    end
+    
+    local function hasUnmetDependencies(achId)
+        local deps = metaDependencies[achId] or {}
+        for _, depId in ipairs(deps) do
+            -- Check if dependency is in remaining (not yet processed)
+            if remaining[depId] then
+                return true
+            end
+        end
+        return false
+    end
+    
+    -- Process in dependency order
+    local changed = true
+    while changed and next(remaining) do
+        changed = false
+        for achId, meta in pairs(remaining) do
+            if not hasUnmetDependencies(achId) then
+                -- All dependencies are processed (or this has no meta dependencies)
+                table.insert(sortedAchievements, meta)
+                remaining[achId] = nil
+                changed = true
+            end
+        end
+    end
+    
+    -- Add any remaining (circular dependencies or orphaned) at the end
+    for _, meta in pairs(remaining) do
+        table.insert(sortedAchievements, meta)
+    end
+    
+    -- Step 3: Process achievements in sorted order
+    local fixedCount = 0
+    local fixedAchievements = {}
+    
+    for _, meta in ipairs(sortedAchievements) do
+        local achId = meta.achId
+        local achievementData = meta.data
+        local achDef = meta.def
+        
+        -- Check if all required achievements are actually available
+        local allRequiredAvailable = true
+        local anyRequiredFailed = false
+        
+        -- Check each required achievement
+        for _, reqAchId in ipairs(achDef.requiredAchievements) do
+            local reqAchDef = _G.HCA_AchievementDefs[tostring(reqAchId)]
+            if reqAchDef then
+                local reqData = cdb.achievements[tostring(reqAchId)]
+                
+                -- Check if required achievement is completed (if so, it's fine)
+                if reqData and reqData.completed then
+                    -- This required achievement is completed, so it's available for the meta
+                    -- Continue checking other requirements
+                else
+                    -- Required achievement is not completed - check if it's failed
+                    local isFailed = false
+                    
+                    -- If it's a meta achievement, check if we already fixed it in this pass
+                    if reqAchDef.isMetaAchievement then
+                        -- Check if it was in our fixed list
+                        local wasFixed = false
+                        for _, fixed in ipairs(fixedAchievements) do
+                            if fixed.achId == tostring(reqAchId) then
+                                wasFixed = true
+                                break
+                            end
+                        end
+                        if wasFixed then
+                            -- This meta dependency was just fixed, so it's not failed
+                            isFailed = false
+                        else
+                            -- Check current status
+                            local reqData = cdb.achievements[tostring(reqAchId)]
+                            if reqData and reqData.failed then
+                                isFailed = true
+                            end
+                        end
+                    else
+                        -- Non-meta achievement - check current status comprehensively
+                        -- Priority: database failed flag > IsRowOutleveled > level check
+                        -- Check database failed flag first (most reliable source of truth)
+                        if reqData and reqData.failed then
+                            isFailed = true
+                        end
+                        
+                        -- If not failed in database, check row status
+                        if not isFailed then
+                            local reqRow = nil
+                            for _, row in ipairs(_G.AchievementPanel.achievements) do
+                                local rowId = row.id or row.achId
+                                if rowId and tostring(rowId) == tostring(reqAchId) then
+                                    reqRow = row
+                                    break
+                                end
+                            end
+                            
+                            if reqRow and _G.IsRowOutleveled then
+                                -- Use IsRowOutleveled to check current status (most accurate)
+                                isFailed = _G.IsRowOutleveled(reqRow)
+                            end
+                        end
+                        
+                        -- If still not failed, check if player is over the achievement's max level
+                        if not isFailed then
+                            local maxLevel = nil
+                            -- Try to get maxLevel from multiple sources
+                            local reqRow = nil
+                            for _, row in ipairs(_G.AchievementPanel.achievements) do
+                                local rowId = row.id or row.achId
+                                if rowId and tostring(rowId) == tostring(reqAchId) then
+                                    reqRow = row
+                                    break
+                                end
+                            end
+                            
+                            if reqRow and reqRow.maxLevel then
+                                maxLevel = reqRow.maxLevel
+                            elseif reqAchDef and reqAchDef.maxLevel then
+                                maxLevel = reqAchDef.maxLevel
+                            end
+                            
+                            if maxLevel and maxLevel > 0 then
+                                local playerLevel = UnitLevel("player") or 1
+                                if playerLevel > maxLevel then
+                                    -- Only mark as failed if achievement is not completed
+                                    if not (reqData and reqData.completed) then
+                                        isFailed = true
+                                    end
+                                end
+                            end
+                        end
+                    end
+                    
+                    if isFailed then
+                        -- This required achievement is actually failed
+                        allRequiredAvailable = false
+                        anyRequiredFailed = true
+                        break
+                    end
+                end
+            end
+        end
+        
+        -- If all required achievements are available (not failed), clear the failed status
+        -- Double-check: make sure we didn't miss any failed requirements
+        if allRequiredAvailable and not anyRequiredFailed then
+            -- Final verification: check one more time that no required achievements are failed
+            -- This catches cases where IsRowOutleveled might have been called before rows were fully initialized
+            local finalCheckPassed = true
+            for _, reqAchId in ipairs(achDef.requiredAchievements) do
+                local reqData = cdb.achievements[tostring(reqAchId)]
+                if reqData and not reqData.completed then
+                    -- Check database failed flag one more time
+                    if reqData.failed then
+                        finalCheckPassed = false
+                        break
+                    end
+                    
+                    -- Check if player is over level for this achievement
+                    local reqAchDef = _G.HCA_AchievementDefs[tostring(reqAchId)]
+                    if reqAchDef and reqAchDef.maxLevel and reqAchDef.maxLevel > 0 then
+                        local playerLevel = UnitLevel("player") or 1
+                        if playerLevel > reqAchDef.maxLevel then
+                            finalCheckPassed = false
+                            break
+                        end
+                    end
+                end
+            end
+            
+            if not finalCheckPassed then
+                -- Found a failed requirement on final check, don't fix this meta achievement
+                allRequiredAvailable = false
+            end
+        end
+        
+        if allRequiredAvailable and not anyRequiredFailed then
+            -- Store for logging
+            table.insert(fixedAchievements, {
+                achId = achId,
+                title = achDef.title or achId
+            })
+            
+            -- Clear failed status
+            achievementData.failed = nil
+            achievementData.failedAt = nil
+            fixedCount = fixedCount + 1
+            
+            -- Update the UI row if it exists
+            local metaRow = nil
+            for _, row in ipairs(_G.AchievementPanel.achievements) do
+                local rowId = row.id or row.achId
+                if rowId and tostring(rowId) == achId then
+                    metaRow = row
+                    break
+                end
+            end
+            
+            if metaRow then
+                -- Refresh the row's styling to reflect the cleared failed status
+                if _G.ApplyOutleveledStyle then
+                    _G.ApplyOutleveledStyle(metaRow)
+                end
+                if _G.UpdatePointsDisplay then
+                    _G.UpdatePointsDisplay(metaRow)
+                end
+            end
+        end
+    end
+    
+    -- Log cleanup if any achievements were fixed
+    if fixedCount > 0 then
+        local message = "|cff008066[Hardcore Achievements]|r |cffffd100Fixed " .. fixedCount .. " incorrectly failed meta achievement(s):|r"
+        print(message)
+        for _, fixed in ipairs(fixedAchievements) do
+            print(string.format("  |cffffd100- %s|r", fixed.title or fixed.achId))
+        end
+        
+        -- Refresh UI to reflect the changes
+        if RefreshOutleveledAll then
+            RefreshOutleveledAll()
+        end
+        if SortAchievementRows then
+            SortAchievementRows()
+        end
+    end
+    
+    return fixedCount
+end
+-- END OF META ACHIEVEMENT CLEANUP
+
 local function ClearProgress(achId)
     local _, cdb = GetCharDB()
     if cdb and cdb.progress then cdb.progress[achId] = nil end
@@ -336,6 +627,44 @@ local function IsRowOutleveled(row)
     
     local lvl = UnitLevel("player") or 1
     local isOverLevel = lvl > row.maxLevel
+    
+    -- Check if this is a dungeon achievement (has isDungeon flag or mapID)
+    -- If player is currently in the specific dungeon, don't mark as failed
+    -- This allows players to level up inside dungeons as long as they entered at the required level
+    if isOverLevel then
+        local isDungeonAchievement = false
+        local dungeonMapId = nil
+        
+        -- Check if row is a dungeon achievement (normal or heroic) for in-dungeon exception
+        if row._def and (row._def.isDungeon or row._def.isHeroicDungeon) then
+            isDungeonAchievement = true
+            -- Get mapID from achievement definition
+            local achId = row.achId or row.id
+            if achId and _G.HCA_AchievementDefs then
+                local achDef = _G.HCA_AchievementDefs[tostring(achId)]
+                if achDef and achDef.mapID then
+                    dungeonMapId = achDef.mapID
+                end
+            end
+        end
+        
+        -- Check if achievement definition has mapID (dungeon achievements have mapID)
+        if not isDungeonAchievement then
+            local achId = row.achId or row.id
+            if achId and _G.HCA_AchievementDefs then
+                local achDef = _G.HCA_AchievementDefs[tostring(achId)]
+                if achDef and achDef.mapID then
+                    isDungeonAchievement = true
+                    dungeonMapId = achDef.mapID
+                end
+            end
+        end
+        
+        -- If it's a dungeon achievement and player is in that specific dungeon, don't mark as failed
+        if isDungeonAchievement and dungeonMapId and _G.HCA_IsInDungeon and _G.HCA_IsInDungeon(dungeonMapId) then
+            return false
+        end
+    end
     
     -- Check if there's pending turn-in progress (kill completed but quest not turned in)
     -- If so, check if quest is still in quest log - if not, mark as failed
@@ -898,9 +1227,36 @@ local function ApplyOutleveledStyle(row)
     UpdatePointsDisplay(row)
 end
 
+-- Helper function to check if an achievement is already completed (in row or database)
+local function IsAchievementAlreadyCompleted(row)
+    if not row then return false end
+    
+    -- Check row.completed flag first (fastest check)
+    if row.completed then
+        return true
+    end
+    
+    -- Check database to ensure we don't re-complete achievements
+    local id = row.id or row.achId
+    if id then
+        local _, cdb = GetCharDB()
+        if cdb and cdb.achievements then
+            local achIdStr = tostring(id)
+            local rec = cdb.achievements[achIdStr]
+            if rec and rec.completed then
+                -- Achievement is completed in database but row.completed is false - sync it
+                row.completed = true
+                return true
+            end
+        end
+    end
+    
+    return false
+end
+
 -- Small utility: mark a UI row as completed visually + persist in DB
 function HCA_MarkRowCompleted(row, cdbParam)
-    if row.completed then 
+    if IsAchievementAlreadyCompleted(row) then 
         return 
     end
     row.completed = true
@@ -1017,7 +1373,7 @@ function HCA_MarkRowCompleted(row, cdbParam)
         local shouldShowSolo = wasSolo and (isHardcoreActive and isSelfFound or not isHardcoreActive)
         if shouldShowSolo then
             -- Completed achievements always show "Solo", not "Solo bonus"
-            row.Sub:SetText(AUCTION_TIME_LEFT0 .. "\n|c" .. select(4, GetClassColor(select(2, UnitClass("player")))) .. "Solo|r")
+            row.Sub:SetText(AUCTION_TIME_LEFT0 .. "\n" .. HCA_SharedUtils.GetClassColor() .. "Solo|r")
         else
             row.Sub:SetText(AUCTION_TIME_LEFT0)
         end
@@ -1085,7 +1441,8 @@ function CheckPendingCompletions()
     local currentLevel = UnitLevel("player") or 1
 
     for _, row in ipairs(AchievementPanel.achievements) do
-        if not row.completed then
+        -- Check both row.completed and database to prevent re-completion
+        if not IsAchievementAlreadyCompleted(row) then
             -- Check row.customIsCompleted first (most common for milestone/profession achievements)
             local fn = row.customIsCompleted
             if type(fn) ~= "function" then
@@ -1129,7 +1486,7 @@ local function RestoreCompletionsFromDB()
                 local shouldShowSolo = rec.wasSolo and (isHardcoreActive and isSelfFound or not isHardcoreActive)
                 if shouldShowSolo then
                     -- Completed achievements always show "Solo", not "Solo bonus"
-                    row.Sub:SetText(AUCTION_TIME_LEFT0 .. "\n|c" .. select(4, GetClassColor(select(2, UnitClass("player")))) .. "Solo|r")
+                    row.Sub:SetText(AUCTION_TIME_LEFT0 .. "\n" .. HCA_SharedUtils.GetClassColor() .. "Solo|r")
                 else
                     row.Sub:SetText(AUCTION_TIME_LEFT0)
                 end
@@ -1663,7 +2020,7 @@ local minimapDataObject = LDB:NewDataObject("HardcoreAchievements", {
         end
     end,
     OnTooltipShow = function(tooltip)
-        tooltip:AddLine("HardcoreAchievements", 1, 1, 1)
+        tooltip:AddLine("Hardcore Achievements", 1, 1, 1)
         
         -- Minimap icon always opens Dashboard
         tooltip:AddLine("Left-click to open Dashboard", 0.5, 0.5, 0.5)
@@ -1753,6 +2110,11 @@ initFrame:SetScript("OnEvent", function(self, event, ...)
             if _HardcoreAchievementsOptionsPanel and _HardcoreAchievementsOptionsPanel.refresh then
                 _HardcoreAchievementsOptionsPanel:refresh()
             end
+        end)
+
+        -- One-time initial options frame for new characters (no initialSetupDone flag)
+        C_Timer.After(1, function()
+            HardcoreAchievements_ShowInitialOptionsIfNeeded()
         end)
 
     elseif event == "ADDON_LOADED" then
@@ -2434,6 +2796,7 @@ local function HideCharacterFrameContentsForCombat()
     if _G["HonorFrame"]        then _G["HonorFrame"]:Hide()        end
     if _G["SkillFrame"]        then _G["SkillFrame"]:Hide()        end
     if _G["ReputationFrame"]   then _G["ReputationFrame"]:Hide()   end
+    if _G["PvPFrame"]          then _G["PvPFrame"]:Hide()          end
     if _G["TokenFrame"]        then _G["TokenFrame"]:Hide()        end
     if type(_G.CSC_HideStatsPanel) == "function" then
         _G.CSC_HideStatsPanel()
@@ -2580,7 +2943,7 @@ local function ApplyFilter()
                     shouldShow = false
                 end
             elseif def.isHeroicDungeon then
-                -- Heroic Dungeons: check index 3
+                -- Heroic Dungeons: check index 3 (heroics don't get isDungeon set, so independent of Dungeons filter)
                 if not ShouldShowByCheckboxFilter(def, isCompleted, 3, nil) then
                     shouldShow = false
                 end
@@ -2779,11 +3142,11 @@ AchievementPanel.Scroll:SetPoint("BOTTOMRIGHT", -65, 85)  -- leaves room for the
 AchievementPanel.Scroll:SetClipsChildren(false) -- Allow borders to extend into padding space
 
 -- Clipping frame for borders: allows horizontal extension but clips top/bottom
--- Extends left/right to allow padding space, but clips top/bottom to prevent overflow
+-- Right edge extends to panel edge (past scrollbar) so row border texture isn't clipped
 AchievementPanel.BorderClip = CreateFrame("Frame", nil, AchievementPanel)
-AchievementPanel.BorderClip:SetPoint("TOPLEFT", AchievementPanel.Scroll, "TOPLEFT", -10, 2)  -- Allow left padding, clip top
-AchievementPanel.BorderClip:SetPoint("BOTTOMRIGHT", AchievementPanel.Scroll, "BOTTOMRIGHT", 10, -2)  -- Allow right padding, clip bottom
-AchievementPanel.BorderClip:SetClipsChildren(true) -- Clip borders to this frame's boundaries
+AchievementPanel.BorderClip:SetPoint("TOPLEFT", AchievementPanel.Scroll, "TOPLEFT", -10, 2)
+AchievementPanel.BorderClip:SetPoint("BOTTOMRIGHT", AchievementPanel, "BOTTOMRIGHT", -2, 90)  -- panel right so border isn't clipped by scroll area
+AchievementPanel.BorderClip:SetClipsChildren(true)
 
 -- The content frame that actually holds rows
 AchievementPanel.Content = CreateFrame("Frame", nil, AchievementPanel.Scroll)
@@ -3206,7 +3569,8 @@ EvaluateCustomCompletions = function(newLevel)
     local anyCompleted = false
     
     for _, row in ipairs(AchievementPanel.achievements) do
-        if not row.completed then
+        -- Check both row.completed and database to prevent re-completion
+        if not IsAchievementAlreadyCompleted(row) then
             local fn = row.customIsCompleted
             if type(fn) ~= "function" then
                 local id = row.id or row.achId
@@ -3252,6 +3616,21 @@ do
         -- Track NPCs the player is fighting (for achievements)
         -- Only process kills if the player was actually fighting the NPC
         local npcsInCombat = {}  -- [destGUID] = true when player is fighting this NPC
+        
+        -- Track tap denial status for NPCs we're fighting
+        -- [destGUID] = true if tap denied, false if not tap denied, nil if unknown
+        local npcTapDenied = {}
+        
+        -- Helper function to check and store tap denial status for an NPC
+        local function checkAndStoreTapDenied(destGUID)
+            if UnitExists("target") and UnitGUID("target") == destGUID then
+                local isTapDenied = UnitIsTapDenied("target")
+                npcTapDenied[destGUID] = isTapDenied
+                return isTapDenied
+            end
+            -- Return stored value if we can't check right now
+            return npcTapDenied[destGUID]
+        end
         
         -- Track external players (non-party) that are fighting tracked NPCs
         -- externalPlayersByNPC[destGUID] = { [playerGUID] = { lastSeen = time, threat = nil } }
@@ -3490,6 +3869,7 @@ do
             if event == "PLAYER_ENTERING_WORLD" then
                 externalPlayersByNPC = {}
                 npcsInCombat = {}
+                npcTapDenied = {}
                 return
             end
             -- Handle BOSS_KILL event for raid achievements (fires regardless of who delivered final blow)
@@ -3517,6 +3897,7 @@ do
                     -- Only clear if we're not in combat anymore
                     if not UnitAffectingCombat("player") then
                         npcsInCombat = {}
+                        npcTapDenied = {}
                         -- Clean up old external player tracking (keep recent ones for a bit longer)
                         cleanupExternalPlayers()
                     end
@@ -3532,10 +3913,18 @@ do
                 if subevent == "PARTY_KILL" then
                     -- PARTY_KILL fires for player/party member kills
                     -- Only process if we were fighting this NPC (prevents tracking kills we had no part in)
+                    -- Check if player tagged the enemy (prevents credit for killing untagged mobs when awardOnKill is enabled)
+                    -- Use stored tap denial status (NPC is cleared from target when it dies, so we can't check at kill time)
+                    local isTapDenied = npcTapDenied[destGUID]
+                    if isTapDenied == true then
+                        print("|cff008066[Hardcore Achievements]|r |cffffd100Achievement cannot be fulfilled: Unit was not your tag.|r")
+                        return
+                    end
                     if npcsInCombat[destGUID] then
                         processKill(destGUID)
                         -- Clean up combat tracking
                         npcsInCombat[destGUID] = nil
+                        npcTapDenied[destGUID] = nil
                     end
                 elseif subevent == "UNIT_DIED" then
                     -- UNIT_DIED is a fallback for dungeon/raid bosses when PARTY_KILL doesn't fire
@@ -3555,6 +3944,7 @@ do
                                     processKill(destGUID)
                                     -- Clean up combat tracking
                                     npcsInCombat[destGUID] = nil
+                                    npcTapDenied[destGUID] = nil
                                 end
                             end
                         end
@@ -3605,9 +3995,21 @@ do
                             end
                             -- Mark that we're fighting this tracked NPC
                             if isTracked or (npcId and RAT_NPC_IDS[npcId]) then
-                                npcsInCombat[destGUID] = true
-                                -- Update threat for any tracked external players
-                                updateExternalPlayerThreat(destGUID)
+                                -- Check tap denial status whenever we can (not just when first engaging)
+                                -- This ensures we catch tap denial status even if NPC wasn't targeted initially
+                                local isTapDenied = checkAndStoreTapDenied(destGUID)
+                                
+                                -- If we discover the NPC is tap denied, don't track it (or remove it if already tracked)
+                                if isTapDenied == true then
+                                    npcsInCombat[destGUID] = nil
+                                    npcTapDenied[destGUID] = true
+                                else
+                                    -- Only track if we know it's NOT tap denied (false) or haven't checked yet (nil)
+                                    -- But we'll verify at kill time
+                                    npcsInCombat[destGUID] = true
+                                    -- Update threat for any tracked external players
+                                    updateExternalPlayerThreat(destGUID)
+                                end
                             end
                         end
                         
@@ -3621,9 +4023,23 @@ do
                                 updateExternalPlayerThreat(destGUID)
                             end
                             
+                            -- Check if player tagged the enemy (prevents credit for killing untagged mobs when awardOnKill is enabled)
+                            -- Use stored tap denial status (NPC is cleared from target when it dies, so we can't check at kill time)
+                            local isTapDenied = npcTapDenied[destGUID]
+                            if isTapDenied == true then
+                                print("|cff008066[Hardcore Achievements]|r |cffffd100Achievement cannot be fulfilled: Unit was not your tag.|r")
+                                -- Clean up combat tracking
+                                npcsInCombat[destGUID] = nil
+                                npcTapDenied[destGUID] = nil
+                                return
+                            end
+                            
                             -- Check for Rats achievement NPCs
                             if npcId and RAT_NPC_IDS[npcId] then
                                 processKill(destGUID)
+                                -- Clean up combat tracking
+                                npcsInCombat[destGUID] = nil
+                                npcTapDenied[destGUID] = nil
                             -- Check if this is a tracked boss (any achievement with a killTracker)
                             elseif npcId then
                                 -- Check if any achievement tracks this NPC
@@ -3639,6 +4055,9 @@ do
                                 end
                                 if isTracked then
                                     processKill(destGUID)
+                                    -- Clean up combat tracking
+                                    npcsInCombat[destGUID] = nil
+                                    npcTapDenied[destGUID] = nil
                                 end
                             end
                         end
@@ -3692,6 +4111,7 @@ do
                                         
                                         -- Clean up combat tracking
                                         npcsInCombat[destGUID] = nil
+                                        npcTapDenied[destGUID] = nil
                                     end
                                 end
                             end
@@ -3757,35 +4177,37 @@ do
                 
                 for _, row in ipairs(AchievementPanel.achievements) do
                     if not row.completed and type(row.questTracker) == "function" then
-                        -- Before calling questTracker, ensure we have a level stored for validation
-                        -- Check if player just leveled up within the window - if so, use the previous level
-                        if HardcoreAchievements_SetProgress then
-                            local progressTable = HardcoreAchievements_GetProgress and HardcoreAchievements_GetProgress(row.id)
-                            -- Only set levelAtTurnIn if we don't already have levelAtKill (for achievements without kill requirements)
-                            if not (progressTable and progressTable.levelAtKill) then
-                                local currentLevel = UnitLevel("player") or 1
-                                local levelToStore = currentLevel
-                                
-                                -- Check if there was a recent level-up within the time window
-                                if recentLevelUpCache and (currentTime - recentLevelUpCache.timestamp) <= LEVEL_UP_WINDOW then
-                                    -- Player leveled up recently - use the previous level as the "true" turn-in level
-                                    -- This handles the case where the quest XP causes the level-up
-                                    levelToStore = recentLevelUpCache.previousLevel
-                                else
-                                    -- No recent level-up, or it was outside the window - check if levelAtAccept might be better
-                                    -- Only use levelAtAccept if current level matches (player hasn't leveled since accept)
-                                    local levelAtAccept = progressTable and progressTable.levelAtAccept
-                                    if levelAtAccept and currentLevel == levelAtAccept then
-                                        levelToStore = levelAtAccept
-                                    end
-                                end
-                                
-                                HardcoreAchievements_SetProgress(row.id, "levelAtTurnIn", levelToStore)
-                            end
-                        end
-                        
+                        -- First check if the quest matches this achievement
                         local questMatched = row.questTracker(questID)
+                        
+                        -- Only set levelAtTurnIn if the quest actually matches this achievement
                         if questMatched then
+                            -- Check if player just leveled up within the window - if so, use the previous level
+                            if HardcoreAchievements_SetProgress then
+                                local progressTable = HardcoreAchievements_GetProgress and HardcoreAchievements_GetProgress(row.id)
+                                -- Only set levelAtTurnIn if we don't already have levelAtKill (for achievements without kill requirements)
+                                if not (progressTable and progressTable.levelAtKill) then
+                                    local currentLevel = UnitLevel("player") or 1
+                                    local levelToStore = currentLevel
+                                    
+                                    -- Check if there was a recent level-up within the time window
+                                    if recentLevelUpCache and (currentTime - recentLevelUpCache.timestamp) <= LEVEL_UP_WINDOW then
+                                        -- Player leveled up recently - use the previous level as the "true" turn-in level
+                                        -- This handles the case where the quest XP causes the level-up
+                                        levelToStore = recentLevelUpCache.previousLevel
+                                    else
+                                        -- No recent level-up, or it was outside the window - check if levelAtAccept might be better
+                                        -- Only use levelAtAccept if current level matches (player hasn't leveled since accept)
+                                        local levelAtAccept = progressTable and progressTable.levelAtAccept
+                                        if levelAtAccept and currentLevel == levelAtAccept then
+                                            levelToStore = levelAtAccept
+                                        end
+                                    end
+                                    
+                                    HardcoreAchievements_SetProgress(row.id, "levelAtTurnIn", levelToStore)
+                                end
+                            end
+                            
                             HCA_MarkRowCompleted(row)
                             HCA_AchToast_Show(row.Icon:GetTexture(), row.Title:GetText(), row.points, row)
                         end
@@ -3800,7 +4222,8 @@ do
                 if unit ~= "player" then return end
                 if spellId ~= 21343 and spellId ~= 16589 then return end
                 for _, row in ipairs(AchievementPanel.achievements) do
-                    if not row.completed and type(row.spellTracker) == "function" then
+                    -- Check both row.completed and database to prevent re-completion
+                    if not IsAchievementAlreadyCompleted(row) and type(row.spellTracker) == "function" then
                         -- Evaluate tracker and require true return value
                         local ok, shouldComplete = pcall(row.spellTracker, tonumber(spellId), tostring(targetName or ""))
                         if ok and shouldComplete == true then
@@ -3813,7 +4236,8 @@ do
                 local unit = select(1, ...)
                 if unit ~= "player" then return end
                 for _, row in ipairs(AchievementPanel.achievements) do
-                    if not row.completed and type(row.auraTracker) == "function" then
+                    -- Check both row.completed and database to prevent re-completion
+                    if not IsAchievementAlreadyCompleted(row) and type(row.auraTracker) == "function" then
                         local ok, shouldComplete = pcall(row.auraTracker)
                         if ok and shouldComplete == true then
                             HCA_MarkRowCompleted(row)
@@ -3832,7 +4256,8 @@ do
                     local headSlotItemId = GetInventoryItemID("player", 1)
                     if headSlotItemId == 7997 then
                         for _, row in ipairs(AchievementPanel.achievements) do
-                            if not row.completed and (row.id == "DefiasMask" or row.achId == "DefiasMask") then
+                            -- Check both row.completed and database to prevent re-completion
+                            if not IsAchievementAlreadyCompleted(row) and (row.id == "DefiasMask" or row.achId == "DefiasMask") then
                                 HCA_MarkRowCompleted(row)
                                 HCA_AchToast_Show(row.Icon:GetTexture(), row.Title:GetText(), row.points, row)
                             end
@@ -3844,7 +4269,8 @@ do
                 -- The tracker checks if ALL required items are owned, so we call it for all incomplete sets
                 -- This is efficient because GetItemCount is fast and the tracker only completes when ALL items are owned
                 for _, row in ipairs(AchievementPanel.achievements) do
-                    if not row.completed and row._def and row._def.isDungeonSet then
+                    -- Check both row.completed and database to prevent re-completion
+                    if not IsAchievementAlreadyCompleted(row) and row._def and row._def.isDungeonSet then
                         local achId = row.achId or row.id
                         if achId then
                             -- Check if this achievement has an item tracker function (dungeon sets)
@@ -3911,7 +4337,8 @@ do
                         -- Manually complete the row immediately.
                         for _, row in ipairs(AchievementPanel.achievements) do
                             local id = row and (row.id or row.achId)
-                            if row and (not row.completed) and id == "Precious" then
+                            -- Check both row.completed and database to prevent re-completion
+                            if row and not IsAchievementAlreadyCompleted(row) and id == "Precious" then
                                 HCA_MarkRowCompleted(row)
                                 HCA_AchToast_Show(row.Icon:GetTexture(), row.Title:GetText(), row.points, row)
                                 
@@ -3927,7 +4354,8 @@ do
                     _G.HCA_Precious_DeleteState = nil
                 end
                 for _, row in ipairs(AchievementPanel.achievements) do
-                    if not row.completed and type(row.itemTracker) == "function" then
+                    -- Check both row.completed and database to prevent re-completion
+                    if not IsAchievementAlreadyCompleted(row) and type(row.itemTracker) == "function" then
                         local ok, shouldComplete = pcall(row.itemTracker)
                         if ok and shouldComplete == true then
                             HCA_MarkRowCompleted(row)
@@ -3940,7 +4368,8 @@ do
                 local msg, unit = ...
                 if unit ~= UnitName("player") then return end
                 for _, row in ipairs(AchievementPanel.achievements) do
-                    if not row.completed and type(row.chatTracker) == "function" then
+                    -- Check both row.completed and database to prevent re-completion
+                    if not IsAchievementAlreadyCompleted(row) and type(row.chatTracker) == "function" then
                         local ok, shouldComplete = pcall(row.chatTracker, tostring(msg or ""))
                         if ok and shouldComplete == true then
                             HCA_MarkRowCompleted(row)
@@ -3991,7 +4420,8 @@ do
                 local itemID = tonumber(itemLink:match("|Hitem:(%d+)"))
                 if itemID ~= 6382 then return end  -- Forest Leather Belt
                     for _, row in ipairs(AchievementPanel.achievements) do
-                        if not row.completed and row.id == "Secret99" then
+                        -- Check both row.completed and database to prevent re-completion
+                        if not IsAchievementAlreadyCompleted(row) and row.id == "Secret99" then
                             HCA_MarkRowCompleted(row)
                             HCA_AchToast_Show(row.Icon:GetTexture(), row.Title:GetText(), row.points, row)
                         end
@@ -4072,7 +4502,8 @@ do
                 end
             elseif event == "PLAYER_DEAD" then
                 for _, row in ipairs(AchievementPanel.achievements) do
-                    if not row.completed and row.id == "Secret4" then
+                    -- Check both row.completed and database to prevent re-completion
+                    if not IsAchievementAlreadyCompleted(row) and (row.id == "Secret4" or row.id == "Secret004" or row.achId == "Secret4" or row.achId == "Secret004") then
                         HCA_MarkRowCompleted(row)
                         HCA_AchToast_Show(row.Icon:GetTexture(), row.Title:GetText(), row.points, row)
                         break
@@ -4101,7 +4532,8 @@ do
 
                 if not AchievementPanel or not AchievementPanel.achievements then return end
                 for _, row in ipairs(AchievementPanel.achievements) do
-                    if not row.completed and type(row.emoteTracker) == "function" then
+                    -- Check both row.completed and database to prevent re-completion
+                    if not IsAchievementAlreadyCompleted(row) and type(row.emoteTracker) == "function" then
                         local ok, shouldComplete = pcall(row.emoteTracker, tostring(token or ""), tostring(targetName or ""), tostring(unit or ""))
                         if ok and shouldComplete == true then
                             HCA_MarkRowCompleted(row)
@@ -4142,6 +4574,7 @@ function HCA_ShowAchievementTab()
     if _G["HonorFrame"]        then _G["HonorFrame"]:Hide()        end
     if _G["SkillFrame"]        then _G["SkillFrame"]:Hide()        end
     if _G["ReputationFrame"]   then _G["ReputationFrame"]:Hide()   end
+    if _G["PvPFrame"]          then _G["PvPFrame"]:Hide()          end
     if _G["TokenFrame"]        then _G["TokenFrame"]:Hide()        end
 
     -- Hide CharacterStatsClassic panel
@@ -4355,6 +4788,12 @@ do
                     if RefreshOutleveledAll then
                         RefreshOutleveledAll()
                     end
+                    
+                    -- Fix incorrectly failed meta achievements after refreshing outleveled status
+                    -- This must run after RefreshOutleveledAll so IsRowOutleveled returns correct values
+                    C_Timer.After(0.1, function()
+                        CleanupIncorrectlyFailedMetaAchievements()
+                    end)
                     
                     C_Timer.After(0.1, function()
                         if SortAchievementRows then

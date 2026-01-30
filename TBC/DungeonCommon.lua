@@ -509,7 +509,7 @@ local function CreateVariation(baseDef, variation)
     -- Update tooltip to reflect variation (clean, without "Variation" suffix)
     local partySizeText = variation.maxPartySize == 1 and "yourself only" or 
                           (variation.maxPartySize == 2 and "up to 2 party members" or "up to 3 party members")
-    variationDef.tooltip = "Defeat the bosses of |cff008765" .. baseDef.title .. "|r before level " .. (variationDef.level + 1) .. 
+    variationDef.tooltip = "Defeat the bosses of " .. HCA_SharedUtils.GetClassColor() .. "" .. baseDef.title .. "|r before level " .. (variationDef.level + 1) .. 
                           " (" .. partySizeText .. ")"
     
     -- Mark as variation
@@ -536,23 +536,22 @@ function DungeonCommon.registerDungeonAchievement(def)
   local faction = def.faction
 
   -- Expose this definition for external lookups (e.g., chat link tooltips)
-  _G.HCA_AchievementDefs = _G.HCA_AchievementDefs or {}
-  _G.HCA_AchievementDefs[tostring(achId)] = {
+  HCA_SharedUtils.RegisterAchievementDef({
     achId = achId,
     title = title,
     tooltip = tooltip,
     icon = icon,
     points = points,
     level = level,
-    mapID = def.requiredMapId,
+    requiredMapId = def.requiredMapId,
     mapName = def.title,
     requiredKills = requiredKills,
-    bossOrder = bossOrder,  -- Store boss order for tooltip display
+    bossOrder = bossOrder,
     faction = faction,
-    isHeroicDungeon = def.isHeroicDungeon or false,  -- Preserve heroic dungeon flag
-    isVariation = def.isVariation,  -- Store variation flag for filtering
-    baseAchId = def.baseAchId,  -- Store base achievement ID for variations
-  }
+    isHeroicDungeon = def.isHeroicDungeon or false,
+    isVariation = def.isVariation,
+    baseAchId = def.baseAchId,
+  })
 
   -- State for the current achievement session only
   local state = {
@@ -1287,7 +1286,10 @@ function DungeonCommon.registerDungeonAchievement(def)
     -- Ensure dungeons never have allowSoloDouble enabled
     local dungeonDef = def or {}
     dungeonDef.allowSoloDouble = false
-    dungeonDef.isDungeon = true
+    -- Only set isDungeon for non-heroic so Heroic Dungeons filter is independent of Dungeons filter
+    if not def.isHeroicDungeon then
+        dungeonDef.isDungeon = true
+    end
     
     _G[rowVarName] = CreateAchievementRow(
       AchievementPanel,

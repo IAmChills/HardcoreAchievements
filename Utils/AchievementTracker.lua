@@ -547,8 +547,12 @@ function AchievementTracker:InitializeHeader(baseFrame)
     end)
 
     headerFrame:SetScript("OnLeave", function(self)
-        self:SetAlpha(0.8)
+        -- Keep header at full opacity regardless of hover state
+        self:SetAlpha(1)
     end)
+    
+    -- Ensure header always starts at full opacity
+    headerFrame:SetAlpha(1)
     
     -- Note: Sizer visibility will be handled after all frames are initialized
 
@@ -1076,9 +1080,9 @@ local function GetAchievementStatus(achievementId)
     end
     
     if isCompleted then
-        return " (Completed)", "FF00FF00"  -- Green
+        return " (Completed)", "|cFF00FF00"  -- Green
     elseif isFailed then
-        return " (Failed)", "FFFF0000"  -- Red
+        return " (Failed)", "|cFFFF0000"  -- Red
     else
         -- Check for pending turn-in status
         local isPendingTurnIn = false
@@ -1138,7 +1142,7 @@ local function GetAchievementStatus(achievementId)
         end
         
         if isPendingTurnIn then
-            return " (Pending Turn-In)", select(4, GetClassColor(select(2, UnitClass("player"))))
+            return " (Pending Turn-In)", HCA_SharedUtils.GetClassColor()
         end
     end
     
@@ -1148,7 +1152,7 @@ end
 -- Helper function to get title color based on player level vs required level
 local function GetTitleColor(requiredLevel)
     if not requiredLevel or requiredLevel <= 0 then
-        return "FFFF00"  -- Yellow (default) if no level requirement
+        return "FFFFFF00"  -- Yellow (default) if no level requirement
     end
     
     local playerLevel = UnitLevel("player") or 1
@@ -1156,13 +1160,13 @@ local function GetTitleColor(requiredLevel)
     
     if levelDiff <= 1 then
         -- Within 1 level or equal/above: Yellow
-        return "FFFF00"
+        return "FFFFFF00"
     elseif levelDiff == 2 then
         -- 2 levels below: Orange (#f26000)
-        return "F26000"
+        return "FFF26000"
     else
         -- 3+ levels below: Red (#ff0000)
-        return "FF0000"
+        return "FFFF0000"
     end
 end
 
@@ -1437,9 +1441,9 @@ function AchievementTracker:Update()
 
     -- Update header (yellow color)
     if isExpanded then
-        trackerHeaderFrame.label:SetText("|cFFFFFF00Achievement Tracker: " .. numTracked .. "/10|r")
+        trackerHeaderFrame.label:SetText("|CFFFFD100Achievement Tracker: " .. numTracked .. "/10|r")
     else
-        trackerHeaderFrame.label:SetText("|cFFFFFF00Achievement Tracker +|r")
+        trackerHeaderFrame.label:SetText("|CFFFFD100Achievement Tracker +|r")
     end
 
     -- Calculate header width including icon, spacing, and label
@@ -1575,20 +1579,23 @@ function AchievementTracker:Update()
                 
                 -- Get achievement level and format title with level prefix
                 local achievementLevel = GetAchievementLevel(achievementId)
-                local displayTitle = achieveName
+                local baseTitle = achieveName
                 if achievementLevel then
-                    displayTitle = "[" .. achievementLevel .. "] " .. achieveName
+                    baseTitle = "[" .. achievementLevel .. "] " .. achieveName
                 end
                 
                 -- Get achievement status (Completed, Failed, Pending Turn-In)
                 local statusText, statusColor = GetAchievementStatus(achievementId)
-                if statusText then
-                    displayTitle = displayTitle .. "|c" .. statusColor .. statusText .. "|r"
-                end
                 
                 -- Set title with color coding based on player level vs required level
+                -- Apply title color to base title, then append status text with its own color
                 local titleColor = GetTitleColor(achievementLevel)
-                line.label:SetText("|cff" .. titleColor .. displayTitle .. "|r")
+                local displayTitle = "|c" .. titleColor .. baseTitle .. "|r"
+                if statusText then
+                    displayTitle = displayTitle .. statusColor .. statusText .. "|r"
+                end
+                
+                line.label:SetText(displayTitle)
                 
                 -- Get and set description (gray color)
                 local description = GetAchievementDescription(achievementId)
@@ -2083,12 +2090,19 @@ local function RestoreOnLogin()
 end
 
 -- Register for PLAYER_LOGIN event to restore tracked achievements
+-- Also register for PLAYER_LEVEL_UP to refresh title colors when player levels up
 local restoreFrame = CreateFrame("Frame")
 restoreFrame:RegisterEvent("PLAYER_LOGIN")
+restoreFrame:RegisterEvent("PLAYER_LEVEL_UP")
 restoreFrame:SetScript("OnEvent", function(self, event)
     if event == "PLAYER_LOGIN" then
         -- Wait a moment for registration to start, then check and restore
         C_Timer.After(0.1, RestoreOnLogin)
+    elseif event == "PLAYER_LEVEL_UP" then
+        -- Refresh tracker to update title colors based on new player level
+        if AchievementTracker and AchievementTracker.Update then
+            AchievementTracker:Update()
+        end
     end
 end)
 

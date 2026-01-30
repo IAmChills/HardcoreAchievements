@@ -11,8 +11,7 @@ function MetaCommon.registerMetaAchievement(def)
   local achievementOrder = def.achievementOrder -- Optional ordering for tooltip display
 
   -- Expose this definition for external lookups (e.g., chat link tooltips)
-  _G.HCA_AchievementDefs = _G.HCA_AchievementDefs or {}
-  _G.HCA_AchievementDefs[tostring(achId)] = {
+  HCA_SharedUtils.RegisterAchievementDef({
     achId = achId,
     title = title,
     tooltip = tooltip,
@@ -21,7 +20,7 @@ function MetaCommon.registerMetaAchievement(def)
     requiredAchievements = requiredAchievements,
     achievementOrder = achievementOrder,
     isMetaAchievement = true,
-  }
+  })
   
   -- Meta achievements only allow solo bonuses when hardcore is active (self-found buff)
   -- Set allowSoloDouble on def to control this behavior

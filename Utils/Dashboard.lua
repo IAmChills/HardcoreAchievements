@@ -321,45 +321,17 @@ local function HookDashboardSubTextUpdates(row)
     fontString._hcaSetTextWrapped = true
 end
 
--- Helper function to check if row is outleveled (must be defined before functions that use it)
+-- Helper function to check if row is outleveled
+-- Use the global function from HardcoreAchievements.lua if available, otherwise fallback to local logic
 local function IsRowOutleveled(row)
+  -- Use the global function if available (it has all the proper checks)
+  if _G.IsRowOutleveled and type(_G.IsRowOutleveled) == "function" then
+    return _G.IsRowOutleveled(row)
+  end
+  
+  -- Fallback to basic check if global function not available
   if not row or row.completed then return false end
   if not row.maxLevel then return false end
-  
-  -- Check if there's pending turn-in progress (kill completed but quest not turned in)
-  -- If so, don't mark as outleveled - player can still complete it
-  if row.questTracker and (row.killTracker or row.requiredKills) then
-    -- Achievement requires both kill and quest
-    local progress = _G.HardcoreAchievements_GetProgress and _G.HardcoreAchievements_GetProgress(row.achId or row.id)
-    if progress then
-      local hasKill = false
-      if row.requiredKills then
-        -- Check if all required kills are satisfied
-        if progress.eligibleCounts then
-          local allSatisfied = true
-          for npcId, requiredCount in pairs(row.requiredKills) do
-            local idNum = tonumber(npcId) or npcId
-            local current = progress.eligibleCounts[idNum] or progress.eligibleCounts[tostring(idNum)] or 0
-            local required = tonumber(requiredCount) or 1
-            if current < required then
-              allSatisfied = false
-              break
-            end
-          end
-          hasKill = allSatisfied
-        end
-      else
-        -- Single kill achievement
-        hasKill = progress.killed or false
-      end
-      
-      local questNotTurnedIn = not progress.quest
-      -- If kills are satisfied but quest is not turned in, keep achievement available
-      if hasKill and questNotTurnedIn then
-        return false
-      end
-    end
-  end
   
   local lvl = UnitLevel("player") or 1
   return lvl > row.maxLevel
@@ -927,7 +899,14 @@ function DASHBOARD:BuildClassicGrid(srcRows)
       local shouldShow = false
       
       local isCompleted = data.completed == true
-      local isFailed = data.outleveled
+      -- Use the global IsRowOutleveled function directly on the source row for accurate failure detection
+      local isFailed = false
+      if _G.IsRowOutleveled and type(_G.IsRowOutleveled) == "function" then
+        isFailed = _G.IsRowOutleveled(srow)
+      else
+        -- Fallback to data.outleveled if global function not available
+        isFailed = data.outleveled or false
+      end
       local isAvailable = not isCompleted and not isFailed
       
       -- Get status filter states (completed, available, failed) - all default to true
@@ -969,7 +948,7 @@ function DASHBOARD:BuildClassicGrid(srcRows)
             shouldShow = false
           end
         elseif def.isHeroicDungeon then
-          -- Heroic Dungeons: check index 3
+          -- Heroic Dungeons: check index 3 (heroics don't get isDungeon set, so independent of Dungeons filter)
           if not ShouldShowByCheckboxFilter(def, isCompleted, 3, nil) then
             shouldShow = false
           end
@@ -1046,12 +1025,14 @@ function DASHBOARD:BuildClassicGrid(srcRows)
         end
 
         -- Set icon appearance based on status
-        local playerLevel = UnitLevel("player") or 0
-        local isOverLeveled = false
-        if data.maxLevel and data.maxLevel > 0 then
-          isOverLeveled = playerLevel > data.maxLevel
+        -- Use the global IsRowOutleveled function directly on the source row for accurate failure detection
+        local isFailed = false
+        if _G.IsRowOutleveled and type(_G.IsRowOutleveled) == "function" then
+          isFailed = _G.IsRowOutleveled(srow)
+        else
+          -- Fallback to data.outleveled if global function not available
+          isFailed = data.outleveled or false
         end
-        local isFailed = data.outleveled or isOverLeveled
 
         if data.completed then
           -- Completed: full color
@@ -1538,7 +1519,14 @@ function DASHBOARD:BuildModernRows(srcRows)
       local shouldShow = false
       
       local isCompleted = data.completed == true
-      local isFailed = data.outleveled
+      -- Use the global IsRowOutleveled function directly on the source row for accurate failure detection
+      local isFailed = false
+      if _G.IsRowOutleveled and type(_G.IsRowOutleveled) == "function" then
+        isFailed = _G.IsRowOutleveled(srow)
+      else
+        -- Fallback to data.outleveled if global function not available
+        isFailed = data.outleveled or false
+      end
       local isAvailable = not isCompleted and not isFailed
       
       -- Get status filter states (completed, available, failed) - all default to true
@@ -1580,7 +1568,7 @@ function DASHBOARD:BuildModernRows(srcRows)
             shouldShow = false
           end
         elseif def.isHeroicDungeon then
-          -- Heroic Dungeons: check index 3
+          -- Heroic Dungeons: check index 3 (heroics don't get isDungeon set, so independent of Dungeons filter)
           if not ShouldShowByCheckboxFilter(def, isCompleted, 3, nil) then
             shouldShow = false
           end
@@ -1957,6 +1945,14 @@ local function BuildDashboardFrame()
     -- If texture doesn't exist, it will show as missing - we can use a fallback
     DashboardFrame.TitleBarBackground = titleBarBackground
     
+    -- Logo in top left corner of title bar
+    local logoSize = 28
+    local titleBarLogo = titleBar:CreateTexture(nil, "OVERLAY")
+    titleBarLogo:SetSize(logoSize, logoSize)
+    titleBarLogo:SetPoint("LEFT", titleBar, "LEFT", 5, 0)
+    titleBarLogo:SetTexture("Interface\\AddOns\\HardcoreAchievements\\Images\\HardcoreAchievementsButton.png")
+    titleBarLogo:SetTexCoord(0, 1, 0, 1)
+
     -- Title text
     DashboardFrame.TitleText = titleBar:CreateFontString(nil, "OVERLAY", "GameFontHighlightHuge")
     DashboardFrame.TitleText:SetPoint("CENTER", titleBar, "CENTER", 0, 0)
@@ -2237,7 +2233,7 @@ local function BuildDashboardFrame()
   if not DashboardFrame.LayoutLabel then
     local parent = DashboardFrame.UIOverlayFrame or DashboardFrame
     DashboardFrame.LayoutLabel = parent:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    DashboardFrame.LayoutLabel:SetPoint("LEFT", DashboardFrame.SettingsButton, "RIGHT", 25, 0)
+    DashboardFrame.LayoutLabel:SetPoint("LEFT", DashboardFrame.SettingsButton, "RIGHT", 25, 2)
     DashboardFrame.LayoutLabel:SetText("Layout:")
     DashboardFrame.LayoutLabel:SetTextColor(0.922, 0.871, 0.761)
     DashboardFrame.LayoutLabel:SetDrawLayer("OVERLAY", 7)
@@ -2388,24 +2384,21 @@ local function BuildDashboardFrame()
     ApplyCustomCheckboxTextures(DashboardFrame.UseCharacterPanelCheckbox)
     
     -- Initialize checkbox state
-    local SharedUtils = _G.HardcoreAchievements_SharedUtils
-    local useCharacterPanel = SharedUtils and SharedUtils.GetSetting("useCharacterPanel", true) or true
+    local useCharacterPanel = _G.HCA_SharedUtils and _G.HCA_SharedUtils.GetSetting("useCharacterPanel", true) or true
     DashboardFrame.UseCharacterPanelCheckbox:SetChecked(useCharacterPanel)
     
     -- Handle checkbox changes
     DashboardFrame.UseCharacterPanelCheckbox:SetScript("OnClick", function(self)
       local isChecked = self:GetChecked()
-      local SharedUtils = _G.HardcoreAchievements_SharedUtils
-      if SharedUtils and SharedUtils.SetUseCharacterPanel then
-        SharedUtils.SetUseCharacterPanel(isChecked)
+      if _G.HCA_SharedUtils and _G.HCA_SharedUtils.SetUseCharacterPanel then
+        _G.HCA_SharedUtils.SetUseCharacterPanel(isChecked)
       end
     end)
   end
 
   -- Apply saved state on initialization
-  local SharedUtils = _G.HardcoreAchievements_SharedUtils
-  if SharedUtils and SharedUtils.UpdateCharacterPanelTabVisibility then
-    SharedUtils.UpdateCharacterPanelTabVisibility()
+  if _G.HCA_SharedUtils and _G.HCA_SharedUtils.UpdateCharacterPanelTabVisibility then
+    _G.HCA_SharedUtils.UpdateCharacterPanelTabVisibility()
   end
 
   -- Only hook once to prevent duplicate scripts
@@ -2417,6 +2410,11 @@ local function BuildDashboardFrame()
       SyncContentWidth()
       ApplyFilter()
       UpdateDashboardMultiplierText() -- Update multiplier text when frame is shown
+      -- Sync UseCharacterPanel checkbox with current setting (in case it was changed elsewhere)
+      if DashboardFrame.UseCharacterPanelCheckbox and _G.HCA_SharedUtils then
+        local useCharacterPanel = _G.HCA_SharedUtils.GetSetting("useCharacterPanel", true)
+        DashboardFrame.UseCharacterPanelCheckbox:SetChecked(useCharacterPanel)
+      end
     end)
 
     if DashboardFrame.Scroll then
