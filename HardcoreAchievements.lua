@@ -635,8 +635,8 @@ local function IsRowOutleveled(row)
         local isDungeonAchievement = false
         local dungeonMapId = nil
         
-        -- Check if row has isDungeon flag
-        if row._def and row._def.isDungeon then
+        -- Check if row is a dungeon achievement (normal or heroic) for in-dungeon exception
+        if row._def and (row._def.isDungeon or row._def.isHeroicDungeon) then
             isDungeonAchievement = true
             -- Get mapID from achievement definition
             local achId = row.achId or row.id
@@ -2943,7 +2943,7 @@ local function ApplyFilter()
                     shouldShow = false
                 end
             elseif def.isHeroicDungeon then
-                -- Heroic Dungeons: check index 3
+                -- Heroic Dungeons: check index 3 (heroics don't get isDungeon set, so independent of Dungeons filter)
                 if not ShouldShowByCheckboxFilter(def, isCompleted, 3, nil) then
                     shouldShow = false
                 end

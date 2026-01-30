@@ -1222,7 +1222,10 @@ function DungeonCommon.registerDungeonAchievement(def)
     -- Ensure dungeons never have allowSoloDouble enabled
     local dungeonDef = def or {}
     dungeonDef.allowSoloDouble = false
-    dungeonDef.isDungeon = true
+    -- Only set isDungeon for non-heroic so Heroic Dungeons filter is independent of Dungeons filter
+    if not def.isHeroicDungeon then
+        dungeonDef.isDungeon = true
+    end
     
     _G[rowVarName] = CreateAchievementRow(
       AchievementPanel,

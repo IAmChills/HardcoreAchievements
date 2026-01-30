@@ -948,7 +948,7 @@ function DASHBOARD:BuildClassicGrid(srcRows)
             shouldShow = false
           end
         elseif def.isHeroicDungeon then
-          -- Heroic Dungeons: check index 3
+          -- Heroic Dungeons: check index 3 (heroics don't get isDungeon set, so independent of Dungeons filter)
           if not ShouldShowByCheckboxFilter(def, isCompleted, 3, nil) then
             shouldShow = false
           end
@@ -1568,7 +1568,7 @@ function DASHBOARD:BuildModernRows(srcRows)
             shouldShow = false
           end
         elseif def.isHeroicDungeon then
-          -- Heroic Dungeons: check index 3
+          -- Heroic Dungeons: check index 3 (heroics don't get isDungeon set, so independent of Dungeons filter)
           if not ShouldShowByCheckboxFilter(def, isCompleted, 3, nil) then
             shouldShow = false
           end
