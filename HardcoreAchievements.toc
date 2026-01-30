@@ -1,4 +1,4 @@
-﻿## Interface: 11508, 20505
+## Interface: 11508, 20505
 ## Title: HardcoreAchievements
 ## Author: Chills
 ## Version: 1.5.5
@@ -78,4 +78,5 @@ Utils\Embed_UltraHardcore.lua
 Utils\CommandHandler.lua
 Utils\AchievementLinks.lua
 Utils\OptionsPanel.lua
+Utils\InitialOptionsFrame.lua
 Utils\CharacterInspection.lua

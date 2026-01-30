@@ -2020,7 +2020,7 @@ local minimapDataObject = LDB:NewDataObject("HardcoreAchievements", {
         end
     end,
     OnTooltipShow = function(tooltip)
-        tooltip:AddLine("HardcoreAchievements", 1, 1, 1)
+        tooltip:AddLine("Hardcore Achievements", 1, 1, 1)
         
         -- Minimap icon always opens Dashboard
         tooltip:AddLine("Left-click to open Dashboard", 0.5, 0.5, 0.5)
@@ -2110,6 +2110,11 @@ initFrame:SetScript("OnEvent", function(self, event, ...)
             if _HardcoreAchievementsOptionsPanel and _HardcoreAchievementsOptionsPanel.refresh then
                 _HardcoreAchievementsOptionsPanel:refresh()
             end
+        end)
+
+        -- One-time initial options frame for new characters (no initialSetupDone flag)
+        C_Timer.After(1, function()
+            HardcoreAchievements_ShowInitialOptionsIfNeeded()
         end)
 
     elseif event == "ADDON_LOADED" then
@@ -3137,11 +3142,11 @@ AchievementPanel.Scroll:SetPoint("BOTTOMRIGHT", -65, 85)  -- leaves room for the
 AchievementPanel.Scroll:SetClipsChildren(false) -- Allow borders to extend into padding space
 
 -- Clipping frame for borders: allows horizontal extension but clips top/bottom
--- Extends left/right to allow padding space, but clips top/bottom to prevent overflow
+-- Right edge extends to panel edge (past scrollbar) so row border texture isn't clipped
 AchievementPanel.BorderClip = CreateFrame("Frame", nil, AchievementPanel)
-AchievementPanel.BorderClip:SetPoint("TOPLEFT", AchievementPanel.Scroll, "TOPLEFT", -10, 2)  -- Allow left padding, clip top
-AchievementPanel.BorderClip:SetPoint("BOTTOMRIGHT", AchievementPanel.Scroll, "BOTTOMRIGHT", 10, -2)  -- Allow right padding, clip bottom
-AchievementPanel.BorderClip:SetClipsChildren(true) -- Clip borders to this frame's boundaries
+AchievementPanel.BorderClip:SetPoint("TOPLEFT", AchievementPanel.Scroll, "TOPLEFT", -10, 2)
+AchievementPanel.BorderClip:SetPoint("BOTTOMRIGHT", AchievementPanel, "BOTTOMRIGHT", -2, 90)  -- panel right so border isn't clipped by scroll area
+AchievementPanel.BorderClip:SetClipsChildren(true)
 
 -- The content frame that actually holds rows
 AchievementPanel.Content = CreateFrame("Frame", nil, AchievementPanel.Scroll)

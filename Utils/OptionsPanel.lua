@@ -68,15 +68,19 @@ function HardcoreAchievements_IsAwardOnKillEnabled()
     return false
 end
 
--- Helper function to check if achievements should be announced in guild chat
+-- Helper function to check if achievements should be announced in guild chat (default: true)
 function HardcoreAchievements_ShouldAnnounceInGuildChat()
     if type(HardcoreAchievements_GetCharDB) == "function" then
         local _, cdb = HardcoreAchievements_GetCharDB()
-        if cdb and cdb.settings and cdb.settings.announceInGuildChat then
+        if cdb and cdb.settings then
+            -- Default to true; only false when explicitly set to false
+            if cdb.settings.announceInGuildChat == false then
+                return false
+            end
             return true
         end
     end
-    return false
+    return true
 end
 
 -- Create Discord frame (will be created on first use)
@@ -634,7 +638,7 @@ local function CreateOptionsPanel()
     local announceInGuildChatCB = CreateFrame("CheckButton", nil, panel, "InterfaceOptionsCheckButtonTemplate")
     announceInGuildChatCB:SetPoint("TOPLEFT", awardOnKillCB, "BOTTOMLEFT", 0, -8)
     announceInGuildChatCB.Text:SetText("Announce achievements in guild chat")
-    announceInGuildChatCB:SetChecked(GetSetting("announceInGuildChat", false))
+    announceInGuildChatCB:SetChecked(GetSetting("announceInGuildChat", true))
     announceInGuildChatCB:SetScript("OnClick", function(self)
         local isChecked = self:GetChecked()
         SetSetting("announceInGuildChat", isChecked)
@@ -720,7 +724,7 @@ local function CreateOptionsPanel()
     -- Credits text
     local creditsText = panel:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
     creditsText:SetPoint("TOPLEFT", creditsCategoryTitle, "BOTTOMLEFT", 0, -8)
-    creditsText:SetText("Special thanks to:\n\n|cffff8000Viviway|r for the help with the addon and the overall design for UI.\n|cffff8000Tulhur|r for the help with tracking down bugs and all his suggestions.\n|cffff8000BonniesDad|r for supplying the Ultra Hardcore addon and allowing Hardcore Achivements to thrive.")
+    creditsText:SetText("Special thanks to:\n\n|cffff8000Viviway|r for the help with the addon and the overall UI design.\n|cffff8000Tulhur|r for the help with tracking down bugs and all his suggestions.\n|cffff8000BonniesDad|r for supplying the Ultra Hardcore addon and allowing Hardcore Achivements to thrive.\n|cffff8000CDank|r for creating the Hardcore TBC community and spreading the word about Hardcore Achivements.\n|cffff8000mocktail|r for creating the Hardcore addon and allowing Hardcore Achivements to thrive.")
     creditsText:SetTextColor(0.8, 0.8, 0.8, 1)
     creditsText:SetWidth(600)
     creditsText:SetJustifyH("LEFT")
@@ -750,7 +754,7 @@ local function CreateOptionsPanel()
             awardOnKillCB:SetChecked(GetSetting("awardOnKill", false))
         end
         if announceInGuildChatCB then
-            announceInGuildChatCB:SetChecked(GetSetting("announceInGuildChat", false))
+            announceInGuildChatCB:SetChecked(GetSetting("announceInGuildChat", true))
         end
         if modernRowsCB then
             modernRowsCB:SetChecked(GetSetting("modernRows", true))

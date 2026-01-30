@@ -1945,6 +1945,14 @@ local function BuildDashboardFrame()
     -- If texture doesn't exist, it will show as missing - we can use a fallback
     DashboardFrame.TitleBarBackground = titleBarBackground
     
+    -- Logo in top left corner of title bar
+    local logoSize = 28
+    local titleBarLogo = titleBar:CreateTexture(nil, "OVERLAY")
+    titleBarLogo:SetSize(logoSize, logoSize)
+    titleBarLogo:SetPoint("LEFT", titleBar, "LEFT", 5, 0)
+    titleBarLogo:SetTexture("Interface\\AddOns\\HardcoreAchievements\\Images\\HardcoreAchievementsButton.png")
+    titleBarLogo:SetTexCoord(0, 1, 0, 1)
+
     -- Title text
     DashboardFrame.TitleText = titleBar:CreateFontString(nil, "OVERLAY", "GameFontHighlightHuge")
     DashboardFrame.TitleText:SetPoint("CENTER", titleBar, "CENTER", 0, 0)
@@ -2376,24 +2384,21 @@ local function BuildDashboardFrame()
     ApplyCustomCheckboxTextures(DashboardFrame.UseCharacterPanelCheckbox)
     
     -- Initialize checkbox state
-    local SharedUtils = _G.HardcoreAchievements_SharedUtils
-    local useCharacterPanel = SharedUtils and HCA_SharedUtils.GetSetting("useCharacterPanel", true) or true
+    local useCharacterPanel = _G.HCA_SharedUtils and _G.HCA_SharedUtils.GetSetting("useCharacterPanel", true) or true
     DashboardFrame.UseCharacterPanelCheckbox:SetChecked(useCharacterPanel)
     
     -- Handle checkbox changes
     DashboardFrame.UseCharacterPanelCheckbox:SetScript("OnClick", function(self)
       local isChecked = self:GetChecked()
-      local SharedUtils = _G.HardcoreAchievements_SharedUtils
-      if SharedUtils and HCA_SharedUtils.SetUseCharacterPanel then
-        HCA_SharedUtils.SetUseCharacterPanel(isChecked)
+      if _G.HCA_SharedUtils and _G.HCA_SharedUtils.SetUseCharacterPanel then
+        _G.HCA_SharedUtils.SetUseCharacterPanel(isChecked)
       end
     end)
   end
 
   -- Apply saved state on initialization
-  local SharedUtils = _G.HardcoreAchievements_SharedUtils
-  if SharedUtils and HCA_SharedUtils.UpdateCharacterPanelTabVisibility then
-    HCA_SharedUtils.UpdateCharacterPanelTabVisibility()
+  if _G.HCA_SharedUtils and _G.HCA_SharedUtils.UpdateCharacterPanelTabVisibility then
+    _G.HCA_SharedUtils.UpdateCharacterPanelTabVisibility()
   end
 
   -- Only hook once to prevent duplicate scripts
@@ -2405,6 +2410,11 @@ local function BuildDashboardFrame()
       SyncContentWidth()
       ApplyFilter()
       UpdateDashboardMultiplierText() -- Update multiplier text when frame is shown
+      -- Sync UseCharacterPanel checkbox with current setting (in case it was changed elsewhere)
+      if DashboardFrame.UseCharacterPanelCheckbox and _G.HCA_SharedUtils then
+        local useCharacterPanel = _G.HCA_SharedUtils.GetSetting("useCharacterPanel", true)
+        DashboardFrame.UseCharacterPanelCheckbox:SetChecked(useCharacterPanel)
+      end
     end)
 
     if DashboardFrame.Scroll then

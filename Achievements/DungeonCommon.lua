@@ -90,7 +90,7 @@ local function CheckAndPrintEligibilityMessages(mapId, entryData)
                 if not isCompleted and not isFailed then
                     local isEligible = CheckAchievementEligibility(mapId, achDef, entryData)
                     if isEligible then
-                        print("|cff008066[Hardcore Achievements]|r |cff00ff00Group is eligible for achievement: " .. (achDef.title or achDef.mapName or "Unknown") .. "|r")
+                        print("|cff008066[Hardcore Achievements]|r |cff00ff00Group is eligible for achievement: " .. (achDef.title or achDef.mapName or "Unknown") .. ". If any player levels beyond the achievement’s allowed level while inside the dungeon, exiting and re-entering will disqualify the group from achievement eligibility.|r")
                     else
                         print("|cff008066[Hardcore Achievements]|r |cffff0000Group is not eligible for achievement: " .. (achDef.title or achDef.mapName or "Unknown") .. "|r")
                     end

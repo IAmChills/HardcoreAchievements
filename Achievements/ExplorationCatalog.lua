@@ -15,9 +15,9 @@ local ExplorationAchievements = {
     staticPoints = true,
 }, {
   achId = "Fellowship",
-  title = "Fellowship of the Journey",
+  title = "Fellowship of the 1 Ring",
   level = nil,
-  tooltip = "Stand with another adventurer and aid them in their perilous journey to " .. HCA_SharedUtils.GetClassColor() .. "Blackrock Mountain|r to destroy |cffff8000The 1 Ring|r, sharing in the burden and seeing the quest through.\n\nMust be within 25 yards of the player at completion.",
+  tooltip = "Stand with another adventurer and aid them in their perilous journey to " .. HCA_SharedUtils.GetClassColor() .. "Blackrock Mountain|r to destroy |cffff8000The 1 Ring|r, sharing in the burden and seeing the quest through.\n\nMust be within 25 yards of the player who destroys the ring.",
   icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\ThePrecious.png",
   points = 0,
   customIsCompleted = function() return false end,
