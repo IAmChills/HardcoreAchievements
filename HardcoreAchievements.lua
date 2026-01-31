@@ -11,6 +11,8 @@ local QuestTrackedRows = {}
 -- Flag to track when achievement restorations from DB are complete
 -- Must be declared early so CheckPendingCompletions and EvaluateCustomCompletions can access it
 local restorationsComplete = false
+-- When true, HCA_MarkRowCompleted skips emote/guild broadcast (first run after login = retroactive completions)
+local skipBroadcastForRetroactive = false
 
 -- Achievement function registry to reduce global pollution
 local AchievementFunctionRegistry = {}
@@ -1399,25 +1401,25 @@ function HCA_MarkRowCompleted(row, cdbParam)
         ProfessionTracker.NotifyRowCompleted(row)
     end
     
-	-- Broadcast achievement completion to emote channel
-	local playerName = UnitName("player")
-	local achievementTitle = row.Title and row.Title:GetText() or "Unknown Achievement"
-	local broadcastMessage = string.format(ACHIEVEMENT_BROADCAST, "", achievementTitle)
-	-- Remove leading whitespace so EMOTE doesn't show a double space before 'has'
-	broadcastMessage = broadcastMessage:gsub("^%s+", "")
-    SendChatMessage(broadcastMessage, "EMOTE")
+	-- Broadcast achievement completion (skip for retroactive completions on first load to avoid guild spam)
+	if not skipBroadcastForRetroactive then
+		local playerName = UnitName("player")
+		local achievementTitle = row.Title and row.Title:GetText() or "Unknown Achievement"
+		local broadcastMessage = string.format(ACHIEVEMENT_BROADCAST, "", achievementTitle)
+		broadcastMessage = broadcastMessage:gsub("^%s+", "")
+		SendChatMessage(broadcastMessage, "EMOTE")
 
-	-- Announce in guild chat (with hyperlink) when enabled
-	if type(HardcoreAchievements_ShouldAnnounceInGuildChat) == "function" and HardcoreAchievements_ShouldAnnounceInGuildChat() and IsInGuild() then
-        local link = nil
-        local achIdForLink = row.achId or row.id
-        if achIdForLink and _G.HCA_GetAchievementHyperlink then
-            link = _G.HCA_GetAchievementBracket(achIdForLink)
-        end
-        local guildMessage = string.format(playerName .. ACHIEVEMENT_BROADCAST, "", link or achievementTitle)
-        guildMessage = guildMessage:gsub("^%s+", "")
-        SendChatMessage(guildMessage, "GUILD")
-    end
+		if type(HardcoreAchievements_ShouldAnnounceInGuildChat) == "function" and HardcoreAchievements_ShouldAnnounceInGuildChat() and IsInGuild() then
+			local link = nil
+			local achIdForLink = row.achId or row.id
+			if achIdForLink and _G.HCA_GetAchievementHyperlink then
+				link = _G.HCA_GetAchievementBracket(achIdForLink)
+			end
+			local guildMessage = string.format(playerName .. ACHIEVEMENT_BROADCAST, "", link or achievementTitle)
+			guildMessage = guildMessage:gsub("^%s+", "")
+			SendChatMessage(guildMessage, "GUILD")
+		end
+	end
     
     -- Ensure hidden-until-complete rows become visible now
     if row.hiddenUntilComplete then
@@ -4771,16 +4773,18 @@ do
             restorationsComplete = true
             
             C_Timer.After(0.1, function()
+                -- First run after login: skip emote/guild broadcast for retroactive completions (avoids guild spam for new installs)
+                skipBroadcastForRetroactive = true
                 -- First, check pending completions (including customIsCompleted achievements)
                 if CheckPendingCompletions then
                     CheckPendingCompletions()
                 end
                 -- Also evaluate custom completions (handles both row.customIsCompleted and global functions)
-                -- This is especially important for level milestones which can be completed at any level
                 if EvaluateCustomCompletions then
                     local currentLevel = UnitLevel("player") or 1
                     EvaluateCustomCompletions(currentLevel)
                 end
+                skipBroadcastForRetroactive = false
                 
                 -- Refresh outleveled status AFTER checking completions
                 -- This ensures level milestones and profession achievements are marked complete before checking if they're "failed"
