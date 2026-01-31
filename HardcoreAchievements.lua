@@ -1799,7 +1799,9 @@ function HCA_AchToast_Show(iconTex, title, pts, achIdOrRow)
     f:Show()
 
     --print(ACHIEVEMENT_BROADCAST_SELF:format(title))
-    PlaySoundFile("Interface\\AddOns\\HardcoreAchievements\\Sounds\\AchievementSound1.ogg", "Effects")
+    if not skipBroadcastForRetroactive then
+        PlaySoundFile("Interface\\AddOns\\HardcoreAchievements\\Sounds\\AchievementSound1.ogg", "Effects")
+    end
 
     C_Timer.After(1, function()
         -- Check if screenshots are disabled before taking screenshot
