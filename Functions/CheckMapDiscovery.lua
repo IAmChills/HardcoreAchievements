@@ -52,7 +52,7 @@ local ZoneMapIDs = {
 local LocationMap = {
     ["Deadwind Pass"] = {
         ["Deadman's Crossing"] = {x = 0.50, y = 0.45},
-        ["The Vice"] = {x = 0.59, y = 0.64},
+        --["The Vice"] = {x = 0.59, y = 0.64},
         ["Karazhan"] = {x = 0.46, y = 0.73},
     },
     ["Eastern Plaguelands"] = {

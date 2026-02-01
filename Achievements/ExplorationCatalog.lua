@@ -29,7 +29,7 @@ local ExplorationAchievements = {
   tooltip = "Discover all of " .. HCA_SharedUtils.GetClassColor() .. "Deadwind Pass|r and speak to " .. HCA_SharedUtils.GetClassColor() .. "Archmage Leryda|r at the entrance of " .. HCA_SharedUtils.GetClassColor() .. "Karazhan|r at or before level 25",
   icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_Raid_Karazhan.png",
   points = 0,
-  customIsCompleted = function() return CheckZoneDiscovery(1430) and UnitName("npc") == "Archmage Leryda" and UnitLevel("player") <= 60 end,
+  customIsCompleted = function() return CheckZoneDiscovery(1430) and UnitName("npc") == "Archmage Leryda" and UnitLevel("player") <= 25 end,
   staticPoints = true,
 }, {
   achId = "OrgA",

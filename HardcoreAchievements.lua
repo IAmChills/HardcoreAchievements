@@ -3921,7 +3921,11 @@ do
                     -- Use stored tap denial status (NPC is cleared from target when it dies, so we can't check at kill time)
                     local isTapDenied = npcTapDenied[destGUID]
                     if isTapDenied == true then
-                        print("|cff008066[Hardcore Achievements]|r |cffffd100Achievement cannot be fulfilled: Unit was not your tag.|r")
+                        -- Only notify when this NPC is part of an achievement (avoid spam for random tapped mobs)
+                        local npcId = getNpcIdFromGUID(destGUID)
+                        if npcId and isNpcTrackedForAchievement(npcId) then
+                            print("|cff008066[Hardcore Achievements]|r |cffffd100Achievement cannot be fulfilled: Unit was not your tag.|r")
+                        end
                         return
                     end
                     if npcsInCombat[destGUID] then
