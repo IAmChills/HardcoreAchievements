@@ -1412,7 +1412,7 @@ function HCA_MarkRowCompleted(row, cdbParam)
 		if type(HardcoreAchievements_ShouldAnnounceInGuildChat) == "function" and HardcoreAchievements_ShouldAnnounceInGuildChat() and IsInGuild() then
 			local link = nil
 			local achIdForLink = row.achId or row.id
-			if achIdForLink and _G.HCA_GetAchievementHyperlink then
+			if achIdForLink and _G.HCA_GetAchievementBracket then
 				link = _G.HCA_GetAchievementBracket(achIdForLink)
 			end
 			local guildMessage = string.format(playerName .. ACHIEVEMENT_BROADCAST, "", link or achievementTitle)

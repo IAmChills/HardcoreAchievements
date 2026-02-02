@@ -61,17 +61,30 @@ end
 -- Public: build a bracket format string for chat (used before chat filter converts to hyperlink)
 -- Format: [HCA:(achId)] - icon, points, and other data are looked up locally on receiver's end
 function HCA_GetAchievementBracket(achId)
-    return string.format("[HCA:(%s)]", tostring(achId))
+	-- For some achievements, the title is player-specific (e.g., includes the sender's name).
+	-- In those cases, send an expanded bracket form so receivers don't recompute a different title locally.
+	-- Pattern handled by ChatFilter_HCA below: [HCA: Title (achId)]
+	local rec = GetAchievementById(achId)
+	if rec and rec.linkUsesSenderTitle and rec.title then
+		return string.format("[HCA: %s (%s)]", tostring(rec.title), tostring(achId))
+	end
+	return string.format("[HCA:(%s)]", tostring(achId))
 end
 
 -- Public: build a hyperlink string for an achievement id and title
 -- Icon and other data are looked up locally on the receiver's end using the achId
-function HCA_GetAchievementHyperlink(achId, title)
-    local sender = UnitGUID("player") or ""
-    local display = string.format("[%s]", tostring(title or achId))
-    -- Format: |Hhcaach:achId:sender|h[Title]|h
-    -- Icon, points, and other data are always looked up locally on the receiver's end
-    return "|cffffd100" .. string.format("|H%s:%s:%s|h%s|h", HCA_LINK_PREFIX, tostring(achId), tostring(sender), display) .. "|r"
+function HCA_GetAchievementHyperlink(achId, title, senderName, senderGuid)
+	-- We intentionally do NOT encode icon/points in the link; those are always looked up locally.
+	-- We do include sender identity metadata so certain achievements can render a sender-stable title
+	local guid = senderGuid
+	if guid == nil then
+		guid = UnitGUID("player") or ""
+	end
+	local name = senderName or ""
+	local display = string.format("[%s]", tostring(title or achId))
+	-- Format (v2): |Hhcaach:achId:senderGuid:senderName|h[Title]|h
+	-- Backwards compatible with v1: hcaach:achId:senderGuid
+	return "|cffffd100" .. string.format("|H%s:%s:%s:%s|h%s|h", HCA_LINK_PREFIX, tostring(achId), tostring(guid), tostring(name), display) .. "|r"
 end
 
 -- Tooltip rendering for our custom link
@@ -79,11 +92,23 @@ local Old_ItemRef_SetHyperlink = ItemRefTooltip and ItemRefTooltip.SetHyperlink
 if Old_ItemRef_SetHyperlink then
 	ItemRefTooltip.SetHyperlink = function(self, link, ...)
         local linkStr = tostring(link or "")
+		-- Extract the visible title from the link text (between |h[ and ]|h) if present.
+		-- This is what was shown in chat, and is sender-stable when the sender provided it.
+		local displayTitleFromLink = string.match(linkStr, "%|h%[([^%]]-)%]%|h")
         -- Extract hyperlink part (between |H and |h) or use the whole string if no |H wrapper
         local hyperlinkPart = string.match(linkStr, "^%|H([^|]+)%|h") or linkStr
-        -- Parse link format: hcaach:achId:sender
+        -- Parse link format:
+		-- v1: hcaach:achId:senderGuid
+		-- v2: hcaach:achId:senderGuid:senderName
         -- Icon, points, and other data are always looked up locally, never from the link
-        local prefix, achId, sender = string.match(hyperlinkPart, "^(%w+):([^:]+):?(.*)$")
+		local prefix, achId, rest = string.match(hyperlinkPart, "^(%w+):([^:]+):?(.*)$")
+		local senderGuid, senderName = "", ""
+		if rest and rest ~= "" then
+			-- Split rest into guid and optional name
+			senderGuid, senderName = string.match(rest, "^([^:]*):?(.*)$")
+			senderGuid = senderGuid or ""
+			senderName = senderName or ""
+		end
         if prefix == HCA_LINK_PREFIX and achId then
             ShowUIPanel(ItemRefTooltip)
 			ItemRefTooltip:SetOwner(UIParent, "ANCHOR_PRESERVE")
@@ -94,6 +119,13 @@ if Old_ItemRef_SetHyperlink then
             local tooltip = rec and rec.tooltip or ""
             local icon = 136116  -- Default fallback icon
             local points = 0
+
+			-- Sender-stable title override for player-specific titles:
+			-- if the achievement opts in, prefer the visible title from the link text itself.
+			-- This avoids recomputing titles locally (which can depend on the viewer).
+			if rec and rec.linkUsesSenderTitle and displayTitleFromLink and displayTitleFromLink ~= "" then
+				title = displayTitleFromLink
+			end
 
             -- Per-viewer secrecy: if secret and viewer hasn't completed, show secret placeholders
             local isSecret = rec and rec.secret
@@ -111,6 +143,15 @@ if Old_ItemRef_SetHyperlink then
                     icon = rec.icon
                 end
             end
+
+			-- Sender-stable tooltip override (only when the viewer is allowed to see the real tooltip).
+			-- Define `def.linkTooltip = function(senderName, senderGuid) return "..." end` on an achievement.
+			if (not isSecret or viewerCompleted) and rec and type(rec.linkTooltip) == "function" and senderName and senderName ~= "" then
+				local ok, linkTip = pcall(rec.linkTooltip, senderName, senderGuid)
+				if ok and type(linkTip) == "string" and linkTip ~= "" then
+					tooltip = linkTip
+				end
+			end
 
             -- Always use local points, ignore sender's points from the link
             -- Only set points if we're not using secret points (which were already set above)
@@ -331,7 +372,7 @@ if Old_ItemRef_SetHyperlink then
 end
 
 -- Optional: Convert bracketed fallback text to hyperlink for receivers without direct link
--- Pattern: [HCA: Title (achId)] -> |Hhcaach:achId:GUID|h[Title]|h
+-- Pattern: [HCA: Title (achId)] -> |Hhcaach:achId:GUID:senderName|h[Title]|h
 local function EscapePattern(s)
 	return (s
 		:gsub("%%", "%%%%")
@@ -353,6 +394,13 @@ end
 local function ChatFilter_HCA(chatFrame, _, msg, ...)
     if not msg or type(msg) ~= "string" then return end
     local changed = false
+	-- ChatFrame_AddMessageEventFilter passes (self, event, msg, author, ...)
+	local author = select(1, ...)
+	local authorName = ""
+	if type(author) == "string" and author ~= "" then
+		-- Strip realm if present (Name-Realm)
+		authorName = (author:match("^([^-]+)")) or author
+	end
     local function ViewerHasCompleted(id)
         return ViewerHasCompletedAchievement(id)
     end
@@ -363,9 +411,10 @@ local function ChatFilter_HCA(chatFrame, _, msg, ...)
         if rec and rec.secret and not ViewerHasCompleted(id) then
             displayTitle = rec.secretTitle or "Secret"
         else
-            displayTitle = (rec and rec.title) or title
+			-- Prefer the sender-supplied title from the message, so player-specific titles remain stable.
+            displayTitle = (title and title ~= "" and title) or (rec and rec.title) or tostring(id)
         end
-        local link = HCA_GetAchievementHyperlink(id, displayTitle)
+        local link = HCA_GetAchievementHyperlink(id, displayTitle, authorName)
         changed = true
         return link
     end)
@@ -378,7 +427,7 @@ local function ChatFilter_HCA(chatFrame, _, msg, ...)
         else
             displayTitle = (rec and rec.title) or tostring(id)
         end
-        local link = HCA_GetAchievementHyperlink(id, displayTitle)
+        local link = HCA_GetAchievementHyperlink(id, displayTitle, authorName)
         changed = true
         return link
     end)

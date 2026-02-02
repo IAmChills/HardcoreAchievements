@@ -521,6 +521,9 @@ local Achievements = {
     tooltip = "Obtain the " .. HCA_SharedUtils.GetClassColor() .. "Mallet of Zul'Farrak|r before level 50",
     icon = 134559,
     points = 10,
+    -- Title is player-specific (includes the completing player's name). Opt-in so chat links
+    -- and tooltips can show the sender/completer name for all viewers.
+    linkUsesSenderTitle = true,
     allowSoloDouble = true,
     customIsCompleted = function() return false end,
     customItem = function() return GetItemCount(9240, true) > 0 end,

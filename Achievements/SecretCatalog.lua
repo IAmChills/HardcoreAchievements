@@ -114,6 +114,11 @@ local Secrets = {
     title = "The Last Achievement",
     level = nil,
     tooltip = string.format("%s... your tale slips quietly into forgotten pages. Only echoes will remember your name now.", GetUnitName("player")),
+	-- When this achievement is linked in chat, prefer the completer/sender name instead of the viewer name.
+	-- (The real tooltip is still hidden from viewers who haven't completed it.)
+	linkTooltip = function(senderName)
+		return string.format("%s... your tale slips quietly into forgotten pages. Only echoes will remember your name now.", tostring(senderName or ""))
+	end,
     icon = 237542,
     points = 0,
     customIsCompleted = function() return UnitIsDeadOrGhost("player") end,
