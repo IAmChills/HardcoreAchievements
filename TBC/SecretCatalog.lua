@@ -238,7 +238,7 @@ local Secrets = {
     hiddenUntilComplete = true,
 }, {
   achId = "Secret013",
-  title = "O.G. Colectors Edition",
+  title = "O.G. Collectors Edition",
   level = nil,
   tooltip = "You have completed the secret achievement: |cffff8000Owner of the Vanilla Collectors Edition|r",
   icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\DiabloAnniversary_Achievement.png", -- ??
