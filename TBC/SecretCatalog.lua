@@ -121,7 +121,6 @@ local Secrets = {
     icon = 237542,
     points = 0,
     customIsCompleted = function() return UnitIsDeadOrGhost("player") end,
-    secret = true,
     staticPoints = true,
     hiddenUntilComplete = true,
 }, {
