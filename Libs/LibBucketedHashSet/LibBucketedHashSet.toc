@@ -1,0 +1,7 @@
+## Interface: 11508, 20505, 30405, 40402, 50503, 110207
+## Title: LibBucketedHashSet
+## Author: Erunehtar
+## Notes: Bucketed Hash Set implementation for WoW Lua 5.1 environment.
+## Version: 1
+
+LibBucketedHashSet.lua

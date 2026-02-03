@@ -2924,6 +2924,20 @@ local function ApplyFilter()
         if row.hiddenByProfession then
             shouldShow = false
         end
+        -- Hide guild-first achievements that are already claimed by someone else
+        if not row.completed then
+            local achId = row.id or row.achId
+            if achId and _G.HCA_GuildFirst then
+                local isClaimed, winner = _G.HCA_GuildFirst:IsClaimed(tostring(achId))
+                if isClaimed and winner then
+                    local myGUID = UnitGUID("player") or ""
+                    if winner.winnerGUID ~= myGUID then
+                        -- Claimed by someone else - silently fail (hide)
+                        shouldShow = false
+                    end
+                end
+            end
+        end
         
         -- Hide/show achievements based on checkbox filter
         if row._def then
