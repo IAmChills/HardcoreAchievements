@@ -2933,6 +2933,7 @@ local function ApplyFilter()
                     local myGUID = UnitGUID("player") or ""
                     if winner.winnerGUID ~= myGUID then
                         -- Claimed by someone else - silently fail (hide)
+                        _G.HCA_DebugPrint("[Filter] Hiding achievement '" .. tostring(achId) .. "' - already claimed by " .. tostring(winner.winnerName or "?") .. " (silent fail)")
                         shouldShow = false
                     end
                 end

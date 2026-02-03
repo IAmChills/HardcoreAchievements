@@ -62,6 +62,7 @@ end
 local function GetScopeKey(scope)
     local realm = GetRealmName()
     if realm == "" then
+        Debug("GetScopeKey: No realm name available")
         return nil
     end
 
@@ -69,20 +70,26 @@ local function GetScopeKey(scope)
     if scope == nil or scope == "guild" then
         local guildName = GetGuildName()
         if not guildName or guildName == "" then
+            Debug("GetScopeKey: Guild-first scope but player not in a guild")
             return nil  -- Not in a guild, can't participate in guild-first
         end
-        return "Guild@" .. tostring(guildName) .. "@" .. tostring(realm)
+        local key = "Guild@" .. tostring(guildName) .. "@" .. tostring(realm)
+        Debug("GetScopeKey: Guild-first scope -> " .. key)
+        return key
     end
 
     -- Server-wide
     if scope == "server" then
-        return "Server@" .. tostring(realm)
+        local key = "Server@" .. tostring(realm)
+        Debug("GetScopeKey: Server-first scope -> " .. key)
+        return key
     end
 
     -- Custom guild list: {"GuildA", "GuildB"}
     if type(scope) == "table" then
         local guildName = GetGuildName()
         if not guildName or guildName == "" then
+            Debug("GetScopeKey: Custom guild pool but player not in a guild")
             return nil  -- Not in a guild, can't participate
         end
         
@@ -97,14 +104,18 @@ local function GetScopeKey(scope)
                 end
                 table.sort(sortedGuilds)
                 local guildListStr = table.concat(sortedGuilds, ",")
-                return "Guilds@" .. guildListStr .. "@" .. tostring(realm)
+                local key = "Guilds@" .. guildListStr .. "@" .. tostring(realm)
+                Debug("GetScopeKey: Custom guild pool [" .. guildListStr .. "] -> " .. key .. " (player in allowed guild)")
+                return key
             end
         end
         
         -- Player's guild is not in the allowed list
+        Debug("GetScopeKey: Player's guild '" .. tostring(guildName) .. "' not in custom pool")
         return nil
     end
 
+    Debug("GetScopeKey: Invalid scope type: " .. type(scope))
     return nil  -- Invalid scope
 end
 
@@ -118,6 +129,12 @@ local function FindRowByAchId(achId)
         end
     end
     return nil
+end
+
+local function Debug(msg)
+    if type(_G.HCA_DebugPrint) == "function" then
+        _G.HCA_DebugPrint("[GuildFirst] " .. tostring(msg))
+    end
 end
 
 -- ---------------------------------------------------------------------------------------------------------------------
@@ -139,15 +156,19 @@ local function EnsureDBForScope(scopeKey)
     -- Get or create database (uses LibP2PDB defaults: LibPatternedBloomFilter, LibSerialize, LibDeflate)
     local db = LibP2PDB:GetDatabase(prefix)
     if not db then
+        Debug("Initializing database for scope: " .. tostring(scopeKey) .. " (prefix: " .. tostring(prefix) .. ")")
         db = LibP2PDB:NewDatabase({
             prefix = prefix,
             version = 1,
             onDiscoveryComplete = function()
+                Debug("Peer discovery complete for scope: " .. tostring(scopeKey) .. " - starting sync")
                 if databases[scopeKey] and databases[scopeKey].db then
                     LibP2PDB:SyncDatabase(databases[scopeKey].db)
                 end
             end,
         })
+    else
+        Debug("Using existing database for scope: " .. tostring(scopeKey))
     end
 
     -- Create claims table (ignore error if already exists)
@@ -160,8 +181,19 @@ local function EnsureDBForScope(scopeKey)
                 winnerGUID = "string",
                 claimedAt = "number",
             },
-            onChange = function(_key, _data)
+            onChange = function(key, data)
                 -- When a claim changes, refresh the achievement filter to hide/show rows
+                local myGUID = UnitGUID("player") or ""
+                if data and data.winnerGUID then
+                    if data.winnerGUID == myGUID then
+                        Debug("Received claim update: Achievement '" .. tostring(key) .. "' claimed by ME (already awarded)")
+                    else
+                        Debug("Received claim update: Achievement '" .. tostring(key) .. "' claimed by " .. tostring(data.winnerName or "?") .. " - marking as silently failed")
+                    end
+                else
+                    Debug("Received claim update: Achievement '" .. tostring(key) .. "' claim removed")
+                end
+                
                 if type(_G.HCA_ApplyFilter) == "function" then
                     C_Timer.After(0.1, function()
                         _G.HCA_ApplyFilter()
@@ -174,8 +206,10 @@ local function EnsureDBForScope(scopeKey)
     -- Load persisted state
     local root = _G.HardcoreAchievementsDB
     if root and root.guildFirst and root.guildFirst[scopeKey] and root.guildFirst[scopeKey].state then
+        Debug("Loading persisted state for scope: " .. tostring(scopeKey))
         pcall(function()
             LibP2PDB:ImportDatabase(db, root.guildFirst[scopeKey].state)
+            Debug("Persisted state loaded for scope: " .. tostring(scopeKey))
         end)
     end
 
@@ -195,6 +229,7 @@ local function EnsureDBForScope(scopeKey)
     end
 
     -- Initial discovery
+    Debug("Starting peer discovery for scope: " .. tostring(scopeKey))
     LibP2PDB:DiscoverPeers(db)
 
     -- Save state periodically (only create one saver per scope)
@@ -229,18 +264,31 @@ end
 --- @return string|table|nil scope
 local function GetAchievementScope(row, achievementId)
     if row and row._def and row._def.achievementScope ~= nil then
-        return row._def.achievementScope
+        local scope = row._def.achievementScope
+        if type(scope) == "table" then
+            Debug("GetAchievementScope(" .. tostring(achievementId) .. "): Custom guild pool: " .. table.concat(scope, ", "))
+        else
+            Debug("GetAchievementScope(" .. tostring(achievementId) .. "): Scope from def: " .. tostring(scope))
+        end
+        return scope
     end
     
     -- Try to find row by ID if not provided
     if not row and achievementId then
         row = FindRowByAchId(achievementId)
         if row and row._def and row._def.achievementScope ~= nil then
-            return row._def.achievementScope
+            local scope = row._def.achievementScope
+            if type(scope) == "table" then
+                Debug("GetAchievementScope(" .. tostring(achievementId) .. "): Custom guild pool (from lookup): " .. table.concat(scope, ", "))
+            else
+                Debug("GetAchievementScope(" .. tostring(achievementId) .. "): Scope from def (from lookup): " .. tostring(scope))
+            end
+            return scope
         end
     end
     
     -- Default to guild-first
+    Debug("GetAchievementScope(" .. tostring(achievementId) .. "): Using default scope: guild")
     return "guild"
 end
 
@@ -249,21 +297,32 @@ end
 --- @param row table? Optional achievement row (to determine scope)
 --- @return boolean isClaimed, table? winnerRecord
 function M:IsClaimed(achievementId, row)
+    achievementId = tostring(achievementId)
     local scope = GetAchievementScope(row, achievementId)
     local scopeKey = GetScopeKey(scope)
     if not scopeKey then
+        Debug("IsClaimed(" .. achievementId .. "): No valid scope key (player can't participate)")
         return false, nil
     end
 
     local db = EnsureDBForScope(scopeKey)
     if not db then
+        Debug("IsClaimed(" .. achievementId .. "): Failed to initialize database for scope: " .. tostring(scopeKey))
         return false, nil
     end
 
-    local rec = LibP2PDB:GetKey(db, TABLE_NAME, tostring(achievementId))
+    local rec = LibP2PDB:GetKey(db, TABLE_NAME, achievementId)
     if rec then
+        local myGUID = UnitGUID("player") or ""
+        if rec.winnerGUID == myGUID then
+            Debug("IsClaimed(" .. achievementId .. "): Already claimed by ME (scope: " .. tostring(scopeKey) .. ")")
+        else
+            Debug("IsClaimed(" .. achievementId .. "): Already claimed by " .. tostring(rec.winnerName or "?") .. " (scope: " .. tostring(scopeKey) .. ")")
+        end
         return true, rec
     end
+    
+    Debug("IsClaimed(" .. achievementId .. "): Not claimed yet (scope: " .. tostring(scopeKey) .. ")")
     return false, nil
 end
 
@@ -299,31 +358,47 @@ end
 function M:CanClaimAndAward(achievementId, row)
     achievementId = tostring(achievementId or "")
     if achievementId == "" then
+        Debug("CanClaimAndAward: Empty achievement ID")
         return false
     end
+
+    Debug("CanClaimAndAward(" .. achievementId .. "): Starting claim attempt")
 
     -- Get row if not provided
     if not row then
         row = FindRowByAchId(achievementId)
+        if row then
+            Debug("CanClaimAndAward(" .. achievementId .. "): Found achievement row")
+        else
+            Debug("CanClaimAndAward(" .. achievementId .. "): Achievement row not found")
+        end
     end
 
     -- Determine scope from achievement definition
     local scope = GetAchievementScope(row, achievementId)
     local scopeKey = GetScopeKey(scope)
     if not scopeKey then
-        -- Player can't participate in this scope (e.g., not in guild for guild-first)
+        Debug("CanClaimAndAward(" .. achievementId .. "): Player can't participate in this scope (e.g., not in guild for guild-first)")
         return false
     end
 
+    Debug("CanClaimAndAward(" .. achievementId .. "): Scope determined -> " .. tostring(scopeKey))
+
     local db = EnsureDBForScope(scopeKey)
     if not db then
+        Debug("CanClaimAndAward(" .. achievementId .. "): Failed to initialize database")
         return false
     end
 
     -- Check if already claimed
     local existing = LibP2PDB:GetKey(db, TABLE_NAME, achievementId)
     if existing then
-        -- Already claimed - silently fail
+        local myGUID = UnitGUID("player") or ""
+        if existing.winnerGUID == myGUID then
+            Debug("CanClaimAndAward(" .. achievementId .. "): Already claimed by ME - skipping")
+        else
+            Debug("CanClaimAndAward(" .. achievementId .. "): Already claimed by " .. tostring(existing.winnerName or "?") .. " - silently failing")
+        end
         return false
     end
 
@@ -336,9 +411,13 @@ function M:CanClaimAndAward(achievementId, row)
         claimedAt = time(),
     }
 
+    Debug("CanClaimAndAward(" .. achievementId .. "): Not claimed yet - claiming as FIRST! (scope: " .. tostring(scopeKey) .. ")")
+    
     pcall(function()
         LibP2PDB:SetKey(db, TABLE_NAME, achievementId, claim)
+        Debug("CanClaimAndAward(" .. achievementId .. "): Claim written locally, broadcasting to all peers...")
         LibP2PDB:BroadcastKey(db, TABLE_NAME, achievementId)
+        Debug("CanClaimAndAward(" .. achievementId .. "): Broadcast sent, discovering peers and syncing...")
         LibP2PDB:DiscoverPeers(db)
         LibP2PDB:SyncDatabase(db)
         
@@ -354,17 +433,22 @@ function M:CanClaimAndAward(achievementId, row)
                     state = dbState,
                     savedAt = time(),
                 }
+                Debug("CanClaimAndAward(" .. achievementId .. "): State saved to SavedVariables")
             end
         end
     end)
 
     -- Award the achievement
     if row and type(_G.HCA_MarkRowCompleted) == "function" then
+        Debug("CanClaimAndAward(" .. achievementId .. "): Awarding achievement to player")
         _G.HCA_MarkRowCompleted(row)
         if type(_G.HCA_AchToast_Show) == "function" and row.Icon and row.Title then
             _G.HCA_AchToast_Show(row.Icon:GetTexture(), row.Title:GetText(), row.points or 0, row)
         end
+        Debug("CanClaimAndAward(" .. achievementId .. "): Achievement awarded successfully!")
         return true
+    else
+        Debug("CanClaimAndAward(" .. achievementId .. "): WARNING - Claim succeeded but couldn't award (row or HCA_MarkRowCompleted missing)")
     end
 
     return false
