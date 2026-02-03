@@ -126,6 +126,15 @@ if Old_ItemRef_SetHyperlink then
 			if rec and rec.linkUsesSenderTitle and displayTitleFromLink and displayTitleFromLink ~= "" then
 				title = displayTitleFromLink
 			end
+			-- If we don't have the visible title text (some hyperlink call sites pass only "hcaach:..."),
+			-- allow an achievement to compute a sender-stable title from sender identity.
+			-- Define `def.linkTitle = function(senderName, senderGuid, displayTitleFromLink) return "..." end`.
+			if rec and rec.linkUsesSenderTitle and (not displayTitleFromLink or displayTitleFromLink == "") and type(rec.linkTitle) == "function" then
+				local ok, linkTitle = pcall(rec.linkTitle, senderName, senderGuid, displayTitleFromLink)
+				if ok and type(linkTitle) == "string" and linkTitle ~= "" then
+					title = linkTitle
+				end
+			end
 
             -- Per-viewer secrecy: if secret and viewer hasn't completed, show secret placeholders
             local isSecret = rec and rec.secret
@@ -146,7 +155,7 @@ if Old_ItemRef_SetHyperlink then
 
 			-- Sender-stable tooltip override (only when the viewer is allowed to see the real tooltip).
 			-- Define `def.linkTooltip = function(senderName, senderGuid) return "..." end` on an achievement.
-			if (not isSecret or viewerCompleted) and rec and type(rec.linkTooltip) == "function" and senderName and senderName ~= "" then
+			if (not isSecret or viewerCompleted) and rec and type(rec.linkTooltip) == "function" and (senderName ~= "" or senderGuid ~= "") then
 				local ok, linkTip = pcall(rec.linkTooltip, senderName, senderGuid)
 				if ok and type(linkTip) == "string" and linkTip ~= "" then
 					tooltip = linkTip
@@ -391,15 +400,23 @@ local function EscapePattern(s)
 	)
 end
 
-local function ChatFilter_HCA(chatFrame, _, msg, ...)
+local function ChatFilter_HCA(chatFrame, event, msg, author, ...)
     if not msg or type(msg) ~= "string" then return end
     local changed = false
 	-- ChatFrame_AddMessageEventFilter passes (self, event, msg, author, ...)
-	local author = select(1, ...)
 	local authorName = ""
 	if type(author) == "string" and author ~= "" then
 		-- Strip realm if present (Name-Realm)
 		authorName = (author:match("^([^-]+)")) or author
+	end
+	-- For *_INFORM events (your outgoing whispers), `author` is the recipient, not the sender.
+	-- For link metadata we want the *sender/completer* name so tooltips render correctly on both sides.
+	local senderNameForLink = authorName
+	if event == "CHAT_MSG_WHISPER_INFORM" or event == "CHAT_MSG_BN_WHISPER_INFORM" then
+		local me = UnitName("player")
+		if type(me) == "string" and me ~= "" then
+			senderNameForLink = (me:match("^([^-]+)")) or me
+		end
 	end
     local function ViewerHasCompleted(id)
         return ViewerHasCompletedAchievement(id)
@@ -414,7 +431,7 @@ local function ChatFilter_HCA(chatFrame, _, msg, ...)
 			-- Prefer the sender-supplied title from the message, so player-specific titles remain stable.
             displayTitle = (title and title ~= "" and title) or (rec and rec.title) or tostring(id)
         end
-        local link = HCA_GetAchievementHyperlink(id, displayTitle, authorName)
+        local link = HCA_GetAchievementHyperlink(id, displayTitle, senderNameForLink)
         changed = true
         return link
     end)
@@ -427,12 +444,14 @@ local function ChatFilter_HCA(chatFrame, _, msg, ...)
         else
             displayTitle = (rec and rec.title) or tostring(id)
         end
-        local link = HCA_GetAchievementHyperlink(id, displayTitle, authorName)
+        local link = HCA_GetAchievementHyperlink(id, displayTitle, senderNameForLink)
         changed = true
         return link
     end)
     if changed then
-        return false, msg, ...
+        -- IMPORTANT: since we took `author` as a named parameter, we must return it explicitly,
+        -- otherwise WoW chat will mis-handle the message (can appear as if the link didn't send).
+        return false, msg, author, ...
     end
 end
 

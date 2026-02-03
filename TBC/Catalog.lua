@@ -561,6 +561,10 @@ local Achievements = {
     -- Title is player-specific (includes the completing player's name). Opt-in so chat links
     -- and tooltips can show the sender/completer name for all viewers.
     linkUsesSenderTitle = true,
+    -- Tooltip title fallback when the visible link text isn't available in the hyperlink handler.
+    linkTitle = function(senderName)
+        return string.format("%s the Keeper", tostring(senderName or ""))
+    end,
     allowSoloDouble = true,
     customIsCompleted = function() return false end,
     customItem = function() return GetItemCount(9240, true) > 0 end,
