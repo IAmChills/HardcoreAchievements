@@ -2017,11 +2017,20 @@ local function UpdateDashboardProgressOverview(srcRows)
   local leftKeys = { "quest", "dungeon" }
   if IsTBCForOverview() then
     table.insert(leftKeys, "heroic_dungeon")
+  else
+    table.insert(leftKeys, "profession")
   end
   local moreLeft = { "raid" }
   for _, k in ipairs(moreLeft) do table.insert(leftKeys, k) end
 
-  local rightKeys = { "profession", "reputation", "exploration", "secret" }
+  local rightKeys = { }
+  if IsTBCForOverview() then
+    table.insert(rightKeys, "profession")
+  else
+    table.insert(rightKeys, "reputation")
+  end
+  table.insert(rightKeys, "exploration")
+  table.insert(rightKeys, "secret")
 
   local function LayoutColumn(keys, side)
     for i, key in ipairs(keys) do
@@ -2345,7 +2354,7 @@ local function SyncContentWidth()
 
   local horizontalPadding = math.max((scrollWidth - w) * 0.5, 0)
   DashboardFrame.Content:ClearAllPoints()
-  if IsModernRowsEnabled() then
+  if (DashboardFrame and DashboardFrame.SelectedTabKey == "summary") or IsModernRowsEnabled() then
     DashboardFrame.Content:SetPoint("TOPLEFT", DashboardFrame.Scroll, "TOPLEFT", horizontalPadding, 0)
     DashboardFrame.Content:SetPoint("TOPRIGHT", DashboardFrame.Scroll, "TOPRIGHT", -horizontalPadding, 0)
   else
@@ -2413,8 +2422,35 @@ function DASHBOARD:Rebuild()
     return
   end
 
+  -- Ensure Summary-only UI doesn't leak into other tabs (especially when switching from grid Summary).
+  local isSummaryTab = DashboardFrame and DashboardFrame.SelectedTabKey == "summary"
+  if not isSummaryTab then
+    if DashboardFrame.SummaryRecentHeaderText then
+      DashboardFrame.SummaryRecentHeaderText:Hide()
+    end
+    if DashboardFrame.ProgressContainer then
+      DashboardFrame.ProgressContainer:Hide()
+    end
+    if DashboardFrame.ProgressHeaderText then
+      DashboardFrame.ProgressHeaderText:Hide()
+    end
+    -- Restore scrolling visuals/interaction for normal tabs.
+    if DashboardFrame.Scroll then
+      if DashboardFrame.Scroll.ScrollBar then
+        DashboardFrame.Scroll.ScrollBar:Show()
+      end
+      if DashboardFrame.Scroll.EnableMouseWheel then
+        DashboardFrame.Scroll:EnableMouseWheel(true)
+      end
+    end
+  end
+
   -- Check if modern rows is enabled
   local useModernRows = IsModernRowsEnabled()
+  -- Summary view always needs the list builder (it renders recent rows + progress overview).
+  if isSummaryTab then
+    useModernRows = true
+  end
 
   if DashboardFrame and DashboardFrame.ScrollBackground then
     if useModernRows then
@@ -2591,7 +2627,11 @@ local function BuildDashboardFrame()
     -- Frozen header row (outside the scroll) so the special Dashboard tab is always visible
     local backdropTemplate = BackdropTemplateMixin and "BackdropTemplate" or nil
     DashboardFrame.TabHeader = CreateFrame("Frame", nil, DashboardFrame, backdropTemplate)
-    DashboardFrame.TabHeader:SetPoint("TOPLEFT", DashboardFrame, "TOPLEFT", 8, -150)
+    if IsTBCForOverview() then
+      DashboardFrame.TabHeader:SetPoint("TOPLEFT", DashboardFrame, "TOPLEFT", 8, -150)
+    else
+      DashboardFrame.TabHeader:SetPoint("TOPLEFT", DashboardFrame, "TOPLEFT", 8, -180)
+    end
     DashboardFrame.TabHeader:SetWidth(TAB_PANEL_WIDTH)
     DashboardFrame.TabHeader:SetHeight(TAB_HEADER_HEIGHT)
     DashboardFrame.TabHeader:SetFrameStrata("DIALOG")
@@ -2857,7 +2897,11 @@ local function BuildDashboardFrame()
   if not DashboardFrame.Scroll then
     DashboardFrame.Scroll = CreateFrame("ScrollFrame", nil, DashboardFrame, "UIPanelScrollFrameTemplate")
     -- Shift main list right to make space for tab panel
-    DashboardFrame.Scroll:SetPoint("TOPLEFT", DashboardFrame, "TOPLEFT", 8 + TAB_PANEL_WIDTH, -150)
+    if IsTBCForOverview() then
+      DashboardFrame.Scroll:SetPoint("TOPLEFT", DashboardFrame, "TOPLEFT", 8 + TAB_PANEL_WIDTH, -150)
+    else
+      DashboardFrame.Scroll:SetPoint("TOPLEFT", DashboardFrame, "TOPLEFT", 8 + TAB_PANEL_WIDTH, -180)
+    end
     -- Reduced right inset: scrollbar is now a thin line
     DashboardFrame.Scroll:SetPoint("BOTTOMRIGHT", DashboardFrame, "BOTTOMRIGHT", -10, 24)
 
