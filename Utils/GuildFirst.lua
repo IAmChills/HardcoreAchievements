@@ -1,8 +1,14 @@
 -- Utils/GuildFirst.lua
--- Simple "guild first" claim system backed by LibP2PDB.
+-- Flexible "first" claim system backed by LibP2PDB.
+-- Supports multiple scopes: guild-first (default), server-first, or custom guild pools.
 -- 
+-- Achievement scope options (in achievement definition):
+--   - nil or "guild" (default): First in player's current guild
+--   - "server": First on the entire server
+--   - {"GuildA", "GuildB"}: First in any of the specified guilds
+--
 -- How it works:
--- 1. When an achievement triggers, check if it's already claimed.
+-- 1. When an achievement triggers, check its scope and if it's already claimed.
 -- 2. If not claimed: claim it locally, broadcast to all online peers, and award immediately.
 -- 3. If claimed by someone else: silently fail (achievement stays hidden).
 --
@@ -11,12 +17,6 @@
 -- - DiscoverPeers: Periodically finds new peers (every 30s) and syncs when they come online
 -- - SyncDatabase: Gossip-style sync with neighbors via WHISPER (exchanges digests, requests missing data)
 -- - Persistence: Saves state to SavedVariables on claim + every 60s, loads on login
---
--- When a player comes online:
--- - Loads saved state from SavedVariables (restores all previous claims)
--- - Discovers peers via GUILD channel broadcasts
--- - Syncs with neighbors to get any claims made while offline
--- - All online players eventually converge to the same state via gossip protocol
 
 local LibStub = LibStub
 if not LibStub then return end
@@ -25,13 +25,7 @@ local LibP2PDB = LibStub("LibP2PDB", true)
 if not LibP2PDB then return end
 
 local TABLE_NAME = "Claims"
-local state = {
-    db = nil,
-    prefix = nil,
-    guildKey = nil,
-    discoverTicker = nil,
-    initDone = false,
-}
+local databases = {}  -- [scopeKey] = { db = DBHandle, prefix = string, discoverTicker = ticker }
 
 local M = {}
 _G.HCA_GuildFirst = M
@@ -40,14 +34,13 @@ _G.HCA_GuildFirst = M
 -- Utilities
 -- ---------------------------------------------------------------------------------------------------------------------
 
-local function GetGuildKey()
+local function GetGuildName()
     C_GuildInfo.GuildRoster()
-    local guildName = GetGuildInfo and GetGuildInfo("player")
-    if not guildName or guildName == "" then
-        return nil
-    end
-    local realm = GetRealmName and GetRealmName() or ""
-    return tostring(guildName) .. "@" .. tostring(realm)
+    return GetGuildInfo and GetGuildInfo("player") or nil
+end
+
+local function GetRealmName()
+    return GetRealmName and GetRealmName() or ""
 end
 
 local function Hash32(s)
@@ -58,9 +51,61 @@ local function Hash32(s)
     return h
 end
 
-local function PrefixForGuild(guildKey)
+local function PrefixForKey(key)
     -- Must be <= 16 chars; "HCAGF" (5) + 8 hex = 13 chars
-    return "HCAGF" .. string.format("%08X", Hash32(guildKey))
+    return "HCAGF" .. string.format("%08X", Hash32(key))
+end
+
+--- Determine the scope key for an achievement based on its definition.
+--- @param scope string|table|nil Scope from achievement definition
+--- @return string? scopeKey Returns nil if scope is invalid or player can't participate
+local function GetScopeKey(scope)
+    local realm = GetRealmName()
+    if realm == "" then
+        return nil
+    end
+
+    -- Default to guild-first if not specified
+    if scope == nil or scope == "guild" then
+        local guildName = GetGuildName()
+        if not guildName or guildName == "" then
+            return nil  -- Not in a guild, can't participate in guild-first
+        end
+        return "Guild@" .. tostring(guildName) .. "@" .. tostring(realm)
+    end
+
+    -- Server-wide
+    if scope == "server" then
+        return "Server@" .. tostring(realm)
+    end
+
+    -- Custom guild list: {"GuildA", "GuildB"}
+    if type(scope) == "table" then
+        local guildName = GetGuildName()
+        if not guildName or guildName == "" then
+            return nil  -- Not in a guild, can't participate
+        end
+        
+        -- Check if player's guild is in the list
+        local playerGuildLower = string.lower(tostring(guildName))
+        for _, allowedGuild in ipairs(scope) do
+            if string.lower(tostring(allowedGuild)) == playerGuildLower then
+                -- Player is in an allowed guild - create deterministic key from sorted guild list
+                local sortedGuilds = {}
+                for _, g in ipairs(scope) do
+                    table.insert(sortedGuilds, tostring(g))
+                end
+                table.sort(sortedGuilds)
+                local guildListStr = table.concat(sortedGuilds, ",")
+                return "Guilds@" .. guildListStr .. "@" .. tostring(realm)
+            end
+        end
+        
+        -- Player's guild is not in the allowed list
+        return nil
+    end
+
+    return nil  -- Invalid scope
 end
 
 local function FindRowByAchId(achId)
@@ -79,34 +124,31 @@ end
 -- Database initialization
 -- ---------------------------------------------------------------------------------------------------------------------
 
-local function EnsureDBInitialized()
-    if state.initDone then
-        return true
+local function EnsureDBForScope(scopeKey)
+    if not scopeKey then
+        return nil
     end
 
-    local guildKey = GetGuildKey()
-    if not guildKey then
-        return false
+    -- Return existing database if already initialized
+    if databases[scopeKey] and databases[scopeKey].db then
+        return databases[scopeKey].db
     end
 
-    state.guildKey = guildKey
-    state.prefix = PrefixForGuild(guildKey)
+    local prefix = PrefixForKey(scopeKey)
 
     -- Get or create database (uses LibP2PDB defaults: LibPatternedBloomFilter, LibSerialize, LibDeflate)
-    local db = LibP2PDB:GetDatabase(state.prefix)
+    local db = LibP2PDB:GetDatabase(prefix)
     if not db then
         db = LibP2PDB:NewDatabase({
-            prefix = state.prefix,
+            prefix = prefix,
             version = 1,
             onDiscoveryComplete = function()
-                if state.db then
-                    LibP2PDB:SyncDatabase(state.db)
+                if databases[scopeKey] and databases[scopeKey].db then
+                    LibP2PDB:SyncDatabase(databases[scopeKey].db)
                 end
             end,
         })
     end
-
-    state.db = db
 
     -- Create claims table (ignore error if already exists)
     pcall(function()
@@ -131,60 +173,95 @@ local function EnsureDBInitialized()
 
     -- Load persisted state
     local root = _G.HardcoreAchievementsDB
-    if root and root.guildFirst and root.guildFirst[guildKey] and root.guildFirst[guildKey].state then
+    if root and root.guildFirst and root.guildFirst[scopeKey] and root.guildFirst[scopeKey].state then
         pcall(function()
-            LibP2PDB:ImportDatabase(db, root.guildFirst[guildKey].state)
+            LibP2PDB:ImportDatabase(db, root.guildFirst[scopeKey].state)
         end)
     end
 
-    -- Periodic peer discovery and sync
-    if state.discoverTicker and state.discoverTicker.Cancel then
-        state.discoverTicker:Cancel()
+    -- Periodic peer discovery and sync (only create one ticker per scope)
+    if not databases[scopeKey] or not databases[scopeKey].discoverTicker then
+        local ticker = C_Timer.NewTicker(30.0, function()
+            if databases[scopeKey] and databases[scopeKey].db then
+                LibP2PDB:DiscoverPeers(databases[scopeKey].db)
+            end
+        end)
+        databases[scopeKey] = {
+            db = db,
+            prefix = prefix,
+            scopeKey = scopeKey,
+            discoverTicker = ticker,
+        }
     end
-    state.discoverTicker = C_Timer.NewTicker(30.0, function()
-        if state.db then
-            LibP2PDB:DiscoverPeers(state.db)
-        end
-    end)
 
     -- Initial discovery
     LibP2PDB:DiscoverPeers(db)
 
-    -- Save state periodically
-    C_Timer.NewTicker(60.0, function()
-        if state.db and state.guildKey then
-            local root = _G.HardcoreAchievementsDB or {}
-            root.guildFirst = root.guildFirst or {}
-            local dbState = LibP2PDB:ExportDatabase(state.db)
-            if dbState then
-                root.guildFirst[state.guildKey] = {
-                    version = 1,
-                    prefix = state.prefix,
-                    state = dbState,
-                    savedAt = time(),
-                }
+    -- Save state periodically (only create one saver per scope)
+    if not databases[scopeKey].saveTicker then
+        databases[scopeKey].saveTicker = C_Timer.NewTicker(60.0, function()
+            if databases[scopeKey] and databases[scopeKey].db then
+                local root = _G.HardcoreAchievementsDB or {}
+                root.guildFirst = root.guildFirst or {}
+                local dbState = LibP2PDB:ExportDatabase(databases[scopeKey].db)
+                if dbState then
+                    root.guildFirst[scopeKey] = {
+                        version = 1,
+                        prefix = databases[scopeKey].prefix,
+                        state = dbState,
+                        savedAt = time(),
+                    }
+                end
             end
-        end
-    end)
+        end)
+    end
 
-    state.initDone = true
-    return true
+    return db
 end
 
 -- ---------------------------------------------------------------------------------------------------------------------
 -- Public API
 -- ---------------------------------------------------------------------------------------------------------------------
 
+--- Get the scope for an achievement from its definition.
+--- @param row table? Achievement row (checks row._def.achievementScope)
+--- @param achievementId string? Optional achievement ID to look up row
+--- @return string|table|nil scope
+local function GetAchievementScope(row, achievementId)
+    if row and row._def and row._def.achievementScope ~= nil then
+        return row._def.achievementScope
+    end
+    
+    -- Try to find row by ID if not provided
+    if not row and achievementId then
+        row = FindRowByAchId(achievementId)
+        if row and row._def and row._def.achievementScope ~= nil then
+            return row._def.achievementScope
+        end
+    end
+    
+    -- Default to guild-first
+    return "guild"
+end
+
 --- Check if an achievement is already claimed by someone else.
 --- @param achievementId string
+--- @param row table? Optional achievement row (to determine scope)
 --- @return boolean isClaimed, table? winnerRecord
-function M:IsClaimed(achievementId)
-    if not EnsureDBInitialized() then
+function M:IsClaimed(achievementId, row)
+    local scope = GetAchievementScope(row, achievementId)
+    local scopeKey = GetScopeKey(scope)
+    if not scopeKey then
         return false, nil
     end
-    local rec = LibP2PDB:GetKey(state.db, TABLE_NAME, tostring(achievementId))
+
+    local db = EnsureDBForScope(scopeKey)
+    if not db then
+        return false, nil
+    end
+
+    local rec = LibP2PDB:GetKey(db, TABLE_NAME, tostring(achievementId))
     if rec then
-        local myGUID = UnitGUID("player") or ""
         return true, rec
     end
     return false, nil
@@ -192,12 +269,21 @@ end
 
 --- Check if an achievement is claimed by the current player.
 --- @param achievementId string
+--- @param row table? Optional achievement row (to determine scope)
 --- @return boolean isClaimedByMe
-function M:IsClaimedByMe(achievementId)
-    if not EnsureDBInitialized() then
+function M:IsClaimedByMe(achievementId, row)
+    local scope = GetAchievementScope(row, achievementId)
+    local scopeKey = GetScopeKey(scope)
+    if not scopeKey then
         return false
     end
-    local rec = LibP2PDB:GetKey(state.db, TABLE_NAME, tostring(achievementId))
+
+    local db = EnsureDBForScope(scopeKey)
+    if not db then
+        return false
+    end
+
+    local rec = LibP2PDB:GetKey(db, TABLE_NAME, tostring(achievementId))
     if rec then
         local myGUID = UnitGUID("player") or ""
         return rec.winnerGUID == myGUID
@@ -208,7 +294,7 @@ end
 --- Attempt to claim and award an achievement.
 --- Returns true if awarded, false if already claimed (silent fail).
 --- @param achievementId string
---- @param row table? Optional achievement row (will find if not provided)
+--- @param row table? Optional achievement row (will find if not provided, also used to determine scope)
 --- @return boolean awarded
 function M:CanClaimAndAward(achievementId, row)
     achievementId = tostring(achievementId or "")
@@ -216,12 +302,26 @@ function M:CanClaimAndAward(achievementId, row)
         return false
     end
 
-    if not EnsureDBInitialized() then
+    -- Get row if not provided
+    if not row then
+        row = FindRowByAchId(achievementId)
+    end
+
+    -- Determine scope from achievement definition
+    local scope = GetAchievementScope(row, achievementId)
+    local scopeKey = GetScopeKey(scope)
+    if not scopeKey then
+        -- Player can't participate in this scope (e.g., not in guild for guild-first)
+        return false
+    end
+
+    local db = EnsureDBForScope(scopeKey)
+    if not db then
         return false
     end
 
     -- Check if already claimed
-    local existing = LibP2PDB:GetKey(state.db, TABLE_NAME, achievementId)
+    local existing = LibP2PDB:GetKey(db, TABLE_NAME, achievementId)
     if existing then
         -- Already claimed - silently fail
         return false
@@ -237,20 +337,20 @@ function M:CanClaimAndAward(achievementId, row)
     }
 
     pcall(function()
-        LibP2PDB:SetKey(state.db, TABLE_NAME, achievementId, claim)
-        LibP2PDB:BroadcastKey(state.db, TABLE_NAME, achievementId)
-        LibP2PDB:DiscoverPeers(state.db)
-        LibP2PDB:SyncDatabase(state.db)
+        LibP2PDB:SetKey(db, TABLE_NAME, achievementId, claim)
+        LibP2PDB:BroadcastKey(db, TABLE_NAME, achievementId)
+        LibP2PDB:DiscoverPeers(db)
+        LibP2PDB:SyncDatabase(db)
         
         -- Save immediately after claiming (don't wait for periodic save)
-        if state.guildKey then
+        if databases[scopeKey] then
             local root = _G.HardcoreAchievementsDB or {}
             root.guildFirst = root.guildFirst or {}
-            local dbState = LibP2PDB:ExportDatabase(state.db)
+            local dbState = LibP2PDB:ExportDatabase(db)
             if dbState then
-                root.guildFirst[state.guildKey] = {
+                root.guildFirst[scopeKey] = {
                     version = 1,
-                    prefix = state.prefix,
+                    prefix = databases[scopeKey].prefix,
                     state = dbState,
                     savedAt = time(),
                 }
@@ -259,10 +359,6 @@ function M:CanClaimAndAward(achievementId, row)
     end)
 
     -- Award the achievement
-    if not row then
-        row = FindRowByAchId(achievementId)
-    end
-
     if row and type(_G.HCA_MarkRowCompleted) == "function" then
         _G.HCA_MarkRowCompleted(row)
         if type(_G.HCA_AchToast_Show) == "function" and row.Icon and row.Title then
@@ -289,7 +385,7 @@ local function HandleSlash(msg)
 
     if msg == "claim" then
         local achId = "GuildFirstTest01"
-        local row = _G.HCA_GuildFirst_TestRow or FindRowByAchId(achId)
+        local row = _G["HCA_GuildFirst_" .. achId .. "_Row"] or FindRowByAchId(achId)
         if M:CanClaimAndAward(achId, row) then
             print("|cff008066[Hardcore Achievements]|r |cff00ff00Claimed and awarded!|r")
         else
@@ -300,7 +396,8 @@ local function HandleSlash(msg)
 
     if msg == "status" then
         local achId = "GuildFirstTest01"
-        local isClaimed, winner = M:IsClaimed(achId)
+        local row = _G.HCA_GuildFirst_TestRow or FindRowByAchId(achId)
+        local isClaimed, winner = M:IsClaimed(achId, row)
         if isClaimed and winner then
             print(string.format("|cff008066[Hardcore Achievements]|r Winner: |cffffd100%s|r", tostring(winner.winnerName or "?")))
         else
@@ -315,11 +412,22 @@ end
 SLASH_HCAGUILDFIRST1 = "/hcagf"
 SlashCmdList["HCAGUILDFIRST"] = HandleSlash
 
--- Initialize on login/guild events
+-- Initialize databases on login/guild events (lazy initialization per scope)
 local initFrame = CreateFrame("Frame")
 initFrame:RegisterEvent("PLAYER_LOGIN")
 initFrame:RegisterEvent("GUILD_ROSTER_UPDATE")
 initFrame:SetScript("OnEvent", function()
-    EnsureDBInitialized()
+    -- Pre-initialize common scopes (guild-first and server-first)
+    local realm = GetRealmName()
+    if realm ~= "" then
+        -- Pre-init server-first (always available)
+        EnsureDBForScope("Server@" .. realm)
+        
+        -- Pre-init guild-first if in a guild
+        local guildName = GetGuildName()
+        if guildName and guildName ~= "" then
+            EnsureDBForScope("Guild@" .. guildName .. "@" .. realm)
+        end
+    end
 end)
 

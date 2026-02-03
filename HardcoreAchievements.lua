@@ -2928,7 +2928,7 @@ local function ApplyFilter()
         if not row.completed then
             local achId = row.id or row.achId
             if achId and _G.HCA_GuildFirst then
-                local isClaimed, winner = _G.HCA_GuildFirst:IsClaimed(tostring(achId))
+                local isClaimed, winner = _G.HCA_GuildFirst:IsClaimed(tostring(achId), row)
                 if isClaimed and winner then
                     local myGUID = UnitGUID("player") or ""
                     if winner.winnerGUID ~= myGUID then
