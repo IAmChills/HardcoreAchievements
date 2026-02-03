@@ -2121,13 +2121,11 @@ function DASHBOARD:BuildModernRows(srcRows)
     recentSet, recentOrder = GetMostRecentCompletedSet(srcRows, 4)
   end
 
+  -- Summary "Recent Achievements" header is only shown if there are any recent rows to show.
   if isDashboardView then
     EnsureSummaryRecentHeader()
-    if DashboardFrame.SummaryRecentHeaderText and DashboardFrame.Scroll then
-      DashboardFrame.SummaryRecentHeaderText:ClearAllPoints()
-      -- Place header above the right panel, without taking scroll space
-      DashboardFrame.SummaryRecentHeaderText:SetPoint("BOTTOM", DashboardFrame.Scroll, "TOP", 0, 8)
-      DashboardFrame.SummaryRecentHeaderText:Show()
+    if DashboardFrame and DashboardFrame.SummaryRecentHeaderText then
+      DashboardFrame.SummaryRecentHeaderText:Hide()
     end
   elseif DashboardFrame and DashboardFrame.SummaryRecentHeaderText then
     DashboardFrame.SummaryRecentHeaderText:Hide()
@@ -2179,6 +2177,17 @@ function DASHBOARD:BuildModernRows(srcRows)
       if shouldShow then
         table.insert(visibleRows, srow)
       end
+  end
+
+  if isDashboardView and DashboardFrame and DashboardFrame.SummaryRecentHeaderText and DashboardFrame.Scroll then
+    if #visibleRows > 0 then
+      DashboardFrame.SummaryRecentHeaderText:ClearAllPoints()
+      -- Place header above the right panel, without taking scroll space
+      DashboardFrame.SummaryRecentHeaderText:SetPoint("BOTTOM", DashboardFrame.Scroll, "TOP", 0, 8)
+      DashboardFrame.SummaryRecentHeaderText:Show()
+    else
+      DashboardFrame.SummaryRecentHeaderText:Hide()
+    end
   end
   
   -- Sort rows (failed to bottom, maintaining level order)
