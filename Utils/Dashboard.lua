@@ -4,6 +4,14 @@ local DashboardFrame -- Main dashboard frame (standalone window)
 local ICON_SIZE = 60
 local ICON_PADDING = 12
 local GRID_COLS = 7  -- Number of columns in the grid
+
+-- Left-side tab panel (placeholder UI for future category tabs)
+local TAB_PANEL_WIDTH = 150
+local TAB_BUTTON_HEIGHT = 34
+local TAB_BUTTON_GAP = 5
+local TAB_BUTTON_TEXTURE = "Interface\\AddOns\\HardcoreAchievements\\Images\\dropdown.png"
+local TAB_TEXT_COLOR = { 0.922, 0.871, 0.761 }
+local TAB_TEXT_FONT = "GameFontHighlightSmall"
 local CHECKBOX_TEXTURE_NORMAL = "Interface\\AddOns\\HardcoreAchievements\\Images\\box.png"
 local CHECKBOX_TEXTURE_ACTIVE = "Interface\\AddOns\\HardcoreAchievements\\Images\\box_active.png"
 local SETTINGS_ICON_TEXTURE = "Interface\\AddOns\\HardcoreAchievements\\Images\\icon_gear.png"
@@ -92,6 +100,59 @@ end)
 
 local POINTS_FONT_PATH = "Interface\\AddOns\\HardcoreAchievements\\Fonts\\friz-quadrata-regular.ttf"
 
+-- Minimal scrollbar styling: a thin class-colored line (thumb) with no bulky UI.
+local function ApplyClassLineScrollbar(scrollFrame, xInset)
+  if not scrollFrame or not scrollFrame.ScrollBar then return end
+  local scrollBar = scrollFrame.ScrollBar
+  local classR, classG, classB = GetPlayerClassColor()
+  xInset = tonumber(xInset) or 2
+
+  -- Nudge scrollbar inward (left) without changing its vertical alignment.
+  -- Use the typical UIPanelScrollFrameTemplate anchoring (outside-right) with a small Y inset,
+  -- then apply the requested X inset.
+  local yInset = 16
+  scrollBar:ClearAllPoints()
+  scrollBar:SetPoint("TOPLEFT", scrollFrame, "TOPRIGHT", -xInset, -yInset)
+  scrollBar:SetPoint("BOTTOMLEFT", scrollFrame, "BOTTOMRIGHT", -xInset, yInset)
+
+  -- Remove up/down buttons (take up a lot of space visually)
+  local sbName = scrollBar.GetName and scrollBar:GetName() or nil
+  local up = scrollBar.ScrollUpButton or scrollBar.UpButton or (sbName and _G[sbName .. "ScrollUpButton"])
+  local down = scrollBar.ScrollDownButton or scrollBar.DownButton or (sbName and _G[sbName .. "ScrollDownButton"])
+  local function ForceHideButton(btn)
+    if not btn then return end
+    btn:Hide()
+    btn:SetAlpha(0)
+    btn:EnableMouse(false)
+    -- Some templates re-show these; keep them hidden.
+    btn:SetScript("OnShow", btn.Hide)
+  end
+  ForceHideButton(up)
+  ForceHideButton(down)
+
+  -- Make the bar itself very thin
+  scrollBar:SetWidth(6)
+  scrollBar:SetAlpha(0.9)
+
+  -- Hide any background/track textures (keep thumb only)
+  local regions = { scrollBar:GetRegions() }
+  for _, region in ipairs(regions) do
+    if region and region:IsObjectType("Texture") then
+      region:SetTexture(nil)
+      region:SetAlpha(0)
+    end
+  end
+
+  local thumb = scrollBar.GetThumbTexture and scrollBar:GetThumbTexture() or nil
+  if thumb then
+    thumb:SetTexture("Interface\\Buttons\\WHITE8x8")
+    thumb:SetTexCoord(0, 1, 0, 1)
+    thumb:SetVertexColor(classR, classG, classB)
+    thumb:SetAlpha(0.95)
+    thumb:SetWidth(2)
+  end
+end
+
 -- Map class tokens to their icon variants
 local classIconTextures = {
   WARRIOR   = "Interface\\AddOns\\HardcoreAchievements\\Images\\Class_WARRIOR.png",
@@ -145,7 +206,6 @@ local function UpdateDashboardClassBackground()
   DashboardFrame.ClassBackground:SetTexture(texturePath)
   DashboardFrame.ClassBackground:SetTexCoord(0, 1, 0, 1)
   
-  -- Match UltraHardcore style: frameHeight * CLASS_BACKGROUND_ASPECT_RATIO, frameHeight
   local frameHeight = DashboardFrame:GetHeight()
   DashboardFrame.ClassBackground:ClearAllPoints()
   DashboardFrame.ClassBackground:SetPoint("CENTER", DashboardFrame, "CENTER", 0, 0)
@@ -213,6 +273,30 @@ local function ShouldShowByCheckboxFilter(def, isCompleted, checkboxIndex, varia
         return FilterDropdown.ShouldShowByCheckboxFilter(def, isCompleted, checkboxIndex, variationType)
     end
     return true -- Fallback to showing if FilterDropdown not available
+end
+
+-- Category filtering via new left-side tabs (DashboardFrame.SelectedTabKey)
+local function ShouldShowBySelectedTab(def)
+  if not def then return true end
+  local key = (DashboardFrame and DashboardFrame.SelectedTabKey) or "all"
+
+  if key == "all" then return true end
+  if key == "general" then return def.isQuest == true end -- General == Catalog/Quest achievements
+  if key == "dungeon" then return def.isDungeon == true and def.isVariation ~= true end
+  if key == "heroic_dungeon" then return def.isHeroicDungeon == true end
+  if key == "raid" then return def.isRaid == true end
+  if key == "profession" then return def.isProfession == true end
+  if key == "meta" then return def.isMeta == true end
+  if key == "reputation" then return def.isReputation == true end
+  if key == "exploration" then return def.isExploration == true end
+  if key == "gear_sets" then return def.isDungeonSet == true end
+  if key == "dungeon_solo" then return def.isVariation == true and def.variationType == "Solo" end
+  if key == "dungeon_duo" then return def.isVariation == true and def.variationType == "Duo" end
+  if key == "dungeon_trio" then return def.isVariation == true and def.variationType == "Trio" end
+  if key == "ridiculous" then return def.isRidiculous == true end
+  if key == "secret" then return def.isSecret == true end
+
+  return true
 end
 
 local function ApplyCustomCheckboxTextures(checkbox)
@@ -909,11 +993,9 @@ function DASHBOARD:BuildClassicGrid(srcRows)
       end
       local isAvailable = not isCompleted and not isFailed
       
-      -- Get status filter states (completed, available, failed) - all default to true
-      local statusFilters = FilterDropdown:GetStatusFilterStatesFromDropdown(DashboardFrame.FilterDropdown)
-      local showCompleted = statusFilters[1] ~= false
-      local showAvailable = statusFilters[2] ~= false
-      local showFailed = statusFilters[3] ~= false
+      -- Status filters (Completed/Available/Failed) were previously controlled by the dropdown.
+      -- Tabs replace the dropdown, so for now default to showing all statuses.
+      local showCompleted, showAvailable, showFailed = true, true, true
       
       -- Show based on status filter checkboxes
       if (isCompleted and showCompleted) or (isAvailable and showAvailable) or (isFailed and showFailed) then
@@ -927,72 +1009,9 @@ function DASHBOARD:BuildClassicGrid(srcRows)
         shouldShow = false
       end
       
-      -- Hide/show achievements based on checkbox filter
-      if srow._def then
-        local def = srow._def
-        
-        if def.isQuest then
-          -- Quest (Catalog non-secret): check index 1
-          if not ShouldShowByCheckboxFilter(def, isCompleted, 1, nil) then
-            shouldShow = false
-          end
-        elseif def.isVariation then
-          -- Variations: check based on variation type (Solo=10, Duo=11, Trio=12)
-          -- Check this BEFORE isDungeon since variations inherit isDungeon from base
-          if not ShouldShowByCheckboxFilter(def, isCompleted, nil, def.variationType) then
-            shouldShow = false
-          end
-        elseif def.isDungeon then
-          -- Dungeon (DungeonCatalog): check index 2
-          if not ShouldShowByCheckboxFilter(def, isCompleted, 2, nil) then
-            shouldShow = false
-          end
-        elseif def.isHeroicDungeon then
-          -- Heroic Dungeons: check index 3 (heroics don't get isDungeon set, so independent of Dungeons filter)
-          if not ShouldShowByCheckboxFilter(def, isCompleted, 3, nil) then
-            shouldShow = false
-          end
-        elseif def.isRaid then
-          -- Raids: check index 4
-          if not ShouldShowByCheckboxFilter(def, isCompleted, 4, nil) then
-            shouldShow = false
-          end
-        elseif def.isProfession then
-          -- Professions: check index 5
-          if not ShouldShowByCheckboxFilter(def, isCompleted, 5, nil) then
-            shouldShow = false
-          end
-        elseif def.isMeta then
-          -- Meta: check index 6
-          if not ShouldShowByCheckboxFilter(def, isCompleted, 6, nil) then
-            shouldShow = false
-          end
-        elseif def.isReputation then
-          -- Reputations: check index 7
-          if not ShouldShowByCheckboxFilter(def, isCompleted, 7, nil) then
-            shouldShow = false
-          end
-        elseif def.isExploration then
-          -- Exploration: check index 8
-          if not ShouldShowByCheckboxFilter(def, isCompleted, 8, nil) then
-            shouldShow = false
-          end
-        elseif def.isDungeonSet then
-          -- Dungeon Sets: check index 9
-          if not ShouldShowByCheckboxFilter(def, isCompleted, 9, nil) then
-            shouldShow = false
-          end
-        elseif def.isRidiculous then
-          -- Ridiculous: check index 13
-          if not ShouldShowByCheckboxFilter(def, isCompleted, 13, nil) then
-            shouldShow = false
-          end
-        elseif def.isSecret then
-          -- Secret: check index 14
-          if not ShouldShowByCheckboxFilter(def, isCompleted, 14, nil) then
-            shouldShow = false
-          end
-        end
+      -- Category filter is now driven by the selected tab.
+      if srow._def and not ShouldShowBySelectedTab(srow._def) then
+        shouldShow = false
       end
       
       if shouldShow then
@@ -1529,11 +1548,9 @@ function DASHBOARD:BuildModernRows(srcRows)
       end
       local isAvailable = not isCompleted and not isFailed
       
-      -- Get status filter states (completed, available, failed) - all default to true
-      local statusFilters = FilterDropdown:GetStatusFilterStatesFromDropdown(DashboardFrame.FilterDropdown)
-      local showCompleted = statusFilters[1] ~= false
-      local showAvailable = statusFilters[2] ~= false
-      local showFailed = statusFilters[3] ~= false
+      -- Status filters (Completed/Available/Failed) were previously controlled by the dropdown.
+      -- Tabs replace the dropdown, so for now default to showing all statuses.
+      local showCompleted, showAvailable, showFailed = true, true, true
       
       -- Show based on status filter checkboxes
       if (isCompleted and showCompleted) or (isAvailable and showAvailable) or (isFailed and showFailed) then
@@ -1546,73 +1563,9 @@ function DASHBOARD:BuildModernRows(srcRows)
         shouldShow = false
       end
       
-      -- Hide/show achievements based on checkbox filter
-      if srow._def then
-        local isCompleted = data.completed == true
-        local def = srow._def
-        
-        if def.isQuest then
-          -- Quest (Catalog non-secret): check index 1
-          if not ShouldShowByCheckboxFilter(def, isCompleted, 1, nil) then
-            shouldShow = false
-          end
-        elseif def.isVariation then
-          -- Variations: check based on variation type (Solo=10, Duo=11, Trio=12)
-          -- Check this BEFORE isDungeon since variations inherit isDungeon from base
-          if not ShouldShowByCheckboxFilter(def, isCompleted, nil, def.variationType) then
-            shouldShow = false
-          end
-        elseif def.isDungeon then
-          -- Dungeon (DungeonCatalog): check index 2
-          if not ShouldShowByCheckboxFilter(def, isCompleted, 2, nil) then
-            shouldShow = false
-          end
-        elseif def.isHeroicDungeon then
-          -- Heroic Dungeons: check index 3 (heroics don't get isDungeon set, so independent of Dungeons filter)
-          if not ShouldShowByCheckboxFilter(def, isCompleted, 3, nil) then
-            shouldShow = false
-          end
-        elseif def.isRaid then
-          -- Raids: check index 4
-          if not ShouldShowByCheckboxFilter(def, isCompleted, 4, nil) then
-            shouldShow = false
-          end
-        elseif def.isProfession then
-          -- Professions: check index 5
-          if not ShouldShowByCheckboxFilter(def, isCompleted, 5, nil) then
-            shouldShow = false
-          end
-        elseif def.isMeta then
-          -- Meta: check index 6
-          if not ShouldShowByCheckboxFilter(def, isCompleted, 6, nil) then
-            shouldShow = false
-          end
-        elseif def.isReputation then
-          -- Reputations: check index 7
-          if not ShouldShowByCheckboxFilter(def, isCompleted, 7, nil) then
-            shouldShow = false
-          end
-        elseif def.isExploration then
-          -- Exploration: check index 8
-          if not ShouldShowByCheckboxFilter(def, isCompleted, 8, nil) then
-            shouldShow = false
-          end
-        elseif def.isDungeonSet then
-          -- Dungeon Sets: check index 9
-          if not ShouldShowByCheckboxFilter(def, isCompleted, 9, nil) then
-            shouldShow = false
-          end
-        elseif def.isRidiculous then
-          -- Ridiculous: check index 13
-          if not ShouldShowByCheckboxFilter(def, isCompleted, 13, nil) then
-            shouldShow = false
-          end
-        elseif def.isSecret then
-          -- Secret: check index 14
-          if not ShouldShowByCheckboxFilter(def, isCompleted, 14, nil) then
-            shouldShow = false
-          end
-        end
+      -- Category filter is now driven by the selected tab.
+      if srow._def and not ShouldShowBySelectedTab(srow._def) then
+        shouldShow = false
       end
       
       if shouldShow then
@@ -1897,7 +1850,7 @@ local function BuildDashboardFrame()
     local backdropTemplate = BackdropTemplateMixin and "BackdropTemplate" or nil
     DashboardFrame = CreateFrame("Frame", "HardcoreAchievementsDashboard", UIParent, backdropTemplate)
     tinsert(UISpecialFrames, "HardcoreAchievementsDashboard")
-    DashboardFrame:SetSize(550, 640)
+    DashboardFrame:SetSize(700, 640) -- +150px to make room for left-side tab panel
     DashboardFrame:SetPoint("CENTER", UIParent, "CENTER", 0, 30)
     DashboardFrame:SetMovable(true)
     DashboardFrame:EnableMouse(true)
@@ -1997,73 +1950,199 @@ local function BuildDashboardFrame()
     DashboardFrame.DividerFrame = dividerFrame
   end
 
-  -- Only create Scroll and Content if they don't already exist
-  if not DashboardFrame.Scroll then
-    DashboardFrame.Scroll = CreateFrame("ScrollFrame", nil, DashboardFrame, "UIPanelScrollFrameTemplate")
-    DashboardFrame.Scroll:SetPoint("TOPLEFT", DashboardFrame, "TOPLEFT", 8, -170)
-    DashboardFrame.Scroll:SetPoint("BOTTOMRIGHT", DashboardFrame, "BOTTOMRIGHT", -24, 24)
-    
+  -- Left-side Tab Scroll (placeholder for future tab system)
+  if not DashboardFrame.TabScroll then
+    DashboardFrame.TabScroll = CreateFrame("ScrollFrame", nil, DashboardFrame, "UIPanelScrollFrameTemplate")
+    DashboardFrame.TabScroll:SetPoint("TOPLEFT", DashboardFrame, "TOPLEFT", 8, -170)
+    DashboardFrame.TabScroll:SetPoint("BOTTOMLEFT", DashboardFrame, "BOTTOMLEFT", 8, 24)
+    DashboardFrame.TabScroll:SetWidth(TAB_PANEL_WIDTH)
+
+    -- Hide the scroll bar but keep it functional
+    if DashboardFrame.TabScroll.ScrollBar then
+      -- Keep visible (thin line style) so users have a subtle scroll indicator
+    end
+
+    DashboardFrame.TabContent = CreateFrame("Frame", nil, DashboardFrame.TabScroll)
+    DashboardFrame.TabContent:SetSize(TAB_PANEL_WIDTH, 1)
+    DashboardFrame.TabScroll:SetScrollChild(DashboardFrame.TabContent)
+
+    -- Mouse wheel scrolling for the tab list (scrollbar is hidden)
+    DashboardFrame.TabScroll:EnableMouseWheel(true)
+    DashboardFrame.TabScroll:SetScript("OnMouseWheel", function(self, delta)
+      local step = 36
+      local cur = self:GetVerticalScroll() or 0
+      local maxV = self:GetVerticalScrollRange() or 0
+      local newV = math.min(maxV, math.max(0, cur - delta * step))
+      self:SetVerticalScroll(newV)
+      local sb = self.ScrollBar or (self:GetName() and _G[self:GetName() .. "ScrollBar"])
+      if sb then sb:SetValue(newV) end
+    end)
+
+    -- Simple background/border for the panel (matches main scroll background styling)
     do
-      local scrollBar = DashboardFrame.Scroll and DashboardFrame.Scroll.ScrollBar
-      if scrollBar then
-        local classR, classG, classB = GetPlayerClassColor()
+      local backdropTemplate = BackdropTemplateMixin and "BackdropTemplate" or nil
+      local bg = CreateFrame("Frame", nil, DashboardFrame, backdropTemplate)
+      bg:SetPoint("TOPLEFT", DashboardFrame.TabScroll, "TOPLEFT", 0, 0)
+      bg:SetPoint("BOTTOMRIGHT", DashboardFrame.TabScroll, "BOTTOMRIGHT", 0, 0)
+      bg:SetFrameStrata(DashboardFrame.TabScroll:GetFrameStrata())
+      local lvl = DashboardFrame.TabScroll:GetFrameLevel() or 1
+      bg:SetFrameLevel(lvl > 0 and (lvl - 1) or 0)
+      bg:EnableMouse(false)
+      if bg.SetBackdrop then
+        bg:SetBackdrop({
+          bgFile = "Interface\\Buttons\\WHITE8X8",
+          edgeFile = "Interface\\Buttons\\WHITE8X8",
+          edgeSize = 1,
+        })
+        bg:SetBackdropColor(0, 0, 0, 0.45)
+        bg:SetBackdropBorderColor(0.282, 0.275, 0.259)
+      else
+        local fill = bg:CreateTexture(nil, "BACKGROUND")
+        fill:SetAllPoints()
+        fill:SetColorTexture(0, 0, 0, 0.45)
+        bg.Fill = fill
+      end
+      DashboardFrame.TabScrollBackground = bg
+    end
 
-        local function ApplyDropdownArrowTextures(button, texturePath)
-          if not button or not texturePath then return end
+    -- Tabs (single-select). Not wired to filtering yet.
+    local function IsTBC()
+      return GetExpansionLevel and GetExpansionLevel() > 0
+    end
 
-          button:SetNormalTexture(texturePath)
-          button:SetPushedTexture(texturePath)
-          button:SetDisabledTexture(texturePath)
-          button:SetHighlightTexture(texturePath)
-          button:SetSize(20, 20)
+    local tabDefs = {
+      { key = "all", label = "All" },
+      { key = "general", label = "General" },
+      { key = "dungeon", label = "Dungeon" },
+    }
+    if IsTBC() then
+      table.insert(tabDefs, { key = "heroic_dungeon", label = "Heroic Dungeon" })
+    end
+    local more = {
+      { key = "raid", label = "Raid" },
+      { key = "profession", label = "Profession" },
+      { key = "meta", label = "Meta" },
+      { key = "reputation", label = "Reputation" },
+      { key = "exploration", label = "Exploration" },
+      { key = "gear_sets", label = "Gear Sets" },
+      { key = "dungeon_solo", label = "Dungeon Solo" },
+      { key = "dungeon_duo", label = "Dungeon Duo" },
+      { key = "dungeon_trio", label = "Dungeon Trio" },
+      { key = "ridiculous", label = "Ridiculous" },
+      { key = "secret", label = "Secret" },
+    }
+    for _, t in ipairs(more) do table.insert(tabDefs, t) end
 
-          local textures = {
-            button:GetNormalTexture(),
-            button:GetPushedTexture(),
-            button:GetDisabledTexture(),
-            button:GetHighlightTexture(),
-          }
+    DashboardFrame.TabButtons = DashboardFrame.TabButtons or {}
+    DashboardFrame.TabButtonsByKey = DashboardFrame.TabButtonsByKey or {}
 
-          for _, tex in ipairs(textures) do
-            if tex then
-              tex:ClearAllPoints()
-              tex:SetPoint("CENTER", button, "CENTER", 0, -3)
-              tex:SetSize(16, 16)
-              tex:SetVertexColor(classR, classG, classB)
-            end
-          end
-
-          local highlight = button:GetHighlightTexture()
-          if highlight then
-            highlight:SetBlendMode("ADD")
-            highlight:SetAlpha(0.7)
-            highlight:SetVertexColor(classR, classG, classB)
-          end
-        end
-
-        ApplyDropdownArrowTextures(
-          scrollBar.ScrollUpButton or scrollBar.UpButton or (scrollBar:GetName() and _G[scrollBar:GetName() .. "ScrollUpButton"]),
-          "Interface\\AddOns\\HardcoreAchievements\\Images\\dropdown_arrow_up.png"
-        )
-        ApplyDropdownArrowTextures(
-          scrollBar.ScrollDownButton or scrollBar.DownButton or (scrollBar:GetName() and _G[scrollBar:GetName() .. "ScrollDownButton"]),
-          "Interface\\AddOns\\HardcoreAchievements\\Images\\dropdown_arrow_down.png"
-        )
-
-        local thumb = scrollBar.GetThumbTexture and scrollBar:GetThumbTexture()
-        if thumb then
-          thumb:SetTexture("Interface\\AddOns\\HardcoreAchievements\\Images\\thumb_box.png")
-          thumb:SetSize(12, 12)
-          thumb:SetTexCoord(0, 1, 0, 1)
-          thumb:SetVertexColor(classR, classG, classB)
+    local function ApplyTabVisual(btn, selected)
+      if not btn then return end
+      local classR, classG, classB = GetPlayerClassColor()
+      if btn.Texture then
+        btn.Texture:SetAlpha(selected and 1.0 or 0.65)
+        btn.Texture:SetVertexColor(selected and classR or 1, selected and classG or 1, selected and classB or 1)
+      end
+      if btn.Text then
+        if selected then
+          btn.Text:SetTextColor(classR, classG, classB)
+        else
+          btn.Text:SetTextColor(TAB_TEXT_COLOR[1], TAB_TEXT_COLOR[2], TAB_TEXT_COLOR[3])
         end
       end
     end
-    
-    -- Hide the scroll bar but keep it functional
-    if DashboardFrame.Scroll.ScrollBar then
-      DashboardFrame.Scroll.ScrollBar:Hide()
+
+    local function SetSelectedTab(key)
+      DashboardFrame.SelectedTabKey = key
+      for _, btn in ipairs(DashboardFrame.TabButtons) do
+        ApplyTabVisual(btn, btn._tabKey == key)
+      end
+      -- Re-apply filter when tab changes (tabs replace the dropdown)
+      if ApplyFilter then
+        ApplyFilter()
+      end
     end
+    DashboardFrame.SetSelectedTab = SetSelectedTab
+
+    -- Hide any existing buttons (in case we rebuild)
+    for _, btn in ipairs(DashboardFrame.TabButtons) do
+      btn:Hide()
+    end
+    wipe(DashboardFrame.TabButtonsByKey)
+
+    local totalH = 0
+    for i, tab in ipairs(tabDefs) do
+      local btn = DashboardFrame.TabButtons[i]
+      if not btn then
+        btn = CreateFrame("Button", nil, DashboardFrame.TabContent)
+        btn:SetSize(TAB_PANEL_WIDTH - 16, TAB_BUTTON_HEIGHT)
+
+        local tex = btn:CreateTexture(nil, "ARTWORK")
+        tex:SetAllPoints(btn)
+        tex:SetTexture(TAB_BUTTON_TEXTURE)
+        tex:SetTexCoord(0, 1, 0, 1)
+        tex:SetAlpha(0.65)
+        btn.Texture = tex
+
+        local hl = btn:CreateTexture(nil, "HIGHLIGHT")
+        hl:SetAllPoints(btn)
+        hl:SetTexture(TAB_BUTTON_TEXTURE)
+        hl:SetBlendMode("ADD")
+        hl:SetAlpha(0.20)
+        btn.Highlight = hl
+
+        local label = btn:CreateFontString(nil, "OVERLAY", TAB_TEXT_FONT)
+        label:SetPoint("LEFT", btn, "LEFT", 10, 0)
+        label:SetJustifyH("LEFT")
+        label:SetTextColor(TAB_TEXT_COLOR[1], TAB_TEXT_COLOR[2], TAB_TEXT_COLOR[3])
+        btn.Text = label
+
+        DashboardFrame.TabButtons[i] = btn
+      end
+
+      btn._tabKey = tab.key
+      btn._tabLabel = tab.label
+      if btn.Text then
+        btn.Text:SetText(tab.label)
+      end
+      btn:SetScript("OnClick", function()
+        SetSelectedTab(tab.key)
+      end)
+
+      btn:ClearAllPoints()
+      if i == 1 then
+        btn:SetPoint("TOPLEFT", DashboardFrame.TabContent, "TOPLEFT", 8, -8)
+      else
+        btn:SetPoint("TOPLEFT", DashboardFrame.TabButtons[i - 1], "BOTTOMLEFT", 0, -TAB_BUTTON_GAP)
+      end
+      btn:Show()
+
+      DashboardFrame.TabButtonsByKey[tab.key] = btn
+      totalH = 8 + i * TAB_BUTTON_HEIGHT + (i - 1) * TAB_BUTTON_GAP + 8
+    end
+
+    DashboardFrame.TabContent:SetHeight(math.max(totalH, 1))
+
+    -- Default selection
+    if not DashboardFrame.SelectedTabKey then
+      DashboardFrame.SelectedTabKey = "all"
+    end
+    SetSelectedTab(DashboardFrame.SelectedTabKey)
+
+    -- Apply minimal scrollbar styling to tab list
+    ApplyClassLineScrollbar(DashboardFrame.TabScroll, 2)
+  end
+
+  -- Only create Scroll and Content if they don't already exist
+  if not DashboardFrame.Scroll then
+    DashboardFrame.Scroll = CreateFrame("ScrollFrame", nil, DashboardFrame, "UIPanelScrollFrameTemplate")
+    -- Shift main list right to make space for tab panel
+    DashboardFrame.Scroll:SetPoint("TOPLEFT", DashboardFrame, "TOPLEFT", 8 + TAB_PANEL_WIDTH, -170)
+    -- Reduced right inset: scrollbar is now a thin line
+    DashboardFrame.Scroll:SetPoint("BOTTOMRIGHT", DashboardFrame, "BOTTOMRIGHT", -10, 24)
+
+    -- Apply minimal scrollbar styling to main list
+    ApplyClassLineScrollbar(DashboardFrame.Scroll, 2)
   end
   
   if not DashboardFrame.Content then
@@ -2334,34 +2413,7 @@ local function BuildDashboardFrame()
     end)
   end
 
-  -- Only create filter dropdown if it doesn't exist
-  if not DashboardFrame.FilterDropdown then
-    -- Create and initialize dropdown using centralized helper
-    DashboardFrame.FilterDropdown = FilterDropdown:CreateAndInitializeDropdown(
-      DashboardFrame,
-      {
-        anchorPoint = "TOP",
-        anchorTo = DashboardFrame.ClassIcon,
-        xOffset = -30,
-        yOffset = -58,
-        width = 87
-      },
-      {
-        onFilterChange = function(filterValue)
-          ApplyFilter()
-        end,
-        onStatusFilterChange = function(statusIndex, newState)
-          -- Status filter state is automatically saved to database in FilterDropdown
-          -- Re-apply filter to show/hide achievements when status filter changes
-          ApplyFilter()
-        end,
-        onCheckboxChange = function(checkboxIndex, newState)
-          -- Checkbox state is automatically saved to database in FilterDropdown
-          ApplyFilter()  -- Re-apply filter when checkbox changes
-        end
-      }
-    )
-  end
+  -- Filter dropdown removed (tabs replace category selection)
 
   DASHBOARD.Content = DashboardFrame.Content
   SyncContentWidth()
