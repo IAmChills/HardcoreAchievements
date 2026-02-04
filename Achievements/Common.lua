@@ -104,7 +104,11 @@ function M.registerQuestAchievement(cfg)
 
     -- Get progress table for this achievement
     local function GetProgress()
-        return GetProgress() or nil
+        local fn = _G.HardcoreAchievements_GetProgress
+        if type(fn) == "function" then
+            return fn(ACH_ID) or nil
+        end
+        return nil
     end
 
     -- Find achievement row by ACH_ID

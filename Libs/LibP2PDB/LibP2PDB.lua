@@ -2723,7 +2723,7 @@ function Private:Broadcast(dbi, data, channels, priority)
         AceComm.SendCommMessage(self, dbi.prefix, encoded, "GUILD", nil, priority)
     end
 
-    if IsInRaid() then
+    if IsInRaid() and not InActiveBattlefield()then
         --- @cast priority "ALERT"|"BULK"|"NORMAL"
         AceComm.SendCommMessage(self, dbi.prefix, encoded, "RAID", nil, priority)
     elseif IsInGroup() then
