@@ -1268,7 +1268,7 @@ function DungeonCommon.registerDungeonAchievement(def)
     end
     
     -- Refresh points with multipliers after creation
-    if RefreshAllAchievementPoints then
+    if not _G.HCA_Initializing and RefreshAllAchievementPoints then
       RefreshAllAchievementPoints()
     end
     

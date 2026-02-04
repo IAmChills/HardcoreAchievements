@@ -123,8 +123,27 @@ function MetaCommon.registerMetaAchievement(def)
     if _G.UpdatePointsDisplay then
       _G.UpdatePointsDisplay(row)
     end
-    if _G.RefreshAllAchievementPoints then
-      _G.RefreshAllAchievementPoints()
+    -- IMPORTANT: don't call RefreshAllAchievementPoints() directly here.
+    -- RefreshAllAchievementPoints() itself calls meta checkers, which call UpdateUI again.
+    -- Direct calls cause infinite recursion and "script ran too long".
+    if _G.HCA_Initializing then
+      return
+    end
+
+    -- If a refresh is already running, mark pending; otherwise schedule one refresh on the next frame.
+    if _G.HCA_RefreshingPoints then
+      _G.HCA_PointsRefreshPending = true
+      return
+    end
+
+    if _G.RefreshAllAchievementPoints and not _G.HCA_PointsRefreshScheduled then
+      _G.HCA_PointsRefreshScheduled = true
+      C_Timer.After(0, function()
+        _G.HCA_PointsRefreshScheduled = nil
+        if _G.RefreshAllAchievementPoints then
+          _G.RefreshAllAchievementPoints()
+        end
+      end)
     end
   end
 
@@ -214,7 +233,7 @@ function MetaCommon.registerMetaAchievement(def)
     end
     
     -- Refresh points with multipliers after creation
-    if RefreshAllAchievementPoints then
+    if not _G.HCA_Initializing and RefreshAllAchievementPoints then
       RefreshAllAchievementPoints()
     end
     

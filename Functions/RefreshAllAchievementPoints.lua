@@ -51,7 +51,7 @@ local function CalculateAchievementPoints(row, preset, isSelfFound, isSoloMode, 
 end
 
 -- Check if kills are satisfied for an achievement that requires both kills and quest
-local function CheckKillsSatisfied(row, rowId, progress)
+local function CheckKillsSatisfied(row, rowId, progress, defById)
     if not progress then
         return false
     end
@@ -63,16 +63,8 @@ local function CheckKillsSatisfied(row, rowId, progress)
     elseif progress.counts and next(progress.counts) ~= nil then
         -- Check if all required kills are satisfied using eligibleCounts
         if progress.eligibleCounts then
-            -- Find the achievement definition to check requiredKills
-            local achDef = nil
-            if _G.Achievements then
-                for _, def in ipairs(_G.Achievements) do
-                    if def.achId == rowId then
-                        achDef = def
-                        break
-                    end
-                end
-            end
+            -- Use a pre-built lookup table for definitions (avoid scanning the full catalog per row)
+            local achDef = defById and defById[tostring(rowId)] or nil
             
             if achDef and achDef.requiredKills then
                 local allSatisfied = true
@@ -102,7 +94,7 @@ local function CheckKillsSatisfied(row, rowId, progress)
 end
 
 -- Update status text for an achievement row
-local function UpdateRowStatusText(row, rowId, progress, isSelfFound, isSoloMode, isHardcoreActive, allowSoloBonus)
+local function UpdateRowStatusText(row, rowId, progress, isSelfFound, isSoloMode, isHardcoreActive, allowSoloBonus, defById)
     if not row.Sub or not row.maxLevel or row.maxLevel <= 0 then
         return
     end
@@ -129,7 +121,7 @@ local function UpdateRowStatusText(row, rowId, progress, isSelfFound, isSoloMode
         -- Check if kills are satisfied but quest is pending
         local killsSatisfied = false
         if requiresBoth then
-            killsSatisfied = CheckKillsSatisfied(row, rowId, progress)
+            killsSatisfied = CheckKillsSatisfied(row, rowId, progress, defById)
         end
         
         local playerLevel = UnitLevel("player") or 1
@@ -182,6 +174,15 @@ end
 -- Function to refresh all achievement points from scratch
 function RefreshAllAchievementPoints()
     if not AchievementPanel or not AchievementPanel.achievements then return end
+
+    -- Re-entrancy guard: Meta achievement checkers (and other UI updaters) may request a refresh
+    -- while a refresh is already running. Nested refresh calls cause infinite recursion and
+    -- "script ran too long". Instead, coalesce into one extra refresh after this pass.
+    if _G.HCA_RefreshingPoints then
+        _G.HCA_PointsRefreshPending = true
+        return
+    end
+    _G.HCA_RefreshingPoints = true
     
     -- Calculate shared values once at the top
     local preset = (_G.GetPlayerPresetFromSettings and _G.GetPlayerPresetFromSettings()) or nil
@@ -189,6 +190,16 @@ function RefreshAllAchievementPoints()
     local isSoloMode = _G.HardcoreAchievements_IsSoloModeEnabled and _G.HardcoreAchievements_IsSoloModeEnabled() or false
     local isHardcoreActive = C_GameRules and C_GameRules.IsHardcoreActive and C_GameRules.IsHardcoreActive() or false
     local allowSoloBonus = isSelfFound or not isHardcoreActive
+
+    -- Build a fast lookup table for achievement definitions (by achId) once.
+    local defById = {}
+    if _G.Achievements then
+        for _, def in ipairs(_G.Achievements) do
+            if def and def.achId ~= nil then
+                defById[tostring(def.achId)] = def
+            end
+        end
+    end
     
     for _, row in ipairs(AchievementPanel.achievements) do
         -- Check both row.id and row.achId (dungeon achievements use achId)
@@ -213,7 +224,7 @@ function RefreshAllAchievementPoints()
             -- Update Sub text - check if we have stored solo status or ineligible status from previous kills/quests
             -- Only update Sub text for incomplete achievements to preserve completed achievement solo indicators
             if not row.completed then
-                UpdateRowStatusText(row, rowId, progress, isSelfFound, isSoloMode, isHardcoreActive, allowSoloBonus)
+                UpdateRowStatusText(row, rowId, progress, isSelfFound, isSoloMode, isHardcoreActive, allowSoloBonus, defById)
             end
         end
     end
@@ -244,6 +255,16 @@ function RefreshAllAchievementPoints()
     -- Sync character panel checkbox state if it exists
     if AchievementPanel and AchievementPanel.SoloModeCheckbox then
         AchievementPanel.SoloModeCheckbox:SetChecked(isSoloMode)
+    end
+
+    _G.HCA_RefreshingPoints = nil
+    if _G.HCA_PointsRefreshPending then
+        _G.HCA_PointsRefreshPending = nil
+        C_Timer.After(0, function()
+            if not _G.HCA_RefreshingPoints then
+                RefreshAllAchievementPoints()
+            end
+        end)
     end
 end
 

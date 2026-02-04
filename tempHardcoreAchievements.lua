@@ -8,10 +8,6 @@ local RefreshOutleveledAll
 local ProfessionTracker = _G.HCA_ProfessionCommon
 local QuestTrackedRows = {}
 
--- True while we're doing the initial registration + post-login heavy operations.
--- Used to suppress redundant UI recalculations (sorting/points/status) until the end of the initial load.
-_G.HCA_Initializing = false
-
 -- Flag to track when achievement restorations from DB are complete
 -- Must be declared early so CheckPendingCompletions and EvaluateCustomCompletions can access it
 local restorationsComplete = false
@@ -82,14 +78,6 @@ function HookSystem:FireEvent(eventName, ...)
             -- Log error
             HCA_DebugPrint("Error in hook callback: " .. tostring(err))
         end
-    end
-
-    -- When called outside the initial load flow, refresh sorting/points/outleveled.
-    -- During initial load, these are handled once at the end to avoid extra work.
-    if not _G.HCA_Initializing then
-        if SortAchievementRows then SortAchievementRows() end
-        if HCA_UpdateTotalPoints then HCA_UpdateTotalPoints() end
-        if RefreshOutleveledAll then RefreshOutleveledAll() end
     end
 end
 
@@ -212,6 +200,296 @@ local function CleanupIncorrectLevelAchievements()
     return cleanedCount
 end
 
+-- DELETE ME AFTER SOME TIME IF YOU WANT
+-- Cleanup function to fix incorrectly failed meta achievements
+-- Fixes a bug where meta achievements were marked as failed when dungeon achievements
+-- were incorrectly marked as failed due to leveling up inside dungeons
+local function CleanupIncorrectlyFailedMetaAchievements()
+    local _, cdb = GetCharDB()
+    if not cdb or not cdb.achievements then
+        return
+    end
+    
+    -- Need AchievementPanel to be loaded to check IsRowOutleveled
+    if not _G.AchievementPanel or not _G.AchievementPanel.achievements then
+        return
+    end
+    
+    if not _G.HCA_AchievementDefs then
+        return
+    end
+    
+    -- Step 1: Collect all failed meta achievements and build dependency graph
+    local failedMetaAchievements = {}
+    local metaDependencies = {} -- Maps achId -> array of meta achievement IDs it depends on
+    
+    for achId, achievementData in pairs(cdb.achievements) do
+        -- Only check meta achievements (marked as failed but not completed)
+        if achId and achievementData.failed and not achievementData.completed then
+            local achDef = _G.HCA_AchievementDefs[tostring(achId)]
+            if achDef and achDef.isMetaAchievement and achDef.requiredAchievements then
+                table.insert(failedMetaAchievements, {
+                    achId = tostring(achId),
+                    data = achievementData,
+                    def = achDef
+                })
+                
+                -- Build dependency list (only include meta achievements)
+                local metaDeps = {}
+                for _, reqAchId in ipairs(achDef.requiredAchievements) do
+                    local reqAchDef = _G.HCA_AchievementDefs[tostring(reqAchId)]
+                    if reqAchDef and reqAchDef.isMetaAchievement then
+                        table.insert(metaDeps, tostring(reqAchId))
+                    end
+                end
+                metaDependencies[tostring(achId)] = metaDeps
+            end
+        end
+    end
+    
+    if #failedMetaAchievements == 0 then
+        return 0
+    end
+    
+    -- Step 2: Topologically sort meta achievements (process dependencies first)
+    -- Use Kahn's algorithm: process achievements with no unmet dependencies
+    local sortedAchievements = {}
+    local processed = {}
+    local remaining = {}
+    for _, meta in ipairs(failedMetaAchievements) do
+        remaining[meta.achId] = meta
+    end
+    
+    local function hasUnmetDependencies(achId)
+        local deps = metaDependencies[achId] or {}
+        for _, depId in ipairs(deps) do
+            -- Check if dependency is in remaining (not yet processed)
+            if remaining[depId] then
+                return true
+            end
+        end
+        return false
+    end
+    
+    -- Process in dependency order
+    local changed = true
+    while changed and next(remaining) do
+        changed = false
+        for achId, meta in pairs(remaining) do
+            if not hasUnmetDependencies(achId) then
+                -- All dependencies are processed (or this has no meta dependencies)
+                table.insert(sortedAchievements, meta)
+                remaining[achId] = nil
+                changed = true
+            end
+        end
+    end
+    
+    -- Add any remaining (circular dependencies or orphaned) at the end
+    for _, meta in pairs(remaining) do
+        table.insert(sortedAchievements, meta)
+    end
+    
+    -- Step 3: Process achievements in sorted order
+    local fixedCount = 0
+    local fixedAchievements = {}
+    
+    for _, meta in ipairs(sortedAchievements) do
+        local achId = meta.achId
+        local achievementData = meta.data
+        local achDef = meta.def
+        
+        -- Check if all required achievements are actually available
+        local allRequiredAvailable = true
+        local anyRequiredFailed = false
+        
+        -- Check each required achievement
+        for _, reqAchId in ipairs(achDef.requiredAchievements) do
+            local reqAchDef = _G.HCA_AchievementDefs[tostring(reqAchId)]
+            if reqAchDef then
+                local reqData = cdb.achievements[tostring(reqAchId)]
+                
+                -- Check if required achievement is completed (if so, it's fine)
+                if reqData and reqData.completed then
+                    -- This required achievement is completed, so it's available for the meta
+                    -- Continue checking other requirements
+                else
+                    -- Required achievement is not completed - check if it's failed
+                    local isFailed = false
+                    
+                    -- If it's a meta achievement, check if we already fixed it in this pass
+                    if reqAchDef.isMetaAchievement then
+                        -- Check if it was in our fixed list
+                        local wasFixed = false
+                        for _, fixed in ipairs(fixedAchievements) do
+                            if fixed.achId == tostring(reqAchId) then
+                                wasFixed = true
+                                break
+                            end
+                        end
+                        if wasFixed then
+                            -- This meta dependency was just fixed, so it's not failed
+                            isFailed = false
+                        else
+                            -- Check current status
+                            local reqData = cdb.achievements[tostring(reqAchId)]
+                            if reqData and reqData.failed then
+                                isFailed = true
+                            end
+                        end
+                    else
+                        -- Non-meta achievement - check current status comprehensively
+                        -- Priority: database failed flag > IsRowOutleveled > level check
+                        -- Check database failed flag first (most reliable source of truth)
+                        if reqData and reqData.failed then
+                            isFailed = true
+                        end
+                        
+                        -- If not failed in database, check row status
+                        if not isFailed then
+                            local reqRow = nil
+                            for _, row in ipairs(_G.AchievementPanel.achievements) do
+                                local rowId = row.id or row.achId
+                                if rowId and tostring(rowId) == tostring(reqAchId) then
+                                    reqRow = row
+                                    break
+                                end
+                            end
+                            
+                            if reqRow and _G.IsRowOutleveled then
+                                -- Use IsRowOutleveled to check current status (most accurate)
+                                isFailed = _G.IsRowOutleveled(reqRow)
+                            end
+                        end
+                        
+                        -- If still not failed, check if player is over the achievement's max level
+                        if not isFailed then
+                            local maxLevel = nil
+                            -- Try to get maxLevel from multiple sources
+                            local reqRow = nil
+                            for _, row in ipairs(_G.AchievementPanel.achievements) do
+                                local rowId = row.id or row.achId
+                                if rowId and tostring(rowId) == tostring(reqAchId) then
+                                    reqRow = row
+                                    break
+                                end
+                            end
+                            
+                            if reqRow and reqRow.maxLevel then
+                                maxLevel = reqRow.maxLevel
+                            elseif reqAchDef and reqAchDef.maxLevel then
+                                maxLevel = reqAchDef.maxLevel
+                            end
+                            
+                            if maxLevel and maxLevel > 0 then
+                                local playerLevel = UnitLevel("player") or 1
+                                if playerLevel > maxLevel then
+                                    -- Only mark as failed if achievement is not completed
+                                    if not (reqData and reqData.completed) then
+                                        isFailed = true
+                                    end
+                                end
+                            end
+                        end
+                    end
+                    
+                    if isFailed then
+                        -- This required achievement is actually failed
+                        allRequiredAvailable = false
+                        anyRequiredFailed = true
+                        break
+                    end
+                end
+            end
+        end
+        
+        -- If all required achievements are available (not failed), clear the failed status
+        -- Double-check: make sure we didn't miss any failed requirements
+        if allRequiredAvailable and not anyRequiredFailed then
+            -- Final verification: check one more time that no required achievements are failed
+            -- This catches cases where IsRowOutleveled might have been called before rows were fully initialized
+            local finalCheckPassed = true
+            for _, reqAchId in ipairs(achDef.requiredAchievements) do
+                local reqData = cdb.achievements[tostring(reqAchId)]
+                if reqData and not reqData.completed then
+                    -- Check database failed flag one more time
+                    if reqData.failed then
+                        finalCheckPassed = false
+                        break
+                    end
+                    
+                    -- Check if player is over level for this achievement
+                    local reqAchDef = _G.HCA_AchievementDefs[tostring(reqAchId)]
+                    if reqAchDef and reqAchDef.maxLevel and reqAchDef.maxLevel > 0 then
+                        local playerLevel = UnitLevel("player") or 1
+                        if playerLevel > reqAchDef.maxLevel then
+                            finalCheckPassed = false
+                            break
+                        end
+                    end
+                end
+            end
+            
+            if not finalCheckPassed then
+                -- Found a failed requirement on final check, don't fix this meta achievement
+                allRequiredAvailable = false
+            end
+        end
+        
+        if allRequiredAvailable and not anyRequiredFailed then
+            -- Store for logging
+            table.insert(fixedAchievements, {
+                achId = achId,
+                title = achDef.title or achId
+            })
+            
+            -- Clear failed status
+            achievementData.failed = nil
+            achievementData.failedAt = nil
+            fixedCount = fixedCount + 1
+            
+            -- Update the UI row if it exists
+            local metaRow = nil
+            for _, row in ipairs(_G.AchievementPanel.achievements) do
+                local rowId = row.id or row.achId
+                if rowId and tostring(rowId) == achId then
+                    metaRow = row
+                    break
+                end
+            end
+            
+            if metaRow then
+                -- Refresh the row's styling to reflect the cleared failed status
+                if _G.ApplyOutleveledStyle then
+                    _G.ApplyOutleveledStyle(metaRow)
+                end
+                if _G.UpdatePointsDisplay then
+                    _G.UpdatePointsDisplay(metaRow)
+                end
+            end
+        end
+    end
+    
+    -- Log cleanup if any achievements were fixed
+    if fixedCount > 0 then
+        local message = "|cff008066[Hardcore Achievements]|r |cffffd100Fixed " .. fixedCount .. " incorrectly failed meta achievement(s):|r"
+        print(message)
+        for _, fixed in ipairs(fixedAchievements) do
+            print(string.format("  |cffffd100- %s|r", fixed.title or fixed.achId))
+        end
+        
+        -- Refresh UI to reflect the changes
+        if RefreshOutleveledAll then
+            RefreshOutleveledAll()
+        end
+        if SortAchievementRows then
+            SortAchievementRows()
+        end
+    end
+    
+    return fixedCount
+end
+-- END OF META ACHIEVEMENT CLEANUP
 
 local function ClearProgress(achId)
     local _, cdb = GetCharDB()
@@ -282,12 +560,16 @@ local function HookRowSubTextUpdates(row)
 
     fontString.SetText = function(self, text, ...)
         originalSetText(self, text, ...)
-        UpdateRowTextLayout(row)
+        if not _G.HCA_SuppressRowTextLayout then
+            UpdateRowTextLayout(row)
+        end
     end
 
     fontString.SetFormattedText = function(self, ...)
         originalSetFormattedText(self, ...)
-        UpdateRowTextLayout(row)
+        if not _G.HCA_SuppressRowTextLayout then
+            UpdateRowTextLayout(row)
+        end
     end
 
     fontString._hcaSetTextWrapped = true
@@ -635,25 +917,12 @@ local function SortAchievementRows()
             and type(row.id) == "string" and row.id:match("^Level%d+$") ~= nil
     end
 
-    -- Cache expensive computations used by the comparator.
-    -- `IsRowOutleveled` can be relatively heavy (db lookups, quest log checks, etc.),
-    -- and the sort comparator is called many times. Cache per-row results for this sort pass.
-    local failedCache = setmetatable({}, { __mode = "k" })
-    local function isFailed(row)
-        local v = failedCache[row]
-        if v == nil then
-            v = IsRowOutleveled(row) and true or false
-            failedCache[row] = v
-        end
-        return v
-    end
-
     table.sort(AchievementPanel.achievements, function(a, b)
         -- First, separate into three groups: completed, available, failed
         local aCompleted = a.completed or false
         local bCompleted = b.completed or false
-        local aFailed = isFailed(a)
-        local bFailed = isFailed(b)
+        local aFailed = IsRowOutleveled(a)
+        local bFailed = IsRowOutleveled(b)
         
         -- Determine group priority: completed (1), available (2), failed (3)
         local aGroup = aCompleted and 1 or (aFailed and 3 or 2)
@@ -1253,6 +1522,10 @@ local function RestoreCompletionsFromDB()
             end
         end
     end
+
+    if SortAchievementRows then SortAchievementRows() end
+    if HCA_UpdateTotalPoints then HCA_UpdateTotalPoints() end
+    RefreshOutleveledAll()
 end
 
 local function ToggleAchievementCharacterFrameTab()
@@ -1594,19 +1867,13 @@ local function ApplySelfFoundBonus()
     local charData = HardcoreAchievementsDB.chars[guid]
     if not charData or not charData.achievements then return end
 
-    -- Build a fast lookup table instead of scanning all rows per achievement.
-    local basePointsById = {}
-    for _, row in ipairs(AchievementPanel.achievements) do
-        local id = row and (row.id or row.achId)
-        if id ~= nil then
-            local idStr = tostring(id)
-            basePointsById[idStr] = tonumber(row.originalPoints) or tonumber(row.revealPointsBase) or tonumber(row.points) or 0
-        end
-    end
-
     local function getBasePointsForAch(achId)
-        if achId == nil then return 0 end
-        return basePointsById[tostring(achId)] or 0
+        for _, row in ipairs(AchievementPanel.achievements) do
+            if row and (row.id == achId or row.achId == achId) then
+                return tonumber(row.originalPoints) or tonumber(row.revealPointsBase) or tonumber(row.points) or 0
+            end
+        end
+        return 0
     end
 
     local updatedCount = 0
@@ -1862,6 +2129,8 @@ initFrame:SetScript("OnEvent", function(self, event, ...)
         local addonName = ...
         if addonName == ADDON_NAME then
             C_Timer.After(3, function()
+                ApplySelfFoundBonus()
+                RestoreCompletionsFromDB()
                 addon:ShowWelcomeMessage()
             end)
         end
@@ -3233,9 +3502,8 @@ function CreateAchievementRow(parent, achId, title, tooltip, icon, level, points
     if def and def.mapID then
         row.zone = nil
     end
-    -- Apply icon/frame styling for initial state
-    -- Defer expensive styling during initial load; heavy ops will refresh once at the end.
-    if not _G.HCA_Initializing then
+    -- Apply icon/frame styling for initial state (can be expensive; suppress during bulk registration)
+    if not _G.HCA_SuppressRowInitStyle then
         ApplyOutleveledStyle(row)
     end
 
@@ -3316,9 +3584,9 @@ function CreateAchievementRow(parent, achId, title, tooltip, icon, level, points
     end
 
     AchievementPanel.achievements[index] = row
-    -- During initial load, avoid sorting/reanchoring after every single insert.
-    -- We'll do a single sort/points refresh at the end of the initial load.
-    if not _G.HCA_Initializing then
+    -- Creating many rows at load time can be expensive if we sort/recompute totals each time.
+    -- During deferred registration we suppress these per-row passes and run them once at the end.
+    if not _G.HCA_SuppressRowSort then
         SortAchievementRows()
         HCA_UpdateTotalPoints()
     end
@@ -4511,99 +4779,205 @@ end)
 
 -- =========================================================
 -- Deferred Achievement Registration System
--- Processes queued achievements on PLAYER_LOGIN with C_Timer chains
+-- Processes queued achievements on PLAYER_LOGIN with optimized batching
 -- =========================================================
 -- restorationsComplete is declared at the top of the file for scope access
 do
     local registrationFrame = CreateFrame("Frame")
     local registrationIndex = 1
-    local REGISTRATION_BATCH_SIZE = 5  -- Process 5 achievements per batch (very small to avoid lag)
-    local REGISTRATION_BATCH_DELAY = 0.01  -- 10ms delay between batches (allows frame updates)
+    -- Increased batch size: process more achievements per batch to reduce total time
+    -- 5 achievements per batch with 20ms delay = ~100ms per batch, much faster than 1 per 10ms
+    local REGISTRATION_BATCH_SIZE = 5  -- Process 5 achievements per batch (increased from 1)
+    local REGISTRATION_BATCH_DELAY = 0.02  -- 20ms delay between batches (allows frame updates)
+    
+    -- Heavy operations batching constants
+    local HEAVY_OPS_BATCH_SIZE = 15  -- Process 15 achievements per batch for heavy operations
+    local HEAVY_OPS_FRAME_SKIP = 2  -- Process every 2nd frame to allow UI updates (target ~30 FPS)
     
     local registrationComplete = false
     local playerLoggedIn = false
     local heavyOpsScheduled = false
+    local heavyOpsIndex = 1
+    local heavyOpsPhase = 0  -- 0=idle, 1=restore, 2=completions, 3=outleveled, 4=cleanup, 5=sort, 6=points, 7=profession
+    local heavyOpsFrameCount = 0
 
     -- Forward declaration
     local RunHeavyOperations
+    local ProcessHeavyOperationBatch
+
+    -- Process heavy operations in batches using OnUpdate for better frame budget control
+    ProcessHeavyOperationBatch = function(self, elapsed)
+        if not AchievementPanel or not AchievementPanel.achievements then
+            -- No achievements yet, wait
+            return
+        end
+
+        local achievements = AchievementPanel.achievements
+        local totalAchievements = #achievements
+        
+        -- Skip frames to allow UI updates
+        heavyOpsFrameCount = heavyOpsFrameCount + 1
+        if heavyOpsFrameCount < HEAVY_OPS_FRAME_SKIP then
+            return
+        end
+        heavyOpsFrameCount = 0
+        
+        -- Process a batch of achievements for current phase
+        local batchEnd = math.min(heavyOpsIndex + HEAVY_OPS_BATCH_SIZE - 1, totalAchievements)
+        
+        if heavyOpsPhase == 1 then
+            -- Phase 1: Restore completions from DB
+            if heavyOpsIndex == 1 then
+                print("|cff008066[Hardcore Achievements]|r |cffffd100[1/7] Restoring completions from database...|r")
+            end
+            local _, cdb = GetCharDB()
+            if cdb and cdb.achievements then
+                for i = heavyOpsIndex, batchEnd do
+                    local row = achievements[i]
+                    if row then
+                        local id = row.id or row.achId or (row.Title and row.Title:GetText())
+                        local rec = id and cdb.achievements[id]
+                        if rec and rec.completed then
+                            row.completed = true
+                            local isSelfFound = _G.IsSelfFound and _G.IsSelfFound() or false
+                            local isHardcoreActive = C_GameRules and C_GameRules.IsHardcoreActive and C_GameRules.IsHardcoreActive() or false
+                            if row.Sub then
+                                local shouldShowSolo = rec.wasSolo and (isHardcoreActive and isSelfFound or not isHardcoreActive)
+                                if shouldShowSolo then
+                                    row.Sub:SetText(AUCTION_TIME_LEFT0 .. "\n" .. HCA_SharedUtils.GetClassColor() .. "Solo|r")
+                                else
+                                    row.Sub:SetText(AUCTION_TIME_LEFT0)
+                                end
+                            end
+                            if row.TS then row.TS:SetText(FormatTimestamp(rec.completedAt)) end
+                            if row.Points then row.Points:SetTextColor(1, 1, 1) end
+                            if _G.HCA_UpdatePointsDisplay then
+                                _G.HCA_UpdatePointsDisplay(row)
+                            end
+                        end
+                    end
+                end
+            end
+            -- Advance index for batched phase
+            heavyOpsIndex = batchEnd + 1
+        elseif heavyOpsPhase == 2 then
+            -- Phase 2: Check pending completions (combined CheckPendingCompletions and EvaluateCustomCompletions)
+            if heavyOpsIndex == 1 then
+                print("|cff008066[Hardcore Achievements]|r |cffffd100[2/7] Checking pending completions...|r")
+            end
+            local currentLevel = UnitLevel("player") or 1
+            skipBroadcastForRetroactive = true
+            for i = heavyOpsIndex, batchEnd do
+                local row = achievements[i]
+                if row and not IsAchievementAlreadyCompleted(row) then
+                    local fn = row.customIsCompleted
+                    if type(fn) ~= "function" then
+                        local id = row.id or row.achId
+                        if id then
+                            fn = _G[id .. "_IsCompleted"]
+                        end
+                    end
+                    if type(fn) == "function" then
+                        local ok, result = pcall(fn, currentLevel)
+                        if ok and result == true then
+                            HCA_MarkRowCompleted(row)
+                            HCA_AchToast_Show(row.Icon and row.Icon:GetTexture() or 136116, row.Title and row.Title:GetText() or "Achievement", row.points or 0, row)
+                        end
+                    end
+                end
+            end
+            skipBroadcastForRetroactive = false
+            -- Advance index for batched phase
+            heavyOpsIndex = batchEnd + 1
+        elseif heavyOpsPhase == 3 then
+            -- Phase 3: Refresh outleveled status
+            if heavyOpsIndex == 1 then
+                print("|cff008066[Hardcore Achievements]|r |cffffd100[3/7] Refreshing outleveled status...|r")
+            end
+            for i = heavyOpsIndex, batchEnd do
+                local row = achievements[i]
+                if row then
+                    ApplyOutleveledStyle(row)
+                end
+            end
+        elseif heavyOpsPhase == 4 then
+            -- Phase 4: Cleanup incorrectly failed meta achievements (runs once, not batched)
+            if heavyOpsIndex == 1 then
+                print("|cff008066[Hardcore Achievements]|r |cffffd100[4/7] Cleaning up meta achievements...|r")
+                CleanupIncorrectlyFailedMetaAchievements()
+                heavyOpsIndex = 2  -- Mark as complete
+            end
+        elseif heavyOpsPhase == 5 then
+            -- Phase 5: Sort achievement rows (runs once, not batched)
+            if heavyOpsIndex == 1 then
+                print("|cff008066[Hardcore Achievements]|r |cffffd100[5/7] Sorting achievements...|r")
+                if SortAchievementRows then
+                    SortAchievementRows()
+                end
+                heavyOpsIndex = 2  -- Mark as complete
+            end
+        elseif heavyOpsPhase == 6 then
+            -- Phase 6: Refresh all achievement points (runs once, not batched - RefreshAllAchievementPoints already iterates)
+            if heavyOpsIndex == 1 then
+                print("|cff008066[Hardcore Achievements]|r |cffffd100[6/7] Refreshing achievement points...|r")
+                if RefreshAllAchievementPoints then
+                    RefreshAllAchievementPoints()
+                end
+                heavyOpsIndex = 2  -- Mark as complete
+            end
+        elseif heavyOpsPhase == 7 then
+            -- Phase 7: Profession tracker refresh (runs once, not batched)
+            if heavyOpsIndex == 1 then
+                print("|cff008066[Hardcore Achievements]|r |cffffd100[7/7] Refreshing profession achievements...|r")
+                if ProfessionTracker and ProfessionTracker.RefreshAll then
+                    ProfessionTracker.RefreshAll()
+                end
+                heavyOpsIndex = 2  -- Mark as complete
+            end
+        end
+        
+        -- Check if current phase is complete
+        local isSingleRunPhase = (heavyOpsPhase == 4) or (heavyOpsPhase == 5) or (heavyOpsPhase == 6) or (heavyOpsPhase == 7)
+        if heavyOpsIndex > totalAchievements or (isSingleRunPhase and heavyOpsIndex > 1) then
+            -- Phase complete (or single-run phase completed)
+            heavyOpsPhase = heavyOpsPhase + 1
+            heavyOpsIndex = 1
+            
+            -- Check if all phases are complete
+            if heavyOpsPhase > 7 then
+                registrationFrame:SetScript("OnUpdate", nil)
+                print("|cff008066[Hardcore Achievements]|r |cffffd100All achievements loaded!|r")
+            end
+        end
+    end
 
     -- Run heavy operations after both registration and login are complete
-    -- These operations are batched as well to avoid lag
+    -- Uses OnUpdate batching instead of C_Timer chains for better performance and frame budget control
     RunHeavyOperations = function()
         if heavyOpsScheduled then return end
         if not registrationComplete or not playerLoggedIn then return end
         
         heavyOpsScheduled = true
-        _G.HCA_Initializing = true
+        heavyOpsIndex = 1
+        heavyOpsPhase = 1
+        heavyOpsFrameCount = 0
         
-        -- Use small delays between operations to spread load
-        C_Timer.After(0.1, function()
-            do
-                local ok, err = pcall(ApplySelfFoundBonus)
-                if not ok then
-                    print("|cff008066[Hardcore Achievements]|r |cffff0000Error in ApplySelfFoundBonus: " .. tostring(err) .. "|r")
-                end
-            end
-            if RestoreCompletionsFromDB then
-                RestoreCompletionsFromDB()
-            end
-            -- Mark that restorations are complete
+        -- Mark that restorations are starting (will be marked complete after first batch)
+        restorationsComplete = false
+        
+        -- Start processing heavy operations in batches using OnUpdate
+        registrationFrame:SetScript("OnUpdate", ProcessHeavyOperationBatch)
+        
+        -- Mark restorations complete after a short delay (allows first batch to process)
+        C_Timer.After(0.05, function()
             restorationsComplete = true
-            
-            C_Timer.After(0.1, function()
-                -- First run after login: skip emote/guild broadcast for retroactive completions (avoids guild spam for new installs)
-                skipBroadcastForRetroactive = true
-                -- First, check pending completions (including customIsCompleted achievements)
-                if CheckPendingCompletions then
-                    CheckPendingCompletions()
-                end
-                -- Also evaluate custom completions (handles both row.customIsCompleted and global functions)
-                if EvaluateCustomCompletions then
-                    local currentLevel = UnitLevel("player") or 1
-                    EvaluateCustomCompletions(currentLevel)
-                end
-                skipBroadcastForRetroactive = false
-                
-                -- Refresh outleveled status AFTER checking completions
-                -- This ensures level milestones and profession achievements are marked complete before checking if they're "failed"
-                C_Timer.After(0.1, function()
-                    if RefreshOutleveledAll then
-                        RefreshOutleveledAll()
-                    end
-
-                    C_Timer.After(0.1, function()
-                        if SortAchievementRows then
-                            SortAchievementRows()
-                        end
-
-                        C_Timer.After(0.1, function()
-                            if RefreshAllAchievementPoints then
-                                RefreshAllAchievementPoints()
-                            end
-
-                            C_Timer.After(0.1, function()
-                                if ProfessionTracker and ProfessionTracker.RefreshAll then
-                                    ProfessionTracker.RefreshAll()
-                                end
-                                -- Initial load is complete: allow normal UI refreshes.
-                                _G.HCA_Initializing = false
-                            end)
-                        end)
-                    end)
-                end)
-            end)
-            
-            -- Print "All achievements loaded!" after restorations are marked complete
-            -- but before scheduling the completion checks
-            print("|cff008066[Hardcore Achievements]|r |cffffd100All achievements loaded!|r")
         end)
     end
 
-    -- Process achievement registration in small batches to avoid blocking
+    -- Process achievement registration in batches to avoid blocking
     local function ProcessRegistrationBatch()
         if not _G.HCA_RegistrationQueue or #_G.HCA_RegistrationQueue == 0 then
             registrationComplete = true
-            -- Keep initial-load suppression enabled until heavy ops completes.
             -- If player already logged in, trigger heavy operations
             if playerLoggedIn then
                 RunHeavyOperations()
@@ -4611,16 +4985,26 @@ do
             return
         end
 
+        -- Suppress expensive per-row passes while bulk-registering rows.
+        _G.HCA_SuppressRowSort = true
+        _G.HCA_SuppressRowInitStyle = true
+        _G.HCA_SuppressRowTextLayout = true
+
+        -- Optional debug progress (enable by setting HCA_DebugEnabled via /hca debug on)
+        local dbg = _G.HCA_DebugPrint
+
         local processed = 0
         while registrationIndex <= #_G.HCA_RegistrationQueue and processed < REGISTRATION_BATCH_SIZE do
             local registerFunc = _G.HCA_RegistrationQueue[registrationIndex]
             if type(registerFunc) == "function" then
+                if dbg and (registrationIndex % 50 == 1) then
+                    dbg(string.format("[Registration] %d/%d", registrationIndex, #_G.HCA_RegistrationQueue))
+                end
                 local success, err = pcall(registerFunc)
                 if not success then
                     print("|cff008066[Hardcore Achievements]|r |cffff0000Error registering achievement: " .. tostring(err) .. "|r")
                 end
             end
-            --print("|cff008066[Hardcore Achievements]|r |cffffffffProcessing achievement: " .. tostring(registerFunc) .. "|r")
             registrationIndex = registrationIndex + 1
             processed = processed + 1
         end
@@ -4629,7 +5013,32 @@ do
             -- All registrations complete
             _G.HCA_RegistrationQueue = nil  -- Clear queue to free memory
             registrationComplete = true
-            -- Keep initial-load suppression enabled until heavy ops completes.
+
+            -- Re-enable expensive UI passes now that rows are all created.
+            _G.HCA_SuppressRowSort = nil
+            _G.HCA_SuppressRowInitStyle = nil
+            _G.HCA_SuppressRowTextLayout = nil
+            if SortAchievementRows then
+                SortAchievementRows()
+            end
+            if HCA_UpdateTotalPoints then
+                HCA_UpdateTotalPoints()
+            end
+            -- Apply initial style + text layout once for all rows (defer to next frame to avoid watchdog).
+            C_Timer.After(0, function()
+                if AchievementPanel and AchievementPanel.achievements then
+                    for _, row in ipairs(AchievementPanel.achievements) do
+                        if row then
+                            if ApplyOutleveledStyle then
+                                ApplyOutleveledStyle(row)
+                            end
+                            if row.UpdateTextLayout then
+                                row.UpdateTextLayout(row)
+                            end
+                        end
+                    end
+                end
+            end)
             
             -- If player already logged in, trigger heavy operations
             if playerLoggedIn then
@@ -4651,19 +5060,16 @@ do
                 -- This happens before PLAYER_LOGIN, spreading the work out earlier
                 if _G.HCA_RegistrationQueue and #_G.HCA_RegistrationQueue > 0 then
                     registrationIndex = 1
-                    _G.HCA_Initializing = true
                     -- Small initial delay to let addon finish initializing
                     C_Timer.After(0.05, ProcessRegistrationBatch)
                 else
                     -- No achievements to register
                     registrationComplete = true
-                    -- We still do post-login heavy ops; mark initial load in progress at PLAYER_LOGIN.
                     -- Will wait for PLAYER_LOGIN to run heavy operations
                 end
             end
         elseif event == "PLAYER_LOGIN" then
             playerLoggedIn = true
-            _G.HCA_Initializing = true
             print("|cff008066[Hardcore Achievements]|r |cffffd100Loading achievements...|r")
             
             -- If registration already complete, trigger heavy operations
