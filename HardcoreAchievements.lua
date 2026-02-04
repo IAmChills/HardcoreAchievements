@@ -4517,7 +4517,7 @@ end)
 do
     local registrationFrame = CreateFrame("Frame")
     local registrationIndex = 1
-    local REGISTRATION_BATCH_SIZE = 5  -- Process 5 achievements per batch (very small to avoid lag)
+    local REGISTRATION_BATCH_SIZE = 10  -- Process 5 achievements per batch (very small to avoid lag)
     local REGISTRATION_BATCH_DELAY = 0.01  -- 10ms delay between batches (allows frame updates)
     
     local registrationComplete = false
