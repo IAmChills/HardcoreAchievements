@@ -7,7 +7,7 @@
 -- Configuration
 ---------------------------------------
 local OTHER_PLAYER_THREAT_THRESHOLD = 10  -- % threat from grouped players to fail
-local PLAYER_SOLO_THREAT_THRESHOLD  = 90  -- % threat you must maintain (unless mob is on non-player)
+local PLAYER_SOLO_THREAT_THRESHOLD  = 90  -- % threat you must maintain (unless mob is a non-player)
 local HELPER_TIMEOUT_SEC            = 8   -- seconds to remember recent player helpers vs your current target
 
 ---------------------------------------
@@ -107,6 +107,30 @@ local function OtherPlayersRecentlyHelped(targetGUID)
 end
 
 ---------------------------------------
+-- Check if a specific unit has significant threat
+---------------------------------------
+local function UnitHasSignificantThreat(unit, mobUnit, threshold)
+    local isUnitTanking, unitStatus, scaledPct, rawPct = UnitDetailedThreatSituation(unit, mobUnit)
+    
+    -- Check if this unit is tanking (definitely helping) - disqualify immediately
+    if isUnitTanking and unitStatus and unitStatus >= 2 then
+        return true
+    end
+    
+    -- Check if this unit has >threshold% threat on EITHER scaled or raw threat
+    -- This ensures we catch cases where either metric shows they're helping
+    if scaledPct and scaledPct > threshold then
+        return true
+    end
+    
+    if rawPct and rawPct > threshold then
+        return true
+    end
+    
+    return false
+end
+
+---------------------------------------
 -- Grouped player > threshold% threat?
 -- Only checks PARTY/RAID *players* via unit tokens (pets excluded by token choice).
 -- Checks both scaled and raw threat, and tanking status.
@@ -117,21 +141,7 @@ local function AnyGroupedPlayerOverThresholdOn(mobUnit, pct)
         for i = 1, n do
             local u = "raid"..i
             if UnitExists(u) and not UnitIsUnit(u, "player") then
-                local isUnitTanking, unitStatus, scaledPct, rawPct = UnitDetailedThreatSituation(u, mobUnit)
-                
-                -- Check if this unit is tanking (definitely helping) - disqualify immediately
-                if isUnitTanking and unitStatus and unitStatus >= 2 then
-                    return true
-                end
-                
-                -- Check if this unit has >threshold% threat on EITHER scaled or raw threat
-                -- Disqualify if scaledPct > threshold OR rawPct > threshold
-                -- This ensures we catch cases where either metric shows they're helping
-                if scaledPct and scaledPct > pct then
-                    return true
-                end
-                
-                if rawPct and rawPct > pct then
+                if UnitHasSignificantThreat(u, mobUnit, pct) then
                     return true
                 end
             end
@@ -141,21 +151,7 @@ local function AnyGroupedPlayerOverThresholdOn(mobUnit, pct)
         for i = 1, n do
             local u = "party"..i
             if UnitExists(u) then
-                local isUnitTanking, unitStatus, scaledPct, rawPct = UnitDetailedThreatSituation(u, mobUnit)
-                
-                -- Check if this unit is tanking (definitely helping) - disqualify immediately
-                if isUnitTanking and unitStatus and unitStatus >= 2 then
-                    return true
-                end
-                
-                -- Check if this unit has >threshold% threat on EITHER scaled or raw threat
-                -- Disqualify if scaledPct > threshold OR rawPct > threshold
-                -- This ensures we catch cases where either metric shows they're helping
-                if scaledPct and scaledPct > pct then
-                    return true
-                end
-                
-                if rawPct and rawPct > pct then
+                if UnitHasSignificantThreat(u, mobUnit, pct) then
                     return true
                 end
             end
@@ -246,6 +242,11 @@ local function CheckSoloStatusForGUID(targetGUID)
         return nil
     end
     
+    -- Early exit: if player doesn't have the tag, they can't be solo
+    if UnitIsTapDenied(mobUnit) then
+        return false
+    end
+    
     if not UnitAffectingCombat("player") then
         return nil
     end
@@ -286,9 +287,14 @@ function PlayerIsSolo()
         and UnitCanAttack("player", mobUnit)
         and UnitAffectingCombat("player")
     then
+        -- Early exit: if player doesn't have the tag, they can't be solo
+        if UnitIsTapDenied(mobUnit) then
+            return false
+        end
+        
         local targetGUID = UnitGUID(mobUnit)
         if targetGUID then
-            -- Update and store solo status for this GUID
+            -- Try to use cached/stored status first
             local isSolo = CheckSoloStatusForGUID(targetGUID)
             if isSolo ~= nil then
                 local now = GetTime()
@@ -300,34 +306,9 @@ function PlayerIsSolo()
             end
         end
         
-        -- Fallback to direct check if GUID tracking failed
-        local threatOK, isTanking, status, scaledPct, rawPct = PlayerThreatGoodEnough(mobUnit)
-        if not threatOK then
-            return false
-        end
-
-        -- Disqualify if any grouped player has >10% threat.
-        if AnyGroupedPlayerOverThresholdOn(mobUnit, OTHER_PLAYER_THREAT_THRESHOLD) then
-            return false
-        end
-
-        -- If any *ungrouped* player recently helped (via combat log),
-        -- only fail if you're NOT clearly holding threat (not tanking and <90%).
-        -- This preserves the "90% solo margin" rule while catching hidden helpers
-        -- when nameplates are off.
-        local targetGUID = UnitGUID(mobUnit)
-        if targetGUID and OtherPlayersRecentlyHelped(targetGUID) then
-            local clearlyAhead =
-                (isTanking and status and status >= 2) or
-                (scaledPct and scaledPct >= PLAYER_SOLO_THREAT_THRESHOLD) or
-                (not scaledPct and rawPct and rawPct >= PLAYER_SOLO_THREAT_THRESHOLD) or
-                (not MobPrimaryTargetIsOtherPlayer(mobUnit))  -- pet/dummy tanking allowance
-            if not clearlyAhead then
-                return false
-            end
-        end
-
-        return true
+        -- If GUID tracking failed, fall back to direct check
+        -- (This should rarely happen, but provides a safety net)
+        return false
     end
 
     -- Fallbacks when no valid hostile target / not in combat:
@@ -397,35 +378,37 @@ function PlayerIsSolo_UpdateStatusForGUID(targetGUID)
 end
 
 ---------------------------------------
+-- Helper: Update solo status for current target if in combat
+---------------------------------------
+local function UpdateSoloStatusForCurrentTarget()
+    if UnitExists("target") and UnitAffectingCombat("player") then
+        local targetGUID = UnitGUID("target")
+        if targetGUID then
+            PlayerIsSolo_UpdateStatusForGUID(targetGUID)
+        end
+    end
+end
+
+---------------------------------------
 -- Event frame: register handlers
 ---------------------------------------
 local _PlayerIsSolo_EventFrame = _PlayerIsSolo_EventFrame or CreateFrame("Frame")
 _PlayerIsSolo_EventFrame:UnregisterAllEvents() -- avoid duplicates on reloads
 _PlayerIsSolo_EventFrame:RegisterEvent("COMBAT_LOG_EVENT_UNFILTERED")
+_PlayerIsSolo_EventFrame:RegisterEvent("UNIT_THREAT_SITUATION_UPDATE")
+_PlayerIsSolo_EventFrame:RegisterEvent("UNIT_THREAT_LIST_UPDATE")
 _PlayerIsSolo_EventFrame:RegisterEvent("PLAYER_REGEN_ENABLED")  -- leave combat
 _PlayerIsSolo_EventFrame:RegisterEvent("PLAYER_ENTERING_WORLD") -- zone loads
 
 _PlayerIsSolo_EventFrame:SetScript("OnEvent", function(_, event, ...)
     if event == "COMBAT_LOG_EVENT_UNFILTERED" then
         OnCombatLogEvent()
-        
-        -- Update solo status for current target during combat
-        if UnitExists("target") and UnitAffectingCombat("player") then
-            local targetGUID = UnitGUID("target")
-            if targetGUID then
-                PlayerIsSolo_UpdateStatusForGUID(targetGUID)
-            end
-        end
+        UpdateSoloStatusForCurrentTarget()
     elseif event == "UNIT_THREAT_SITUATION_UPDATE" or event == "UNIT_THREAT_LIST_UPDATE" then
         -- Update solo status when threat changes during combat
         local unit = ...
         if unit == "player" or unit == "target" then
-            if UnitExists("target") and UnitAffectingCombat("player") then
-                local targetGUID = UnitGUID("target")
-                if targetGUID then
-                    PlayerIsSolo_UpdateStatusForGUID(targetGUID)
-                end
-            end
+            UpdateSoloStatusForCurrentTarget()
         end
     elseif event == "PLAYER_REGEN_ENABLED" then
         -- Clear memory when combat ends to avoid stale helpers
@@ -443,10 +426,6 @@ _PlayerIsSolo_EventFrame:SetScript("OnEvent", function(_, event, ...)
         wipeTable(soloStatusByGUID)
     end
 end)
-
--- Also register threat update events to track status during combat
-_PlayerIsSolo_EventFrame:RegisterEvent("UNIT_THREAT_SITUATION_UPDATE")
-_PlayerIsSolo_EventFrame:RegisterEvent("UNIT_THREAT_LIST_UPDATE")
 
 -- Optional: expose a tiny debug helper (comment out for release)
 -- /dump _PlayerIsSolo_Debug()

@@ -2,17 +2,6 @@
 -- Helper function to determine achievement status text based on current state
 
 local function GetStatusText(params)
-    -- params should contain:
-    --   completed: boolean - whether achievement is completed
-    --   hasSoloStatus: boolean - whether progress has soloKill or soloQuest
-    --   hasIneligibleKill: boolean - whether progress has ineligibleKill flag
-    --   requiresBoth: boolean - whether achievement requires both kill AND quest
-    --   killsSatisfied: boolean - whether kills are satisfied but quest is not yet turned in
-    --   isSelfFound: boolean - whether player is self-found
-    --   isSoloMode: boolean - whether solo mode toggle is enabled
-    --   wasSolo: boolean - whether achievement was completed solo (only for completed achievements)
-    --   allowSoloDouble: boolean - whether achievement allows solo doubling
-    
     local completed = params.completed or false
     local hasSoloStatus = params.hasSoloStatus or false
     local hasIneligibleKill = params.hasIneligibleKill or false

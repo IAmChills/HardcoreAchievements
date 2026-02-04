@@ -1,4 +1,6 @@
--- Reputation achievement definitions
+---------------------------------------
+-- Reputation Achievement Definitions
+---------------------------------------
 -- Each achievement requires reaching Exalted with a specific faction
 -- Only factions that the player has discovered will show up in the achievement list
 local Reputations = {
@@ -371,6 +373,10 @@ local Reputations = {
     class = "ROGUE",
   },
 }
+
+---------------------------------------
+-- Deferred Registration Queue
+---------------------------------------
 
 -- Defer registration until PLAYER_LOGIN to prevent load timeouts
 _G.HCA_RegistrationQueue = _G.HCA_RegistrationQueue or {}

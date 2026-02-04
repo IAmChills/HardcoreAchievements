@@ -1,4 +1,6 @@
--- Comprehensive dungeon achievement definitions
+---------------------------------------
+-- Heroic Dungeon Achievement Definitions
+---------------------------------------
 local HeroicDungeons = {
   -- Hellfire Ramparts (Both, Level 70)
   {
@@ -311,6 +313,10 @@ local HeroicDungeons = {
     bossOrder = {21626, 21590, 21624, 21599}
   },
 }
+
+---------------------------------------
+-- Deferred Registration Queue
+---------------------------------------
 
 -- Defer registration until PLAYER_LOGIN to prevent load timeouts
 _G.HCA_RegistrationQueue = _G.HCA_RegistrationQueue or {}

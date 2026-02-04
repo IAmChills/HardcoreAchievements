@@ -3,29 +3,14 @@
 ## Author: Chills
 ## Version: 1.6.0
 ## Notes: Hardcore achievements system
-## OptionalDeps: Ace3, CallbackHandler-1.0, HereBeDragons, LibDataBroker-1.1, LibDBIcon-1.0, LibStub, LibUIDropDownMenu
+## OptionalDeps: Ace3, CallbackHandler-1.0, LibDataBroker-1.1, LibDBIcon-1.0, LibStub, LibUIDropDownMenu
 ## SavedVariables: HardcoreAchievementsDB
 ## IconTexture: Interface\AddOns\HardcoreAchievements\Images\HardcoreAchievementsButton.png
 ## X-Category: Achievements
 ## Category: Achievements
 
-# Required Libraries for CommandHandler
-Libs\LibStub\LibStub.lua
-Libs\CallbackHandler-1.0\CallbackHandler-1.0.lua
-Libs\AceComm-3.0\AceComm-3.0.xml
-Libs\AceSerializer-3.0\AceSerializer-3.0.xml
-Libs\LibBucketedHashSet\LibBucketedHashSet.xml
-Libs\LibPatternedBloomFilter\LibPatternedBloomFilter.xml
-Libs\LibSerialize\LibSerialize.lua
-Libs\LibDeflate\LibDeflate.lua
-Libs\LibP2PDB\LibP2PDB.xml
-
-# Required Libraries for Minimap Button
-Libs\LibDataBroker-1.1\LibDataBroker-1.1.lua
-Libs\LibDBIcon-1.0\LibDBIcon-1.0.lua
-
-# Required Libraries for context menu
-Libs\LibUIDropDownMenu\LibUIDropDownMenu.xml
+# Embedded Libraries
+embeds.xml
 
 Functions\GetUHCPreset.lua
 Functions\PlayerIsSolo.lua

@@ -1,6 +1,12 @@
+---------------------------------------
+-- Reputation Achievement Common Module
+---------------------------------------
 local ReputationCommon = {}
 
--- Register a reputation achievement with the given definition
+---------------------------------------
+-- Registration Function
+---------------------------------------
+
 function ReputationCommon.registerReputationAchievement(def)
   local achId = def.achId
   local title = def.title or ""
@@ -15,16 +21,27 @@ function ReputationCommon.registerReputationAchievement(def)
   local rowVarName = achId .. "_Row"
   local registerFuncName = "HCA_Register" .. achId
   
-  -- Check if player has the faction and is exalted
-  -- Uses factionId to check standing via C_Reputation.GetFactionDataByID()
-  local function IsExalted()
+  ---------------------------------------
+  -- Helper Functions
+  ---------------------------------------
+
+  -- Get character database with fallback
+  local function GetCharDB()
+    return HardcoreAchievements_GetCharDB and HardcoreAchievements_GetCharDB() or (function() return nil, nil end)()
+  end
+
+  -- Check if achievement was already completed in database
+  local function WasAlreadyCompleted()
+    local _, cdb = GetCharDB()
+    return cdb and cdb.achievements and cdb.achievements[achId] and cdb.achievements[achId].completed
+  end
+
+  -- Get faction standing ID (8 = Exalted)
+  local function GetFactionStanding()
     if GetFactionInfoByID then
       local standing = select(4, GetFactionInfoByID(factionId))
       if standing then
-        if standing == 8 then
-          return true
-        end
-        return false -- Faction exists but not exalted
+        return standing
       end
     end
     
@@ -33,12 +50,17 @@ function ReputationCommon.registerReputationAchievement(def)
     for i = 1, numFactions do
       local name, _, standingId, _, _, _, _, _, isHeader, _, _, _, _, factionID = GetFactionInfo(i)
       if not isHeader and factionID == factionId then
-        if standingId == 8 then
-          return true
-        end
-        return false
+        return standingId
       end
     end
+    return nil
+  end
+
+  -- Check if player has the faction and is exalted
+  -- Uses factionId to check standing via C_Reputation.GetFactionDataByID()
+  local function IsExalted()
+    local standing = GetFactionStanding()
+    return standing == 8
   end
   
   -- Check if player has the faction in their list (even if not exalted)
@@ -54,7 +76,10 @@ function ReputationCommon.registerReputationAchievement(def)
     return false
   end
   
-  -- Update tooltip
+  ---------------------------------------
+  -- Tooltip Management
+  ---------------------------------------
+
   local function UpdateTooltip()
     local row = _G[rowVarName]
     if row then
@@ -107,11 +132,23 @@ function ReputationCommon.registerReputationAchievement(def)
     end
   end
   
+  -- Mark achievement as completed and optionally show toast
+  local function MarkCompletionAndShowToast(row, showToast)
+    if not row or not _G.HCA_MarkRowCompleted then
+      return
+    end
+    
+    _G.HCA_MarkRowCompleted(row)
+    
+    if showToast and _G.HCA_AchToast_Show then
+      _G.HCA_AchToast_Show(row.Icon:GetTexture(), row.Title:GetText(), row.points, row)
+    end
+  end
+
   -- Check if achievement should be completed (no progress saving - just check directly)
   local function CheckCompletion()
     -- First check database to see if achievement was previously completed
-    local _, cdb = HardcoreAchievements_GetCharDB and HardcoreAchievements_GetCharDB() or (function() return nil, nil end)()
-    if cdb and cdb.achievements and cdb.achievements[achId] and cdb.achievements[achId].completed then
+    if WasAlreadyCompleted() then
       return true
     end
     
@@ -133,19 +170,10 @@ function ReputationCommon.registerReputationAchievement(def)
   local function ReputationTracker()
     -- Check if achievement should be completed
     if CheckCompletion() then
-      -- Check if it was already completed in database (to avoid showing toast on login)
-      local _, cdb = HardcoreAchievements_GetCharDB and HardcoreAchievements_GetCharDB() or (function() return nil, nil end)()
-      local wasAlreadyCompleted = cdb and cdb.achievements and cdb.achievements[achId] and cdb.achievements[achId].completed
-      
-      -- Mark achievement as completed in the row if it exists
       local row = _G[rowVarName]
-      if row and _G.HCA_MarkRowCompleted then
-        _G.HCA_MarkRowCompleted(row)
-        -- Only show toast if this is a new completion (not loading from database)
-        if not wasAlreadyCompleted and _G.HCA_AchToast_Show then
-          _G.HCA_AchToast_Show(row.Icon:GetTexture(), row.Title:GetText(), row.points, row)
-        end
-      end
+      -- Only show toast if this is a new completion (not loading from database)
+      local showToast = not WasAlreadyCompleted()
+      MarkCompletionAndShowToast(row, showToast)
       UpdateTooltip()
       return true
     end
@@ -183,7 +211,10 @@ function ReputationCommon.registerReputationAchievement(def)
     return true
   end
   
-  -- Create the registration function dynamically
+  ---------------------------------------
+  -- Registration Logic
+  ---------------------------------------
+
   _G[registerFuncName] = function()
     if not _G.CreateAchievementRow or not _G.AchievementPanel then return end
     if _G[rowVarName] then return end
@@ -213,18 +244,12 @@ function ReputationCommon.registerReputationAchievement(def)
     _G[rowVarName].factionId = factionId
     
     -- Load completion status from database on registration
-    local _, cdb = HardcoreAchievements_GetCharDB and HardcoreAchievements_GetCharDB() or (function() return nil, nil end)()
-    if cdb and cdb.achievements and cdb.achievements[achId] and cdb.achievements[achId].completed then
+    if WasAlreadyCompleted() then
       -- Achievement was previously completed - mark row as completed without showing toast
-      if _G.HCA_MarkRowCompleted then
-        _G.HCA_MarkRowCompleted(_G[rowVarName])
-      end
+      MarkCompletionAndShowToast(_G[rowVarName], false)
     elseif CheckCompletion() then
       -- Achievement should be completed now (player is exalted) - mark and show toast
-      if _G.HCA_MarkRowCompleted then
-        _G.HCA_MarkRowCompleted(_G[rowVarName])
-        HCA_AchToast_Show(_G[rowVarName].Icon:GetTexture(), _G[rowVarName].Title:GetText(), _G[rowVarName].points, _G[rowVarName])
-      end
+      MarkCompletionAndShowToast(_G[rowVarName], true)
     end
     
     -- Update tooltip after creation to ensure it shows current progress
@@ -245,18 +270,10 @@ function ReputationCommon.registerReputationAchievement(def)
     if event == "UPDATE_FACTION" then
       -- Check completion when reputation updates
       if CheckCompletion() then
-        -- Check if it was already completed in database (to avoid showing toast on login)
-        local _, cdb = HardcoreAchievements_GetCharDB and HardcoreAchievements_GetCharDB() or (function() return nil, nil end)()
-        local wasAlreadyCompleted = cdb and cdb.achievements and cdb.achievements[achId] and cdb.achievements[achId].completed
-        
         local row = _G[rowVarName]
-        if row and _G.HCA_MarkRowCompleted then
-          _G.HCA_MarkRowCompleted(row)
-          -- Only show toast if this is a new completion (not loading from database)
-          if not wasAlreadyCompleted and _G.HCA_AchToast_Show then
-            _G.HCA_AchToast_Show(row.Icon:GetTexture(), row.Title:GetText(), row.points, row)
-          end
-        end
+        -- Only show toast if this is a new completion (not loading from database)
+        local showToast = not WasAlreadyCompleted()
+        MarkCompletionAndShowToast(row, showToast)
       end
     end
     _G[registerFuncName]()
@@ -269,5 +286,8 @@ function ReputationCommon.registerReputationAchievement(def)
   end
 end
 
--- Export to global scope
+---------------------------------------
+-- Module Export
+---------------------------------------
+
 _G.ReputationCommon = ReputationCommon

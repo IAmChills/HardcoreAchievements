@@ -57,6 +57,27 @@ local function EnsureState(skillID)
     return state
 end
 
+---------------------------------------
+-- Helper functions
+---------------------------------------
+
+-- Calculate if a profession is "known" based on rank/maxRank
+local function CalculateKnownState(rank, maxRank)
+    return (rank or 0) > 0 or (maxRank or 0) > 0
+end
+
+-- Get required rank from achievement definition
+local function GetRequiredRank(def)
+    return (def and (def.requiredProfessionRank or def.requiredRank)) or 0
+end
+
+-- Initialize profession hiddenUntilComplete flag if not already set
+local function InitializeProfessionHiddenUntilComplete(row)
+    if row._professionHiddenUntilComplete == nil then
+        row._professionHiddenUntilComplete = row.hiddenUntilComplete
+    end
+end
+
 -- =========================================================
 -- Public helpers
 -- =========================================================
@@ -124,8 +145,8 @@ local function UpdateProfessionRowVisibility(skillID)
     table.sort(rows, function(a, b)
         local defA = a and a._def or {}
         local defB = b and b._def or {}
-        local rankA = defA.requiredProfessionRank or defA.requiredRank or 0
-        local rankB = defB.requiredProfessionRank or defB.requiredRank or 0
+        local rankA = GetRequiredRank(defA)
+        local rankB = GetRequiredRank(defB)
         if rankA == rankB then
             local idA = defA.achId or a.id or ""
             local idB = defB.achId or b.id or ""
@@ -144,7 +165,7 @@ local function UpdateProfessionRowVisibility(skillID)
         if row and row._def then
             local completed = IsRowCompleted(row, cdb)
             if completed then
-                local rank = row._def.requiredProfessionRank or row._def.requiredRank or 0
+                local rank = GetRequiredRank(row._def)
                 if rank > highestCompletedRank then
                     highestCompletedRank = rank
                 end
@@ -157,12 +178,10 @@ local function UpdateProfessionRowVisibility(skillID)
 
     for _, row in ipairs(rows) do
         if row and row._def then
-            if row._professionHiddenUntilComplete == nil then
-                row._professionHiddenUntilComplete = row.hiddenUntilComplete
-            end
+            InitializeProfessionHiddenUntilComplete(row)
 
             local completed = IsRowCompleted(row, cdb)
-            local currentRank = row._def.requiredProfessionRank or row._def.requiredRank or 0
+            local currentRank = GetRequiredRank(row._def)
             local shouldShow = false
 
             if completed then
@@ -256,9 +275,7 @@ function ProfessionTracker.RegisterRow(row, def)
     table.insert(ProfessionRows[skillID], row)
 
     row._professionSkillID = skillID
-    if row._professionHiddenUntilComplete == nil then
-        row._professionHiddenUntilComplete = row.hiddenUntilComplete
-    end
+    InitializeProfessionHiddenUntilComplete(row)
     row.hiddenByProfession = true
 
     UpdateProfessionRowVisibility(skillID)
@@ -280,7 +297,7 @@ end
 local function NotifySkillChanged(skillID, newRank, oldRank, localizedName)
     local state = EnsureState(skillID)
     state.rank = newRank or state.rank or 0
-    state.known = (state.rank or 0) > 0 or (state.maxRank or 0) > 0
+    state.known = CalculateKnownState(state.rank, state.maxRank)
     if localizedName and localizedName ~= "" then
         state.localizedName = localizedName
     end
@@ -298,7 +315,7 @@ local function ScanSkills()
     for index = 1, GetNumSkillLines() do
         local skillName, isHeader, _, skillRank, _, _, skillMaxRank, _, _, _, _, _, _, _, _, _, _, skillLineID = GetSkillLineInfo(index)
         if not isHeader then
-        local skillID = skillLineID or (skillName and ProfessionNameToID[skillName])
+            local skillID = skillLineID or (skillName and ProfessionNameToID[skillName])
 
             if skillID and ProfessionByID[skillID] then
                 seen[skillID] = true
@@ -308,7 +325,7 @@ local function ScanSkills()
 
                 state.rank = skillRank or 0
                 state.maxRank = skillMaxRank or 0
-                state.known = (state.rank > 0) or (state.maxRank > 0)
+                state.known = CalculateKnownState(state.rank, state.maxRank)
 
                 if skillName and skillName ~= "" then
                     state.localizedName = skillName

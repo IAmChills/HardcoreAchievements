@@ -1,4 +1,6 @@
--- Comprehensive raid achievement definitions
+---------------------------------------
+-- Raid Achievement Definitions
+---------------------------------------
 local Raids = {
   -- Lower Blackrock Spire (Level 60)
   {
@@ -190,6 +192,10 @@ local Raids = {
     bossOrder = {15956, 15953, 15952, 15954, 15936, 16011, 16061, 16060, 16064, 16065, 16062, 16063, 16028, 15931, 15932, 15928, 15989, 15990}
   },
 }
+
+---------------------------------------
+-- Deferred Registration Queue
+---------------------------------------
 
 -- Defer registration until PLAYER_LOGIN to prevent load timeouts
 _G.HCA_RegistrationQueue = _G.HCA_RegistrationQueue or {}

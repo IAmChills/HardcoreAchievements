@@ -118,10 +118,6 @@ for _, def in ipairs(achievements) do
             return
         end
 
-        -- (def.isSecret/isGuildFirst already set above; keep consistent if other code mutates)
-        def.isSecret = true
-        def.isGuildFirst = true
-
         -- Store the row in a global so GuildFirst module can award it without scanning.
         local globalName = "HCA_GuildFirst_" .. def.achId .. "_Row"
         _G[globalName] = CreateAchievementRow(

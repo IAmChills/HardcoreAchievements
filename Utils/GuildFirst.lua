@@ -54,8 +54,7 @@ local function Hash32(s)
 end
 
 local function PrefixForKey(key)
-    -- Must be <= 16 chars; "HCAGF" (5) + 8 hex = 13 chars
-    return "HCAGF" .. string.format("%08X", Hash32(key))
+    return "HCA" .. string.format("%08X", Hash32(key))
 end
 
 --- Determine the scope key for an achievement based on its definition.
@@ -249,51 +248,6 @@ local function BuildWinnersGUIDList(awardMode, requireSameGuild)
     end
 
     return table.concat(winnersGUID, ";")
-end
-
--- Winner parsing helpers -------------------------------------------------------------------------
-local function Trim(s)
-    return (tostring(s or ""):gsub("^%s+", ""):gsub("%s+$", ""))
-end
-
-local function ParseDelimitedSet(s, delim)
-    local set = {}
-    s = Trim(s)
-    if s == "" then
-        return set
-    end
-    delim = delim or ";"
-    for token in string.gmatch(s, "([^" .. delim .. "]+)") do
-        token = Trim(token)
-        if token ~= "" then
-            set[token] = true
-        end
-    end
-    return set
-end
-
-local function RecordIncludesGUID(rec, guid)
-    guid = tostring(guid or "")
-    if guid == "" or not rec then
-        return false
-    end
-    -- Multi-winner claim (raid/party): encode the GUID list into winnerGUID as a ';' delimited string.
-    -- (This avoids LibP2PDB schema migration issues for existing installs.)
-    local s = tostring(rec.winnerGUID or "")
-    if s:find(";", 1, true) then
-        local set = ParseDelimitedSet(s, ";")
-        return set[guid] == true
-    end
-    -- Single-winner claim:
-    return s == guid
-end
-
---- True if the given claim record includes the current player as a winner.
---- @param rec table?
---- @return boolean
-function M:IsWinnerRecord(rec)
-    local myGUID = UnitGUID("player") or ""
-    return RecordIncludesGUID(rec, myGUID)
 end
 
 -- ---------------------------------------------------------------------------------------------------------------------
@@ -521,9 +475,8 @@ end
 --- @param achievementId string
 --- @param row table? Optional achievement row (will find if not provided, also used to determine scope)
 --- @param winnersGUIDs string? Optional ';' delimited GUID list for multi-winner claims (e.g. a raid)
---- @param winnersNames string? Optional ';' delimited names list (debug only)
 --- @return boolean awarded
-function M:CanClaimAndAward(achievementId, row, winnersGUIDs, winnersNames)
+function M:CanClaimAndAward(achievementId, row, winnersGUIDs)
     achievementId = tostring(achievementId or "")
     if achievementId == "" then
         Debug("CanClaimAndAward: Empty achievement ID")
@@ -562,8 +515,8 @@ function M:CanClaimAndAward(achievementId, row, winnersGUIDs, winnersNames)
     local existing = LibP2PDB:GetKey(db, TABLE_NAME, achievementId)
     if existing then
         local myGUID = UnitGUID("player") or ""
-        if existing.winnerGUID == myGUID then
-            Debug("CanClaimAndAward(" .. achievementId .. "): Already claimed by ME - skipping")
+        if RecordIncludesGUID(existing, myGUID) then
+            Debug("CanClaimAndAward(" .. achievementId .. "): Already claimed and I am a winner - skipping")
         else
             Debug("CanClaimAndAward(" .. achievementId .. "): Already claimed by " .. tostring(existing.winnerName or "?") .. " - silently failing")
         end
@@ -679,7 +632,7 @@ local function HandleSlash(msg)
         local awardMode = (def and def.awardMode) or "solo"
         local requireSameGuild = DefaultRequireSameGuild(def)
         local winnersGUIDs = BuildWinnersGUIDList(awardMode, requireSameGuild)
-        if M:CanClaimAndAward(achId, row, winnersGUIDs, nil) then
+        if M:CanClaimAndAward(achId, row, winnersGUIDs) then
             print("|cff008066[Hardcore Achievements]|r |cff00ff00Claimed and awarded!|r")
         else
             print("|cff008066[Hardcore Achievements]|r |cffff0000Already claimed by someone else.|r")
@@ -745,7 +698,7 @@ local function OnAchievementCompleted(achievementData)
         local awardMode = (def and def.awardMode) or "solo"
         local requireSameGuild = DefaultRequireSameGuild(def)
         local winnersGUIDs = BuildWinnersGUIDList(awardMode, requireSameGuild)
-        M:CanClaimAndAward(tostring(gfAchId), row, winnersGUIDs, nil)
+        M:CanClaimAndAward(tostring(gfAchId), row, winnersGUIDs)
     end
 end
 

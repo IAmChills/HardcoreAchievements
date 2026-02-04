@@ -1,4 +1,11 @@
+---------------------------------------
+-- Dungeon Achievement Common Module
+---------------------------------------
 local DungeonCommon = {}
+
+---------------------------------------
+-- Module-Level State
+---------------------------------------
 
 -- Module-level tracking for instance entry levels
 -- Tracks player and party member levels when entering dungeons
@@ -12,6 +19,10 @@ local lastInstanceMapId = nil
 -- Track if player is currently inside a dungeon or raid instance
 -- This prevents achievements from being marked as failed when leveling up inside
 local isInDungeonOrRaid = false
+
+---------------------------------------
+-- Helper Functions
+---------------------------------------
 
 -- Helper function to check if a group is eligible for a dungeon achievement
 local function CheckAchievementEligibility(mapId, achDef, entryData)
@@ -565,6 +576,10 @@ local function CreateVariation(baseDef, variation)
     return variationDef
 end
 
+---------------------------------------
+-- Registration Function
+---------------------------------------
+
 -- Register a dungeon achievement with the given definition
 function DungeonCommon.registerDungeonAchievement(def)
   local achId = def.achId
@@ -597,6 +612,10 @@ function DungeonCommon.registerDungeonAchievement(def)
     baseAchId = def.baseAchId,
   })
 
+  ---------------------------------------
+  -- State Management
+  ---------------------------------------
+
   -- State for the current achievement session only
   local state = {
     counts = {},           -- npcId => kills this achievement
@@ -627,7 +646,10 @@ function DungeonCommon.registerDungeonAchievement(def)
   local registerFuncName = "HCA_Register" .. achId
   local rowVarName       = achId .. "_Row"
 
-  -- Helpers
+  ---------------------------------------
+  -- Helper Functions
+  ---------------------------------------
+
   local function GetNpcIdFromGUID(guid)
     if not guid then return nil end
     local npcId = select(6, strsplit("-", guid))
@@ -667,6 +689,50 @@ function DungeonCommon.registerDungeonAchievement(def)
       end
     end
     return true
+  end
+
+  -- Check if an NPC ID is a required boss for this achievement
+  local function IsRequiredBoss(npcId)
+    if not npcId then return false end
+    -- Direct lookup
+    if requiredKills[npcId] then
+      return true
+    end
+    -- Check if this NPC ID is in any array
+    for key, value in pairs(requiredKills) do
+      if type(value) == "table" then
+        for _, id in pairs(value) do
+          if id == npcId then
+            return true
+          end
+        end
+      end
+    end
+    return false
+  end
+
+  -- Increment kill count for a boss
+  local function IncrementBossKill(npcId)
+    if not npcId then return end
+    state.counts[npcId] = (state.counts[npcId] or 0) + 1
+  end
+
+  -- Calculate and store points for this achievement
+  local function StorePointsAtKill()
+    if not AchievementPanel or not AchievementPanel.achievements then return end
+    local row = _G[rowVarName]
+    if not row or not row.points then return end
+    
+    -- Store pointsAtKill WITHOUT the self-found bonus.
+    -- Recompute from base/original points so we don't rely on subtracting a (now dynamic) bonus.
+    local base = tonumber(row.originalPoints) or tonumber(row.points) or 0
+    local pointsToStore = base
+    if not row.staticPoints then
+      local preset = _G.GetPlayerPresetFromSettings and _G.GetPlayerPresetFromSettings() or nil
+      local multiplier = _G.GetPresetMultiplier and _G.GetPresetMultiplier(preset) or 1.0
+      pointsToStore = math.floor(base * multiplier + 0.5)
+    end
+    HardcoreAchievements_SetProgress(achId, "pointsAtKill", pointsToStore)
   end
 
   -- Get boss names from NPC IDs (you can expand this with a lookup table)
@@ -926,8 +992,8 @@ function DungeonCommon.registerDungeonAchievement(def)
             GameTooltip:AddLine("\nRequired Bosses:", 0, 1, 0) -- Green header
             
             -- Helper function to process a single boss entry
-          local function processBossEntry(npcId, need)
-            local done = false
+            local function processBossEntry(npcId, need)
+              local done = false
               local bossName = ""
               
               -- Support both single NPC IDs and arrays of NPC IDs
@@ -994,6 +1060,10 @@ function DungeonCommon.registerDungeonAchievement(def)
       end
     end
 
+  ---------------------------------------
+  -- Tooltip Management
+  ---------------------------------------
+
   -- Lazy tooltip handler - initializes on first hover
   local tooltipHandler = nil
   local function GetTooltipHandler()
@@ -1010,6 +1080,11 @@ function DungeonCommon.registerDungeonAchievement(def)
     tooltipHandler = nil
   end
 
+  -- Check if a unit is over the level requirement
+  local function IsOverLeveled(unitLevel)
+    return unitLevel and unitLevel > level
+  end
+
   local function IsGroupEligible()
     if IsInRaid() then return false end
     local members = GetNumGroupMembers()
@@ -1022,10 +1097,6 @@ function DungeonCommon.registerDungeonAchievement(def)
     local inInstance, instanceType = IsInInstance()
     local currentMapId = inInstance and select(8, GetInstanceInfo())
     local useEntryLevels = inInstance and instanceType == "party" and currentMapId and currentMapId == requiredMapId and instanceEntryLevels[currentMapId]
-    
-    local function overLeveled(unit, unitLevel)
-      return (unitLevel and unitLevel > level)
-    end
 
     -- Always use stored entry levels if in an instance, otherwise use current levels
     if useEntryLevels then
@@ -1034,7 +1105,7 @@ function DungeonCommon.registerDungeonAchievement(def)
       
       -- Check player level (must use stored level)
       local playerLevel = entryData.playerLevel
-      if not playerLevel or overLeveled("player", playerLevel) then return false end
+      if not playerLevel or IsOverLeveled(playerLevel) then return false end
       
       -- Check party member levels (must use stored levels only)
       if members > 1 then
@@ -1046,7 +1117,7 @@ function DungeonCommon.registerDungeonAchievement(def)
               local partyLevel = entryData.partyLevels and entryData.partyLevels[guid]
               -- If we don't have stored level for this party member, they shouldn't be eligible
               -- (they should have been added when they entered)
-              if not partyLevel or overLeveled(u, partyLevel) then
+              if not partyLevel or IsOverLeveled(partyLevel) then
                 return false
               end
             else
@@ -1059,12 +1130,12 @@ function DungeonCommon.registerDungeonAchievement(def)
     else
       -- Not in a tracked instance - use current levels (fallback for non-instance scenarios)
       local playerLevel = UnitLevel("player")
-      if overLeveled("player", playerLevel) then return false end
+      if IsOverLeveled(playerLevel) then return false end
       
       if members > 1 then
         for i = 1, 4 do
           local u = "party"..i
-          if UnitExists(u) and overLeveled(u, UnitLevel(u)) then
+          if UnitExists(u) and IsOverLeveled(UnitLevel(u)) then
             return false
           end
         end
@@ -1072,6 +1143,10 @@ function DungeonCommon.registerDungeonAchievement(def)
     end
     return true
   end
+
+  ---------------------------------------
+  -- Tracker Function
+  ---------------------------------------
 
   -- Create the tracker function dynamically
   local function KillTracker(destGUID)
@@ -1085,90 +1160,31 @@ function DungeonCommon.registerDungeonAchievement(def)
     end
 
     local npcId = GetNpcIdFromGUID(destGUID)
-    
-    if npcId then
-      -- Check if this is a required boss first
-      local isRequiredBoss = false
-      -- Support both single NPC IDs and arrays of NPC IDs
-      if requiredKills[npcId] then
-        isRequiredBoss = true
-      else
-        -- Check if this NPC ID is in any array
-        for key, value in pairs(requiredKills) do
-          if type(value) == "table" then
-            for _, id in pairs(value) do
-              if id == npcId then
-                isRequiredBoss = true
-                break
-              end
-            end
-            if isRequiredBoss then break end
-          end
-        end
-      end
-      
-      if isRequiredBoss then
-        -- Check group eligibility BEFORE counting the kill
-        -- Only count kills when group is eligible - allows returning later with eligible group
-        local isEligible = IsGroupEligible()
-        if isEligible then
-          -- Group is eligible - count this kill
-          if requiredKills[npcId] then
-            -- Direct lookup for single NPC ID
-            if type(requiredKills[npcId]) == "table" then
-              -- This is an array entry - increment the actual killed NPC ID
-              state.counts[npcId] = (state.counts[npcId] or 0) + 1
-            else
-              -- Single NPC ID with count requirement
-              state.counts[npcId] = (state.counts[npcId] or 0) + 1
-            end
-          else
-            -- Check if this NPC ID is in any array
-            for key, value in pairs(requiredKills) do
-              if type(value) == "table" then
-                for _, id in pairs(value) do
-                  if id == npcId then
-                    state.counts[npcId] = (state.counts[npcId] or 0) + 1
-                    break
-                  end
-                end
-              end
-            end
-          end
-          
-          -- Dungeons do not support solo points - store regular points only
-          if AchievementPanel and AchievementPanel.achievements then
-            local rowVarName = achId .. "_Row"
-            local row = _G[rowVarName]
-            if row and row.points then
-              -- Store pointsAtKill WITHOUT the self-found bonus.
-              -- Recompute from base/original points so we don't rely on subtracting a (now dynamic) bonus.
-              local base = tonumber(row.originalPoints) or tonumber(row.points) or 0
-              local pointsToStore = base
-              if not row.staticPoints then
-                local preset = _G.GetPlayerPresetFromSettings and _G.GetPlayerPresetFromSettings() or nil
-                local multiplier = _G.GetPresetMultiplier and _G.GetPresetMultiplier(preset) or 1.0
-                pointsToStore = math.floor(base * multiplier + 0.5)
-              end
-              HardcoreAchievements_SetProgress(achId, "pointsAtKill", pointsToStore)
-            end
-          end
-          
-          SaveProgress() -- Save progress after each eligible kill
-          UpdateTooltip() -- Update tooltip to show progress
-          print("|cff008066[Hardcore Achievements]|r |cffffd100" .. HCA_GetBossName(npcId) .. " killed as part of achievement: " .. title .. "|r")
-        else
-          -- Group is ineligible - don't count this kill
-          -- Player can return later with an eligible group to kill this boss
-          -- Only print message if the achievement is still available (not completed or failed) and visible
-          local progress = HardcoreAchievements_GetProgress(achId)
-          local isStillAvailable = not state.completed and not (progress and progress.failed)
-          if isStillAvailable and _G.HCA_IsAchievementVisible and _G.HCA_IsAchievementVisible(achId) then
-            print("|cff008066[Hardcore Achievements]|r |cffffd100" .. HCA_GetBossName(npcId) .. " killed but group is ineligible - kill not counted for achievement: " .. title .. "|r")
-          end
-        end
-      end
+    if not npcId or not IsRequiredBoss(npcId) then
+      return false
     end
+    
+    -- Check group eligibility BEFORE counting the kill
+    -- Only count kills when group is eligible - allows returning later with eligible group
+    local isEligible = IsGroupEligible()
+    if not isEligible then
+      -- Group is ineligible - don't count this kill
+      -- Player can return later with an eligible group to kill this boss
+      -- Only print message if the achievement is still available (not completed or failed) and visible
+      local progress = HardcoreAchievements_GetProgress(achId)
+      local isStillAvailable = not state.completed and not (progress and progress.failed)
+      if isStillAvailable and _G.HCA_IsAchievementVisible and _G.HCA_IsAchievementVisible(achId) then
+        print("|cff008066[Hardcore Achievements]|r |cffffd100" .. HCA_GetBossName(npcId) .. " killed but group is ineligible - kill not counted for achievement: " .. title .. "|r")
+      end
+      return false
+    end
+    
+    -- Group is eligible - count this kill
+    IncrementBossKill(npcId)
+    StorePointsAtKill()
+    SaveProgress()
+    UpdateTooltip()
+    print("|cff008066[Hardcore Achievements]|r |cffffd100" .. HCA_GetBossName(npcId) .. " killed as part of achievement: " .. title .. "|r")
 
     -- Check if achievement should be completed
     local progress = HardcoreAchievements_GetProgress(achId)
@@ -1196,6 +1212,10 @@ function DungeonCommon.registerDungeonAchievement(def)
     _G.HardcoreAchievements_RegisterAchievementFunction(achId, "Kill", KillTracker)
     _G.HardcoreAchievements_RegisterAchievementFunction(achId, "IsCompleted", function() return state.completed end)
   end
+
+  ---------------------------------------
+  -- Registration Logic
+  ---------------------------------------
 
   -- Check faction eligibility
   local function IsEligible()
@@ -1278,6 +1298,10 @@ function DungeonCommon.registerDungeonAchievement(def)
   -- Note: Event handling is now centralized in HardcoreAchievements.lua
   -- Individual event frames removed for performance
 end
+
+---------------------------------------
+-- Variation Registration
+---------------------------------------
 
 -- Function to register dungeon variations
 -- Note: Variations are always registered, but filtered in ApplyFilter based on checkbox states

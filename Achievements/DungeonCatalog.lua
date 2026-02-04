@@ -1,4 +1,6 @@
--- Comprehensive dungeon achievement definitions
+---------------------------------------
+-- Dungeon Achievement Definitions
+---------------------------------------
 local Dungeons = {
   -- Test achievement
   -- {
@@ -517,6 +519,10 @@ local Dungeons = {
     bossOrder = {10503, 11622, 10433, 10432, 10508, 10505, 11261, 10901, 10507, 10504, 10502, 1853}
   }
 }
+
+---------------------------------------
+-- Deferred Registration Queue
+---------------------------------------
 
 -- Defer registration until PLAYER_LOGIN to prevent load timeouts
 -- Create global registration queue if it doesn't exist

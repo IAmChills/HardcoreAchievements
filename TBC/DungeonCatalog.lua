@@ -1,4 +1,6 @@
--- Comprehensive dungeon achievement definitions
+---------------------------------------
+-- Dungeon Achievement Definitions
+---------------------------------------
 local Dungeons = {
   -- Test achievement
   -- {
@@ -826,6 +828,10 @@ local Dungeons = {
     bossOrder = {20870, 20885, 20886, 20912}
   },
 }
+
+---------------------------------------
+-- Deferred Registration Queue
+---------------------------------------
 
 -- Defer registration until PLAYER_LOGIN to prevent load timeouts
 _G.HCA_RegistrationQueue = _G.HCA_RegistrationQueue or {}

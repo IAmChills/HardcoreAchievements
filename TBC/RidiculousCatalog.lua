@@ -1,4 +1,6 @@
--- Ridiculous achievement definitions
+---------------------------------------
+-- Ridiculous Achievement Definitions
+---------------------------------------
 -- These achievements are hidden by default and do not count towards total unless completed
 local RidiculousAchievements = {
   {
@@ -31,35 +33,63 @@ local RidiculousAchievements = {
   },
 }
 
+---------------------------------------
+-- Helper Functions
+---------------------------------------
+
+-- Get kill tracker function for an achievement definition
+local function GetKillTracker(def)
+    if def.customKill then
+        return def.customKill
+    end
+    if def.targetNpcId or def.requiredKills then
+        return _G.HardcoreAchievements_GetAchievementFunction and _G.HardcoreAchievements_GetAchievementFunction(def.achId, "Kill") or nil
+    end
+    return nil
+end
+
+-- Get quest tracker function for an achievement definition
+local function GetQuestTracker(def)
+    if def.requiredQuestId then
+        return _G.HardcoreAchievements_GetAchievementFunction and _G.HardcoreAchievements_GetAchievementFunction(def.achId, "Quest") or nil
+    end
+    return nil
+end
+
+---------------------------------------
+-- Registration
+---------------------------------------
+
 -- Defer registration until PLAYER_LOGIN to prevent load timeouts
 _G.HCA_RegistrationQueue = _G.HCA_RegistrationQueue or {}
 
 -- Queue all ridiculous achievements for deferred registration
 for _, def in ipairs(RidiculousAchievements) do
-  -- Mark as ridiculous for filtering
-  def.isRidiculous = true
-  -- Queue achievement registration
-  table.insert(_G.HCA_RegistrationQueue, function()
-    if def.customIsCompleted then
-      _G[def.achId .. "_IsCompleted"] = def.customIsCompleted
-    end
+    -- Mark as ridiculous for filtering
+    def.isRidiculous = true
     
-    local killFn = def.customKill or ((def.targetNpcId or def.requiredKills) and _G.HardcoreAchievements_GetAchievementFunction(def.achId, "Kill")) or nil
-    local questFn = (def.requiredQuestId and _G.HardcoreAchievements_GetAchievementFunction(def.achId, "Quest")) or nil
+    -- Queue achievement registration
+    table.insert(_G.HCA_RegistrationQueue, function()
+        if def.customIsCompleted then
+            _G[def.achId .. "_IsCompleted"] = def.customIsCompleted
+        end
+        
+        local killFn = GetKillTracker(def)
+        local questFn = GetQuestTracker(def)
 
-    CreateAchievementRow(
-      AchievementPanel,
-      def.achId,
-      def.title,
-      def.tooltip,
-      def.icon,
-      def.level,
-      def.points or 0,
-      killFn,
-      questFn,
-      def.staticPoints,
-      def.zone,
-      def
-    )
-  end)
+        CreateAchievementRow(
+            AchievementPanel,
+            def.achId,
+            def.title,
+            def.tooltip,
+            def.icon,
+            def.level,
+            def.points or 0,
+            killFn,
+            questFn,
+            def.staticPoints,
+            def.zone,
+            def
+        )
+    end)
 end

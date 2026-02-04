@@ -1,4 +1,11 @@
+---------------------------------------
+-- Dungeon Set Achievement Common Module
+---------------------------------------
 local DungeonSetCommon = {}
+
+---------------------------------------
+-- Item Name Lookup
+---------------------------------------
 
 -- Get item names from item IDs (you can expand this with a lookup table)
 -- Export globally so tooltip function can use it
@@ -276,6 +283,10 @@ function HCA_GetItemName(itemId)
   return "Item " .. tostring(itemId)
 end
 
+---------------------------------------
+-- Registration Function
+---------------------------------------
+
 -- Register a dungeon set achievement with the given definition
 function DungeonSetCommon.registerDungeonSetAchievement(def)
   local achId = def.achId
@@ -295,12 +306,19 @@ function DungeonSetCommon.registerDungeonSetAchievement(def)
   local rowVarName = achId .. "_Row"
   local registerFuncName = "HCA_Register" .. achId
   
-  -- State management
+  ---------------------------------------
+  -- State Management
+  ---------------------------------------
+
   local state = {
     completed = false,
     itemOwned = {} -- Track which items are owned
   }
   
+  ---------------------------------------
+  -- Helper Functions
+  ---------------------------------------
+
   -- Load progress from database
   local function LoadProgress()
     local progress = HardcoreAchievements_GetProgress and HardcoreAchievements_GetProgress(achId)
@@ -321,12 +339,22 @@ function DungeonSetCommon.registerDungeonSetAchievement(def)
     end
   end
   
+  -- Check if a specific item is owned (checks saved state first, then current inventory)
+  local function IsItemOwned(itemId)
+    -- Check saved state first (once owned, always owned)
+    if state.itemOwned and state.itemOwned[itemId] then
+      return true
+    end
+    -- Fall back to checking current inventory
+    return GetItemCount(itemId, true) > 0
+  end
+  
   -- Check if all required items are owned
   local function HasAllItems()
     if state.completed then return true end
     
     for _, itemId in ipairs(requiredItems) do
-      if GetItemCount(itemId, true) == 0 then
+      if not IsItemOwned(itemId) then
         return false
       end
     end
@@ -352,7 +380,10 @@ function DungeonSetCommon.registerDungeonSetAchievement(def)
     end
   end
   
-  -- Update tooltip when progress changes
+  ---------------------------------------
+  -- Tooltip Management
+  ---------------------------------------
+
   local function UpdateTooltip()
     local row = _G[rowVarName]
     if row then
@@ -405,21 +436,12 @@ function DungeonSetCommon.registerDungeonSetAchievement(def)
             
             -- Helper function to process a single item entry
             local function processItemEntry(itemId)
-              local owned = false
-              local itemName = ""
+              local owned = IsItemOwned(itemId)
               
-              -- Check saved state first (once owned, always owned)
-              if state.itemOwned and state.itemOwned[itemId] then
-                owned = true
-              else
-                -- Fall back to checking current inventory
-                local count = GetItemCount(itemId, true)
-                owned = count > 0
-                -- If currently owned, update and save the state
-                if owned then
-                  state.itemOwned[itemId] = true
-                  SaveProgress()
-                end
+              -- If currently owned but not saved, update and save the state
+              if owned and not state.itemOwned[itemId] then
+                state.itemOwned[itemId] = true
+                SaveProgress()
               end
               
               -- If achievement is complete, all items show as owned
@@ -427,7 +449,7 @@ function DungeonSetCommon.registerDungeonSetAchievement(def)
                 owned = true
               end
               
-              itemName = HCA_GetItemName(itemId)
+              local itemName = HCA_GetItemName(itemId)
               
               if owned then
                 GameTooltip:AddLine(itemName, 1, 1, 1) -- White for owned
@@ -478,7 +500,10 @@ function DungeonSetCommon.registerDungeonSetAchievement(def)
     return false
   end
   
-  -- Item ownership tracker (called on EQUIP_UNEQUIP events)
+  ---------------------------------------
+  -- Tracker Function
+  ---------------------------------------
+
   local function ItemTracker()
     if state.completed then return true end
     
@@ -512,6 +537,25 @@ function DungeonSetCommon.registerDungeonSetAchievement(def)
     end)
   end
   
+  -- Check if player's class matches the required class(es)
+  local function MatchesClassRequirement()
+    if not class then return true end
+    
+    local _, classFile = UnitClass("player")
+    if type(class) == "table" then
+      -- Array of classes - check if player's class is in the array
+      for _, allowedClass in ipairs(class) do
+        if classFile == allowedClass then
+          return true
+        end
+      end
+      return false
+    else
+      -- Single class string
+      return classFile == class
+    end
+  end
+  
   -- Check eligibility
   local function IsEligible()
     -- Faction: "Alliance" / "Horde"
@@ -520,33 +564,17 @@ function DungeonSetCommon.registerDungeonSetAchievement(def)
     end
     
     -- Class: use class file tokens ("MAGE","WARRIOR",...)
-    -- Support both single class (string) and multiple classes (array)
-    if class then
-      local _, classFile = UnitClass("player")
-      if type(class) == "table" then
-        -- Array of classes - check if player's class is in the array
-        local found = false
-        for _, allowedClass in ipairs(class) do
-          if classFile == allowedClass then
-            found = true
-            break
-          end
-        end
-        if not found then
-          return false
-        end
-      else
-        -- Single class string
-        if classFile ~= class then
-          return false
-        end
-      end
+    if not MatchesClassRequirement() then
+      return false
     end
     
     return true
   end
   
-  -- Create the registration function dynamically
+  ---------------------------------------
+  -- Registration Logic
+  ---------------------------------------
+
   _G[registerFuncName] = function()
     if not _G.CreateAchievementRow or not _G.AchievementPanel then return end
     if _G[rowVarName] then return end
@@ -609,6 +637,9 @@ function DungeonSetCommon.registerDungeonSetAchievement(def)
   end
 end
 
--- Export to global scope
+---------------------------------------
+-- Module Export
+---------------------------------------
+
 _G.DungeonSetCommon = DungeonSetCommon
 

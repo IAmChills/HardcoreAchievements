@@ -1,6 +1,12 @@
+---------------------------------------
+-- Meta Achievement Common Module
+---------------------------------------
 local MetaCommon = {}
 
--- Register a meta achievement with the given definition
+---------------------------------------
+-- Registration Function
+---------------------------------------
+
 function MetaCommon.registerMetaAchievement(def)
   local achId = def.achId
   local title = def.title
@@ -27,10 +33,18 @@ function MetaCommon.registerMetaAchievement(def)
   local isHardcoreActive = C_GameRules and C_GameRules.IsHardcoreActive and C_GameRules.IsHardcoreActive() or false
   def.allowSoloDouble = isHardcoreActive
 
+  ---------------------------------------
+  -- State Management
+  ---------------------------------------
+
   -- State for the current achievement session only
   local state = {
     completed = false,     -- set true once achievement conditions met
   }
+
+  ---------------------------------------
+  -- Helper Functions
+  ---------------------------------------
 
   -- Load progress from database on initialization
   local function LoadProgress()
@@ -48,29 +62,31 @@ function MetaCommon.registerMetaAchievement(def)
     end
   end
 
+  -- Find an achievement row by achievement ID
+  local function FindAchievementRow(reqAchId)
+    if not _G.AchievementPanel or not _G.AchievementPanel.achievements then
+      return nil
+    end
+    
+    for _, row in ipairs(_G.AchievementPanel.achievements) do
+      local rowId = row.id or row.achId
+      if rowId and tostring(rowId) == tostring(reqAchId) then
+        return row
+      end
+    end
+    return nil
+  end
+
   -- Helper function to check if any required achievement is failed/outleveled
   local function AnyRequiredAchievementFailed()
     if not requiredAchievements or #requiredAchievements == 0 then
       return false
     end
 
-    -- Check if AchievementPanel is available and has rows
-    if not _G.AchievementPanel or not _G.AchievementPanel.achievements then
-      return false
-    end
-
-    -- Check each required achievement to see if it's failed/outleveled
     for _, reqAchId in ipairs(requiredAchievements) do
-      -- Find the row for this achievement
-      for _, row in ipairs(_G.AchievementPanel.achievements) do
-        local rowId = row.id or row.achId
-        if rowId and tostring(rowId) == tostring(reqAchId) then
-          -- Check if this row is outleveled/failed
-          if _G.IsRowOutleveled and _G.IsRowOutleveled(row) then
-            return true
-          end
-          break
-        end
+      local row = FindAchievementRow(reqAchId)
+      if row and _G.IsRowOutleveled and _G.IsRowOutleveled(row) then
+        return true
       end
     end
 
@@ -93,6 +109,25 @@ function MetaCommon.registerMetaAchievement(def)
     return true
   end
 
+  -- Mark meta achievement as failed
+  local function MarkAsFailed()
+    if _G.HCA_EnsureFailureTimestamp then
+      _G.HCA_EnsureFailureTimestamp(achId)
+    end
+  end
+
+  -- Update UI when achievement state changes
+  local function UpdateUI(row)
+    if not row then return end
+    
+    if _G.UpdatePointsDisplay then
+      _G.UpdatePointsDisplay(row)
+    end
+    if _G.RefreshAllAchievementPoints then
+      _G.RefreshAllAchievementPoints()
+    end
+  end
+
   -- Check if achievement is complete (called periodically)
   local function CheckComplete()
     if state.completed then
@@ -101,9 +136,7 @@ function MetaCommon.registerMetaAchievement(def)
 
     -- If any required achievement is failed, mark meta achievement as failed
     if AnyRequiredAchievementFailed() then
-      if _G.HCA_EnsureFailureTimestamp then
-        _G.HCA_EnsureFailureTimestamp(achId)
-      end
+      MarkAsFailed()
       return false
     end
 
@@ -123,26 +156,27 @@ function MetaCommon.registerMetaAchievement(def)
   local registerFuncName = "HCA_Register" .. achId
   local rowVarName = achId .. "_Row"
 
+  ---------------------------------------
+  -- Tracker Function
+  ---------------------------------------
+
   -- Create a dummy tracker function (meta achievements don't track kills)
   local function MetaTracker()
     -- Check completion on any event (this will be called periodically)
-    if CheckComplete() and _G[rowVarName] then
+    if CheckComplete() then
       local row = _G[rowVarName]
       if row and not row.completed then
         row.completed = true
-        -- Trigger UI update
-        if _G.UpdatePointsDisplay then
-          _G.UpdatePointsDisplay(row)
-        end
-        if _G.RefreshAllAchievementPoints then
-          _G.RefreshAllAchievementPoints()
-        end
+        UpdateUI(row)
       end
     end
     return state.completed
   end
 
-  -- Create the registration function
+  ---------------------------------------
+  -- Registration Logic
+  ---------------------------------------
+
   _G[registerFuncName] = function()
     if not _G.CreateAchievementRow or not _G.AchievementPanel then return end
     if _G[rowVarName] then return end
@@ -192,30 +226,19 @@ function MetaCommon.registerMetaAchievement(def)
       _G.HCA_MetaAchievementCheckers = {}
     end
     _G.HCA_MetaAchievementCheckers[achId] = function()
-      if _G[rowVarName] then
-        local row = _G[rowVarName]
-        if row and not row.completed then
-          -- Check if any required achievement is failed
-          if AnyRequiredAchievementFailed() then
-            -- Mark meta achievement as failed
-            if _G.HCA_EnsureFailureTimestamp then
-              _G.HCA_EnsureFailureTimestamp(achId)
-            end
-            -- Update display to show failed state
-            if _G.UpdatePointsDisplay then
-              _G.UpdatePointsDisplay(row)
-            end
-          elseif CheckComplete() then
-            -- All required achievements completed
-            row.completed = true
-            if _G.UpdatePointsDisplay then
-              _G.UpdatePointsDisplay(row)
-            end
-            if _G.RefreshAllAchievementPoints then
-              _G.RefreshAllAchievementPoints()
-            end
-          end
-        end
+      local row = _G[rowVarName]
+      if not row or row.completed then
+        return
+      end
+      
+      -- Check if any required achievement is failed
+      if AnyRequiredAchievementFailed() then
+        MarkAsFailed()
+        UpdateUI(row)
+      elseif CheckComplete() then
+        -- All required achievements completed
+        row.completed = true
+        UpdateUI(row)
       end
     end
   end
@@ -225,6 +248,10 @@ function MetaCommon.registerMetaAchievement(def)
     _G[registerFuncName]()
   end
 end
+
+---------------------------------------
+-- Module Export
+---------------------------------------
 
 _G.MetaCommon = MetaCommon
 return MetaCommon

@@ -100,6 +100,24 @@ for _, def in ipairs(ExplorationAchievements) do
   end
 end
 
+---------------------------------------
+-- Fellowship Achievement Handler
+---------------------------------------
+
+-- Helper: Find achievement row by ID
+local function FindAchievementRow(achId)
+    if not AchievementPanel or not AchievementPanel.achievements then
+        return nil
+    end
+    for _, row in ipairs(AchievementPanel.achievements) do
+        local id = row and (row.id or row.achId)
+        if row and id == achId then
+            return row
+        end
+    end
+    return nil
+end
+
 -- Handle Fellowship achievement when someone nearby completes Precious
 -- Register callback with CommandHandler to receive Precious completion messages
 local fellowshipFrame = CreateFrame("Frame")
@@ -109,16 +127,7 @@ fellowshipFrame:SetScript("OnEvent", function(self, event)
         if _G.HCA_RegisterPreciousCompletionCallback then
             _G.HCA_RegisterPreciousCompletionCallback(function(payload, sender)
                 -- Only check if Fellowship isn't already completed
-                local fellowshipRow = nil
-                if AchievementPanel and AchievementPanel.achievements then
-                    for _, row in ipairs(AchievementPanel.achievements) do
-                        local id = row and (row.id or row.achId)
-                        if row and id == "Fellowship" then
-                            fellowshipRow = row
-                            break
-                        end
-                    end
-                end
+                local fellowshipRow = FindAchievementRow("Fellowship")
                 
                 -- If Fellowship is already completed, don't do anything
                 if not fellowshipRow or fellowshipRow.completed then

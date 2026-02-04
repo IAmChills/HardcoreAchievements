@@ -1,6 +1,12 @@
--- Achievements_Common.lua
+---------------------------------------
+-- Achievement Common Module
+---------------------------------------
 -- Shared factory for standard (quest/kill under level cap) achievements.
 local M = {}
+
+---------------------------------------
+-- Helper Functions
+---------------------------------------
 
 -- Load GetPlayerPresetFromSettings function from GetUHCPreset
 local GetPlayerPresetFromSettings = _G.GetPlayerPresetFromSettings
@@ -64,6 +70,10 @@ end
 
 local isAchievementVisible = _G.HCA_IsAchievementVisible
 
+---------------------------------------
+-- Registration Function
+---------------------------------------
+
 function M.registerQuestAchievement(cfg)
     assert(type(cfg.achId) == "string", "achId required")
     local ACH_ID = cfg.achId
@@ -88,6 +98,120 @@ function M.registerQuestAchievement(cfg)
     local MAX_LEVEL = tonumber(cfg.maxLevel)
     local FACTION, RACE, CLASS = cfg.faction, cfg.race, cfg.class
 
+    ---------------------------------------
+    -- Helper Functions
+    ---------------------------------------
+
+    -- Get progress table for this achievement
+    local function GetProgress()
+        return GetProgress() or nil
+    end
+
+    -- Find achievement row by ACH_ID
+    local function FindAchievementRow()
+        if not AchievementPanel or not AchievementPanel.achievements then
+            return nil
+        end
+        for _, row in ipairs(AchievementPanel.achievements) do
+            if row.id == ACH_ID then
+                return row
+            end
+        end
+        return nil
+    end
+
+    -- Calculate base points from row (handles originalPoints, multipliers, solo mode preview)
+    local function CalculateBasePoints(row)
+        if not row or not row.points then
+            return 0
+        end
+        
+        local currentPoints = tonumber(row.points) or 0
+        local isSoloMode = _G.HardcoreAchievements_IsSoloModeEnabled and _G.HardcoreAchievements_IsSoloModeEnabled() or false
+        
+        -- Use originalPoints when available
+        local basePoints = tonumber(row.originalPoints) or currentPoints
+        
+        if row.originalPoints then
+            -- Use stored original points and apply current preset multiplier
+            basePoints = tonumber(row.originalPoints) or basePoints
+            if not row.staticPoints then
+                local preset = GetPlayerPresetFromSettings and GetPlayerPresetFromSettings() or nil
+                local multiplier = _G.GetPresetMultiplier and _G.GetPresetMultiplier(preset) or 1.0
+                basePoints = basePoints + math.floor((basePoints) * (multiplier - 1) + 0.5)
+            end
+        elseif isSoloMode and row.allowSoloDouble and not row.staticPoints then
+            -- Points might have been doubled by preview, divide by 2 to get base
+            local progress = GetProgress()
+            local storedPointsAtKill = progress and progress.pointsAtKill
+            if storedPointsAtKill then
+                -- If stored points are doubled (solo), divide by 2 to get base
+                local storedSolo = progress and progress.soloKill
+                if storedSolo then
+                    basePoints = math.floor(tonumber(storedPointsAtKill) / 2 + 0.5)
+                else
+                    basePoints = math.floor(basePoints / 2 + 0.5)
+                end
+            else
+                basePoints = math.floor(basePoints / 2 + 0.5)
+            end
+        end
+        
+        return basePoints
+    end
+
+    -- Get solo status for a kill (uses stored status from combat tracking)
+    local function GetSoloStatusForKill(destGUID)
+        local isSelfFound = _G.IsSelfFound and _G.IsSelfFound() or false
+        local isHardcoreActive = C_GameRules and C_GameRules.IsHardcoreActive and C_GameRules.IsHardcoreActive() or false
+        local allowSoloBonus = isSelfFound or not isHardcoreActive
+        
+        local storedSoloStatus = nil
+        if destGUID and _G.PlayerIsSoloForGUID then
+            storedSoloStatus = _G.PlayerIsSoloForGUID(destGUID)
+        end
+        
+        -- Fallback to current check if no stored status available
+        return allowSoloBonus and (
+            (storedSoloStatus ~= nil and storedSoloStatus) or
+            (storedSoloStatus == nil and _G.PlayerIsSolo and _G.PlayerIsSolo() or false)
+        ) or false
+    end
+
+    -- Get solo status for quest completion
+    local function GetSoloStatusForQuest()
+        local isSelfFound = _G.IsSelfFound and _G.IsSelfFound() or false
+        local isHardcoreActive = C_GameRules and C_GameRules.IsHardcoreActive and C_GameRules.IsHardcoreActive() or false
+        local allowSoloBonus = isSelfFound or not isHardcoreActive
+        return allowSoloBonus and (_G.PlayerIsSolo and _G.PlayerIsSolo() or false) or false
+    end
+
+    -- Update status text on row (wrapper for HCA_SetStatusTextOnRow)
+    local function UpdateStatusText(row, options)
+        if not row or not _G.HCA_SetStatusTextOnRow then
+            return
+        end
+        
+        local isSelfFound = _G.IsSelfFound and _G.IsSelfFound() or false
+        local defaults = {
+            completed = false,
+            isSelfFound = isSelfFound,
+            maxLevel = row.maxLevel
+        }
+        
+        for k, v in pairs(defaults) do
+            if options[k] == nil then
+                options[k] = v
+            end
+        end
+        
+        _G.HCA_SetStatusTextOnRow(row, options)
+    end
+
+    ---------------------------------------
+    -- State Management
+    ---------------------------------------
+
     local state = {
         completed = false,
         killed = false,
@@ -95,6 +219,10 @@ function M.registerQuestAchievement(cfg)
         counts = {}, -- Track kill counts when requiredKills is used (total kills, including ineligible)
         eligibleCounts = {} -- Track only eligible kill counts for requiredKills achievements
     }
+
+    ---------------------------------------
+    -- Validation Functions
+    ---------------------------------------
 
     local function gate()
         if FACTION and UnitFactionGroup("player") ~= FACTION then return false end
@@ -111,7 +239,7 @@ function M.registerQuestAchievement(cfg)
 
     local function belowMax()
         -- Check stored levels: prioritize levelAtKill (when NPC was killed), then levelAtTurnIn, then levelAtAccept (backup)
-        local progressTable = HardcoreAchievements_GetProgress and HardcoreAchievements_GetProgress(ACH_ID)
+        local progressTable = GetProgress()
         local levelToCheck = nil
         if progressTable then
             -- Priority: levelAtKill > levelAtTurnIn > levelAtAccept > current level
@@ -173,7 +301,7 @@ function M.registerQuestAchievement(cfg)
         if REQUIRED_QUEST_ID and not state.quest and serverQuestDone() then
             -- Check level before storing quest completion
             -- Priority: levelAtKill (from NPC kill) > levelAtTurnIn > levelAtAccept (backup) > current level
-            local progressTable = HardcoreAchievements_GetProgress and HardcoreAchievements_GetProgress(ACH_ID)
+            local progressTable = GetProgress()
             local levelToCheck = nil
             if progressTable then
                 -- Prefer levelAtKill if available, otherwise use levelAtTurnIn, then levelAtAccept
@@ -189,16 +317,13 @@ function M.registerQuestAchievement(cfg)
                 
                 -- Check if we already have pointsAtKill from a previous NPC kill
                 -- If we do, preserve it; if not, store points based on current solo status
-                local progressTable = HardcoreAchievements_GetProgress and HardcoreAchievements_GetProgress(ACH_ID)
+                local progressTable = GetProgress()
                 local existingPointsAtKill = progressTable and progressTable.pointsAtKill
                 
                 if not existingPointsAtKill then
                     -- No existing pointsAtKill, check if quest completion was solo (check at time of topUp)
                     -- Solo points apply: requires self-found if hardcore is active, otherwise solo is allowed
-                    local isSelfFound = _G.IsSelfFound and _G.IsSelfFound() or false
-                    local isHardcoreActive = C_GameRules and C_GameRules.IsHardcoreActive and C_GameRules.IsHardcoreActive() or false
-                    local allowSoloBonus = isSelfFound or not isHardcoreActive
-                    local isSoloQuest = allowSoloBonus and (_G.PlayerIsSolo and _G.PlayerIsSolo() or false) or false
+                    local isSoloQuest = GetSoloStatusForQuest()
                     
                     if AchievementPanel and AchievementPanel.achievements then
                         for _, row in ipairs(AchievementPanel.achievements) do
@@ -225,7 +350,7 @@ function M.registerQuestAchievement(cfg)
                                     end
                                 elseif isSoloMode and row.allowSoloDouble and not row.staticPoints then
                                     -- Points might have been doubled by preview, divide by 2 to get base
-                                    local progress = HardcoreAchievements_GetProgress and HardcoreAchievements_GetProgress(ACH_ID)
+                                    local progress = GetProgress()
                                     if not (progress and progress.pointsAtKill) then
                                         basePoints = math.floor(basePoints / 2 + 0.5)
                                     end
@@ -280,7 +405,7 @@ function M.registerQuestAchievement(cfg)
                             for _, row in ipairs(AchievementPanel.achievements) do
                                 if row.id == ACH_ID and not row.completed then
                                     -- Use stored pointsAtKill value if available (doubled for solo)
-                                    local progressTable = HardcoreAchievements_GetProgress and HardcoreAchievements_GetProgress(ACH_ID)
+                                    local progressTable = GetProgress()
                                     if progressTable and progressTable.pointsAtKill then
                                         row.points = tonumber(progressTable.pointsAtKill) or row.points
                                         if row.Points then
@@ -313,7 +438,7 @@ function M.registerQuestAchievement(cfg)
         if not REQUIRED_KILLS then return true end
         
         -- Always reload eligibleCounts from progress table to ensure we have latest saved data
-        local p = HardcoreAchievements_GetProgress and HardcoreAchievements_GetProgress(ACH_ID)
+        local p = GetProgress()
         state.eligibleCounts = {}
         if p and p.eligibleCounts then
             for k, v in pairs(p.eligibleCounts) do
@@ -344,7 +469,7 @@ function M.registerQuestAchievement(cfg)
         end
 		
 		-- Check both state and progress table for kill/quest completion
-		local progressTable = HardcoreAchievements_GetProgress and HardcoreAchievements_GetProgress(ACH_ID)
+		local progressTable = GetProgress()
 		
 		-- Check if there's an ineligible kill flag - achievement was done when group was ineligible
 		-- The ineligibleKill flag can be cleared by getting a new eligible kill of the same NPC,
@@ -453,8 +578,12 @@ function M.registerQuestAchievement(cfg)
 		return false
     end
 
+    ---------------------------------------
+    -- Initialization
+    ---------------------------------------
+
     do
-        local p = HardcoreAchievements_GetProgress and HardcoreAchievements_GetProgress(ACH_ID)
+        local p = GetProgress()
         if p then
             state.killed = not not p.killed
             state.quest = not not p.quest
@@ -581,7 +710,7 @@ function M.registerQuestAchievement(cfg)
                     for _, row in ipairs(AchievementPanel.achievements) do
                         if row.id == ACH_ID and not row.completed then
                             local isSelfFound = _G.IsSelfFound and _G.IsSelfFound() or false
-                            local progress = HardcoreAchievements_GetProgress and HardcoreAchievements_GetProgress(ACH_ID)
+                            local progress = GetProgress()
                             local hasSoloStatus = progress and (progress.soloKill or progress.soloQuest)
                             if _G.HCA_SetStatusTextOnRow then
                                 _G.HCA_SetStatusTextOnRow(row, {
@@ -602,6 +731,10 @@ function M.registerQuestAchievement(cfg)
         checkComplete()
     end
 
+    ---------------------------------------
+    -- Kill Tracker Function
+    ---------------------------------------
+
     -- Handle kills: support both TARGET_NPC_ID (single kill) and REQUIRED_KILLS (kill counts)
     if TARGET_NPC_ID or REQUIRED_KILLS then
         local killFunc = function(destGUID)
@@ -610,7 +743,7 @@ function M.registerQuestAchievement(cfg)
             end
             
             local destId = getNpcIdFromGUID(destGUID)
-            local progressTable = HardcoreAchievements_GetProgress and HardcoreAchievements_GetProgress(ACH_ID)
+            local progressTable = GetProgress()
             local killValidated = false
             local idNum = nil -- For REQUIRED_KILLS
             
@@ -687,7 +820,7 @@ function M.registerQuestAchievement(cfg)
                 -- Track the kill progress, but mark as ineligible (don't increment eligible counts)
                 if REQUIRED_KILLS then
                     -- Always reload eligibleCounts from progress table to ensure we have latest saved data
-                    local p = HardcoreAchievements_GetProgress and HardcoreAchievements_GetProgress(ACH_ID)
+                    local p = GetProgress()
                     state.eligibleCounts = {}
                     if p and p.eligibleCounts then
                         for k, v in pairs(p.eligibleCounts) do
@@ -746,7 +879,7 @@ function M.registerQuestAchievement(cfg)
             -- Track kill progress normally (eligible kill)
             if REQUIRED_KILLS then
                 -- Always reload eligibleCounts from progress table to ensure we have latest saved data
-                local p = HardcoreAchievements_GetProgress and HardcoreAchievements_GetProgress(ACH_ID)
+                local p = GetProgress()
                 state.eligibleCounts = {}
                 if p and p.eligibleCounts then
                     for k, v in pairs(p.eligibleCounts) do
@@ -780,16 +913,7 @@ function M.registerQuestAchievement(cfg)
                 
                 -- Solo points only apply if player is self-found
                 -- Use stored solo status from combat tracking (more accurate than checking at kill time)
-                local isSelfFound = _G.IsSelfFound and _G.IsSelfFound() or false
-                local storedSoloStatus = nil
-                if destGUID and _G.PlayerIsSoloForGUID then
-                    storedSoloStatus = _G.PlayerIsSoloForGUID(destGUID)
-                end
-                -- Fallback to current check if no stored status available
-                local isSoloKill = isSelfFound and (
-                    (storedSoloStatus ~= nil and storedSoloStatus) or
-                    (storedSoloStatus == nil and _G.PlayerIsSolo and _G.PlayerIsSolo() or false)
-                ) or false
+                local isSoloKill = GetSoloStatusForKill(destGUID)
                 
                 -- Mark as killed (allows re-killing to update solo status and points)
                 if not state.killed then
@@ -805,38 +929,11 @@ function M.registerQuestAchievement(cfg)
                             local isSelfFound = _G.IsSelfFound and _G.IsSelfFound() or false
                             local isSoloMode = _G.HardcoreAchievements_IsSoloModeEnabled and _G.HardcoreAchievements_IsSoloModeEnabled() or false
                             
-                            -- Always recalculate base points from originalPoints if available, or from current points
-                            -- Use originalPoints when available; do NOT subtract a flat self-found bonus from display points.
-                            local basePoints = tonumber(row.originalPoints) or currentPoints
-                            if row.originalPoints then
-                                -- Use stored original points and apply current preset multiplier
-                                basePoints = tonumber(row.originalPoints) or basePoints
-                                if not row.staticPoints then
-                                    local preset = _G.GetPlayerPresetFromSettings and _G.GetPlayerPresetFromSettings() or nil
-                                    local multiplier = _G.GetPresetMultiplier and _G.GetPresetMultiplier(preset) or 1.0
-                                    basePoints = basePoints + math.floor((basePoints) * (multiplier - 1) + 0.5)
-                                end
-                            elseif isSoloMode and row.allowSoloDouble and not row.staticPoints then
-                                -- Points might have been doubled by preview, divide by 2 to get base
-                                -- Check if we have a stored pointsAtKill that was already doubled (solo kill)
-                                local progress = HardcoreAchievements_GetProgress and HardcoreAchievements_GetProgress(ACH_ID)
-                                local storedPointsAtKill = progress and progress.pointsAtKill
-                                if storedPointsAtKill then
-                                    -- If stored points are doubled (solo), divide by 2 to get base
-                                    -- Otherwise use current points (might already be base)
-                                    local storedSolo = progress and progress.soloKill
-                                    if storedSolo then
-                                        basePoints = math.floor(tonumber(storedPointsAtKill) / 2 + 0.5)
-                                    else
-                                        basePoints = math.floor(basePoints / 2 + 0.5)
-                                    end
-                                else
-                                    basePoints = math.floor(basePoints / 2 + 0.5)
-                                end
-                            end
+                            -- Calculate base points using helper function
+                            local basePoints = CalculateBasePoints(row)
                             
                             -- Check existing progress to preserve solo status and only upgrade points
-                            local progress = HardcoreAchievements_GetProgress and HardcoreAchievements_GetProgress(ACH_ID)
+                            local progress = GetProgress()
                             local existingSoloKill = progress and progress.soloKill or false
                             local existingPointsAtKill = progress and progress.pointsAtKill
                             
@@ -890,18 +987,7 @@ function M.registerQuestAchievement(cfg)
                 -- TARGET_NPC_ID: track kill normally (eligible kill)
                 -- Solo points apply: requires self-found if hardcore is active, otherwise solo is allowed
                 -- Use stored solo status from combat tracking (more accurate than checking at kill time)
-                local isSelfFound = _G.IsSelfFound and _G.IsSelfFound() or false
-                local isHardcoreActive = C_GameRules and C_GameRules.IsHardcoreActive and C_GameRules.IsHardcoreActive() or false
-                local allowSoloBonus = isSelfFound or not isHardcoreActive
-                local storedSoloStatus = nil
-                if destGUID and _G.PlayerIsSoloForGUID then
-                    storedSoloStatus = _G.PlayerIsSoloForGUID(destGUID)
-                end
-                -- Fallback to current check if no stored status available
-                local isSoloKill = allowSoloBonus and (
-                    (storedSoloStatus ~= nil and storedSoloStatus) or
-                    (storedSoloStatus == nil and _G.PlayerIsSolo and _G.PlayerIsSolo() or false)
-                ) or false
+                local isSoloKill = GetSoloStatusForKill(destGUID)
                 
                 state.killed = true
                 setProg("killed", true)
@@ -922,38 +1008,11 @@ function M.registerQuestAchievement(cfg)
                             local isSelfFound = _G.IsSelfFound and _G.IsSelfFound() or false
                             local isSoloMode = _G.HardcoreAchievements_IsSoloModeEnabled and _G.HardcoreAchievements_IsSoloModeEnabled() or false
                             
-                            -- Always recalculate base points from originalPoints if available, or from current points
-                            -- Use originalPoints when available; do NOT subtract a flat self-found bonus from display points.
-                            local basePoints = tonumber(row.originalPoints) or currentPoints
-                            if row.originalPoints then
-                                -- Use stored original points and apply current preset multiplier
-                                basePoints = tonumber(row.originalPoints) or basePoints
-                                if not row.staticPoints then
-                                    local preset = _G.GetPlayerPresetFromSettings and _G.GetPlayerPresetFromSettings() or nil
-                                    local multiplier = _G.GetPresetMultiplier and _G.GetPresetMultiplier(preset) or 1.0
-                                    basePoints = basePoints + math.floor((basePoints) * (multiplier - 1) + 0.5)
-                                end
-                            elseif isSoloMode and row.allowSoloDouble and not row.staticPoints then
-                                -- Points might have been doubled by preview, divide by 2 to get base
-                                -- Check if we have a stored pointsAtKill that was already doubled (solo kill)
-                                local progress = HardcoreAchievements_GetProgress and HardcoreAchievements_GetProgress(ACH_ID)
-                                local storedPointsAtKill = progress and progress.pointsAtKill
-                                if storedPointsAtKill then
-                                    -- If stored points are doubled (solo), divide by 2 to get base
-                                    -- Otherwise use current points (might already be base)
-                                    local storedSolo = progress and progress.soloKill
-                                    if storedSolo then
-                                        basePoints = math.floor(tonumber(storedPointsAtKill) / 2 + 0.5)
-                                    else
-                                        basePoints = math.floor(basePoints / 2 + 0.5)
-                                    end
-                                else
-                                    basePoints = math.floor(basePoints / 2 + 0.5)
-                                end
-                            end
+                            -- Calculate base points using helper function
+                            local basePoints = CalculateBasePoints(row)
                             
                             -- Check existing progress to preserve solo status and only upgrade points
-                            local progress = HardcoreAchievements_GetProgress and HardcoreAchievements_GetProgress(ACH_ID)
+                            local progress = GetProgress()
                             local existingSoloKill = progress and progress.soloKill or false
                             local existingPointsAtKill = progress and progress.pointsAtKill
                             
@@ -1066,7 +1125,7 @@ function M.registerQuestAchievement(cfg)
                         for _, row in ipairs(AchievementPanel.achievements) do
                             if row.id == ACH_ID and not row.completed then
                                 local isSelfFound = _G.IsSelfFound and _G.IsSelfFound() or false
-                                local progress = HardcoreAchievements_GetProgress and HardcoreAchievements_GetProgress(ACH_ID)
+                                local progress = GetProgress()
                                 local hasSoloStatus = progress and (progress.soloKill or progress.soloQuest)
                                 if _G.HCA_SetStatusTextOnRow then
                                     _G.HCA_SetStatusTextOnRow(row, {
@@ -1094,6 +1153,10 @@ function M.registerQuestAchievement(cfg)
         end
     end
 
+    ---------------------------------------
+    -- Quest Tracker Function
+    ---------------------------------------
+
     if REQUIRED_QUEST_ID then
         local questFunc = function(questID)
             if state.completed then
@@ -1111,7 +1174,7 @@ function M.registerQuestAchievement(cfg)
                 return false
             end
             
-            local progressTable = HardcoreAchievements_GetProgress and HardcoreAchievements_GetProgress(ACH_ID)
+            local progressTable = GetProgress()
             
             -- Don't allow quest completion if there's an ineligible kill flag - kill was done when group was ineligible
             -- The ineligibleKill flag can be cleared by getting a new eligible kill of the same NPC,
@@ -1198,7 +1261,7 @@ function M.registerQuestAchievement(cfg)
             
             -- Check if we already have pointsAtKill from a previous NPC kill
             -- If we do, preserve it; if not, store points based on quest turn-in solo status
-            local progressTable = HardcoreAchievements_GetProgress and HardcoreAchievements_GetProgress(ACH_ID)
+            local progressTable = GetProgress()
             local existingPointsAtKill = progressTable and progressTable.pointsAtKill
             
             if not existingPointsAtKill then
@@ -1234,7 +1297,7 @@ function M.registerQuestAchievement(cfg)
                                 end
                             elseif isSoloMode and row.allowSoloDouble and not row.staticPoints then
                                 -- Points might have been doubled by preview, divide by 2 to get base
-                                local progress = HardcoreAchievements_GetProgress and HardcoreAchievements_GetProgress(ACH_ID)
+                                local progress = GetProgress()
                                 if not (progress and progress.pointsAtKill) then
                                     basePoints = math.floor(basePoints / 2 + 0.5)
                                 end
@@ -1296,10 +1359,7 @@ function M.registerQuestAchievement(cfg)
                     -- We have existing pointsAtKill from NPC kill, preserve it
                     -- But still update solo status if quest was solo (for indicator purposes)
                     -- Solo points apply: requires self-found if hardcore is active, otherwise solo is allowed
-                    local isSelfFound = _G.IsSelfFound and _G.IsSelfFound() or false
-                    local isHardcoreActive = C_GameRules and C_GameRules.IsHardcoreActive and C_GameRules.IsHardcoreActive() or false
-                    local allowSoloBonus = isSelfFound or not isHardcoreActive
-                    local isSoloQuest = allowSoloBonus and (_G.PlayerIsSolo and _G.PlayerIsSolo() or false) or false
+                    local isSoloQuest = GetSoloStatusForQuest()
                     if isSoloQuest then
                     -- Update solo quest status and indicator (only if not completed)
                     setProg("soloQuest", true)
@@ -1308,7 +1368,7 @@ function M.registerQuestAchievement(cfg)
                             if row.id == ACH_ID and not row.completed then
                                 -- Use stored pointsAtKill value if available (doubled for solo)
                                 -- pointsAtKill doesn't include self-found bonus, so add it if applicable
-                                local progressTable = HardcoreAchievements_GetProgress and HardcoreAchievements_GetProgress(ACH_ID)
+                                local progressTable = GetProgress()
                                 if progressTable and progressTable.pointsAtKill then
                                     local storedPoints = tonumber(progressTable.pointsAtKill) or row.points
                                     local isSelfFound = _G.IsSelfFound and _G.IsSelfFound() or false
@@ -1331,7 +1391,7 @@ function M.registerQuestAchievement(cfg)
                                 local killsSatisfied = false
                                 if REQUIRED_QUEST_ID and (TARGET_NPC_ID or REQUIRED_KILLS) then
                                     local hasKill = false
-                                    local progressTable = HardcoreAchievements_GetProgress and HardcoreAchievements_GetProgress(ACH_ID)
+                                    local progressTable = GetProgress()
                                     if REQUIRED_KILLS then
                                         -- Need to check eligibleCounts from progress table
                                         if progressTable and progressTable.eligibleCounts then
@@ -1393,6 +1453,10 @@ function M.registerQuestAchievement(cfg)
         end)
     end
 
+    ---------------------------------------
+    -- Function Registration
+    ---------------------------------------
+
     -- Register IsCompleted function in local registry
     if _G.HardcoreAchievements_RegisterAchievementFunction then
         _G.HardcoreAchievements_RegisterAchievementFunction(ACH_ID, "IsCompleted", function()
@@ -1406,6 +1470,10 @@ function M.registerQuestAchievement(cfg)
         end)
     end
 end
+
+---------------------------------------
+-- Module Export
+---------------------------------------
 
 _G.Achievements_Common = M
 return M

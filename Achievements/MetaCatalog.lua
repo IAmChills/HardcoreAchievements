@@ -1,32 +1,19 @@
 -- Meta achievement definitions
 -- Note: MetaCommon should be loaded before this file (via .toc) and exports via _G.MetaCommon
 
+---------------------------------------
+-- Helper Functions
+---------------------------------------
+
 -- Get player faction to filter faction-specific achievements
 local function GetPlayerFaction()
-  local _, faction = UnitFactionGroup("player")
-  return faction  -- "Alliance" or "Horde"
+    local _, faction = UnitFactionGroup("player")
+    return faction  -- "Alliance" or "Horde"
 end
 
--- Classic Dungeon Master - requires all dungeon achievements
--- RFC is Horde-only, STOCK is Alliance-only
-local function GetClassicDungeonMasterAchievements()
-  local playerFaction = GetPlayerFaction()
-  local requiredAchievements = {
-    "VC", "WC", "SFK", "BFD", "RFK", "GNOM", "SM",
-    "RFD", "ULD", "ZF", "MARA", "ST", "BRD", "BRS", "STRAT", "DM", "SCHOLO"
-  }
-  
-  -- Add faction-specific dungeons
-  if playerFaction == FACTION_HORDE then
-    table.insert(requiredAchievements, 1, "RFC")  -- Add at the beginning
-  elseif playerFaction == FACTION_ALLIANCE then
-    table.insert(requiredAchievements, 6, "STOCK")  -- Add after BFD
-  end
-  
-  return requiredAchievements
-end
-
-local classicDungeons = GetClassicDungeonMasterAchievements()
+---------------------------------------
+-- Achievement Lists
+---------------------------------------
 
 -- Quest Master - requires all quest-related achievements
 -- Pre-ordered lists (sorted by level, lowest to highest)
@@ -51,49 +38,82 @@ local QUEST_HORDE_ORDERED = {
   "OverseerMaltorius", "MercutioFilthgorger", "HighChiefWinterfall", "Deathclasp"
 }
 
+---------------------------------------
+-- Achievement List Builders
+---------------------------------------
+
+-- Classic Dungeon Master - requires all dungeon achievements
+-- RFC is Horde-only, STOCK is Alliance-only
+local function GetClassicDungeonMasterAchievements()
+    local playerFaction = GetPlayerFaction()
+    local requiredAchievements = {
+        "VC", "WC", "SFK", "BFD", "RFK", "GNOM", "SM",
+        "RFD", "ULD", "ZF", "MARA", "ST", "BRD", "BRS", "STRAT", "DM", "SCHOLO"
+    }
+    
+    -- Add faction-specific dungeons
+    if playerFaction == FACTION_HORDE then
+        table.insert(requiredAchievements, 1, "RFC")  -- Add at the beginning
+    elseif playerFaction == FACTION_ALLIANCE then
+        table.insert(requiredAchievements, 6, "STOCK")  -- Add after BFD
+    end
+    
+    return requiredAchievements
+end
+
 local function GetQuestMasterAchievements()
-  local playerFaction = GetPlayerFaction()
-  
-  if playerFaction == FACTION_ALLIANCE then
-    return QUEST_ALLIANCE_ORDERED
-  elseif playerFaction == FACTION_HORDE then
-    return QUEST_HORDE_ORDERED
-  end
+    local playerFaction = GetPlayerFaction()
+    
+    if playerFaction == FACTION_ALLIANCE then
+        return QUEST_ALLIANCE_ORDERED
+    elseif playerFaction == FACTION_HORDE then
+        return QUEST_HORDE_ORDERED
+    end
+    return {}
 end
 
 -- Core Reputation Master - requires all 4 core faction reputation achievements
 local function GetCoreReputationMasterAchievements()
-  local playerFaction = GetPlayerFaction()
-  if playerFaction == FACTION_ALLIANCE then
-    return {
-      "Stormwind", "Darnassus", "Ironforge", "Gnomeregan Exiles"
-    }
-  elseif playerFaction == FACTION_HORDE then
-    return {
-      "Orgrimmar", "Thunder Bluff", "Undercity", "Darkspear Trolls"
-    }
-  end
+    local playerFaction = GetPlayerFaction()
+    if playerFaction == FACTION_ALLIANCE then
+        return {
+            "Stormwind", "Darnassus", "Ironforge", "Gnomeregan Exiles"
+        }
+    elseif playerFaction == FACTION_HORDE then
+        return {
+            "Orgrimmar", "Thunder Bluff", "Undercity", "Darkspear Trolls"
+        }
+    end
+    return {}
 end
 
 -- Raid Master - requires all raid achievements
 local function GetRaidMasterAchievements()
-  return {
-    "UBRS", "MC", "ONY", "BWL", "ZG", "AQ20", "AQ40", "NAXX"
-  }
+    return {
+        "UBRS", "MC", "ONY", "BWL", "ZG", "AQ20", "AQ40", "NAXX"
+    }
 end
 
 -- Secondary Profession Master - requires First Aid, Fishing, Cooking to 300
 local function GetSecondaryProfessionMasterAchievements()
-  return {
-    "Profession_FirstAid_300",  -- Artisan First Aid
-    "Profession_Fishing_300",   -- Artisan Fishing
-    "Profession_Cooking_300"    -- Artisan Cooking
-  }
+    return {
+        "Profession_FirstAid_300",  -- Artisan First Aid
+        "Profession_Fishing_300",   -- Artisan Fishing
+        "Profession_Cooking_300"    -- Artisan Cooking
+    }
 end
 
+---------------------------------------
+-- Build Achievement Lists
+---------------------------------------
+local classicDungeons = GetClassicDungeonMasterAchievements()
 local coreRepAchievements = GetCoreReputationMasterAchievements()
 local raidAchievements = GetRaidMasterAchievements()
 local secondaryProfAchievements = GetSecondaryProfessionMasterAchievements()
+
+---------------------------------------
+-- Meta Achievement Definitions
+---------------------------------------
 
 local MetaAchievements = {
   {
@@ -152,21 +172,24 @@ local MetaAchievements = {
   }
 }
 
+---------------------------------------
+-- Registration
+---------------------------------------
+
 -- Defer registration until PLAYER_LOGIN to prevent load timeouts
--- Create global registration queue if it doesn't exist
 _G.HCA_RegistrationQueue = _G.HCA_RegistrationQueue or {}
 
 -- Queue all meta achievements for deferred registration
 for _, meta in ipairs(MetaAchievements) do
-  table.insert(_G.HCA_RegistrationQueue, function()
-    if _G.MetaCommon and _G.MetaCommon.registerMetaAchievement then
-      -- For QuestMeta, sort achievements by level before registration
-      if meta.achId == "QuestMeta" then
-        local questAchievements = GetQuestMasterAchievements() -- Sort happens inside this function
-        meta.requiredAchievements = questAchievements
-        meta.achievementOrder = questAchievements
-      end
-      _G.MetaCommon.registerMetaAchievement(meta)
-    end
-  end)
+    table.insert(_G.HCA_RegistrationQueue, function()
+        if _G.MetaCommon and _G.MetaCommon.registerMetaAchievement then
+            -- For QuestMeta, set achievements list at registration time
+            if meta.achId == "QuestMeta" then
+                local questAchievements = GetQuestMasterAchievements()
+                meta.requiredAchievements = questAchievements
+                meta.achievementOrder = questAchievements
+            end
+            _G.MetaCommon.registerMetaAchievement(meta)
+        end
+    end)
 end

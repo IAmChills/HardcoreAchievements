@@ -83,6 +83,10 @@ local ENCOUNTER_ID_TO_NPC_IDS = {
   [1121] = {16064, 16065, 16062, 16063},  -- The Four Horsemen (Thane Korth'azz, Lady Blaumeux, Highlord Mograine, Sir Zeliek)
 }
 
+---------------------------------------
+-- Registration Function
+---------------------------------------
+
 -- Register a raid achievement with the given definition
 function RaidCommon.registerRaidAchievement(def)
   local achId = def.achId
@@ -113,11 +117,19 @@ function RaidCommon.registerRaidAchievement(def)
     isRaid = true,
   }, { level = nil })  -- Raids have no level requirement
 
+  ---------------------------------------
+  -- State Management
+  ---------------------------------------
+
   -- State for the current achievement session only
   local state = {
     counts = {},           -- npcId => kills this achievement
     completed = false,     -- set true once achievement conditions met in this achievement
   }
+
+  ---------------------------------------
+  -- Helper Functions
+  ---------------------------------------
 
   -- Load progress from database on initialization
   local function LoadProgress()
@@ -242,7 +254,6 @@ function RaidCommon.registerRaidAchievement(def)
     return bossNames[npcId] or ("Boss " .. tostring(npcId))
   end
 
-  -- Helpers
   local function GetNpcIdFromGUID(guid)
     if not guid then return nil end
     local npcId = select(6, strsplit("-", guid))
@@ -284,7 +295,55 @@ function RaidCommon.registerRaidAchievement(def)
     return true
   end
 
+  -- Check if an NPC ID is a required boss for this achievement
+  local function IsRequiredBoss(npcId)
+    if not npcId then return false end
+    -- Direct lookup
+    if requiredKills[npcId] then
+      return true
+    end
+    -- Check if this NPC ID is in any array
+    for key, value in pairs(requiredKills) do
+      if type(value) == "table" then
+        for _, id in pairs(value) do
+          if id == npcId then
+            return true
+          end
+        end
+      end
+    end
+    return false
+  end
+
+  -- Increment kill count for a boss
+  local function IncrementBossKill(npcId)
+    if not npcId then return end
+    state.counts[npcId] = (state.counts[npcId] or 0) + 1
+  end
+
+  -- Calculate and store points for this achievement
+  local function StorePointsAtKill()
+    if not AchievementPanel or not AchievementPanel.achievements then return end
+    local row = _G[rowVarName]
+    if not row or not row.points then return end
+    
+    -- Store pointsAtKill WITHOUT the self-found bonus.
+    -- Recompute from base/original points so we don't rely on subtracting a (now dynamic) bonus.
+    local base = tonumber(row.originalPoints) or tonumber(row.points) or 0
+    local pointsToStore = base
+    if not row.staticPoints then
+      local preset = _G.GetPlayerPresetFromSettings and _G.GetPlayerPresetFromSettings() or nil
+      local multiplier = _G.GetPresetMultiplier and _G.GetPresetMultiplier(preset) or 1.0
+      pointsToStore = math.floor(base * multiplier + 0.5)
+    end
+    HardcoreAchievements_SetProgress(achId, "pointsAtKill", pointsToStore)
+  end
+
   -- Update tooltip when progress changes (local; closes over the local generator)
+  ---------------------------------------
+  -- Tooltip Management
+  ---------------------------------------
+
   local function UpdateTooltip()
     local row = _G[rowVarName]
     if row then
@@ -437,30 +496,9 @@ function RaidCommon.registerRaidAchievement(def)
     -- Process each NPC ID that matches this encounter
     local anyKilled = false
     for _, npcId in ipairs(npcIds) do
-      -- Check if this NPC ID is in our requiredKills
-      local isRequiredBoss = false
-      if requiredKills[npcId] then
-        isRequiredBoss = true
-      else
-        -- Check if this NPC ID is in any array
-        for key, value in pairs(requiredKills) do
-          if type(value) == "table" then
-            for _, id in pairs(value) do
-              if id == npcId then
-                isRequiredBoss = true
-                break
-              end
-            end
-            if isRequiredBoss then
-              break
-            end
-          end
-        end
-      end
-
-      if isRequiredBoss then
+      if IsRequiredBoss(npcId) then
         -- Count this kill (always eligible for raids)
-        state.counts[npcId] = (state.counts[npcId] or 0) + 1
+        IncrementBossKill(npcId)
         anyKilled = true
 
         -- Store the level when this boss was killed (for tracking purposes)
@@ -468,22 +506,7 @@ function RaidCommon.registerRaidAchievement(def)
         HardcoreAchievements_SetProgress(achId, "levelAtKill", killLevel)
 
         -- Store points (raids do not support solo doubling)
-        if AchievementPanel and AchievementPanel.achievements then
-          local rowVarName = achId .. "_Row"
-          local row = _G[rowVarName]
-          if row and row.points then
-            -- Store pointsAtKill WITHOUT the self-found bonus.
-            -- Recompute from base/original points so we don't rely on subtracting a (now dynamic) bonus.
-            local base = tonumber(row.originalPoints) or tonumber(row.points) or 0
-            local pointsToStore = base
-            if not row.staticPoints then
-              local preset = _G.GetPlayerPresetFromSettings and _G.GetPlayerPresetFromSettings() or nil
-              local multiplier = _G.GetPresetMultiplier and _G.GetPresetMultiplier(preset) or 1.0
-              pointsToStore = math.floor(base * multiplier + 0.5)
-            end
-            HardcoreAchievements_SetProgress(achId, "pointsAtKill", pointsToStore)
-          end
-        end
+        StorePointsAtKill()
 
         print("|cff008066[Hardcore Achievements]|r |cffffd100" .. HCA_GetRaidBossName(npcId) .. " killed as part of achievement: " .. title .. "|r")
       end
@@ -517,6 +540,10 @@ function RaidCommon.registerRaidAchievement(def)
   if _G.HardcoreAchievements_RegisterAchievementFunction then
     _G.HardcoreAchievements_RegisterAchievementFunction(achId, "IsCompleted", function() return state.completed end)
   end
+
+  ---------------------------------------
+  -- Registration Logic
+  ---------------------------------------
 
   -- Check faction eligibility
   local function IsEligible()
@@ -606,5 +633,8 @@ function RaidCommon.registerRaidAchievement(def)
   end
 end
 
--- Export to global scope
+---------------------------------------
+-- Module Export
+---------------------------------------
+
 _G.RaidCommon = RaidCommon

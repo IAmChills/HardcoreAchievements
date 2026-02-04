@@ -1,4 +1,6 @@
--- Dungeon Set achievement definitions
+---------------------------------------
+-- Dungeon Set Achievement Definitions
+---------------------------------------
 -- https://www.wowhead.com/tbc/item-sets
 local DungeonSets = {
   -- DEADMINES
@@ -364,6 +366,10 @@ local DungeonSets = {
     staticPoints = true,
   },
 }
+
+---------------------------------------
+-- Deferred Registration Queue
+---------------------------------------
 
 -- Defer registration until PLAYER_LOGIN to prevent load timeouts
 _G.HCA_RegistrationQueue = _G.HCA_RegistrationQueue or {}

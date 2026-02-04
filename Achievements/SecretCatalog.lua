@@ -1,5 +1,7 @@
+---------------------------------------
+-- Secret Achievement Definitions
+---------------------------------------
 local Secrets = {
-    -- Secret Achievements
 {
     achId = "Secret00Horde",
     title = "Snowball at Thrall",
@@ -317,8 +319,12 @@ local function IsEligible(def)
     end
   
     return true
-  end
-  
+end
+
+---------------------------------------
+-- Registration Logic
+---------------------------------------
+
 -- Register achievements and set up completion functions
 for _, def in ipairs(Secrets) do
   if IsEligible(def) then
@@ -345,6 +351,10 @@ end
 
 -- Export secrets to global scope for AdminPanel access
 _G.Secrets = Secrets
+
+---------------------------------------
+-- Deferred Registration Queue
+---------------------------------------
 
 -- Defer registration until PLAYER_LOGIN to prevent load timeouts
 _G.HCA_RegistrationQueue = _G.HCA_RegistrationQueue or {}

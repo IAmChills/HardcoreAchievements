@@ -1,3 +1,6 @@
+---------------------------------------
+-- Achievement Definitions
+---------------------------------------
 local Achievements = {
 
 --{ achId="Test",  title="Boar Test",  level=4, tooltip="Kill " .. HCA_SharedUtils.GetClassColor() .. "a boar", icon=134400, points=10, requiredQuestId=nil, targetNpcId=3098, faction="Horde", zone="Durotar" },
@@ -778,6 +781,10 @@ local function IsEligible(def)
   return true
 end
 
+---------------------------------------
+-- Registration Logic
+---------------------------------------
+
 for _, def in ipairs(Achievements) do
   if IsEligible(def) then
     if def.customKill then
@@ -804,6 +811,33 @@ end
 -- Export achievements to global scope for AdminPanel access
 _G.Achievements = Achievements
 
+---------------------------------------
+-- Helper Functions
+---------------------------------------
+
+-- Get kill tracker function for an achievement definition
+local function GetKillTracker(def)
+    if def.customKill then
+        return def.customKill
+    end
+    if def.targetNpcId or def.requiredKills then
+        return _G.HardcoreAchievements_GetAchievementFunction and _G.HardcoreAchievements_GetAchievementFunction(def.achId, "Kill") or nil
+    end
+    return nil
+end
+
+-- Get quest tracker function for an achievement definition
+local function GetQuestTracker(def)
+    if def.requiredQuestId then
+        return _G.HardcoreAchievements_GetAchievementFunction and _G.HardcoreAchievements_GetAchievementFunction(def.achId, "Quest") or nil
+    end
+    return nil
+end
+
+---------------------------------------
+-- Deferred Registration Queue
+---------------------------------------
+
 -- Defer registration until PLAYER_LOGIN to prevent load timeouts
 _G.HCA_RegistrationQueue = _G.HCA_RegistrationQueue or {}
 
@@ -813,8 +847,8 @@ for _, def in ipairs(Achievements) do
     -- Mark as quest achievement for filtering
     def.isQuest = true
     table.insert(_G.HCA_RegistrationQueue, function()
-      local killFn  = def.customKill or ((def.targetNpcId or def.requiredKills) and _G.HardcoreAchievements_GetAchievementFunction(def.achId, "Kill")) or nil
-      local questFn = (def.requiredQuestId and _G.HardcoreAchievements_GetAchievementFunction(def.achId, "Quest")) or nil
+      local killFn = GetKillTracker(def)
+      local questFn = GetQuestTracker(def)
 
       -- Expose this definition for external lookups (e.g., NPC tooltips, chat links)
       HCA_SharedUtils.RegisterAchievementDef(def)

@@ -380,26 +380,6 @@ if Old_ItemRef_SetHyperlink then
 	end
 end
 
--- Optional: Convert bracketed fallback text to hyperlink for receivers without direct link
--- Pattern: [HCA: Title (achId)] -> |Hhcaach:achId:GUID:senderName|h[Title]|h
-local function EscapePattern(s)
-	return (s
-		:gsub("%%", "%%%%")
-		:gsub("^%^", "%%^")
-		:gsub("%$", "%%$")
-		:gsub("%(", "%%(")
-		:gsub("%)", "%%)")
-		:gsub("%.", "%%.")
-		:gsub("%[", "%%[")
-		:gsub("%]", "%%]")
-		:gsub("%*", "%%*")
-		:gsub("%+", "%%+")
-		:gsub("%-", "%%-")
-		:gsub("%?", "%%?")
-		:gsub("%|", "%%|")
-	)
-end
-
 local function ChatFilter_HCA(chatFrame, event, msg, author, ...)
     if not msg or type(msg) ~= "string" then return end
     local changed = false
