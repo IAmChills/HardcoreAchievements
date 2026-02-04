@@ -1,7 +1,7 @@
 ﻿## Interface: 11508, 20505
 ## Title: HardcoreAchievements
 ## Author: Chills
-## Version: 1.6.0
+## Version: 1.6.1
 ## Notes: Hardcore achievements system
 ## OptionalDeps: Ace3, CallbackHandler-1.0, LibDataBroker-1.1, LibDBIcon-1.0, LibStub, LibUIDropDownMenu
 ## SavedVariables: HardcoreAchievementsDB
@@ -28,7 +28,7 @@ TBC\ProfessionTracker.lua [AllowLoadGameType tbc]
 Utils\SharedUtils.lua
 Utils\FilterDropdown.lua
 HardcoreAchievements.lua
-Utils\GuildFirst.lua
+#Utils\GuildFirst.lua
 Utils\AchievementTracker.lua
 
 Achievements\Common.lua
@@ -40,7 +40,7 @@ Achievements\MetaCommon.lua
 Achievements\ProfessionCatalog.lua [AllowLoadGameType vanilla]
 Achievements\Catalog.lua [AllowLoadGameType vanilla]
 Achievements\SecretCatalog.lua [AllowLoadGameType vanilla]
-Achievements\GuildFirstCatalog.lua [AllowLoadGameType vanilla]
+#Achievements\GuildFirstCatalog.lua [AllowLoadGameType vanilla]
 Achievements\RidiculousCatalog.lua [AllowLoadGameType vanilla]
 Achievements\DungeonCatalog.lua [AllowLoadGameType vanilla]
 Achievements\DungeonSetCatalog.lua [AllowLoadGameType vanilla]

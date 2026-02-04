@@ -4587,15 +4587,12 @@ do
                                 end
                                 -- Initial load is complete: allow normal UI refreshes.
                                 _G.HCA_Initializing = false
+                                print("|cff008066[Hardcore Achievements]|r |cffffd100All achievements loaded!|r")
                             end)
                         end)
                     end)
                 end)
             end)
-            
-            -- Print "All achievements loaded!" after restorations are marked complete
-            -- but before scheduling the completion checks
-            print("|cff008066[Hardcore Achievements]|r |cffffd100All achievements loaded!|r")
         end)
     end
 
@@ -4664,7 +4661,7 @@ do
         elseif event == "PLAYER_LOGIN" then
             playerLoggedIn = true
             _G.HCA_Initializing = true
-            print("|cff008066[Hardcore Achievements]|r |cffffd100Loading achievements...|r")
+            --print("|cff008066[Hardcore Achievements]|r |cffffd100Loading achievements...|r")
             
             -- If registration already complete, trigger heavy operations
             if registrationComplete then
