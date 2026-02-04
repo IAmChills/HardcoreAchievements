@@ -39,8 +39,10 @@ local function GetGuildName()
     return GetGuildInfo and GetGuildInfo("player") or nil
 end
 
-local function GetRealmName()
-    return GetRealmName and GetRealmName() or ""
+local function Debug(msg)
+    if type(_G.HCA_DebugPrint) == "function" then
+        _G.HCA_DebugPrint("[GuildFirst] " .. tostring(msg))
+    end
 end
 
 local function Hash32(s)
@@ -129,12 +131,6 @@ local function FindRowByAchId(achId)
         end
     end
     return nil
-end
-
-local function Debug(msg)
-    if type(_G.HCA_DebugPrint) == "function" then
-        _G.HCA_DebugPrint("[GuildFirst] " .. tostring(msg))
-    end
 end
 
 -- ---------------------------------------------------------------------------------------------------------------------

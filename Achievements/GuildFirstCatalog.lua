@@ -23,7 +23,7 @@ local achievements = {
         secretPoints = 0,
         staticPoints = true,
         hiddenUntilComplete = true,
-        -- achievementScope = nil or "guild" (default)
+        achievementScope = "server"
     },
     
     -- Example 2: Server-first
@@ -73,6 +73,7 @@ for _, def in ipairs(achievements) do
         end
 
         def.isSecret = true
+        def.isGuildFirst = true
 
         -- Store the row in a global so GuildFirst module can award it without scanning.
         local globalName = "HCA_GuildFirst_" .. def.achId .. "_Row"

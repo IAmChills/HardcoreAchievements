@@ -2924,8 +2924,10 @@ local function ApplyFilter()
         if row.hiddenByProfession then
             shouldShow = false
         end
-        -- Hide guild-first achievements that are already claimed by someone else
-        if not row.completed then
+        -- Hide GuildFirst achievements that are already claimed by someone else.
+        -- IMPORTANT: only apply this to achievements explicitly marked as GuildFirst,
+        -- otherwise we'll do unnecessary checks (and spam debug) for the entire catalog.
+        if not row.completed and row._def and row._def.isGuildFirst then
             local achId = row.id or row.achId
             if achId and _G.HCA_GuildFirst then
                 local isClaimed, winner = _G.HCA_GuildFirst:IsClaimed(tostring(achId), row)
