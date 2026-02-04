@@ -1955,6 +1955,27 @@ local function UpdateDashboardProgressOverview(srcRows)
         end
       end
       c, t = completed, total
+    elseif key == "secret" then
+      -- Secret progress: count secret achievements, but do NOT include GuildFirst-style
+      -- "claim" secrets unless the player has actually completed them.
+      local completed, total = 0, 0
+      for _, row in ipairs(srcRows) do
+        local def = row and row._def
+        if def and def.isSecret == true then
+          local achId = tostring(row.achId or row.id or def.achId or "")
+          local rec = (achId ~= "" and achievements) and achievements[achId] or nil
+          local isCompleted = (rec and rec.completed == true) or (row and row.completed == true)
+
+          -- GuildFirst secrets are not "real" secrets for the player unless they won/claimed them.
+          if def.isGuildFirst ~= true or isCompleted then
+            total = total + 1
+            if isCompleted then
+              completed = completed + 1
+            end
+          end
+        end
+      end
+      c, t = completed, total
     else
       c, t = GetCategoryCountsFromRows(key, srcRows, achievements)
     end
@@ -2293,15 +2314,30 @@ function DASHBOARD:BuildModernRows(srcRows)
     local minH = math.max((self.Content:GetHeight() or 1), rowsH + progH + 60)
     self.Content:SetHeight(minH)
     if DashboardFrame and DashboardFrame.Scroll then
-      -- No scrolling needed on Summary: hide scrollbar and disable scroll input.
-      if DashboardFrame.Scroll.ScrollBar then
-        DashboardFrame.Scroll.ScrollBar:Hide()
-      end
-      if DashboardFrame.Scroll.EnableMouseWheel then
-        DashboardFrame.Scroll:EnableMouseWheel(false)
-      end
-      DashboardFrame.Scroll:SetVerticalScroll(0)
+      -- Summary can be scrollable (recent rows + progress overview). Only disable scroll input
+      -- if there is genuinely no scroll range.
       DashboardFrame.Scroll:UpdateScrollChildRect()
+      local maxV = DashboardFrame.Scroll:GetVerticalScrollRange() or 0
+      local curV = DashboardFrame.Scroll:GetVerticalScroll() or 0
+      if curV > maxV then
+        DashboardFrame.Scroll:SetVerticalScroll(maxV)
+        curV = maxV
+      end
+      local sb = DashboardFrame.Scroll.ScrollBar
+      if maxV <= 0 then
+        if sb then sb:Hide() end
+        if DashboardFrame.Scroll.EnableMouseWheel then
+          DashboardFrame.Scroll:EnableMouseWheel(false)
+        end
+        DashboardFrame.Scroll:SetVerticalScroll(0)
+        if sb then sb:SetValue(0) end
+      else
+        if sb then sb:Show() end
+        if DashboardFrame.Scroll.EnableMouseWheel then
+          DashboardFrame.Scroll:EnableMouseWheel(true)
+        end
+        if sb then sb:SetValue(curV) end
+      end
     end
   else
     if DashboardFrame and DashboardFrame.ProgressContainer then
@@ -2916,6 +2952,18 @@ local function BuildDashboardFrame()
 
     -- Apply minimal scrollbar styling to main list
     ApplyClassLineScrollbar(DashboardFrame.Scroll, 2)
+
+    -- Mouse wheel scrolling for the main list (Summary + tabs).
+    DashboardFrame.Scroll:EnableMouseWheel(true)
+    DashboardFrame.Scroll:SetScript("OnMouseWheel", function(self, delta)
+      local step = 48
+      local cur = self:GetVerticalScroll() or 0
+      local maxV = self:GetVerticalScrollRange() or 0
+      local newV = math.min(maxV, math.max(0, cur - delta * step))
+      self:SetVerticalScroll(newV)
+      local sb = self.ScrollBar or (self:GetName() and _G[self:GetName() .. "ScrollBar"])
+      if sb then sb:SetValue(newV) end
+    end)
   end
   
   if not DashboardFrame.Content then

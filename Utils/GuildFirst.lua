@@ -134,6 +134,169 @@ local function FindRowByAchId(achId)
 end
 
 -- ---------------------------------------------------------------------------------------------------------------------
+-- GuildFirst config registry (published by Achievements/GuildFirstCatalog.lua)
+-- ---------------------------------------------------------------------------------------------------------------------
+
+local function GetGuildFirstDef(achId, row)
+    if row and row._def and row._def.isGuildFirst then
+        return row._def
+    end
+    if _G.HCA_GuildFirst_DefById then
+        return _G.HCA_GuildFirst_DefById[tostring(achId)]
+    end
+    return nil
+end
+
+local function DefaultRequireSameGuild(def)
+    if def and def.requireSameGuild ~= nil then
+        return def.requireSameGuild == true
+    end
+    -- Default: if claim scope is guild-scoped (default), require same guild for group awards.
+    local scope = def and def.achievementScope
+    return scope == nil or scope == "guild"
+end
+
+local function Trim(s)
+    return (tostring(s or ""):gsub("^%s+", ""):gsub("%s+$", ""))
+end
+
+local function ParseDelimitedSet(s, delim)
+    local set = {}
+    s = Trim(s)
+    if s == "" then
+        return set
+    end
+    delim = delim or ";"
+    for token in string.gmatch(s, "([^" .. delim .. "]+)") do
+        token = Trim(token)
+        if token ~= "" then
+            set[token] = true
+        end
+    end
+    return set
+end
+
+local function RecordIncludesGUID(rec, guid)
+    guid = tostring(guid or "")
+    if guid == "" or not rec then
+        return false
+    end
+    -- Multi-winner claim (raid/party): encode the GUID list into winnerGUID as a ';' delimited string.
+    -- (This avoids LibP2PDB schema migration issues for existing installs.)
+    local s = tostring(rec.winnerGUID or "")
+    if s:find(";", 1, true) then
+        local set = ParseDelimitedSet(s, ";")
+        return set[guid] == true
+    end
+    -- Single-winner claim:
+    return s == guid
+end
+
+--- True if the given claim record includes the current player as a winner.
+--- @param rec table?
+--- @return boolean
+function M:IsWinnerRecord(rec)
+    local myGUID = UnitGUID("player") or ""
+    return RecordIncludesGUID(rec, myGUID)
+end
+
+local function BuildWinnersGUIDList(awardMode, requireSameGuild)
+    awardMode = tostring(awardMode or "solo"):lower()
+    requireSameGuild = requireSameGuild == true
+
+    local myGuild = requireSameGuild and GetGuildName() or nil
+    local winnersGUID = {}
+    local seen = {}
+
+    local function AddUnit(unit)
+        if not UnitExists(unit) then return end
+        local guid = UnitGUID(unit)
+        if not guid or guid == "" or seen[guid] then return end
+
+        if myGuild and myGuild ~= "" then
+            local gName = GetGuildInfo and GetGuildInfo(unit) or nil
+            if gName ~= myGuild then
+                return
+            end
+        end
+
+        seen[guid] = true
+        table.insert(winnersGUID, guid)
+    end
+
+    if awardMode == "solo" then
+        AddUnit("player")
+    elseif awardMode == "party" then
+        AddUnit("player")
+        for i = 1, 4 do AddUnit("party" .. i) end
+    elseif awardMode == "raid" then
+        local n = GetNumGroupMembers and GetNumGroupMembers() or 0
+        for i = 1, n do AddUnit("raid" .. i) end
+        -- Fallback if API returns 0 unexpectedly
+        AddUnit("player")
+    else
+        -- "group" (default): raid if in raid, else party if in group, else solo
+        if IsInRaid and IsInRaid() then
+            local n = GetNumGroupMembers and GetNumGroupMembers() or 0
+            for i = 1, n do AddUnit("raid" .. i) end
+            AddUnit("player")
+        elseif IsInGroup and IsInGroup() then
+            AddUnit("player")
+            for i = 1, 4 do AddUnit("party" .. i) end
+        else
+            AddUnit("player")
+        end
+    end
+
+    return table.concat(winnersGUID, ";")
+end
+
+-- Winner parsing helpers -------------------------------------------------------------------------
+local function Trim(s)
+    return (tostring(s or ""):gsub("^%s+", ""):gsub("%s+$", ""))
+end
+
+local function ParseDelimitedSet(s, delim)
+    local set = {}
+    s = Trim(s)
+    if s == "" then
+        return set
+    end
+    delim = delim or ";"
+    for token in string.gmatch(s, "([^" .. delim .. "]+)") do
+        token = Trim(token)
+        if token ~= "" then
+            set[token] = true
+        end
+    end
+    return set
+end
+
+local function RecordIncludesGUID(rec, guid)
+    guid = tostring(guid or "")
+    if guid == "" or not rec then
+        return false
+    end
+    -- Multi-winner claim (raid/party): encode the GUID list into winnerGUID as a ';' delimited string.
+    -- (This avoids LibP2PDB schema migration issues for existing installs.)
+    local s = tostring(rec.winnerGUID or "")
+    if s:find(";", 1, true) then
+        local set = ParseDelimitedSet(s, ";")
+        return set[guid] == true
+    end
+    -- Single-winner claim:
+    return s == guid
+end
+
+--- True if the given claim record includes the current player as a winner.
+--- @param rec table?
+--- @return boolean
+function M:IsWinnerRecord(rec)
+    local myGUID = UnitGUID("player") or ""
+    return RecordIncludesGUID(rec, myGUID)
+end
+
+-- ---------------------------------------------------------------------------------------------------------------------
 -- Database initialization
 -- ---------------------------------------------------------------------------------------------------------------------
 
@@ -181,10 +344,18 @@ local function EnsureDBForScope(scopeKey)
                 -- When a claim changes, refresh the achievement filter to hide/show rows
                 local myGUID = UnitGUID("player") or ""
                 if data and data.winnerGUID then
-                    if data.winnerGUID == myGUID then
-                        Debug("Received claim update: Achievement '" .. tostring(key) .. "' claimed by ME (already awarded)")
+                    if RecordIncludesGUID(data, myGUID) then
+                        Debug("Received claim update: Achievement '" .. tostring(key) .. "' claimed and I am an eligible winner")
+                        -- If this player is a winner, award immediately when the claim arrives.
+                        local row = _G["HCA_GuildFirst_" .. tostring(key) .. "_Row"] or FindRowByAchId(tostring(key))
+                        if row and not row.completed and type(_G.HCA_MarkRowCompleted) == "function" then
+                            _G.HCA_MarkRowCompleted(row)
+                            if row.completed and type(_G.HCA_AchToast_Show) == "function" and row.Icon and row.Title then
+                                _G.HCA_AchToast_Show(row.Icon:GetTexture(), row.Title:GetText(), row.points or 0, row)
+                            end
+                        end
                     else
-                        Debug("Received claim update: Achievement '" .. tostring(key) .. "' claimed by " .. tostring(data.winnerName or "?") .. " - marking as silently failed")
+                        Debug("Received claim update: Achievement '" .. tostring(key) .. "' claimed by " .. tostring(data.winnerName or "?") .. " - not eligible (silent fail)")
                     end
                 else
                     Debug("Received claim update: Achievement '" .. tostring(key) .. "' claim removed")
@@ -310,8 +481,8 @@ function M:IsClaimed(achievementId, row)
     local rec = LibP2PDB:GetKey(db, TABLE_NAME, achievementId)
     if rec then
         local myGUID = UnitGUID("player") or ""
-        if rec.winnerGUID == myGUID then
-            Debug("IsClaimed(" .. achievementId .. "): Already claimed by ME (scope: " .. tostring(scopeKey) .. ")")
+        if RecordIncludesGUID(rec, myGUID) then
+            Debug("IsClaimed(" .. achievementId .. "): Already claimed and I am an eligible winner (scope: " .. tostring(scopeKey) .. ")")
         else
             Debug("IsClaimed(" .. achievementId .. "): Already claimed by " .. tostring(rec.winnerName or "?") .. " (scope: " .. tostring(scopeKey) .. ")")
         end
@@ -340,8 +511,7 @@ function M:IsClaimedByMe(achievementId, row)
 
     local rec = LibP2PDB:GetKey(db, TABLE_NAME, tostring(achievementId))
     if rec then
-        local myGUID = UnitGUID("player") or ""
-        return rec.winnerGUID == myGUID
+        return RecordIncludesGUID(rec, UnitGUID("player") or "")
     end
     return false
 end
@@ -350,8 +520,10 @@ end
 --- Returns true if awarded, false if already claimed (silent fail).
 --- @param achievementId string
 --- @param row table? Optional achievement row (will find if not provided, also used to determine scope)
+--- @param winnersGUIDs string? Optional ';' delimited GUID list for multi-winner claims (e.g. a raid)
+--- @param winnersNames string? Optional ';' delimited names list (debug only)
 --- @return boolean awarded
-function M:CanClaimAndAward(achievementId, row)
+function M:CanClaimAndAward(achievementId, row, winnersGUIDs, winnersNames)
     achievementId = tostring(achievementId or "")
     if achievementId == "" then
         Debug("CanClaimAndAward: Empty achievement ID")
@@ -401,9 +573,10 @@ function M:CanClaimAndAward(achievementId, row)
     -- Claim it
     local myName = UnitName("player") or ""
     local myGUID = UnitGUID("player") or ""
+    local encodedWinners = (type(winnersGUIDs) == "string" and winnersGUIDs ~= "") and winnersGUIDs or myGUID
     local claim = {
         winnerName = myName,
-        winnerGUID = myGUID,
+        winnerGUID = encodedWinners,
         claimedAt = time(),
     }
 
@@ -436,18 +609,50 @@ function M:CanClaimAndAward(achievementId, row)
 
     -- Award the achievement
     if row and type(_G.HCA_MarkRowCompleted) == "function" then
-        Debug("CanClaimAndAward(" .. achievementId .. "): Awarding achievement to player")
-        _G.HCA_MarkRowCompleted(row)
-        if type(_G.HCA_AchToast_Show) == "function" and row.Icon and row.Title then
-            _G.HCA_AchToast_Show(row.Icon:GetTexture(), row.Title:GetText(), row.points or 0, row)
+        if RecordIncludesGUID(claim, myGUID) then
+            if not row.completed then
+                Debug("CanClaimAndAward(" .. achievementId .. "): Awarding achievement to player")
+                _G.HCA_MarkRowCompleted(row)
+                if row.completed and type(_G.HCA_AchToast_Show) == "function" and row.Icon and row.Title then
+                    _G.HCA_AchToast_Show(row.Icon:GetTexture(), row.Title:GetText(), row.points or 0, row)
+                end
+                Debug("CanClaimAndAward(" .. achievementId .. "): Achievement awarded successfully!")
+                return true
+            end
+            return true
+        else
+            Debug("CanClaimAndAward(" .. achievementId .. "): Claim succeeded but player not in winners list (no award)")
         end
-        Debug("CanClaimAndAward(" .. achievementId .. "): Achievement awarded successfully!")
-        return true
     else
         Debug("CanClaimAndAward(" .. achievementId .. "): WARNING - Claim succeeded but couldn't award (row or HCA_MarkRowCompleted missing)")
     end
 
     return false
+end
+
+--- Data-driven trigger: claim + award using the catalog definition (or overrides).
+--- @param guildFirstAchId string
+--- @param opts table? { winnersGUIDs?: string, awardMode?: string, requireSameGuild?: boolean }
+function M:Trigger(guildFirstAchId, opts)
+    guildFirstAchId = tostring(guildFirstAchId or "")
+    if guildFirstAchId == "" then return false end
+
+    opts = opts or {}
+    local row = _G["HCA_GuildFirst_" .. guildFirstAchId .. "_Row"] or FindRowByAchId(guildFirstAchId)
+    local def = GetGuildFirstDef(guildFirstAchId, row)
+
+    local awardMode = opts.awardMode or (def and def.awardMode) or "solo"
+    local requireSameGuild = opts.requireSameGuild
+    if requireSameGuild == nil then
+        requireSameGuild = DefaultRequireSameGuild(def)
+    end
+
+    local winnersGUIDs = opts.winnersGUIDs
+    if type(winnersGUIDs) ~= "string" or winnersGUIDs == "" then
+        winnersGUIDs = BuildWinnersGUIDList(awardMode, requireSameGuild)
+    end
+
+    return self:CanClaimAndAward(guildFirstAchId, row, winnersGUIDs, nil)
 end
 
 -- ---------------------------------------------------------------------------------------------------------------------
@@ -458,15 +663,23 @@ local function HandleSlash(msg)
     msg = tostring(msg or ""):lower():gsub("^%s+", ""):gsub("%s+$", "")
     if msg == "" or msg == "help" then
         print("|cff008066[Hardcore Achievements]|r GuildFirst commands:")
-        print("  |cffffd100/hcagf claim|r - Attempt to claim the test guild-first achievement")
-        print("  |cffffd100/hcagf status|r - Show current winner (if any)")
+        print("  |cffffd100/hcagf claim [GuildFirstId]|r - Attempt to claim a GuildFirst achievement (defaults to test)")
+        print("  |cffffd100/hcagf status [GuildFirstId]|r - Show current winner (if any)")
         return
     end
 
-    if msg == "claim" then
-        local achId = "GuildFirstTest01"
+    local cmd, arg = msg:match("^(%S+)%s*(.-)$")
+    cmd = tostring(cmd or ""):lower()
+    arg = tostring(arg or ""):gsub("^%s+", ""):gsub("%s+$", "")
+
+    if cmd == "claim" then
+        local achId = (arg ~= "" and arg) or "GuildFirstTest01"
         local row = _G["HCA_GuildFirst_" .. achId .. "_Row"] or FindRowByAchId(achId)
-        if M:CanClaimAndAward(achId, row) then
+        local def = GetGuildFirstDef(achId, row)
+        local awardMode = (def and def.awardMode) or "solo"
+        local requireSameGuild = DefaultRequireSameGuild(def)
+        local winnersGUIDs = BuildWinnersGUIDList(awardMode, requireSameGuild)
+        if M:CanClaimAndAward(achId, row, winnersGUIDs, nil) then
             print("|cff008066[Hardcore Achievements]|r |cff00ff00Claimed and awarded!|r")
         else
             print("|cff008066[Hardcore Achievements]|r |cffff0000Already claimed by someone else.|r")
@@ -474,9 +687,9 @@ local function HandleSlash(msg)
         return
     end
 
-    if msg == "status" then
-        local achId = "GuildFirstTest01"
-        local row = _G.HCA_GuildFirst_TestRow or FindRowByAchId(achId)
+    if cmd == "status" then
+        local achId = (arg ~= "" and arg) or "GuildFirstTest01"
+        local row = _G["HCA_GuildFirst_" .. achId .. "_Row"] or FindRowByAchId(achId)
         local isClaimed, winner = M:IsClaimed(achId, row)
         if isClaimed and winner then
             print(string.format("|cff008066[Hardcore Achievements]|r Winner: |cffffd100%s|r", tostring(winner.winnerName or "?")))
@@ -510,4 +723,33 @@ initFrame:SetScript("OnEvent", function()
         end
     end
 end)
+
+-- ---------------------------------------------------------------------------------------------------------------------
+-- Generic trigger wiring: when a standard achievement completes, trigger any configured GuildFirst entries.
+-- ---------------------------------------------------------------------------------------------------------------------
+
+local function OnAchievementCompleted(achievementData)
+    if not achievementData then return end
+    local triggerId = tostring(achievementData.achievementId or "")
+    if triggerId == "" then return end
+
+    local idx = _G.HCA_GuildFirst_ByTrigger
+    if not idx then return end
+
+    local list = idx[triggerId]
+    if type(list) ~= "table" then return end
+
+    for _, gfAchId in ipairs(list) do
+        local row = _G["HCA_GuildFirst_" .. tostring(gfAchId) .. "_Row"] or FindRowByAchId(tostring(gfAchId))
+        local def = GetGuildFirstDef(gfAchId, row)
+        local awardMode = (def and def.awardMode) or "solo"
+        local requireSameGuild = DefaultRequireSameGuild(def)
+        local winnersGUIDs = BuildWinnersGUIDList(awardMode, requireSameGuild)
+        M:CanClaimAndAward(tostring(gfAchId), row, winnersGUIDs, nil)
+    end
+end
+
+if _G.HardcoreAchievements_Hooks and _G.HardcoreAchievements_Hooks.HookScript then
+    _G.HardcoreAchievements_Hooks:HookScript("OnAchievement", OnAchievementCompleted)
+end
 

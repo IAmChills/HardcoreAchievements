@@ -2932,8 +2932,14 @@ local function ApplyFilter()
             if achId and _G.HCA_GuildFirst then
                 local isClaimed, winner = _G.HCA_GuildFirst:IsClaimed(tostring(achId), row)
                 if isClaimed and winner then
-                    local myGUID = UnitGUID("player") or ""
-                    if winner.winnerGUID ~= myGUID then
+                    local isWinner = false
+                    if type(_G.HCA_GuildFirst.IsWinnerRecord) == "function" then
+                        isWinner = _G.HCA_GuildFirst:IsWinnerRecord(winner) == true
+                    else
+                        local myGUID = UnitGUID("player") or ""
+                        isWinner = tostring(winner.winnerGUID or "") == myGUID
+                    end
+                    if not isWinner then
                         -- Claimed by someone else - silently fail (hide)
                         _G.HCA_DebugPrint("[Filter] Hiding achievement '" .. tostring(achId) .. "' - already claimed by " .. tostring(winner.winnerName or "?") .. " (silent fail)")
                         shouldShow = false
