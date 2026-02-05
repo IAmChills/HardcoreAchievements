@@ -8,6 +8,17 @@ local REFRESH_DELAY_SEC = 0.1      -- Delay before refreshing UI after failure
 
 local NO_JUMP_ACHIEVEMENT_ID = "NoJumpChallenge"
 
+-- Localize frequently-used WoW API globals (micro-optimization, no behavior change)
+local _G = _G
+local UnitLevel = UnitLevel
+local UnitGUID = UnitGUID
+local GetExpansionLevel = GetExpansionLevel
+local CreateFrame = CreateFrame
+local C_Timer = C_Timer
+local GetTime = GetTime
+local hooksecurefunc = hooksecurefunc
+local IsFalling = IsFalling
+
 ---------------------------------------
 -- Helper Functions
 ---------------------------------------

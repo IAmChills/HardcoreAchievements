@@ -4,6 +4,12 @@
 
 HCA_SharedUtils = {}
 
+-- Localize frequently-used WoW API globals (micro-optimization, no behavior change)
+local _G = _G
+local UnitClass = UnitClass
+local GetClassColor = GetClassColor
+local CreateFrame = CreateFrame
+
 -- =========================================================
 -- Settings Helpers
 -- =========================================================

@@ -5,6 +5,18 @@
 local AceComm = LibStub("AceComm-3.0")
 local AceSerialize = LibStub("AceSerializer-3.0")
 
+-- Localize frequently-used WoW API globals (micro-optimization, no behavior change)
+local _G = _G
+local UnitName = UnitName
+local UnitLevel = UnitLevel
+local CreateFrame = CreateFrame
+local time = time
+local table_insert = table.insert
+local table_remove = table.remove
+local string_format = string.format
+local string_byte = string.byte
+local string_gmatch = string.gmatch
+
 -- Reference to AchievementTracker (loaded via TOC, get it lazily)
 local function GetAchievementTracker()
     return _G.HardcoreAchievementsTracker
@@ -70,7 +82,7 @@ local function CreateSecureHash(payload, secretKey)
     end
     
     -- Create message to sign: all critical fields in canonical order
-    local message = string.format("%d:%d:%s:%s:%s",
+    local message = string_format("%d:%d:%s:%s:%s",
         payload.version or 0,
         payload.timestamp or 0,
         payload.achievementId or "",
@@ -87,7 +99,7 @@ local function CreateSecureHash(payload, secretKey)
     local prime2 = 17
     
     for i = 1, #combined do
-        local byte = string.byte(combined, i)
+        local byte = string_byte(combined, i)
         hash = ((hash * prime1) + byte * prime2) % 2147483647
         hash = (hash + (byte * i * prime1)) % 2147483647
     end
@@ -96,12 +108,12 @@ local function CreateSecureHash(payload, secretKey)
     hash = (hash * #secretKey) % 2147483647
     
     -- Return as hex string for better security
-    return string.format("%08x", hash)
+    return string_format("%08x", hash)
 end
 
 -- Generate a nonce for replay protection
 local function GenerateNonce()
-    return string.format("%d:%d", time(), math.random(1000000, 9999999))
+    return string_format("%d:%d", time(), math.random(1000000, 9999999))
 end
 
 local function ValidatePayload(payload, sender)
@@ -145,7 +157,7 @@ local function ValidatePayload(payload, sender)
     local noncesToRemove = {}
     for nonce, nonceTime in pairs(HardcoreAchievementsDB.adminNonces) do
         if currentTime - nonceTime > MAX_PAYLOAD_AGE then
-            table.insert(noncesToRemove, nonce)
+            table_insert(noncesToRemove, nonce)
         end
     end
     for _, nonce in ipairs(noncesToRemove) do
@@ -275,7 +287,7 @@ local function ProcessDeleteAchievementCommand(payload, sender)
     
     -- Log the action
     if not HardcoreAchievementsDB.adminCommands then HardcoreAchievementsDB.adminCommands = {} end
-    table.insert(HardcoreAchievementsDB.adminCommands, {
+    table_insert(HardcoreAchievementsDB.adminCommands, {
         timestamp = time(),
         commandType = "delete_achievement",
         achievementId = payload.achievementId,
@@ -288,7 +300,7 @@ local function ProcessDeleteAchievementCommand(payload, sender)
     
     -- Keep only last 100 commands
     if #HardcoreAchievementsDB.adminCommands > 100 then
-        table.remove(HardcoreAchievementsDB.adminCommands, 1)
+        table_remove(HardcoreAchievementsDB.adminCommands, 1)
     end
     
     if hadAchievement then
@@ -328,7 +340,7 @@ local function ProcessClearSecretKeyCommand(payload, sender)
         
         -- Log the action
         if not HardcoreAchievementsDB.adminCommands then HardcoreAchievementsDB.adminCommands = {} end
-        table.insert(HardcoreAchievementsDB.adminCommands, {
+        table_insert(HardcoreAchievementsDB.adminCommands, {
             timestamp = time(),
             commandType = "clear_secret_key",
             sender = sender,
@@ -339,7 +351,7 @@ local function ProcessClearSecretKeyCommand(payload, sender)
         
         -- Keep only last 100 commands
         if #HardcoreAchievementsDB.adminCommands > 100 then
-            table.remove(HardcoreAchievementsDB.adminCommands, 1)
+            table_remove(HardcoreAchievementsDB.adminCommands, 1)
         end
         
         if hadKey then
@@ -572,7 +584,7 @@ local function ProcessAdminCommand(payload, sender)
     -- Log the admin command (for audit trail)
     if not HardcoreAchievementsDB.adminCommands then HardcoreAchievementsDB.adminCommands = {} end
     
-    table.insert(HardcoreAchievementsDB.adminCommands, {
+    table_insert(HardcoreAchievementsDB.adminCommands, {
         timestamp = time(),
         achievementId = payload.achievementId,
         sender = sender,
@@ -584,7 +596,7 @@ local function ProcessAdminCommand(payload, sender)
     
     -- Keep only last 100 commands to prevent database bloat
     if #HardcoreAchievementsDB.adminCommands > 100 then
-        table.remove(HardcoreAchievementsDB.adminCommands, 1)
+        table_remove(HardcoreAchievementsDB.adminCommands, 1)
     end
     
     return true
@@ -644,8 +656,8 @@ end
 -- Slash command handler
 local function HandleSlashCommand(msg)
     local args = {}
-    for arg in string.gmatch(msg or "", "%S+") do
-        table.insert(args, arg)
+    for arg in string_gmatch(msg or "", "%S+") do
+        table_insert(args, arg)
     end
     local command = args[1] and string.lower(args[1]) or ""
     
@@ -826,7 +838,7 @@ end
 -- Callback signature: function(payload, sender) where payload contains {type, playerName}
 function _G.HCA_RegisterPreciousCompletionCallback(callback)
     if type(callback) == "function" then
-        table.insert(preciousCompletionCallbacks, callback)
+        table_insert(preciousCompletionCallbacks, callback)
     end
 end
 

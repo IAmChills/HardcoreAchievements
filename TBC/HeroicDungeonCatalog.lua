@@ -1,6 +1,8 @@
 ---------------------------------------
 -- Heroic Dungeon Achievement Definitions
 ---------------------------------------
+local table_insert = table.insert
+
 local HeroicDungeons = {
   -- Hellfire Ramparts (Both, Level 70)
   {
@@ -326,7 +328,7 @@ for _, dungeon in ipairs(HeroicDungeons) do
   -- Mark as heroic dungeon for filtering
   dungeon.isHeroicDungeon = true
   -- Queue base dungeon achievement
-  table.insert(_G.HCA_RegistrationQueue, function()
+  table_insert(_G.HCA_RegistrationQueue, function()
     DungeonCommon.registerDungeonAchievement(dungeon)
   end)
 end

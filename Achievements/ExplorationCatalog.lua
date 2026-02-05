@@ -1,3 +1,10 @@
+-- Localize frequently-used WoW API globals (micro-optimization, no behavior change)
+local _G = _G
+local UnitName = UnitName
+local UnitLevel = UnitLevel
+local UnitFactionGroup = UnitFactionGroup
+local table_insert = table.insert
+
 local ExplorationAchievements = {
 {
     achId = "Precious",
@@ -77,7 +84,7 @@ for _, def in ipairs(ExplorationAchievements) do
     -- Mark as exploration for filtering
     def.isExploration = true
     -- Queue achievement registration
-    table.insert(_G.HCA_RegistrationQueue, function()
+    table_insert(_G.HCA_RegistrationQueue, function()
       if def.customIsCompleted then
         _G[def.achId .. "_IsCompleted"] = def.customIsCompleted
       end

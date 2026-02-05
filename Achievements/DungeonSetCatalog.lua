@@ -1,6 +1,8 @@
 ---------------------------------------
 -- Dungeon Set Achievement Definitions
 ---------------------------------------
+local table_insert = table.insert
+
 local DungeonSets = {
   -- DEADMINES
   {
@@ -376,7 +378,7 @@ _G.HCA_RegistrationQueue = _G.HCA_RegistrationQueue or {}
 -- Queue all dungeon set achievements for deferred registration
 for _, def in ipairs(DungeonSets) do
   if _G.DungeonSetCommon and _G.DungeonSetCommon.registerDungeonSetAchievement then
-    table.insert(_G.HCA_RegistrationQueue, function()
+    table_insert(_G.HCA_RegistrationQueue, function()
       _G.DungeonSetCommon.registerDungeonSetAchievement(def)
     end)
   end

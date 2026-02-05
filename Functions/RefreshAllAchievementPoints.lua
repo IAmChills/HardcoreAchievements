@@ -1,6 +1,11 @@
 -- RefreshAllAchievementPoints.lua
 -- Function to refresh all achievement points and status text from scratch
 
+-- Localize frequently-used WoW API globals (micro-optimization, no behavior change)
+local _G = _G
+local UnitLevel = UnitLevel
+local time = time
+
 ---------------------------------------
 -- Helper Functions
 ---------------------------------------
@@ -173,7 +178,8 @@ end
 
 -- Function to refresh all achievement points from scratch
 function RefreshAllAchievementPoints()
-    if not AchievementPanel or not AchievementPanel.achievements then return end
+    local rows = _G.HCA_AchievementRowModel or {}
+    if #rows == 0 then return end
 
     -- Re-entrancy guard: Meta achievement checkers (and other UI updaters) may request a refresh
     -- while a refresh is already running. Nested refresh calls cause infinite recursion and
@@ -201,7 +207,7 @@ function RefreshAllAchievementPoints()
         end
     end
     
-    for _, row in ipairs(AchievementPanel.achievements) do
+    for _, row in ipairs(rows) do
         -- Check both row.id and row.achId (dungeon achievements use achId)
         local rowId = row.id or row.achId
         if rowId and not row.completed then
@@ -212,19 +218,23 @@ function RefreshAllAchievementPoints()
             local finalPoints = CalculateAchievementPoints(row, preset, isSelfFound, isSoloMode, progress)
             
             row.points = finalPoints
-            if row.Points then
-                row.Points:SetText(tostring(finalPoints))
+            local frame = row.frame
+            if frame then
+                frame.points = finalPoints
+                if frame.Points then
+                    frame.Points:SetText(tostring(finalPoints))
+                end
             end
             
             -- Re-apply point-circle UI rules (e.g., 0-point shield icon) after recalculation
-            if _G.HCA_UpdatePointsDisplay then
-                _G.HCA_UpdatePointsDisplay(row)
+            if frame and _G.HCA_UpdatePointsDisplay then
+                _G.HCA_UpdatePointsDisplay(frame)
             end
             
             -- Update Sub text - check if we have stored solo status or ineligible status from previous kills/quests
             -- Only update Sub text for incomplete achievements to preserve completed achievement solo indicators
-            if not row.completed then
-                UpdateRowStatusText(row, rowId, progress, isSelfFound, isSoloMode, isHardcoreActive, allowSoloBonus, defById)
+            if frame and not row.completed then
+                UpdateRowStatusText(frame, rowId, progress, isSelfFound, isSoloMode, isHardcoreActive, allowSoloBonus, defById)
             end
         end
     end

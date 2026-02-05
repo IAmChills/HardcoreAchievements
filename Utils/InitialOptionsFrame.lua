@@ -8,6 +8,11 @@ local CHECKBOX_TEXTURE_NORMAL = "Interface\\AddOns\\HardcoreAchievements\\Images
 local CHECKBOX_TEXTURE_ACTIVE = "Interface\\AddOns\\HardcoreAchievements\\Images\\box_active.png"
 local TITLE_COLOR = { 0.922, 0.871, 0.761 }
 
+-- Localize frequently-used WoW API globals (micro-optimization, no behavior change)
+local _G = _G
+local UnitClass = UnitClass
+local CreateFrame = CreateFrame
+
 -- Class background textures (same as Dashboard.lua)
 local CLASS_BACKGROUND_MAP = {
     WARRIOR = "Interface\\AddOns\\HardcoreAchievements\\Images\\bg_warrior.png",

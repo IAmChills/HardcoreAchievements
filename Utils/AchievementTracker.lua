@@ -39,6 +39,25 @@ local fadeTickerValue = 0  -- Current fade value (0 to 0.3)
 local hoveredLine = nil  -- Track which achievement line is currently hovered
 local HOVER_ALPHA = 0.6  -- Alpha for non-hovered lines when mouse is over tracker
 
+-- Localize frequently-used WoW API globals (micro-optimization, no behavior change)
+local _G = _G
+local CreateFrame = CreateFrame
+local C_Timer = C_Timer
+local InCombatLockdown = InCombatLockdown
+local IsControlKeyDown = IsControlKeyDown
+local IsShiftKeyDown = IsShiftKeyDown
+local ChatEdit_GetActiveWindow = ChatEdit_GetActiveWindow
+local UnitLevel = UnitLevel
+local GetMouseFoci = GetMouseFoci
+local GetAchievementInfo = GetAchievementInfo
+local GetQuestLogIndexByID = GetQuestLogIndexByID
+local GetNumQuestLogEntries = GetNumQuestLogEntries
+local GetQuestLogTitle = GetQuestLogTitle
+local table_insert = table.insert
+local table_sort = table.sort
+local table_concat = table.concat
+local string_format = string.format
+
 -- Fade ticker system (matching Questie's approach) - module level so accessible from Initialize and Update
 local function StartFadeTicker()
     if not fadeTicker then
@@ -935,7 +954,7 @@ local function GetAchievementDescription(achievementId)
                 for _, id in pairs(need) do
                     local current = (counts[id] or counts[tostring(id)] or 0)
                     local name = (getBossNameFn and getBossNameFn(id)) or ("Boss " .. tostring(id))
-                    table.insert(bossNames, name)
+                    table_insert(bossNames, name)
                     if not done and current >= 1 then
                         done = true
                     end
@@ -945,7 +964,7 @@ local function GetAchievementDescription(achievementId)
                     bossName = npcId
                 else
                     -- For numeric keys, show all names
-                    bossName = table.concat(bossNames, " / ")
+                    bossName = table_concat(bossNames, " / ")
                 end
             else
                 -- Single NPC ID
@@ -1322,7 +1341,7 @@ function AchievementTracker:GetAchievementLine(index)
                         -- Chat edit box is active: link achievement
                         local achId = line.achievementId
                         if achId then
-                            local bracket = _G.HCA_GetAchievementBracket and _G.HCA_GetAchievementBracket(achId) or string.format("[HCA:(%s)]", tostring(achId))
+                            local bracket = _G.HCA_GetAchievementBracket and _G.HCA_GetAchievementBracket(achId) or string_format("[HCA:(%s)]", tostring(achId))
                             local currentText = editBox:GetText() or ""
                             if currentText == "" then
                                 editBox:SetText(bracket)
@@ -1524,7 +1543,7 @@ function AchievementTracker:Update()
         local sortedAchievements = {}
         for achievementId, data in pairs(trackedAchievements) do
             local level = GetAchievementLevel(achievementId) or 999  -- Put achievements without level at end
-            table.insert(sortedAchievements, {
+            table_insert(sortedAchievements, {
                 id = achievementId,
                 data = data,
                 level = level
@@ -1532,7 +1551,7 @@ function AchievementTracker:Update()
         end
         
         -- Sort by level (ascending - easiest first)
-        table.sort(sortedAchievements, function(a, b)
+        table_sort(sortedAchievements, function(a, b)
             return a.level < b.level
         end)
 
@@ -1923,7 +1942,7 @@ end
 function AchievementTracker:GetTrackedAchievements()
     local result = {}
     for id, _ in pairs(trackedAchievements) do
-        table.insert(result, id)
+        table_insert(result, id)
     end
     return result
 end

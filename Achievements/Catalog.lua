@@ -1,6 +1,13 @@
 ---------------------------------------
 -- Achievement Definitions
 ---------------------------------------
+-- Localize frequently-used WoW API globals (micro-optimization, no behavior change)
+local UnitLevel = UnitLevel
+local UnitClass = UnitClass
+local UnitFactionGroup = UnitFactionGroup
+local table_insert = table.insert
+local string_format = string.format
+
 local Achievements = {
 
 --{ achId="Test",  title="Boar Test",  level=4, tooltip="Kill " .. HCA_SharedUtils.GetClassColor() .. "a boar", icon=134400, points=10, requiredQuestId=nil, targetNpcId=3098, faction="Horde", zone="Durotar" },
@@ -519,7 +526,7 @@ local Achievements = {
     zone = "Stranglethorn Vale"
 }, {
     achId = "MalletZF",
-    title = string.format("%s the Keeper", GetUnitName("player")),
+    title = string_format("%s the Keeper", GetUnitName("player")),
     level = 49,
     tooltip = "Obtain the " .. HCA_SharedUtils.GetClassColor() .. "Mallet of Zul'Farrak|r before level 50",
     icon = 134559,
@@ -529,7 +536,7 @@ local Achievements = {
     linkUsesSenderTitle = true,
     -- Tooltip title fallback when the visible link text isn't available in the hyperlink handler.
     linkTitle = function(senderName)
-        return string.format("%s the Keeper", tostring(senderName or ""))
+        return string_format("%s the Keeper", tostring(senderName or ""))
     end,
     allowSoloDouble = true,
     customIsCompleted = function() return false end,
@@ -811,7 +818,7 @@ for _, def in ipairs(Achievements) do
   if IsEligible(def) then
     -- Mark as quest achievement for filtering
     def.isQuest = true
-    table.insert(_G.HCA_RegistrationQueue, function()
+    table_insert(_G.HCA_RegistrationQueue, function()
       local killFn = GetKillTracker(def)
       local questFn = GetQuestTracker(def)
 

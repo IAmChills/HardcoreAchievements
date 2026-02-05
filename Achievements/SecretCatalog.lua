@@ -1,6 +1,15 @@
 ---------------------------------------
 -- Secret Achievement Definitions
 ---------------------------------------
+-- Localize frequently-used WoW API globals (micro-optimization, no behavior change)
+local UnitGUID = UnitGUID
+local UnitClass = UnitClass
+local UnitFactionGroup = UnitFactionGroup
+local GetUnitName = GetUnitName
+local strsplit = strsplit
+local table_insert = table.insert
+local string_format = string.format
+
 local Secrets = {
 {
     achId = "Secret00Horde",
@@ -115,11 +124,11 @@ local Secrets = {
     achId = "Secret004",
     title = "The Last Achievement",
     level = nil,
-    tooltip = string.format("%s... your tale slips quietly into forgotten pages. Only echoes will remember your name now.", GetUnitName("player")),
+    tooltip = string_format("%s... your tale slips quietly into forgotten pages. Only echoes will remember your name now.", GetUnitName("player")),
     -- When this achievement is linked in chat, prefer the completer/sender name instead of the viewer name.
     -- (The real tooltip is still hidden from viewers who haven't completed it.)
     linkTooltip = function(senderName)
-      return string.format("%s... your tale slips quietly into forgotten pages. Only echoes will remember your name now.", tostring(senderName or ""))
+      return string_format("%s... your tale slips quietly into forgotten pages. Only echoes will remember your name now.", tostring(senderName or ""))
     end,
     icon = 237542,
     points = 0,
@@ -365,7 +374,7 @@ for _, def in ipairs(Secrets) do
     -- Mark as secret for filtering
     def.isSecret = true
     -- Queue achievement registration
-    table.insert(_G.HCA_RegistrationQueue, function()
+    table_insert(_G.HCA_RegistrationQueue, function()
       if def.customIsCompleted then
         _G[def.achId .. "_IsCompleted"] = def.customIsCompleted
       end

@@ -4,6 +4,12 @@
 
 local FilterDropdown = {}
 
+-- Localize frequently-used WoW API globals (micro-optimization, no behavior change)
+local _G = _G
+local UnitClass = UnitClass
+local CreateFrame = CreateFrame
+local GetExpansionLevel = GetExpansionLevel
+
 -- =========================================================
 -- Checkbox Filter Logic (Core Business Logic)
 -- =========================================================

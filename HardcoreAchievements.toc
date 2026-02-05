@@ -28,7 +28,7 @@ TBC\ProfessionTracker.lua [AllowLoadGameType tbc]
 Utils\SharedUtils.lua
 Utils\FilterDropdown.lua
 HardcoreAchievements.lua
-#Utils\GuildFirst.lua
+Utils\GuildFirst.lua
 Utils\AchievementTracker.lua
 
 Achievements\Common.lua
@@ -64,6 +64,7 @@ TBC\RidiculousCatalog.lua [AllowLoadGameType tbc]
 TBC\ReputationCatalog.lua [AllowLoadGameType tbc]
 TBC\RaidCatalog.lua [AllowLoadGameType tbc]
 TBC\MetaCatalog.lua [AllowLoadGameType tbc]
+TBC\GuildFirstCatalog.lua [AllowLoadGameType tbc]
 
 Utils\Dashboard.lua
 Utils\CommandHandler.lua

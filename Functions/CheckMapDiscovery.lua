@@ -30,6 +30,9 @@
 -- Tp find coordinates for a location using the mouse pointer on the world map, run:
 -- /dump WorldMapFrame.ScrollContainer:GetNormalizedCursorPosition()
 
+local table_insert = table.insert
+local string_format = string.format
+
 ---------------------------------------
 -- Zone to MapID mapping
 -- Add zones as needed (you can find mapIDs using /dump C_Map.GetBestMapForUnit("player"))
@@ -252,7 +255,7 @@ local function CheckZoneDiscovery(zone, threshold)
     
     -- Check all defined locations in the zone
     for locationName, coords in pairs(LocationMap[zoneName]) do
-        table.insert(locationsToCheck, {x = coords.x, y = coords.y, name = locationName})
+        table_insert(locationsToCheck, {x = coords.x, y = coords.y, name = locationName})
     end
     
     totalCount = #locationsToCheck
@@ -285,7 +288,7 @@ local function CheckZoneDiscovery(zone, threshold)
     
     local message = nil
     if not isDiscovered then
-        message = string.format("Zone %s: %d/%d locations discovered (%.1f%%, need %.1f%%)", 
+        message = string_format("Zone %s: %d/%d locations discovered (%.1f%%, need %.1f%%)", 
             tostring(zoneName or mapID), discoveredCount, totalCount, percentage * 100, threshold * 100)
     end
     

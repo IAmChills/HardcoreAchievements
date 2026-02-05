@@ -1,6 +1,9 @@
 -- Centralized function to show achievement tooltip
 -- Can be called from main window or embed UI
 
+local table_insert = table.insert
+local table_concat = table.concat
+
 ---------------------------------------
 -- Helper Functions
 ---------------------------------------
@@ -125,7 +128,7 @@ local function ShowBossRequirements(achId, requiredKills, bossOrder, achievement
             for _, id in pairs(need) do
                 local current = (counts[id] or counts[tostring(id)] or 0)
                 local name = (getBossNameFn and getBossNameFn(id)) or ("Boss " .. tostring(id))
-                table.insert(bossNames, name)
+                table_insert(bossNames, name)
                 if not done and current >= 1 then
                     done = true
                 end
@@ -135,7 +138,7 @@ local function ShowBossRequirements(achId, requiredKills, bossOrder, achievement
                 bossName = npcId
             else
                 -- For numeric keys, show all names
-                bossName = table.concat(bossNames, " / ")
+                bossName = table_concat(bossNames, " / ")
             end
         else
             -- Single NPC ID

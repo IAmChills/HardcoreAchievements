@@ -5,6 +5,9 @@
 -- Load AceSerializer
 local AceSerialize = LibStub("AceSerializer-3.0")
 
+local string_byte = string.byte
+local table_concat = table.concat
+
 -- Simple Base64 encoding/decoding for compression and obfuscation
 -- Using bit library if available (Classic WoW should have it)
 local bit = _G.bit or _G.bit32
@@ -54,9 +57,9 @@ local function base64encode(data)
     end
     
     for i = 1, len, 3 do
-        local b1 = string.byte(data, i) or 0
-        local b2 = string.byte(data, i + 1)
-        local b3 = string.byte(data, i + 2)
+        local b1 = string_byte(data, i) or 0
+        local b2 = string_byte(data, i + 1)
+        local b3 = string_byte(data, i + 2)
         
         local bitmap = bor(bor(lshift(b1, 16), lshift(b2 or 0, 8)), b3 or 0)
         
@@ -87,7 +90,7 @@ local function base64encode(data)
             result[#result + 1] = '='
         end
     end
-    return table.concat(result)
+    return table_concat(result)
 end
 
 local function base64decode(data)
@@ -146,7 +149,7 @@ local function base64decode(data)
             end
         end
     end
-    return table.concat(result)
+    return table_concat(result)
 end
 
 -- Encode: Serialize -> Base64 (simple and reliable)

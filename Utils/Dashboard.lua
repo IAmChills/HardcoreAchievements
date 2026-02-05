@@ -5,6 +5,21 @@ local ICON_SIZE = 60
 local ICON_PADDING = 12
 local GRID_COLS = 7  -- Number of columns in the grid
 
+-- Localize frequently-used WoW API globals (micro-optimization, no behavior change)
+local UnitClass = UnitClass
+local UnitLevel = UnitLevel
+local GetLocale = GetLocale
+local time = time
+local select = select
+local GetExpansionLevel = GetExpansionLevel
+local IsShiftKeyDown = IsShiftKeyDown
+local ChatEdit_GetActiveWindow = ChatEdit_GetActiveWindow
+local CreateFrame = CreateFrame
+local hooksecurefunc = hooksecurefunc
+local table_insert = table.insert
+local table_sort = table.sort
+local string_format = string.format
+
 -- Left-side tab panel (placeholder UI for future category tabs)
 local TAB_PANEL_WIDTH = 150
 local TAB_BUTTON_HEIGHT = 34
@@ -833,9 +848,9 @@ local function FormatTimestampDashboard(timestamp)
     local locale = GetLocale()
     
     if locale == "enUS" then
-        return string.format("%02d/%02d/%02d", dateInfo.month, dateInfo.day, dateInfo.year % 100)
+        return string_format("%02d/%02d/%02d", dateInfo.month, dateInfo.day, dateInfo.year % 100)
     else
-        return string.format("%02d/%02d/%02d", dateInfo.day, dateInfo.month, dateInfo.year % 100)
+        return string_format("%02d/%02d/%02d", dateInfo.day, dateInfo.month, dateInfo.year % 100)
     end
 end
 
@@ -851,7 +866,13 @@ end
 
 -- ---------- Source ----------
 local function GetSourceRows()
-  if AchievementPanel and type(AchievementPanel.achievements) == "table" then
+  -- Prefer the data model so Dashboard can work without building Character Panel row frames.
+  local model = _G.HCA_AchievementRowModel
+  if type(model) == "table" and #model > 0 then
+    return model
+  end
+  -- Fallback: if UI rows exist, use them.
+  if AchievementPanel and type(AchievementPanel.achievements) == "table" and #AchievementPanel.achievements > 0 then
     return AchievementPanel.achievements
   end
 end
@@ -863,6 +884,8 @@ local function ReadRowData(src)
   local iconTex = nil
   if src.Icon and src.Icon.GetTexture then
     iconTex = src.Icon:GetTexture()
+  else
+    iconTex = src.icon or (src.isSecretAchievement and src.secretIcon) or nil
   end
   
   return {
@@ -898,13 +921,13 @@ local function GetMostRecentCompletedSet(srcRows, maxCount)
         local rec = cdb.achievements[key]
         local ts = rec and rec.completedAt
         if ts then
-          table.insert(tmp, { key = key, ts = tonumber(ts) or 0 })
+          table_insert(tmp, { key = key, ts = tonumber(ts) or 0 })
         end
       end
     end
   end
 
-  table.sort(tmp, function(a, b) return (a.ts or 0) > (b.ts or 0) end)
+  table_sort(tmp, function(a, b) return (a.ts or 0) > (b.ts or 0) end)
   local n = math.min(tonumber(maxCount) or 0, #tmp)
   for i = 1, n do
     set[tmp[i].key] = true
@@ -1000,7 +1023,7 @@ local function CreateDashboardIcon(parent)
       -- Check if chat edit box is active/visible
       if editBox and editBox:IsVisible() then
         -- Chat edit box is active: link achievement (original behavior)
-        local bracket = _G.HCA_GetAchievementBracket and _G.HCA_GetAchievementBracket(self.achId) or string.format("[HCA:(%s)]", tostring(self.achId))
+        local bracket = _G.HCA_GetAchievementBracket and _G.HCA_GetAchievementBracket(self.achId) or string_format("[HCA:(%s)]", tostring(self.achId))
         local currentText = editBox:GetText() or ""
         if currentText == "" then
           editBox:SetText(bracket)
@@ -1025,6 +1048,8 @@ local function CreateDashboardIcon(parent)
         local title = nil
         if self.sourceRow and self.sourceRow.Title and self.sourceRow.Title.GetText then
           title = self.sourceRow.Title:GetText()
+        elseif self.sourceRow and self.sourceRow.title then
+          title = self.sourceRow.title
         end
         
         -- Strip color codes from title if present
@@ -1068,7 +1093,7 @@ local function LayoutIcons(container, icons)
   local visibleIcons = {}
   for i, icon in ipairs(icons) do
     if icon:IsShown() then
-      table.insert(visibleIcons, icon)
+      table_insert(visibleIcons, icon)
     end
   end
   
@@ -1259,8 +1284,8 @@ local function CreateDashboardModernRow(parent, srow)
     row:SetClipsChildren(false)
     
     -- Extract data from source row
-    local iconTex = srow.Icon and srow.Icon:GetTexture() or 136116
-    local title = (srow.Title and srow.Title.GetText and srow.Title:GetText()) or (srow.id or "")
+    local iconTex = (srow.Icon and srow.Icon.GetTexture and srow.Icon:GetTexture()) or srow.icon or (srow.isSecretAchievement and srow.secretIcon) or 136116
+    local title = (srow.Title and srow.Title.GetText and srow.Title:GetText()) or srow.title or (srow.id or "")
     local tooltip = srow.tooltip or ""
     local zone = srow.zone or ""
     local achId = srow.achId or srow.id
@@ -1430,7 +1455,7 @@ local function CreateDashboardModernRow(parent, srow)
             -- Check if chat edit box is active/visible
             if editBox and editBox:IsVisible() then
                 -- Chat edit box is active: link achievement (original behavior)
-                local bracket = _G.HCA_GetAchievementBracket and _G.HCA_GetAchievementBracket(self.achId) or string.format("[HCA:(%s)]", tostring(self.achId))
+                local bracket = _G.HCA_GetAchievementBracket and _G.HCA_GetAchievementBracket(self.achId) or string_format("[HCA:(%s)]", tostring(self.achId))
                 local currentText = editBox:GetText() or ""
                 if currentText == "" then
                     editBox:SetText(bracket)
@@ -1457,6 +1482,8 @@ local function CreateDashboardModernRow(parent, srow)
                     title = self.Title:GetText()
                 elseif self.sourceRow and self.sourceRow.Title and self.sourceRow.Title.GetText then
                     title = self.sourceRow.Title:GetText()
+                elseif self.sourceRow and self.sourceRow.title then
+                    title = self.sourceRow.title
                 end
                 
                 -- Strip color codes from title if present
@@ -1519,8 +1546,8 @@ local function UpdateDashboardModernRow(row, srow)
     if not row or not srow then return end
     
     -- Update data from source row
-    local iconTex = srow.Icon and srow.Icon:GetTexture() or 136116
-    local title = (srow.Title and srow.Title.GetText and srow.Title:GetText()) or (srow.id or "")
+    local iconTex = (srow.Icon and srow.Icon.GetTexture and srow.Icon:GetTexture()) or srow.icon or (srow.isSecretAchievement and srow.secretIcon) or 136116
+    local title = (srow.Title and srow.Title.GetText and srow.Title:GetText()) or srow.title or (srow.id or "")
     local points = srow.points or 0
     local level = srow.maxLevel or 0
     local achId = srow.achId or srow.id
@@ -1629,7 +1656,7 @@ local function LayoutModernRows(container, rows)
     local visibleRows = {}
     for i, row in ipairs(rows) do
         if row:IsShown() then
-            table.insert(visibleRows, row)
+            table_insert(visibleRows, row)
         else
             -- Hide border for hidden rows
             if row.Border then
@@ -1795,44 +1822,12 @@ end
 
 local function ScheduleSummaryRefresh(srcRows)
   if not DashboardFrame or not DashboardFrame.Scroll then return end
-  if DashboardFrame._hcaSummaryRefreshPending then return end
   if IsSummaryDataReady(srcRows) then return end
-
   DashboardFrame._hcaSummaryRefreshPending = true
-  local triesLeft = 25
-  local function tick()
-    if not DashboardFrame or not DashboardFrame:IsShown() then
-      if DashboardFrame then DashboardFrame._hcaSummaryRefreshPending = false end
-      return
-    end
-    if not (DashboardFrame.SelectedTabKey == "summary") then
-      DashboardFrame._hcaSummaryRefreshPending = false
-      return
-    end
-
-    local rowsNow = GetSourceRows()
-    if IsSummaryDataReady(rowsNow) then
-      DashboardFrame._hcaSummaryRefreshPending = false
-      if DASHBOARD and DASHBOARD.Rebuild then
-        DASHBOARD:Rebuild()
-      end
-      return
-    end
-
-    triesLeft = triesLeft - 1
-    if triesLeft <= 0 then
-      DashboardFrame._hcaSummaryRefreshPending = false
-      return
-    end
-    C_Timer.After(0.20, tick)
-  end
-
-  C_Timer.After(0.20, tick)
 end
 
-local function IsTBCForOverview()
-  return GetExpansionLevel and GetExpansionLevel() > 0
-end
+-- Expansion level won't change mid-session; cache once.
+local isTBC = GetExpansionLevel and GetExpansionLevel() > 0
 
 local function GetCategoryCountsFromRows(key, srcRows, achievements)
   local total, completed = 0, 0
@@ -1983,12 +1978,12 @@ local function UpdateDashboardProgressOverview(srcRows)
     bar:SetValue(math.min(c, t))
     bar:SetStatusBarColor(classR, classG, classB, 0.85)
     if bar.LeftText then bar.LeftText:SetText(label) end
-    if bar.RightText then bar.RightText:SetText(string.format("%d/%d", c, t)) end
+    if bar.RightText then bar.RightText:SetText(string_format("%d/%d", c, t)) end
     bar:Show()
   end
 
   -- Hide heroic dungeon bar if not in TBC
-  if not IsTBCForOverview() and DashboardFrame.ProgressBars.heroic_dungeon then
+  if not isTBC and DashboardFrame.ProgressBars.heroic_dungeon then
     DashboardFrame.ProgressBars.heroic_dungeon:Hide()
   end
 
@@ -2036,22 +2031,22 @@ local function UpdateDashboardProgressOverview(srcRows)
 
   -- Columns under the All bar
   local leftKeys = { "quest", "dungeon" }
-  if IsTBCForOverview() then
-    table.insert(leftKeys, "heroic_dungeon")
+  if isTBC then
+    table_insert(leftKeys, "heroic_dungeon")
   else
-    table.insert(leftKeys, "profession")
+    table_insert(leftKeys, "profession")
   end
   local moreLeft = { "raid" }
-  for _, k in ipairs(moreLeft) do table.insert(leftKeys, k) end
+  for _, k in ipairs(moreLeft) do table_insert(leftKeys, k) end
 
   local rightKeys = { }
-  if IsTBCForOverview() then
-    table.insert(rightKeys, "profession")
+  if isTBC then
+    table_insert(rightKeys, "profession")
   else
-    table.insert(rightKeys, "reputation")
+    table_insert(rightKeys, "reputation")
   end
-  table.insert(rightKeys, "exploration")
-  table.insert(rightKeys, "secret")
+  table_insert(rightKeys, "exploration")
+  table_insert(rightKeys, "secret")
 
   local function LayoutColumn(keys, side)
     for i, key in ipairs(keys) do
@@ -2074,7 +2069,7 @@ local function UpdateDashboardProgressOverview(srcRows)
   SetBar("all", "Achievements Earned")
   SetBar("quest", "Quests")
   SetBar("dungeon", "Dungeon")
-  if IsTBCForOverview() then
+  if isTBC then
     SetBar("heroic_dungeon", "Heroic Dungeon")
   end
   SetBar("raid", "Raid")
@@ -2196,7 +2191,7 @@ function DASHBOARD:BuildModernRows(srcRows)
       end
       
       if shouldShow then
-        table.insert(visibleRows, srow)
+        table_insert(visibleRows, srow)
       end
   end
 
@@ -2218,7 +2213,7 @@ function DASHBOARD:BuildModernRows(srcRows)
     _, cdb = HardcoreAchievements_GetCharDB()
   end
   
-  table.sort(visibleRows, function(a, b)
+  table_sort(visibleRows, function(a, b)
     local aFailed = IsRowOutleveled(a)
     local bFailed = IsRowOutleveled(b)
     if aFailed ~= bFailed then
@@ -2366,7 +2361,7 @@ local function LayoutIcons(container, icons)
   local visibleIcons = {}
   for i, icon in ipairs(icons) do
     if icon:IsShown() then
-      table.insert(visibleIcons, icon)
+      table_insert(visibleIcons, icon)
     end
   end
   
@@ -2445,7 +2440,7 @@ local function UpdateTotalPointsText()
       completed, totalCount = _G.HCA_AchievementCount()
     end
     if completed and totalCount then
-      DashboardFrame.CountsText:SetText(string.format(" (%d/%d)", completed or 0, totalCount or 0))
+      DashboardFrame.CountsText:SetText(string_format(" (%d/%d)", completed or 0, totalCount or 0))
     else
       DashboardFrame.CountsText:SetText("")
     end
@@ -2672,7 +2667,7 @@ local function BuildDashboardFrame()
     -- Frozen header row (outside the scroll) so the special Dashboard tab is always visible
     local backdropTemplate = BackdropTemplateMixin and "BackdropTemplate" or nil
     DashboardFrame.TabHeader = CreateFrame("Frame", nil, DashboardFrame, backdropTemplate)
-    if IsTBCForOverview() then
+    if isTBC then
       DashboardFrame.TabHeader:SetPoint("TOPLEFT", DashboardFrame, "TOPLEFT", 8, -150)
     else
       DashboardFrame.TabHeader:SetPoint("TOPLEFT", DashboardFrame, "TOPLEFT", 8, -180)
@@ -2807,17 +2802,14 @@ local function BuildDashboardFrame()
     end
 
     -- Tabs (single-select). Not wired to filtering yet.
-    local function IsTBC()
-      return GetExpansionLevel and GetExpansionLevel() > 0
-    end
 
     local tabDefs = {
       { key = "all", label = "All" },
       { key = "quest", label = "Quests" },
       { key = "dungeon", label = "Dungeon" },
     }
-    if IsTBC() then
-      table.insert(tabDefs, { key = "heroic_dungeon", label = "Heroic Dungeon" })
+    if isTBC then
+      table_insert(tabDefs, { key = "heroic_dungeon", label = "Heroic Dungeon" })
     end
     local more = {
       { key = "raid", label = "Raid" },
@@ -2832,7 +2824,7 @@ local function BuildDashboardFrame()
       { key = "ridiculous", label = "Ridiculous" },
       { key = "secret", label = "Secret" },
     }
-    for _, t in ipairs(more) do table.insert(tabDefs, t) end
+    for _, t in ipairs(more) do table_insert(tabDefs, t) end
 
     DashboardFrame.TabButtons = DashboardFrame.TabButtons or {}
     DashboardFrame.TabButtonsByKey = DashboardFrame.TabButtonsByKey or {}
@@ -2942,7 +2934,7 @@ local function BuildDashboardFrame()
   if not DashboardFrame.Scroll then
     DashboardFrame.Scroll = CreateFrame("ScrollFrame", nil, DashboardFrame, "UIPanelScrollFrameTemplate")
     -- Shift main list right to make space for tab panel
-    if IsTBCForOverview() then
+    if isTBC then
       DashboardFrame.Scroll:SetPoint("TOPLEFT", DashboardFrame, "TOPLEFT", 8 + TAB_PANEL_WIDTH, -150)
     else
       DashboardFrame.Scroll:SetPoint("TOPLEFT", DashboardFrame, "TOPLEFT", 8 + TAB_PANEL_WIDTH, -180)
@@ -3039,8 +3031,8 @@ local function BuildDashboardFrame()
 
   -- Points number text (with drop shadow) - positioned below title bar/divider
   if not DashboardFrame.TotalPointsText then
-    DashboardFrame.TotalPointsText = DashboardFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlightHuge")
-    DashboardFrame.TotalPointsText:SetPoint("TOPLEFT", DashboardFrame, "TOPLEFT", 20, -80)
+    DashboardFrame.TotalPointsText = DashboardFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlightLarge")
+    DashboardFrame.TotalPointsText:SetPoint("TOPLEFT", DashboardFrame, "TOPLEFT", 20, -50)
     DashboardFrame.TotalPointsText:SetText("0") -- Will be updated by UpdateTotalPointsText
     DashboardFrame.TotalPointsText:SetTextColor(0.922, 0.871, 0.761)
     DashboardFrame.TotalPointsText:SetFont(POINTS_FONT_PATH, 42)
@@ -3048,7 +3040,7 @@ local function BuildDashboardFrame()
 
   -- Points number drop shadow
   if not DashboardFrame.TotalPointsTextShadow then
-    DashboardFrame.TotalPointsTextShadow = DashboardFrame:CreateFontString(nil, "BACKGROUND", "GameFontHighlightHuge")
+    DashboardFrame.TotalPointsTextShadow = DashboardFrame:CreateFontString(nil, "BACKGROUND", "GameFontHighlightLarge")
     DashboardFrame.TotalPointsTextShadow:SetPoint("CENTER", DashboardFrame.TotalPointsText, "CENTER", 1, -1)
     DashboardFrame.TotalPointsTextShadow:SetText("0")
     DashboardFrame.TotalPointsTextShadow:SetTextColor(0, 0, 0, 0.5)
@@ -3058,7 +3050,7 @@ local function BuildDashboardFrame()
 
   -- " pts" text (smaller, positioned after the number)
   if not DashboardFrame.PointsLabelText then
-    DashboardFrame.PointsLabelText = DashboardFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlightHuge")
+    DashboardFrame.PointsLabelText = DashboardFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlightLarge")
     -- Position it to the right of the points number
     DashboardFrame.PointsLabelText:SetPoint("LEFT", DashboardFrame.TotalPointsText, "RIGHT", 2, 0)
     DashboardFrame.PointsLabelText:SetText(" pts")
@@ -3068,22 +3060,14 @@ local function BuildDashboardFrame()
 
   -- Player name text (centered above the points background)
   if not DashboardFrame.PlayerNameText then
-    DashboardFrame.PlayerNameText = DashboardFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlightLarge")
-    DashboardFrame.PlayerNameText:SetPoint("TOPLEFT", DashboardFrame.TotalPointsText, "BOTTOMLEFT", 2, -6)
+    DashboardFrame.PlayerNameText = DashboardFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlightHuge")
+    DashboardFrame.PlayerNameText:SetPoint("TOPLEFT", DashboardFrame.TotalPointsText, "BOTTOMLEFT", 0, -8)
     DashboardFrame.PlayerNameText:SetJustifyH("LEFT")
     DashboardFrame.PlayerNameText:SetText(GetUnitName('player')) -- Will be updated by UpdatePlayerNameText
     --DashboardFrame.PlayerNameText:SetTextColor(0.42, 0.396, 0.345)
     DashboardFrame.PlayerNameText:SetTextColor(GetPlayerClassColor())
   end
 
-  -- Achievement completion counter (next to player name)
-  if not DashboardFrame.CountsText then
-    DashboardFrame.CountsText = DashboardFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    DashboardFrame.CountsText:SetPoint("BOTTOMLEFT", DashboardFrame.TotalPointsText, "TOPLEFT", 0, 0)
-    DashboardFrame.CountsText:SetText("(0/0)")
-    DashboardFrame.CountsText:SetTextColor(0.8, 0.8, 0.8)
-    DashboardFrame.CountsText:SetJustifyH("LEFT")
-  end
 
   -- Multiplier text (below the points background)
   if not DashboardFrame.MultiplierText then
@@ -3314,18 +3298,33 @@ end
 -- Hook source signals for updates
 local function HookSourceSignals()
   if DASHBOARD._hooked then return end
+  local function RequestRebuild()
+    C_Timer.After(0, function()
+      if not DashboardFrame or not DashboardFrame:IsShown() then return end
+
+      -- If we were waiting for summary data, clear the pending flag once it becomes available.
+      if DashboardFrame._hcaSummaryRefreshPending and DashboardFrame.SelectedTabKey == "summary" then
+        local rowsNow = GetSourceRows()
+        if IsSummaryDataReady(rowsNow) then
+          DashboardFrame._hcaSummaryRefreshPending = false
+        end
+      end
+
+      if DASHBOARD.Rebuild then
+        DASHBOARD:Rebuild()
+      else
+        ApplyFilter()
+      end
+    end)
+  end
   if type(CheckPendingCompletions) == "function" then
     hooksecurefunc("CheckPendingCompletions", function()
-      C_Timer.After(0, function() 
-        if DASHBOARD.Rebuild then DASHBOARD:Rebuild() else ApplyFilter() end
-      end)
+      RequestRebuild()
     end)
   end
   if type(HCA_UpdateTotalPoints) == "function" then
     hooksecurefunc("HCA_UpdateTotalPoints", function()
-      C_Timer.After(0, function() 
-        if DASHBOARD.Rebuild then DASHBOARD:Rebuild() else ApplyFilter() end
-      end)
+      RequestRebuild()
     end)
   end
   DASHBOARD._hooked = true

@@ -1,5 +1,14 @@
 local RaidCommon = {}
 
+-- Localize frequently-used WoW API globals (micro-optimization, no behavior change)
+local _G = _G
+local UnitLevel = UnitLevel
+local GetInstanceInfo = GetInstanceInfo
+local CreateFrame = CreateFrame
+local C_Timer = C_Timer
+local table_insert = table.insert
+local table_concat = table.concat
+
 -- Mapping from encounter IDs (as reported by BOSS_KILL event) to NPC IDs
 -- This allows us to track boss kills even when the kill is delivered by someone outside your party
 local ENCOUNTER_ID_TO_NPC_IDS = {
@@ -350,18 +359,29 @@ function RaidCommon.registerRaidAchievement(def)
       -- Store the base tooltip for the main tooltip
       local baseTooltip = tooltip or ""
       row.tooltip = baseTooltip
+
+      local frame = row.frame
+      if not frame then
+        if _G.HCA_AddRowUIInit then
+          _G.HCA_AddRowUIInit(row, function()
+            C_Timer.After(0, UpdateTooltip)
+          end)
+        end
+        return
+      end
+      frame.tooltip = baseTooltip
       
       -- Ensure mouse events are enabled and highlight texture exists
-      row:EnableMouse(true)
-      if not row.highlight then
-        row.highlight = row:CreateTexture(nil, "BACKGROUND")
-        row.highlight:SetAllPoints(row)
-        row.highlight:SetColorTexture(1, 1, 1, 0.10)
-        row.highlight:Hide()
+      frame:EnableMouse(true)
+      if not frame.highlight then
+        frame.highlight = frame:CreateTexture(nil, "BACKGROUND")
+        frame.highlight:SetAllPoints(frame)
+        frame.highlight:SetColorTexture(1, 1, 1, 0.10)
+        frame.highlight:Hide()
       end
       
       -- Override the OnEnter script to use proper GameTooltip API while preserving highlighting
-      row:SetScript("OnEnter", function(self)
+      frame:SetScript("OnEnter", function(self)
         -- Show highlight
         if self.highlight then
           self.highlight:Show()
@@ -397,7 +417,7 @@ function RaidCommon.registerRaidAchievement(def)
                 for _, id in pairs(need) do
                   local current = (state.counts[id] or state.counts[tostring(id)] or 0)
                   local name = HCA_GetRaidBossName(id)
-                  table.insert(bossNames, name)
+                  table_insert(bossNames, name)
                   -- Mark as done if this boss has been killed (or if achievement is complete)
                   if current >= 1 then
                     done = true
@@ -409,7 +429,7 @@ function RaidCommon.registerRaidAchievement(def)
                   bossName = npcId
                 else
                   -- For numeric keys, show all names
-                  bossName = table.concat(bossNames, " / ")
+                  bossName = table_concat(bossNames, " / ")
                 end
               else
                 -- Single NPC ID
@@ -467,7 +487,7 @@ function RaidCommon.registerRaidAchievement(def)
       end)
       
       -- Set up OnLeave script to hide highlight and tooltip
-      row:SetScript("OnLeave", function(self)
+      frame:SetScript("OnLeave", function(self)
         if self.highlight then
           self.highlight:Hide()
         end
@@ -556,7 +576,7 @@ function RaidCommon.registerRaidAchievement(def)
 
   -- Create the registration function dynamically
   _G[registerFuncName] = function()
-    if not _G.CreateAchievementRow or not _G.AchievementPanel then return end
+    if not _G.CreateAchievementRow then return end
     if _G[rowVarName] then return end
     
     -- Check if player is eligible for this achievement
@@ -612,7 +632,7 @@ function RaidCommon.registerRaidAchievement(def)
   end
 
   -- Auto-register the achievement immediately if the panel is ready
-  if _G.CreateAchievementRow and _G.AchievementPanel then
+  if _G.CreateAchievementRow then
     _G[registerFuncName]()
   end
 

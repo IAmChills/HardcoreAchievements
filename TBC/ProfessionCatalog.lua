@@ -1,4 +1,6 @@
 local thresholds = { 75, 150, 225, 300, 375 }
+local table_insert = table.insert
+local string_format = string.format
 
 local rankTitles = {
     [75]  = "Apprentice",
@@ -33,9 +35,9 @@ for _, profession in ipairs(ProfessionList) do
     local label = profession.name or "Profession"
     local shortKey = profession.shortKey or (label:gsub("%s+", ""))
     for _, threshold in ipairs(thresholds) do
-        local achId = string.format("Profession_%s_%d", shortKey, threshold)
-        local title = string.format("%s %s", rankTitles[threshold] or ("Rank " .. threshold), label)
-        local tooltip = string.format("Reach %d skill in %s", threshold, label)
+        local achId = string_format("Profession_%s_%d", shortKey, threshold)
+        local title = string_format("%s %s", rankTitles[threshold] or ("Rank " .. threshold), label)
+        local tooltip = string_format("Reach %d skill in %s", threshold, label)
         
         local def = {
             achId = achId,
@@ -53,7 +55,7 @@ for _, profession in ipairs(ProfessionList) do
             isProfession = true,
         }
         
-        table.insert(_G.HCA_RegistrationQueue, function()
+        table_insert(_G.HCA_RegistrationQueue, function()
             if def.customIsCompleted then
                 _G[def.achId .. "_IsCompleted"] = def.customIsCompleted
             end

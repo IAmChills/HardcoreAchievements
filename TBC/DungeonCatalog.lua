@@ -1,6 +1,8 @@
 ---------------------------------------
 -- Dungeon Achievement Definitions
 ---------------------------------------
+local table_insert = table.insert
+
 local Dungeons = {
   -- Test achievement
   -- {
@@ -839,12 +841,12 @@ _G.HCA_RegistrationQueue = _G.HCA_RegistrationQueue or {}
 -- Queue all dungeon achievements for deferred registration
 for _, dungeon in ipairs(Dungeons) do
   -- Queue base dungeon achievement
-  table.insert(_G.HCA_RegistrationQueue, function()
+  table_insert(_G.HCA_RegistrationQueue, function()
     DungeonCommon.registerDungeonAchievement(dungeon)
   end)
   -- Queue variations (if checkboxes are enabled)
   if DungeonCommon.registerDungeonVariations then
-    table.insert(_G.HCA_RegistrationQueue, function()
+    table_insert(_G.HCA_RegistrationQueue, function()
       DungeonCommon.registerDungeonVariations(dungeon)
     end)
   end

@@ -3,6 +3,15 @@
 ---------------------------------------
 local DungeonSetCommon = {}
 
+-- Localize frequently-used WoW API globals (micro-optimization, no behavior change)
+local _G = _G
+local GetItemInfo = GetItemInfo
+local GetItemCount = GetItemCount
+local UnitClass = UnitClass
+local UnitFactionGroup = UnitFactionGroup
+local CreateFrame = CreateFrame
+local C_Timer = C_Timer
+
 ---------------------------------------
 -- Item Name Lookup
 ---------------------------------------
@@ -390,18 +399,30 @@ function DungeonSetCommon.registerDungeonSetAchievement(def)
       -- Store the base tooltip for the main tooltip
       local baseTooltip = tooltip or ""
       row.tooltip = baseTooltip
+
+      -- UI is created lazily; only touch frame methods when the row frame exists
+      local frame = row.frame
+      if not frame then
+        if _G.HCA_AddRowUIInit then
+          _G.HCA_AddRowUIInit(row, function()
+            C_Timer.After(0, UpdateTooltip)
+          end)
+        end
+        return
+      end
+      frame.tooltip = baseTooltip
       
       -- Ensure mouse events are enabled and highlight texture exists
-      row:EnableMouse(true)
-      if not row.highlight then
-        row.highlight = row:CreateTexture(nil, "BACKGROUND")
-        row.highlight:SetAllPoints(row)
-        row.highlight:SetColorTexture(1, 1, 1, 0.10)
-        row.highlight:Hide()
+      frame:EnableMouse(true)
+      if not frame.highlight then
+        frame.highlight = frame:CreateTexture(nil, "BACKGROUND")
+        frame.highlight:SetAllPoints(frame)
+        frame.highlight:SetColorTexture(1, 1, 1, 0.10)
+        frame.highlight:Hide()
       end
       
       -- Override the OnEnter script to use proper GameTooltip API while preserving highlighting
-      row:SetScript("OnEnter", function(self)
+      frame:SetScript("OnEnter", function(self)
         -- Show highlight
         if self.highlight then
           self.highlight:Show()
@@ -478,7 +499,7 @@ function DungeonSetCommon.registerDungeonSetAchievement(def)
       end)
       
       -- Set up OnLeave script to hide highlight and tooltip
-      row:SetScript("OnLeave", function(self)
+      frame:SetScript("OnLeave", function(self)
         if self.highlight then
           self.highlight:Hide()
         end
@@ -576,7 +597,7 @@ function DungeonSetCommon.registerDungeonSetAchievement(def)
   ---------------------------------------
 
   _G[registerFuncName] = function()
-    if not _G.CreateAchievementRow or not _G.AchievementPanel then return end
+    if not _G.CreateAchievementRow then return end
     if _G[rowVarName] then return end
     
     -- Check if player is eligible for this achievement
@@ -590,7 +611,7 @@ function DungeonSetCommon.registerDungeonSetAchievement(def)
     def.isDungeonSet = true
     
     _G[rowVarName] = CreateAchievementRow(
-      AchievementPanel,
+      nil,
       achId,
       title,
       tooltip,
@@ -614,7 +635,7 @@ function DungeonSetCommon.registerDungeonSetAchievement(def)
   end
   
   -- Auto-register the achievement immediately if the panel is ready
-  if _G.CreateAchievementRow and _G.AchievementPanel then
+  if _G.CreateAchievementRow then
     _G[registerFuncName]()
   end
   

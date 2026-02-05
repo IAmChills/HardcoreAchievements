@@ -10,6 +10,24 @@ local OTHER_PLAYER_THREAT_THRESHOLD = 10  -- % threat from grouped players to fa
 local PLAYER_SOLO_THREAT_THRESHOLD  = 90  -- % threat you must maintain (unless mob is a non-player)
 local HELPER_TIMEOUT_SEC            = 8   -- seconds to remember recent player helpers vs your current target
 
+-- Localize frequently-used WoW API globals (micro-optimization, no behavior change)
+local UnitGUID = UnitGUID
+local GetTime = GetTime
+local UnitExists = UnitExists
+local UnitIsUnit = UnitIsUnit
+local UnitIsPlayer = UnitIsPlayer
+local UnitInRange = UnitInRange
+local UnitDetailedThreatSituation = UnitDetailedThreatSituation
+local CombatLogGetCurrentEventInfo = CombatLogGetCurrentEventInfo
+local IsInRaid = IsInRaid
+local IsInGroup = IsInGroup
+local GetNumGroupMembers = GetNumGroupMembers
+local GetNumSubgroupMembers = GetNumSubgroupMembers
+local UnitIsTapDenied = UnitIsTapDenied
+local UnitAffectingCombat = UnitAffectingCombat
+local UnitCanAttack = UnitCanAttack
+local CreateFrame = CreateFrame
+
 ---------------------------------------
 -- Internal state (helpers per mob GUID)
 -- helpersByTarget[targetGUID] = { [playerGUID] = lastSeenTime }

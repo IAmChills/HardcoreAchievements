@@ -1,4 +1,6 @@
 local ProfessionTracker = {}
+local table_insert = table.insert
+local table_sort = table.sort
 
 -- =========================================================
 -- Profession data
@@ -127,10 +129,12 @@ local function ApplyFilterIfAvailable()
     local panel = _G.AchievementPanel
     if panel and panel.achievements then
         for _, row in ipairs(panel.achievements) do
-            if row.hiddenByProfession or (row.hiddenUntilComplete and not row.completed) then
-                row:Hide()
-            else
-                row:Show()
+            if row and row.Hide and row.Show then
+                if row.hiddenByProfession or (row.hiddenUntilComplete and not row.completed) then
+                    row:Hide()
+                else
+                    row:Show()
+                end
             end
         end
     end
@@ -142,7 +146,7 @@ local function UpdateProfessionRowVisibility(skillID)
         return
     end
 
-    table.sort(rows, function(a, b)
+    table_sort(rows, function(a, b)
         local defA = a and a._def or {}
         local defB = b and b._def or {}
         local rankA = GetRequiredRank(defA)
@@ -272,7 +276,7 @@ function ProfessionTracker.RegisterRow(row, def)
     if not skillID then return end
 
     ProfessionRows[skillID] = ProfessionRows[skillID] or {}
-    table.insert(ProfessionRows[skillID], row)
+    table_insert(ProfessionRows[skillID], row)
 
     row._professionSkillID = skillID
     InitializeProfessionHiddenUntilComplete(row)

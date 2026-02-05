@@ -1,6 +1,8 @@
 -- Functions/NPCTooltip.lua
 -- Adds achievement requirement information to NPC tooltips
 
+local table_insert = table.insert
+
 local function GetNPCIdFromGUID(guid)
     if not guid then return nil end
     local npcId = select(6, strsplit("-", guid))
@@ -58,7 +60,7 @@ local function GetAchievementsForNPC(npcId)
                 end
                 
                 if found then
-                    table.insert(achievements, {
+                    table_insert(achievements, {
                         achId = achId,
                         title = achDef.title or achDef.mapName or tostring(achId)
                     })

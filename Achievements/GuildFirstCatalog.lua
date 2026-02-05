@@ -16,6 +16,8 @@
 --       - group : raid if in raid, else party if in group, else solo
 --   - requireSameGuild: boolean (default: true for guild-scoped claims, else false)
 
+local table_insert = table.insert
+
 local achievements = {
     -- Example 1: Guild-first (default - no scope needed)
     {
@@ -105,7 +107,7 @@ for _, def in ipairs(achievements) do
     if def.triggerAchievementId then
         local k = tostring(def.triggerAchievementId)
         _G.HCA_GuildFirst_ByTrigger[k] = _G.HCA_GuildFirst_ByTrigger[k] or {}
-        table.insert(_G.HCA_GuildFirst_ByTrigger[k], def.achId)
+        table_insert(_G.HCA_GuildFirst_ByTrigger[k], def.achId)
     end
 end
 
@@ -113,7 +115,7 @@ end
 for _, def in ipairs(achievements) do
     _G.HCA_RegistrationQueue = _G.HCA_RegistrationQueue or {}
     
-    table.insert(_G.HCA_RegistrationQueue, function()
+    table_insert(_G.HCA_RegistrationQueue, function()
         if not _G.CreateAchievementRow or not _G.AchievementPanel then
             return
         end

@@ -12,6 +12,8 @@
 -- Configuration
 local OTHER_PLAYER_THREAT_THRESHOLD = 10  -- % threat from overleveled players to fail (if ANY has >10% threat, disqualify)
 
+local table_insert = table.insert
+
 function IsGroupEligibleForAchievement(MAX_LEVEL, ACH_ID, destGUID)
     -- If in a raid, not eligible
     if IsInRaid() then
@@ -150,7 +152,7 @@ function IsGroupEligibleForAchievement(MAX_LEVEL, ACH_ID, destGUID)
             local unit = "party" .. i
             if UnitExists(unit) then
                 if overLeveled(unit) and UnitInRange(unit) then
-                    table.insert(overleveledParty, unit)
+                    table_insert(overleveledParty, unit)
                 end
             end
         end

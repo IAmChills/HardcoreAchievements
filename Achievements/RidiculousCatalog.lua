@@ -1,5 +1,10 @@
 -- Ridiculous achievement definitions
 -- These achievements are hidden by default and do not count towards total unless completed
+-- Localize frequently-used WoW API globals (micro-optimization, no behavior change)
+local _G = _G
+local UnitLevel = UnitLevel
+local table_insert = table.insert
+
 local RidiculousAchievements = {
   {
     achId = "NoJumpChallenge",
@@ -67,7 +72,7 @@ for _, def in ipairs(RidiculousAchievements) do
     def.isRidiculous = true
     
     -- Queue achievement registration
-    table.insert(_G.HCA_RegistrationQueue, function()
+    table_insert(_G.HCA_RegistrationQueue, function()
         if def.customIsCompleted then
             _G[def.achId .. "_IsCompleted"] = def.customIsCompleted
         end

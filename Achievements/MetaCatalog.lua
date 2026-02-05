@@ -1,6 +1,8 @@
 -- Meta achievement definitions
 -- Note: MetaCommon should be loaded before this file (via .toc) and exports via _G.MetaCommon
 
+local table_insert = table.insert
+
 ---------------------------------------
 -- Helper Functions
 ---------------------------------------
@@ -53,9 +55,9 @@ local function GetClassicDungeonMasterAchievements()
     
     -- Add faction-specific dungeons
     if playerFaction == FACTION_HORDE then
-        table.insert(requiredAchievements, 1, "RFC")  -- Add at the beginning
+        table_insert(requiredAchievements, 1, "RFC")  -- Add at the beginning
     elseif playerFaction == FACTION_ALLIANCE then
-        table.insert(requiredAchievements, 6, "STOCK")  -- Add after BFD
+        table_insert(requiredAchievements, 6, "STOCK")  -- Add after BFD
     end
     
     return requiredAchievements
@@ -181,7 +183,7 @@ _G.HCA_RegistrationQueue = _G.HCA_RegistrationQueue or {}
 
 -- Queue all meta achievements for deferred registration
 for _, meta in ipairs(MetaAchievements) do
-    table.insert(_G.HCA_RegistrationQueue, function()
+    table_insert(_G.HCA_RegistrationQueue, function()
         if _G.MetaCommon and _G.MetaCommon.registerMetaAchievement then
             -- For QuestMeta, set achievements list at registration time
             if meta.achId == "QuestMeta" then

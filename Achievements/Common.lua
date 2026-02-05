@@ -4,6 +4,17 @@
 -- Shared factory for standard (quest/kill under level cap) achievements.
 local M = {}
 
+-- Localize frequently-used WoW API globals (micro-optimization, no behavior change)
+local _G = _G
+local UnitLevel = UnitLevel
+local UnitClass = UnitClass
+local UnitFactionGroup = UnitFactionGroup
+local strsplit = strsplit
+local select = select
+local time = time
+local C_Timer = C_Timer
+local CreateFrame = CreateFrame
+
 ---------------------------------------
 -- Helper Functions
 ---------------------------------------

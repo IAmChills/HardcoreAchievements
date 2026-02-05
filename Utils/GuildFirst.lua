@@ -30,6 +30,154 @@ local databases = {}  -- [scopeKey] = { db = DBHandle, prefix = string, discover
 local M = {}
 _G.HCA_GuildFirst = M
 
+-- Localize frequently-used WoW API globals (micro-optimization, no behavior change)
+local _G = _G
+local UnitGUID = UnitGUID
+local UnitName = UnitName
+local UnitExists = UnitExists
+local IsInRaid = IsInRaid
+local IsInGroup = IsInGroup
+local GetNumGroupMembers = GetNumGroupMembers
+local GetRealmName = GetRealmName
+local GetGuildInfo = GetGuildInfo
+local CreateFrame = CreateFrame
+local C_Timer = C_Timer
+local time = time
+local table_insert = table.insert
+local table_sort = table.sort
+local table_concat = table.concat
+local string_byte = string.byte
+local string_format = string.format
+local string_gmatch = string.gmatch
+
+-- ---------------------------------------------------------------------------------------------------------------------
+-- Guild-first toast (own frame above main achievement toast so both are visible)
+-- ---------------------------------------------------------------------------------------------------------------------
+
+local guildFirstToastFrame = nil
+
+local function CreateGuildFirstToast()
+    if guildFirstToastFrame and guildFirstToastFrame:IsObjectType("Frame") then
+        return guildFirstToastFrame
+    end
+    local f = CreateFrame("Frame", nil, UIParent)
+    f:SetSize(320, 92)
+    f:SetPoint("CENTER", 0, -180)
+    f:Hide()
+    f:SetFrameStrata("TOOLTIP")
+    f:SetFrameLevel(100)
+
+    local bg = f:CreateTexture(nil, "BACKGROUND")
+    bg:SetAllPoints()
+    if bg.SetAtlas and bg:SetAtlas("UI-Achievement-Alert-Background", true) then
+        bg:SetTexCoord(0, 1, 0, 1)
+    else
+        bg:SetTexture("Interface\\AchievementFrame\\UI-Achievement-Alert-Background")
+        bg:SetTexCoord(0, 0.605, 0, 0.703)
+    end
+
+    local iconFrame = CreateFrame("Frame", nil, f)
+    iconFrame:SetSize(40, 40)
+    iconFrame:SetPoint("LEFT", f, "LEFT", 6, 0)
+    local icon = iconFrame:CreateTexture(nil, "ARTWORK")
+    icon:SetPoint("CENTER", iconFrame, "CENTER", 0, 0)
+    icon:SetSize(40, 43)
+    icon:SetTexCoord(0.05, 1, 0.05, 1)
+    f.icon = icon
+
+    local overlay = iconFrame:CreateTexture(nil, "OVERLAY")
+    overlay:SetTexture("Interface\\AchievementFrame\\UI-Achievement-IconFrame")
+    overlay:SetTexCoord(0, 0.5625, 0, 0.5625)
+    overlay:SetSize(72, 72)
+    overlay:SetPoint("CENTER", iconFrame, "CENTER", -1, 2)
+
+    local name = f:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    name:SetPoint("CENTER", f, "CENTER", 10, 0)
+    name:SetJustifyH("CENTER")
+    name:SetText("")
+    f.name = name
+
+    local unlocked = f:CreateFontString(nil, "OVERLAY", "GameFontBlackTiny")
+    unlocked:SetPoint("TOP", f, "TOP", 7, -26)
+    unlocked:SetText(ACHIEVEMENT_UNLOCKED or "Achievement Unlocked")
+
+    local shield = CreateFrame("Frame", nil, f)
+    shield:SetSize(64, 64)
+    shield:SetPoint("RIGHT", f, "RIGHT", -10, -4)
+    local shieldIcon = shield:CreateTexture(nil, "BACKGROUND")
+    shieldIcon:SetTexture("Interface\\AchievementFrame\\UI-Achievement-Shields")
+    shieldIcon:SetSize(56, 52)
+    shieldIcon:SetPoint("TOPRIGHT", 1, 0)
+    shieldIcon:SetTexCoord(0, 0.5, 0, 0.45)
+    f.shieldIcon = shieldIcon
+    local points = shield:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    points:SetPoint("CENTER", 4, 5)
+    points:SetText("")
+    f.points = points
+
+    function f:PlayFade(duration)
+        local t = 0
+        self:SetScript("OnUpdate", function(s, elapsed)
+            t = t + elapsed
+            local a = 1 - math.min(t / duration, 1)
+            s:SetAlpha(a)
+            if t >= duration then
+                s:SetScript("OnUpdate", nil)
+                s:Hide()
+                s:SetAlpha(1)
+            end
+        end)
+    end
+
+    f:EnableMouse(true)
+    f:SetScript("OnMouseUp", function(_, button)
+        if button == "LeftButton" and (_G.ShowHardcoreAchievementWindow or _G.HCA_ShowAchievementTab) then
+            if _G.ShowHardcoreAchievementWindow then _G.ShowHardcoreAchievementWindow()
+            else _G.HCA_ShowAchievementTab() end
+        end
+    end)
+
+    guildFirstToastFrame = f
+    return f
+end
+
+local function ShowGuildFirstToast(iconTex, title, pts)
+    -- Defer to next frame so we're not hidden by the same event that triggered the claim
+    C_Timer.After(0.05, function()
+        local f = CreateGuildFirstToast()
+        f:Hide()
+        f:SetAlpha(1)
+        local tex = iconTex
+        if type(iconTex) == "table" and iconTex.GetTexture then
+            tex = iconTex:GetTexture()
+        end
+        if not tex then tex = 136116 end
+        f.icon:SetTexture(tex)
+        f.name:SetText(title or "")
+        local finalPoints = pts or 0
+        if finalPoints == 0 then
+            f.points:SetText("")
+            f.points:Hide()
+            if f.shieldIcon then
+                f.shieldIcon:SetTexture("Interface\\AchievementFrame\\UI-Achievement-Shields-Nopoints")
+                f.shieldIcon:SetTexCoord(0, 0.5, 0, 0.45)
+            end
+        else
+            f.points:SetText(tostring(finalPoints))
+            f.points:Show()
+            if f.shieldIcon then
+                f.shieldIcon:SetTexture("Interface\\AchievementFrame\\UI-Achievement-Shields")
+                f.shieldIcon:SetTexCoord(0, 0.5, 0, 0.45)
+            end
+        end
+        f:Show()
+        PlaySoundFile("Interface\\AddOns\\HardcoreAchievements\\Sounds\\AchievementSound1.ogg", "Effects")
+        C_Timer.After(3, function()
+            if f:IsShown() then f:PlayFade(0.6) end
+        end)
+    end)
+end
+
 -- ---------------------------------------------------------------------------------------------------------------------
 -- Utilities
 -- ---------------------------------------------------------------------------------------------------------------------
@@ -48,13 +196,13 @@ end
 local function Hash32(s)
     local h = 5381
     for i = 1, #s do
-        h = (h * 33 + string.byte(s, i)) % 4294967296
+        h = (h * 33 + string_byte(s, i)) % 4294967296
     end
     return h
 end
 
 local function PrefixForKey(key)
-    return "HCA" .. string.format("%08X", Hash32(key))
+    return "HCA" .. string_format("%08X", Hash32(key))
 end
 
 --- Determine the scope key for an achievement based on its definition.
@@ -101,10 +249,10 @@ local function GetScopeKey(scope)
                 -- Player is in an allowed guild - create deterministic key from sorted guild list
                 local sortedGuilds = {}
                 for _, g in ipairs(scope) do
-                    table.insert(sortedGuilds, tostring(g))
+                    table_insert(sortedGuilds, tostring(g))
                 end
-                table.sort(sortedGuilds)
-                local guildListStr = table.concat(sortedGuilds, ",")
+                table_sort(sortedGuilds)
+                local guildListStr = table_concat(sortedGuilds, ",")
                 local key = "Guilds@" .. guildListStr .. "@" .. tostring(realm)
                 Debug("GetScopeKey: Custom guild pool [" .. guildListStr .. "] -> " .. key .. " (player in allowed guild)")
                 return key
@@ -166,7 +314,7 @@ local function ParseDelimitedSet(s, delim)
         return set
     end
     delim = delim or ";"
-    for token in string.gmatch(s, "([^" .. delim .. "]+)") do
+    for token in string_gmatch(s, "([^" .. delim .. "]+)") do
         token = Trim(token)
         if token ~= "" then
             set[token] = true
@@ -220,7 +368,7 @@ local function BuildWinnersGUIDList(awardMode, requireSameGuild)
         end
 
         seen[guid] = true
-        table.insert(winnersGUID, guid)
+        table_insert(winnersGUID, guid)
     end
 
     if awardMode == "solo" then
@@ -247,7 +395,7 @@ local function BuildWinnersGUIDList(awardMode, requireSameGuild)
         end
     end
 
-    return table.concat(winnersGUID, ";")
+    return table_concat(winnersGUID, ";")
 end
 
 -- ---------------------------------------------------------------------------------------------------------------------
@@ -300,13 +448,12 @@ local function EnsureDBForScope(scopeKey)
                 if data and data.winnerGUID then
                     if RecordIncludesGUID(data, myGUID) then
                         Debug("Received claim update: Achievement '" .. tostring(key) .. "' claimed and I am an eligible winner")
-                        -- If this player is a winner, award immediately when the claim arrives.
+                        -- Mark row completed when we receive the claim (e.g. from sync or broadcast).
+                        -- Do NOT show toast here: onChange also fires on load/relog when we ImportDatabase,
+                        -- so we only show the toast in CanClaimAndAward when we actually just claimed.
                         local row = _G["HCA_GuildFirst_" .. tostring(key) .. "_Row"] or FindRowByAchId(tostring(key))
                         if row and not row.completed and type(_G.HCA_MarkRowCompleted) == "function" then
                             _G.HCA_MarkRowCompleted(row)
-                            if row.completed and type(_G.HCA_AchToast_Show) == "function" and row.Icon and row.Title then
-                                _G.HCA_AchToast_Show(row.Icon:GetTexture(), row.Title:GetText(), row.points or 0, row)
-                            end
                         end
                     else
                         Debug("Received claim update: Achievement '" .. tostring(key) .. "' claimed by " .. tostring(data.winnerName or "?") .. " - not eligible (silent fail)")
@@ -387,7 +534,7 @@ local function GetAchievementScope(row, achievementId)
     if row and row._def and row._def.achievementScope ~= nil then
         local scope = row._def.achievementScope
         if type(scope) == "table" then
-            Debug("GetAchievementScope(" .. tostring(achievementId) .. "): Custom guild pool: " .. table.concat(scope, ", "))
+            Debug("GetAchievementScope(" .. tostring(achievementId) .. "): Custom guild pool: " .. table_concat(scope, ", "))
         else
             Debug("GetAchievementScope(" .. tostring(achievementId) .. "): Scope from def: " .. tostring(scope))
         end
@@ -400,7 +547,7 @@ local function GetAchievementScope(row, achievementId)
         if row and row._def and row._def.achievementScope ~= nil then
             local scope = row._def.achievementScope
             if type(scope) == "table" then
-                Debug("GetAchievementScope(" .. tostring(achievementId) .. "): Custom guild pool (from lookup): " .. table.concat(scope, ", "))
+                Debug("GetAchievementScope(" .. tostring(achievementId) .. "): Custom guild pool (from lookup): " .. table_concat(scope, ", "))
             else
                 Debug("GetAchievementScope(" .. tostring(achievementId) .. "): Scope from def (from lookup): " .. tostring(scope))
             end
@@ -485,9 +632,9 @@ function M:CanClaimAndAward(achievementId, row, winnersGUIDs)
 
     Debug("CanClaimAndAward(" .. achievementId .. "): Starting claim attempt")
 
-    -- Get row if not provided
+    -- Get row if not provided (check global first; catalog stores row there so we can award/toast even if panel scan misses it)
     if not row then
-        row = FindRowByAchId(achievementId)
+        row = _G["HCA_GuildFirst_" .. achievementId .. "_Row"] or FindRowByAchId(achievementId)
         if row then
             Debug("CanClaimAndAward(" .. achievementId .. "): Found achievement row")
         else
@@ -560,24 +707,22 @@ function M:CanClaimAndAward(achievementId, row, winnersGUIDs)
         end
     end)
 
-    -- Award the achievement
-    if row and type(_G.HCA_MarkRowCompleted) == "function" then
-        if RecordIncludesGUID(claim, myGUID) then
-            if not row.completed then
-                Debug("CanClaimAndAward(" .. achievementId .. "): Awarding achievement to player")
-                _G.HCA_MarkRowCompleted(row)
-                if row.completed and type(_G.HCA_AchToast_Show) == "function" and row.Icon and row.Title then
-                    _G.HCA_AchToast_Show(row.Icon:GetTexture(), row.Title:GetText(), row.points or 0, row)
-                end
-                Debug("CanClaimAndAward(" .. achievementId .. "): Achievement awarded successfully!")
-                return true
-            end
-            return true
-        else
-            Debug("CanClaimAndAward(" .. achievementId .. "): Claim succeeded but player not in winners list (no award)")
+    -- Award the achievement (row may be a UI frame or the model/data if panel wasn't built yet)
+    if RecordIncludesGUID(claim, myGUID) then
+        if row and type(_G.HCA_MarkRowCompleted) == "function" and not row.completed then
+            Debug("CanClaimAndAward(" .. achievementId .. "): Awarding achievement to player")
+            _G.HCA_MarkRowCompleted(row)
         end
+        -- Always show guild-first toast when we're a winner (use row or def so we show even when row is nil)
+        local def = GetGuildFirstDef(achievementId, row)
+        local icon = (row and ((row.Icon and row.Icon.GetTexture and row.Icon:GetTexture()) or row.icon)) or (def and def.icon) or 136116
+        local titleText = (row and ((row.Title and row.Title.GetText and row.Title:GetText()) or row.title)) or (def and def.title) or tostring(achievementId)
+        local pts = (row and row.points) or (def and def.points) or 0
+        ShowGuildFirstToast(icon, titleText, pts)
+        Debug("CanClaimAndAward(" .. achievementId .. "): Achievement awarded successfully!")
+        return true
     else
-        Debug("CanClaimAndAward(" .. achievementId .. "): WARNING - Claim succeeded but couldn't award (row or HCA_MarkRowCompleted missing)")
+        Debug("CanClaimAndAward(" .. achievementId .. "): Claim succeeded but player not in winners list (no award)")
     end
 
     return false
@@ -607,56 +752,6 @@ function M:Trigger(guildFirstAchId, opts)
 
     return self:CanClaimAndAward(guildFirstAchId, row, winnersGUIDs, nil)
 end
-
--- ---------------------------------------------------------------------------------------------------------------------
--- Testing slash command
--- ---------------------------------------------------------------------------------------------------------------------
-
-local function HandleSlash(msg)
-    msg = tostring(msg or ""):lower():gsub("^%s+", ""):gsub("%s+$", "")
-    if msg == "" or msg == "help" then
-        print("|cff008066[Hardcore Achievements]|r GuildFirst commands:")
-        print("  |cffffd100/hcagf claim [GuildFirstId]|r - Attempt to claim a GuildFirst achievement (defaults to test)")
-        print("  |cffffd100/hcagf status [GuildFirstId]|r - Show current winner (if any)")
-        return
-    end
-
-    local cmd, arg = msg:match("^(%S+)%s*(.-)$")
-    cmd = tostring(cmd or ""):lower()
-    arg = tostring(arg or ""):gsub("^%s+", ""):gsub("%s+$", "")
-
-    if cmd == "claim" then
-        local achId = (arg ~= "" and arg) or "GuildFirstTest01"
-        local row = _G["HCA_GuildFirst_" .. achId .. "_Row"] or FindRowByAchId(achId)
-        local def = GetGuildFirstDef(achId, row)
-        local awardMode = (def and def.awardMode) or "solo"
-        local requireSameGuild = DefaultRequireSameGuild(def)
-        local winnersGUIDs = BuildWinnersGUIDList(awardMode, requireSameGuild)
-        if M:CanClaimAndAward(achId, row, winnersGUIDs) then
-            print("|cff008066[Hardcore Achievements]|r |cff00ff00Claimed and awarded!|r")
-        else
-            print("|cff008066[Hardcore Achievements]|r |cffff0000Already claimed by someone else.|r")
-        end
-        return
-    end
-
-    if cmd == "status" then
-        local achId = (arg ~= "" and arg) or "GuildFirstTest01"
-        local row = _G["HCA_GuildFirst_" .. achId .. "_Row"] or FindRowByAchId(achId)
-        local isClaimed, winner = M:IsClaimed(achId, row)
-        if isClaimed and winner then
-            print(string.format("|cff008066[Hardcore Achievements]|r Winner: |cffffd100%s|r", tostring(winner.winnerName or "?")))
-        else
-            print("|cff008066[Hardcore Achievements]|r Not claimed yet.")
-        end
-        return
-    end
-
-    print("|cff008066[Hardcore Achievements]|r Unknown command. Use |cffffd100/hcagf help|r")
-end
-
-SLASH_HCAGUILDFIRST1 = "/hcagf"
-SlashCmdList["HCAGUILDFIRST"] = HandleSlash
 
 -- Initialize databases on login/guild events (lazy initialization per scope)
 local initFrame = CreateFrame("Frame")

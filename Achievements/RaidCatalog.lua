@@ -1,6 +1,8 @@
 ---------------------------------------
 -- Raid Achievement Definitions
 ---------------------------------------
+local table_insert = table.insert
+
 local Raids = {
   -- Lower Blackrock Spire (Level 60)
   {
@@ -204,7 +206,7 @@ _G.HCA_RegistrationQueue = _G.HCA_RegistrationQueue or {}
 -- Note: RaidCommon must be loaded before this file (RaidCommon.lua should be in .toc before RaidCatalog.lua)
 if _G.RaidCommon and _G.RaidCommon.registerRaidAchievement then
   for _, raid in ipairs(Raids) do
-    table.insert(_G.HCA_RegistrationQueue, function()
+    table_insert(_G.HCA_RegistrationQueue, function()
       RaidCommon.registerRaidAchievement(raid)
     end)
   end

@@ -1,4 +1,6 @@
 local ProfessionTracker = {}
+local table_insert = table.insert
+local table_sort = table.sort
 
 -- =========================================================
 -- Profession data
@@ -143,7 +145,7 @@ local function UpdateProfessionRowVisibility(skillID)
         return
     end
 
-    table.sort(rows, function(a, b)
+    table_sort(rows, function(a, b)
         local defA = a and a._def or {}
         local defB = b and b._def or {}
         local rankA = GetRequiredRank(defA)
@@ -273,7 +275,7 @@ function ProfessionTracker.RegisterRow(row, def)
     if not skillID then return end
 
     ProfessionRows[skillID] = ProfessionRows[skillID] or {}
-    table.insert(ProfessionRows[skillID], row)
+    table_insert(ProfessionRows[skillID], row)
 
     row._professionSkillID = skillID
     InitializeProfessionHiddenUntilComplete(row)

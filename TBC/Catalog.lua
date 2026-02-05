@@ -1,11 +1,18 @@
 ---------------------------------------
 -- Achievement Definitions
 ---------------------------------------
+-- Localize frequently-used WoW API globals (micro-optimization, no behavior change)
+local UnitLevel = UnitLevel
+local UnitClass = UnitClass
+local UnitFactionGroup = UnitFactionGroup
+local table_insert = table.insert
+local string_format = string.format
+
 local Achievements = {
 
 --{ achId="Test",  title="Boar Test",  level=4, tooltip="Kill " .. HCA_SharedUtils.GetClassColor() .. "a boar", icon=134400, points=10, requiredQuestId=nil, targetNpcId=3098, faction="Horde", zone="Durotar" },
 --{ achId="Test2", title="Easy Quest Test", level=2, tooltip="Orc starter quest", icon=134400, points=10, requiredQuestId=4641, targetNpcId=nil, faction="Horde", zone="Durotar" },
---{ achId="Test3", title="Kill + Quest", level=2, tooltip="Kill a boar and complete the orc starter quest", icon=134400, points=10, requiredQuestId=4641, targetNpcId=3098, faction="Horde", zone="Durotar" },
+{ achId="Test3", title="Kill + Quest", level=5, tooltip="Kill a boar and complete the orc starter quest", icon=134400, points=10, requiredQuestId=4641, targetNpcId=3098, faction="Horde", zone="Durotar" },
 --{ achId="Test4", title="Kill 3 Boars", level=2, tooltip="Kill 3 boars", icon=134400, points=10, requiredQuestId=nil, requiredKills = { [3098] = 3, }, faction="Horde", zone="Durotar" },
 
 -- Alliance
@@ -556,7 +563,7 @@ local Achievements = {
     zone = "Stranglethorn Vale"
 }, {
     achId = "MalletZF",
-    title = string.format("%s the Keeper", GetUnitName("player")),
+    title = string_format("%s the Keeper", GetUnitName("player")),
     level = 47,
     tooltip = "Obtain the " .. HCA_SharedUtils.GetClassColor() .. "Mallet of Zul'Farrak|r before level 48",
     icon = 134559,
@@ -566,7 +573,7 @@ local Achievements = {
     linkUsesSenderTitle = true,
     -- Tooltip title fallback when the visible link text isn't available in the hyperlink handler.
     linkTitle = function(senderName)
-        return string.format("%s the Keeper", tostring(senderName or ""))
+        return string_format("%s the Keeper", tostring(senderName or ""))
     end,
     allowSoloDouble = true,
     customIsCompleted = function() return false end,
@@ -846,7 +853,7 @@ for _, def in ipairs(Achievements) do
   if IsEligible(def) then
     -- Mark as quest achievement for filtering
     def.isQuest = true
-    table.insert(_G.HCA_RegistrationQueue, function()
+    table_insert(_G.HCA_RegistrationQueue, function()
       local killFn = GetKillTracker(def)
       local questFn = GetQuestTracker(def)
 

@@ -3,6 +3,18 @@
 
 local HCA_LINK_PREFIX = "hcaach"
 
+-- Localize frequently-used WoW API globals (micro-optimization, no behavior change)
+local _G = _G
+local UnitGUID = UnitGUID
+local UnitName = UnitName
+local UnitLevel = UnitLevel
+local GetItemCount = GetItemCount
+local ShowUIPanel = ShowUIPanel
+local table_insert = table.insert
+local table_sort = table.sort
+local table_concat = table.concat
+local string_format = string.format
+
 local function GetAchievementById(achId)
 	if _G.Achievements then
 		for _, rec in ipairs(_G.Achievements) do
@@ -14,6 +26,10 @@ local function GetAchievementById(achId)
 	-- Fallback to dungeon/other defs registry if present
 	if _G.HCA_AchievementDefs and _G.HCA_AchievementDefs[tostring(achId)] then
 		return _G.HCA_AchievementDefs[tostring(achId)]
+	end
+	-- Guild-first achievements (from GuildFirstCatalog, stored in HCA_GuildFirst_DefById)
+	if _G.HCA_GuildFirst_DefById and _G.HCA_GuildFirst_DefById[tostring(achId)] then
+		return _G.HCA_GuildFirst_DefById[tostring(achId)]
 	end
 	-- Check achievement panel rows for reputation and dungeon set achievements
 	if _G.AchievementPanel and _G.AchievementPanel.achievements then
@@ -39,8 +55,19 @@ local function GetAchievementById(achId)
 	return nil
 end
 
+--- Guild-first achievements use secret/hiddenUntilComplete in the UI but should never show secret placeholders when linked in chat.
+local function IsGuildFirstAchievement(achId)
+	return _G.HCA_GuildFirst_DefById and _G.HCA_GuildFirst_DefById[tostring(achId or "")]
+end
+
 local function ViewerHasCompletedAchievement(achId)
     local key = tostring(achId)
+    -- Guild-first achievements: completion is "claimed by me" in the guild-first DB
+    if _G.HCA_GuildFirst_DefById and _G.HCA_GuildFirst_DefById[key] and _G.HCA_GuildFirst and type(_G.HCA_GuildFirst.IsClaimedByMe) == "function" then
+        if _G.HCA_GuildFirst:IsClaimedByMe(key) then
+            return true
+        end
+    end
     local getDB = _G.HardcoreAchievements_GetCharDB
     if type(getDB) == "function" then
         local _, cdb = getDB()
@@ -66,9 +93,9 @@ function HCA_GetAchievementBracket(achId)
 	-- Pattern handled by ChatFilter_HCA below: [HCA: Title (achId)]
 	local rec = GetAchievementById(achId)
 	if rec and rec.linkUsesSenderTitle and rec.title then
-		return string.format("[HCA: %s (%s)]", tostring(rec.title), tostring(achId))
+		return string_format("[HCA: %s (%s)]", tostring(rec.title), tostring(achId))
 	end
-	return string.format("[HCA:(%s)]", tostring(achId))
+	return string_format("[HCA:(%s)]", tostring(achId))
 end
 
 -- Public: build a hyperlink string for an achievement id and title
@@ -81,10 +108,10 @@ function HCA_GetAchievementHyperlink(achId, title, senderName, senderGuid)
 		guid = UnitGUID("player") or ""
 	end
 	local name = senderName or ""
-	local display = string.format("[%s]", tostring(title or achId))
+	local display = string_format("[%s]", tostring(title or achId))
 	-- Format (v2): |Hhcaach:achId:senderGuid:senderName|h[Title]|h
 	-- Backwards compatible with v1: hcaach:achId:senderGuid
-	return "|cffffd100" .. string.format("|H%s:%s:%s:%s|h%s|h", HCA_LINK_PREFIX, tostring(achId), tostring(guid), tostring(name), display) .. "|r"
+	return "|cffffd100" .. string_format("|H%s:%s:%s:%s|h%s|h", HCA_LINK_PREFIX, tostring(achId), tostring(guid), tostring(name), display) .. "|r"
 end
 
 -- Tooltip rendering for our custom link
@@ -136,8 +163,8 @@ if Old_ItemRef_SetHyperlink then
 				end
 			end
 
-            -- Per-viewer secrecy: if secret and viewer hasn't completed, show secret placeholders
-            local isSecret = rec and rec.secret
+            -- Per-viewer secrecy: if secret and viewer hasn't completed, show secret placeholders (never for guild-first links)
+            local isSecret = rec and rec.secret and not IsGuildFirstAchievement(achId)
             local viewerCompleted = ViewerHasCompletedAchievement(achId)
             local usingSecretPoints = false
             if isSecret and not viewerCompleted then
@@ -187,7 +214,7 @@ if Old_ItemRef_SetHyperlink then
             end
 
 			-- Title line with icon texture escape (valid in tooltips)
-			local iconTag = type(icon) == "number" and string.format("|T%d:24:24|t", icon) or string.format("|T%s:24:24|t", tostring(icon))
+			local iconTag = type(icon) == "number" and string_format("|T%d:24:24|t", icon) or string_format("|T%s:24:24|t", tostring(icon))
 			ItemRefTooltip:AddLine(iconTag .. "  " .. title, 1, 0.82, 0)
 			if tooltip and tooltip ~= "" then
 				ItemRefTooltip:AddLine(tooltip, 0.9, 0.9, 0.9, true)
@@ -213,14 +240,14 @@ if Old_ItemRef_SetHyperlink then
 				if rec.bossOrder and next(rec.bossOrder) ~= nil then
 					-- Use provided boss order
 					for _, npcId in ipairs(rec.bossOrder) do
-						table.insert(keys, npcId)
+						table_insert(keys, npcId)
 					end
 				else
 					-- Build sorted list of boss IDs for stable order
 					for npcId, _ in pairs(rec.requiredKills) do 
-						table.insert(keys, npcId) 
+						table_insert(keys, npcId) 
 					end
-					table.sort(keys, function(a, b)
+					table_sort(keys, function(a, b)
 						local aa = tonumber(a) or 0
 						local bb = tonumber(b) or 0
 						return aa < bb
@@ -259,9 +286,9 @@ if Old_ItemRef_SetHyperlink then
 							local bossNames = {}
 							for _, id in ipairs(need) do
 								local name = (getBossNameFn and getBossNameFn(id)) or ("Boss " .. tostring(id))
-								table.insert(bossNames, name)
+								table_insert(bossNames, name)
 							end
-							bossName = table.concat(bossNames, " / ")
+							bossName = table_concat(bossNames, " / ")
 							-- Check if any has been killed
 							for _, id in ipairs(need) do
 								local idNumCheck = tonumber(id) or id
@@ -370,7 +397,7 @@ if Old_ItemRef_SetHyperlink then
                 statusR, statusG, statusB = 0.5, 0.5, 0.5  -- Gray
             end
             
-            local pointsText = (points and points > 0) and string.format("%d pts", points) or ""
+            local pointsText = (points and points > 0) and string_format("%d pts", points) or ""
             ItemRefTooltip:AddDoubleLine(statusText, pointsText, statusR, statusG, statusB, 0.7, 0.9, 0.7)
             
 			ItemRefTooltip:Show()
@@ -405,7 +432,7 @@ local function ChatFilter_HCA(chatFrame, event, msg, author, ...)
     msg = msg:gsub("%[HCA:%s*(.-)%s*%(([^%)]+)%)%]", function(title, id)
         local rec = GetAchievementById(id)
         local displayTitle
-        if rec and rec.secret and not ViewerHasCompleted(id) then
+        if rec and rec.secret and not ViewerHasCompleted(id) and not IsGuildFirstAchievement(id) then
             displayTitle = rec.secretTitle or "Secret"
         else
 			-- Prefer the sender-supplied title from the message, so player-specific titles remain stable.
@@ -419,7 +446,7 @@ local function ChatFilter_HCA(chatFrame, event, msg, author, ...)
     msg = msg:gsub("%[HCA:%s*%(([^%)]+)%)%]", function(id)
         local rec = GetAchievementById(id)
         local displayTitle
-        if rec and rec.secret and not ViewerHasCompleted(id) then
+        if rec and rec.secret and not ViewerHasCompleted(id) and not IsGuildFirstAchievement(id) then
             displayTitle = rec.secretTitle or "Secret"
         else
             displayTitle = (rec and rec.title) or tostring(id)

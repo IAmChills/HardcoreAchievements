@@ -3,6 +3,21 @@
 ---------------------------------------
 local DungeonCommon = {}
 
+-- Localize frequently-used WoW API globals (micro-optimization, no behavior change)
+local _G = _G
+local UnitLevel = UnitLevel
+local UnitGUID = UnitGUID
+local UnitName = UnitName
+local UnitExists = UnitExists
+local UnitFactionGroup = UnitFactionGroup
+local IsInRaid = IsInRaid
+local GetNumGroupMembers = GetNumGroupMembers
+local IsInInstance = IsInInstance
+local GetInstanceInfo = GetInstanceInfo
+local CreateFrame = CreateFrame
+local table_insert = table.insert
+local table_concat = table.concat
+
 ---------------------------------------
 -- Module-Level State
 ---------------------------------------
@@ -1003,22 +1018,25 @@ function DungeonCommon.registerDungeonAchievement(def)
   local function CreateTooltipHandler()
     local row = _G[rowVarName]
     if not row then return function() end end
+    local frame = row.frame
+    if not frame then return function() end end
     
     -- Store the base tooltip for the main tooltip
     local baseTooltip = tooltip or ""
     row.tooltip = baseTooltip
+    frame.tooltip = baseTooltip
     
     -- Ensure mouse events are enabled and highlight texture exists
-    row:EnableMouse(true)
-    if not row.highlight then
-      row.highlight = row:CreateTexture(nil, "BACKGROUND")
-      row.highlight:SetAllPoints(row)
-      row.highlight:SetColorTexture(1, 1, 1, 0.10)
-      row.highlight:Hide()
+    frame:EnableMouse(true)
+    if not frame.highlight then
+      frame.highlight = frame:CreateTexture(nil, "BACKGROUND")
+      frame.highlight:SetAllPoints(frame)
+      frame.highlight:SetColorTexture(1, 1, 1, 0.10)
+      frame.highlight:Hide()
     end
     
     -- Set up OnLeave script to hide highlight and tooltip
-    row:SetScript("OnLeave", function(self)
+    frame:SetScript("OnLeave", function(self)
       if self.highlight then
         self.highlight:Hide()
       end
@@ -1064,7 +1082,7 @@ function DungeonCommon.registerDungeonAchievement(def)
                 for _, id in pairs(need) do
                   local current = (state.counts[id] or state.counts[tostring(id)] or 0)
                   local name = HCA_GetBossName(id)
-                  table.insert(bossNames, name)
+                  table_insert(bossNames, name)
                   -- Mark as done if this boss has been killed (or if achievement is complete)
                   if current >= 1 then
                     done = true
@@ -1076,7 +1094,7 @@ function DungeonCommon.registerDungeonAchievement(def)
                   bossName = npcId
                 else
                   -- For numeric keys, show all names
-                  bossName = table.concat(bossNames, " / ")
+                  bossName = table_concat(bossNames, " / ")
                 end
               else
                 -- Single NPC ID
@@ -1288,7 +1306,7 @@ function DungeonCommon.registerDungeonAchievement(def)
 
   -- Create the registration function dynamically
   _G[registerFuncName] = function()
-    if not _G.CreateAchievementRow or not _G.AchievementPanel then return end
+    if not _G.CreateAchievementRow then return end
     if _G[rowVarName] then return end
     
     -- Check if player is eligible for this achievement
@@ -1335,23 +1353,27 @@ function DungeonCommon.registerDungeonAchievement(def)
     -- Set up lazy tooltip initialization - only set up handlers on first hover
     local row = _G[rowVarName]
     if row then
-      row:EnableMouse(true)
-      -- Lazy OnEnter handler - creates tooltip handler on first hover
-      row:SetScript("OnEnter", function(self)
-        GetTooltipHandler()(self)
-      end)
-      -- OnLeave handler
-      row:SetScript("OnLeave", function(self)
-        if self.highlight then
-          self.highlight:Hide()
-        end
-        GameTooltip:Hide()
-      end)
+      if _G.HCA_AddRowUIInit then
+        _G.HCA_AddRowUIInit(row, function(frame)
+          frame:EnableMouse(true)
+          -- Lazy OnEnter handler - creates tooltip handler on first hover
+          frame:SetScript("OnEnter", function(self)
+            GetTooltipHandler()(self)
+          end)
+          -- OnLeave handler
+          frame:SetScript("OnLeave", function(self)
+            if self.highlight then
+              self.highlight:Hide()
+            end
+            GameTooltip:Hide()
+          end)
+        end)
+      end
     end
   end
 
   -- Auto-register the achievement immediately if the panel is ready
-  if _G.CreateAchievementRow and _G.AchievementPanel then
+  if _G.CreateAchievementRow then
     _G[registerFuncName]()
   end
 
@@ -1391,7 +1413,7 @@ function DungeonCommon.refreshDungeonVariations()
   local baseDungeonIds = {}
   for achId, def in pairs(_G.HCA_AchievementDefs) do
     if not def.isVariation and def.mapID then  -- Dungeons have mapID
-      table.insert(baseDungeonIds, achId)
+      table_insert(baseDungeonIds, achId)
     end
   end
   

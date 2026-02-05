@@ -197,7 +197,7 @@ function MetaCommon.registerMetaAchievement(def)
   ---------------------------------------
 
   _G[registerFuncName] = function()
-    if not _G.CreateAchievementRow or not _G.AchievementPanel then return end
+    if not _G.CreateAchievementRow then return end
     if _G[rowVarName] then return end
     
     -- Load progress from database
@@ -263,7 +263,7 @@ function MetaCommon.registerMetaAchievement(def)
   end
   
   -- Auto-register the achievement immediately if the panel is ready
-  if _G.CreateAchievementRow and _G.AchievementPanel then
+  if _G.CreateAchievementRow then
     _G[registerFuncName]()
   end
 end

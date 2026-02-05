@@ -1,3 +1,11 @@
+-- Localize frequently-used WoW API globals (micro-optimization, no behavior change)
+local _G = _G
+local UnitGUID = UnitGUID
+local CreateFrame = CreateFrame
+local C_Timer = C_Timer
+local table_insert = table.insert
+local table_concat = table.concat
+
 local settingsCheckboxOptions = {
     { id = 1, name = "UHC Player Frame", dbSettingsValueName = "hidePlayerFrame" },
     { id = 2, name = "Hide Minimap", dbSettingsValueName = "hideMinimap" },
@@ -148,20 +156,20 @@ function UpdateMultiplierText(multiplierTextElement, textColor)
     -- In TBC (non-hardcore), Self Found is never available, so we only check Solo
     -- Build array of modifiers (preset goes last)
     if isSoloMode and not isSelfFound then
-        table.insert(modifiers, "Solo")
+        table_insert(modifiers, "Solo")
     elseif isSelfFound and not isSoloMode then
-        table.insert(modifiers, "Self Found")
+        table_insert(modifiers, "Self Found")
     elseif isSoloMode and isSelfFound then
-        table.insert(modifiers, "Solo Self Found")
+        table_insert(modifiers, "Solo Self Found")
     end
     
     if preset then
-        table.insert(modifiers, preset)
+        table_insert(modifiers, preset)
     end
     
     -- Show text if there are any modifiers (preset or solo/self-found)
     if #modifiers > 0 then
-        labelText = "Point Multiplier (" .. table.concat(modifiers, ", ") .. ")"
+        labelText = "Point Multiplier (" .. table_concat(modifiers, ", ") .. ")"
     end
     
     multiplierTextElement:SetText(labelText)

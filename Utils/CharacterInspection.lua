@@ -22,6 +22,26 @@ local INSPECTION_COMM_PREFIX = "HCA_Inspect" -- AceComm prefix for inspection re
 local INSPECTION_RESPONSE_PREFIX = "HCA_InspectResp" -- AceComm prefix for inspection responses
 local INSPECTION_DATA_PREFIX = "HCA_InspectData" -- AceComm prefix for achievement data
 
+-- Localize frequently-used WoW API globals (micro-optimization, no behavior change)
+local _G = _G
+local UnitLevel = UnitLevel
+local UnitName = UnitName
+local UnitIsPlayer = UnitIsPlayer
+local UnitIsUnit = UnitIsUnit
+local CreateFrame = CreateFrame
+local C_Timer = C_Timer
+local GetLocale = GetLocale
+local date = date
+local time = time
+local wipe = wipe
+local hooksecurefunc = hooksecurefunc
+local IsShiftKeyDown = IsShiftKeyDown
+local ChatEdit_GetActiveWindow = ChatEdit_GetActiveWindow
+local table_insert = table.insert
+local table_sort = table.sort
+local table_concat = table.concat
+local string_format = string.format
+
 -- Cache for inspection data to avoid repeated requests
 local inspectionCache = {}
 local CACHE_DURATION = 300 -- 5 minutes
@@ -130,12 +150,12 @@ local function FormatInspectionTimestamp(timestamp)
 
     local locale = GetLocale and GetLocale() or "enUS"
     if locale == "enUS" then
-        return string.format("%02d/%02d/%02d",
+        return string_format("%02d/%02d/%02d",
             dateInfo.month,
             dateInfo.day,
             dateInfo.year % 100)
     else
-        return string.format("%02d/%02d/%02d",
+        return string_format("%02d/%02d/%02d",
             dateInfo.day,
             dateInfo.month,
             dateInfo.year % 100)
@@ -504,7 +524,7 @@ function CharacterInspection.SetupInspectionTab()
             end
         end
         if not exists then
-            table.insert(INSPECTFRAME_SUBFRAMES, "InspectAchievementPanel")
+            table_insert(INSPECTFRAME_SUBFRAMES, "InspectAchievementPanel")
         end
     end
 end
@@ -849,7 +869,7 @@ function CharacterInspection.DisplayAchievementData(data)
         end
     end
     if inspectionAchievementPanel.TotalPoints then
-        inspectionAchievementPanel.TotalPoints:SetText(string.format("%d pts", totalPoints))
+        inspectionAchievementPanel.TotalPoints:SetText(string_format("%d pts", totalPoints))
     end
     
     local createdRows = 0
@@ -882,13 +902,13 @@ function CharacterInspection.DisplayAchievementData(data)
         )
         
         createdRows = createdRows + 1
-        table.insert(inspectionAchievementPanel.achievements, inspectionRow)
+        table_insert(inspectionAchievementPanel.achievements, inspectionRow)
     end
 
     local completedCount = tonumber(data.completedCount) or createdRows
     local totalCount = tonumber(data.totalCount) or math.max(completedCount, createdRows)
     if inspectionAchievementPanel.CountsText then
-        inspectionAchievementPanel.CountsText:SetText(string.format("(%d/%d)", completedCount or 0, totalCount or 0))
+        inspectionAchievementPanel.CountsText:SetText(string_format("(%d/%d)", completedCount or 0, totalCount or 0))
     end
     
     if createdRows == 0 then
@@ -969,18 +989,18 @@ function CharacterInspection.CreateInspectionAchievementRow(parent, achId, title
     local completionLevel = tonumber(achievementData and achievementData.level)
     local subLines = {}
     if capNum and capNum > 0 then
-        table.insert(subLines, ((LEVEL or "Level") .. " " .. capNum))
+        table_insert(subLines, ((LEVEL or "Level") .. " " .. capNum))
     end
     if completionLevel and completionLevel > 0 then
         local completionText
         if type(ACHIEVEMENT_COMPLETED_AT_LEVEL) == "string" then
-            completionText = string.format(ACHIEVEMENT_COMPLETED_AT_LEVEL, completionLevel)
+            completionText = string_format(ACHIEVEMENT_COMPLETED_AT_LEVEL, completionLevel)
         else
-            completionText = string.format("Completed at level %d", completionLevel)
+            completionText = string_format("Completed at level %d", completionLevel)
         end
-        table.insert(subLines, completionText)
+        table_insert(subLines, completionText)
     end
-    row.Sub:SetText(table.concat(subLines, "\n"))
+    row.Sub:SetText(table_concat(subLines, "\n"))
     row._defaultSubText = row.Sub:GetText() or ""
     HookInspectionRowSubTextUpdates(row)
     row.UpdateTextLayout = UpdateInspectionRowTextLayout
@@ -1060,7 +1080,7 @@ function CharacterInspection.CreateInspectionAchievementRow(parent, achId, title
     row:SetScript("OnMouseUp", function(self, button)
         if button == "LeftButton" and IsShiftKeyDown() and row.achId then
             -- Use centralized function to generate bracket format (icon looked up client-side)
-            local bracket = _G.HCA_GetAchievementBracket and _G.HCA_GetAchievementBracket(row.achId) or string.format("[HCA:(%s)]", tostring(row.achId))
+            local bracket = _G.HCA_GetAchievementBracket and _G.HCA_GetAchievementBracket(row.achId) or string_format("[HCA:(%s)]", tostring(row.achId))
             
             local editBox = ChatEdit_GetActiveWindow()
             if not editBox or not editBox:IsVisible() then
@@ -1138,7 +1158,7 @@ function CharacterInspection.SortInspectionAchievementRows()
     if not inspectionAchievementPanel or not inspectionAchievementPanel.achievements then return end
     
     -- Sort by level cap (same as main panel)
-    table.sort(inspectionAchievementPanel.achievements, function(a, b)
+    table_sort(inspectionAchievementPanel.achievements, function(a, b)
         local la, lb = (a.maxLevel or 0), (b.maxLevel or 0)
         if la ~= lb then return la < lb end
         

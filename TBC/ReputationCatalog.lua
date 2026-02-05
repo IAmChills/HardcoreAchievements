@@ -3,6 +3,8 @@
 ---------------------------------------
 -- Each achievement requires reaching Exalted with a specific faction
 -- Only factions that the player has discovered will show up in the achievement list
+local table_insert = table.insert
+
 local Reputations = {
   
   -- ALLIANCE
@@ -384,7 +386,7 @@ _G.HCA_RegistrationQueue = _G.HCA_RegistrationQueue or {}
 -- Queue all reputation achievements for deferred registration
 for _, def in ipairs(Reputations) do
   if _G.ReputationCommon and _G.ReputationCommon.registerReputationAchievement then
-    table.insert(_G.HCA_RegistrationQueue, function()
+    table_insert(_G.HCA_RegistrationQueue, function()
       _G.ReputationCommon.registerReputationAchievement(def)
     end)
   end
