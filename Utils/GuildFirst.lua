@@ -56,6 +56,22 @@ local string_gmatch = string.gmatch
 
 local guildFirstToastFrame = nil
 
+-- Single OnUpdate for fade; state on frame (fadeT, fadeDuration) avoids allocating a new function per toast
+local function GuildFirstToastFadeOnUpdate(s, elapsed)
+    local t = (s.fadeT or 0) + elapsed
+    s.fadeT = t
+    local duration = s.fadeDuration or 1
+    local a = 1 - math.min(t / duration, 1)
+    s:SetAlpha(a)
+    if t >= duration then
+        s:SetScript("OnUpdate", nil)
+        s.fadeT = nil
+        s.fadeDuration = nil
+        s:Hide()
+        s:SetAlpha(1)
+    end
+end
+
 local function CreateGuildFirstToast()
     if guildFirstToastFrame and guildFirstToastFrame:IsObjectType("Frame") then
         return guildFirstToastFrame
@@ -116,17 +132,9 @@ local function CreateGuildFirstToast()
     f.points = points
 
     function f:PlayFade(duration)
-        local t = 0
-        self:SetScript("OnUpdate", function(s, elapsed)
-            t = t + elapsed
-            local a = 1 - math.min(t / duration, 1)
-            s:SetAlpha(a)
-            if t >= duration then
-                s:SetScript("OnUpdate", nil)
-                s:Hide()
-                s:SetAlpha(1)
-            end
-        end)
+        self.fadeT = 0
+        self.fadeDuration = duration
+        self:SetScript("OnUpdate", GuildFirstToastFadeOnUpdate)
     end
 
     f:EnableMouse(true)

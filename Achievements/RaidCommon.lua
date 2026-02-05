@@ -380,108 +380,75 @@ function RaidCommon.registerRaidAchievement(def)
         frame.highlight:Hide()
       end
       
+      -- Process a single boss entry (defined once per UpdateTooltip run, not per hover)
+      local function processBossEntry(npcId, need, achievementCompleted)
+        local done = false
+        local bossName = ""
+        if type(need) == "table" then
+          local bossNames = {}
+          for _, id in pairs(need) do
+            local current = (state.counts[id] or state.counts[tostring(id)] or 0)
+            local name = HCA_GetRaidBossName(id)
+            table_insert(bossNames, name)
+            if current >= 1 then done = true end
+          end
+          if type(npcId) == "string" then
+            bossName = npcId
+          else
+            bossName = table_concat(bossNames, " / ")
+          end
+        else
+          local idNum = tonumber(npcId) or npcId
+          local current = (state.counts[idNum] or state.counts[tostring(idNum)] or 0)
+          bossName = HCA_GetRaidBossName(idNum)
+          done = current >= (tonumber(need) or 1)
+        end
+        if achievementCompleted then done = true end
+        if done then
+          GameTooltip:AddLine(bossName, 1, 1, 1)
+        else
+          GameTooltip:AddLine(bossName, 0.5, 0.5, 0.5)
+        end
+      end
+
       -- Override the OnEnter script to use proper GameTooltip API while preserving highlighting
       frame:SetScript("OnEnter", function(self)
-        -- Show highlight
         if self.highlight then
           self.highlight:Show()
         end
-        
         if self.Title and self.Title.GetText then
-          -- Load fresh progress from database before showing tooltip
           LoadProgress()
-          
           local achievementCompleted = state.completed or (self.completed == true)
-          
           GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
           GameTooltip:ClearLines()
           GameTooltip:SetText(title or "", 1, 1, 1)
-          -- Points only (no level requirement for raids)
           local rightText = (self.points and tonumber(self.points) and tonumber(self.points) > 0) and (ACHIEVEMENT_POINTS .. ": " .. tostring(self.points)) or " "
           GameTooltip:AddDoubleLine(" ", rightText, 1, 1, 1, 0.7, 0.9, 0.7)
-          -- Description in default yellow
           GameTooltip:AddLine(baseTooltip, nil, nil, nil, true)
-          
           if next(requiredKills) ~= nil then
-            GameTooltip:AddLine("\nRequired Bosses:", 0, 1, 0) -- Green header
-            
-            -- Helper function to process a single boss entry
-            local function processBossEntry(npcId, need)
-              local done = false
-              local bossName = ""
-              
-              -- Support both single NPC IDs and arrays of NPC IDs
-              if type(need) == "table" then
-                -- Array of NPC IDs - check if any of them has been killed
-                local bossNames = {}
-                for _, id in pairs(need) do
-                  local current = (state.counts[id] or state.counts[tostring(id)] or 0)
-                  local name = HCA_GetRaidBossName(id)
-                  table_insert(bossNames, name)
-                  -- Mark as done if this boss has been killed (or if achievement is complete)
-                  if current >= 1 then
-                    done = true
-                  end
-                end
-                -- Use the key as display name for string keys
-                if type(npcId) == "string" then
-                  -- Use the key as display name for string keys (e.g., "Ring Of Law")
-                  bossName = npcId
-                else
-                  -- For numeric keys, show all names
-                  bossName = table_concat(bossNames, " / ")
-                end
-              else
-                -- Single NPC ID
-                local idNum = tonumber(npcId) or npcId
-                local current = (state.counts[idNum] or state.counts[tostring(idNum)] or 0)
-                bossName = HCA_GetRaidBossName(idNum)
-                -- Mark as done if this boss has been killed enough times (or if achievement is complete)
-                done = current >= (tonumber(need) or 1)
-              end
-              
-              -- If achievement is complete, all bosses show as done
-              if achievementCompleted then
-                done = true
-              end
-              
-              if done then
-                GameTooltip:AddLine(bossName, 1, 1, 1) -- White for completed
-              else
-                GameTooltip:AddLine(bossName, 0.5, 0.5, 0.5) -- Gray for not completed
-              end
-            end
-            
-            -- Use ordered display if provided, otherwise use pairs
+            GameTooltip:AddLine("\nRequired Bosses:", 0, 1, 0)
             if bossOrder then
               for _, npcId in ipairs(bossOrder) do
                 local need = requiredKills[npcId]
                 if need then
-                  processBossEntry(npcId, need)
+                  processBossEntry(npcId, need, achievementCompleted)
                 end
               end
-              
-              -- Also check for any bosses not in bossOrder (shouldn't happen, but just in case)
               for npcId, need in pairs(requiredKills) do
                 local found = false
                 for _, orderedId in ipairs(bossOrder) do
-                  if orderedId == npcId then
-                    found = true
-                    break
-                  end
+                  if orderedId == npcId then found = true break end
                 end
                 if not found then
-                  processBossEntry(npcId, need)
+                  processBossEntry(npcId, need, achievementCompleted)
                 end
               end
             else
-              -- No boss order - just iterate through pairs
               for npcId, need in pairs(requiredKills) do
-                processBossEntry(npcId, need)
+                processBossEntry(npcId, need, achievementCompleted)
               end
             end
           end
-          
           GameTooltip:Show()
         end
       end)

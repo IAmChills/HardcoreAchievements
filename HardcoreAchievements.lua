@@ -1340,6 +1340,22 @@ end
 -- HCA_AchToast_Show(iconTextureIdOrPath, "Achievement Title", 10)
 -- HCA_AchToast_Show(row.icon or 134400, row.title or "Achievement", row.points or 10)
 
+-- Single OnUpdate for toast fade; state on frame (fadeT, fadeDuration) avoids allocating per toast
+local function AchToastFadeOnUpdate(s, elapsed)
+    local t = (s.fadeT or 0) + elapsed
+    s.fadeT = t
+    local duration = s.fadeDuration or 1
+    local a = 1 - math.min(t / duration, 1)
+    s:SetAlpha(a)
+    if t >= duration then
+        s:SetScript("OnUpdate", nil)
+        s.fadeT = nil
+        s.fadeDuration = nil
+        s:Hide()
+        s:SetAlpha(1)
+    end
+end
+
 local function HCA_CreateAchToast()
     if HCA_AchToast and HCA_AchToast:IsObjectType("Frame") then
         return HCA_AchToast
@@ -1417,17 +1433,9 @@ local function HCA_CreateAchToast()
 
     -- Simple fade-out (no UIParent fades)
     function f:PlayFade(duration)
-        local t = 0
-        self:SetScript("OnUpdate", function(s, elapsed)
-            t = t + elapsed
-            local a = 1 - math.min(t / duration, 1)
-            s:SetAlpha(a)
-            if t >= duration then
-                s:SetScript("OnUpdate", nil)
-                s:Hide()
-                s:SetAlpha(1)
-            end
-        end)
+        self.fadeT = 0
+        self.fadeDuration = duration
+        self:SetScript("OnUpdate", AchToastFadeOnUpdate)
     end
 
     local function AttachModelOverlayClipped(parentFrame, texture)
@@ -3761,6 +3769,19 @@ do
             end
         end
 
+        -- Order for dungeon kill print: base first, then Trio, Duo, Solo (so only first eligible variation prints)
+        local function dungeonKillPrintOrder(row)
+            local def = row._def
+            if not def or not def.mapID then return 2, 0, 0 end
+            local achId = row.achId or row.id or ""
+            local order = 0
+            if achId:match("_Trio$") then order = 1
+            elseif achId:match("_Duo$") then order = 2
+            elseif achId:match("_Solo$") then order = 3
+            end
+            return 1, def.mapID, order
+        end
+
         local function processKill(destGUID)
             if not destGUID or recentKills[destGUID] then
                 return
@@ -3768,17 +3789,30 @@ do
 
             recentKills[destGUID] = true
             clearRecentKill(destGUID)
+            _G.HCA_DungeonKillPrintedForGUID = nil
             local rows = _G.HCA_AchievementRowModel
             if not rows then return end
 
+            local rowsWithTracker = {}
             for _, row in ipairs(rows) do
                 if not row.completed and type(row.killTracker) == "function" then
-                    if row.killTracker(destGUID) then
-                        HCA_MarkRowCompleted(row)
-                        local iconTex = (row.frame and row.frame.Icon and row.frame.Icon.GetTexture and row.frame.Icon:GetTexture()) or row.icon or 136116
-                        local titleText = (row.frame and row.frame.Title and row.frame.Title.GetText and row.frame.Title:GetText()) or row.title or "Achievement"
-                        HCA_AchToast_Show(iconTex, titleText, row.points, row.frame or row)
-                    end
+                    table_insert(rowsWithTracker, row)
+                end
+            end
+            table_sort(rowsWithTracker, function(a, b)
+                local da, ma, oa = dungeonKillPrintOrder(a)
+                local db, mb, ob = dungeonKillPrintOrder(b)
+                if da ~= db then return da < db end
+                if ma ~= mb then return ma < mb end
+                return oa < ob
+            end)
+
+            for _, row in ipairs(rowsWithTracker) do
+                if row.killTracker(destGUID) then
+                    HCA_MarkRowCompleted(row)
+                    local iconTex = (row.frame and row.frame.Icon and row.frame.Icon.GetTexture and row.frame.Icon:GetTexture()) or row.icon or 136116
+                    local titleText = (row.frame and row.frame.Title and row.frame.Title.GetText and row.frame.Title:GetText()) or row.title or "Achievement"
+                    HCA_AchToast_Show(iconTex, titleText, row.points, row.frame or row)
                 end
             end
             

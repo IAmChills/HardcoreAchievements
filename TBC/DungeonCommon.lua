@@ -31,6 +31,9 @@ local instanceEntryLevels = {}
 local wasDeadOnExit = false
 local lastInstanceMapId = nil
 
+-- Shared no-op; used as early-exit return from CreateTooltipHandler to avoid allocating a new function each time
+local function noop() end
+
 -- Helper function to check if a group is eligible for a dungeon achievement
 local function CheckAchievementEligibility(mapId, achDef, entryData)
     if not mapId or not achDef or not entryData then return false end
@@ -1017,9 +1020,9 @@ function DungeonCommon.registerDungeonAchievement(def)
   -- Lazy tooltip setup - only initialize when first hovered (optimization)
   local function CreateTooltipHandler()
     local row = _G[rowVarName]
-    if not row then return function() end end
+    if not row then return noop end
     local frame = row.frame
-    if not frame then return function() end end
+    if not frame then return noop end
     
     -- Store the base tooltip for the main tooltip
     local baseTooltip = tooltip or ""
@@ -1043,6 +1046,37 @@ function DungeonCommon.registerDungeonAchievement(def)
       GameTooltip:Hide()
     end)
     
+    -- Process a single boss entry (defined once per CreateTooltipHandler run, not per hover)
+    local function processBossEntry(npcId, need, achievementCompleted)
+      local done = false
+      local bossName = ""
+      if type(need) == "table" then
+        local bossNames = {}
+        for _, id in pairs(need) do
+          local current = (state.counts[id] or state.counts[tostring(id)] or 0)
+          local name = HCA_GetBossName(id)
+          table_insert(bossNames, name)
+          if current >= 1 then done = true end
+        end
+        if type(npcId) == "string" then
+          bossName = npcId
+        else
+          bossName = table_concat(bossNames, " / ")
+        end
+      else
+        local idNum = tonumber(npcId) or npcId
+        local current = (state.counts[idNum] or state.counts[tostring(idNum)] or 0)
+        bossName = HCA_GetBossName(idNum)
+        done = current >= (tonumber(need) or 1)
+      end
+      if achievementCompleted then done = true end
+      if done then
+        GameTooltip:AddLine(bossName, 1, 1, 1)
+      else
+        GameTooltip:AddLine(bossName, 0.5, 0.5, 0.5)
+      end
+    end
+    
     -- Return the tooltip handler function
     return function(self)
         -- Show highlight
@@ -1051,83 +1085,28 @@ function DungeonCommon.registerDungeonAchievement(def)
         end
         
         if self.Title and self.Title.GetText then
-          -- Load fresh progress from database before showing tooltip
           LoadProgress()
-          
           local achievementCompleted = state.completed or (self.completed == true)
-          
           GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
           GameTooltip:ClearLines()
           GameTooltip:SetText(title or "", 1, 1, 1)
-          -- Level (left) and Points (right) on one line
-          -- Use self.points (calculated with multipliers) instead of raw points
           local leftText = (self.maxLevel and self.maxLevel > 0) and (LEVEL .. " " .. tostring(self.maxLevel)) or " "
           local rightText = (self.points and tonumber(self.points) and tonumber(self.points) > 0) and (ACHIEVEMENT_POINTS .. ": " .. tostring(self.points)) or " "
           GameTooltip:AddDoubleLine(leftText, rightText, 1, 1, 1, 0.7, 0.9, 0.7)
-          -- Description in default yellow
           GameTooltip:AddLine(baseTooltip, nil, nil, nil, true)
           
           if next(requiredKills) ~= nil then
-            GameTooltip:AddLine("\nRequired Bosses:", 0, 1, 0) -- Green header
-            
-            -- Helper function to process a single boss entry
-            local function processBossEntry(npcId, need)
-              local done = false
-              local bossName = ""
-              
-              -- Support both single NPC IDs and arrays of NPC IDs
-              if type(need) == "table" then
-                -- Array of NPC IDs - check if any of them has been killed
-                local bossNames = {}
-                for _, id in pairs(need) do
-                  local current = (state.counts[id] or state.counts[tostring(id)] or 0)
-                  local name = HCA_GetBossName(id)
-                  table_insert(bossNames, name)
-                  -- Mark as done if this boss has been killed (or if achievement is complete)
-                  if current >= 1 then
-                    done = true
-                  end
-                end
-                -- Use the key as display name for string keys
-                if type(npcId) == "string" then
-                  -- Use the key as display name for string keys (e.g., "Ring Of Law")
-                  bossName = npcId
-                else
-                  -- For numeric keys, show all names
-                  bossName = table_concat(bossNames, " / ")
-                end
-              else
-                -- Single NPC ID
-                local idNum = tonumber(npcId) or npcId
-                local current = (state.counts[idNum] or state.counts[tostring(idNum)] or 0)
-                bossName = HCA_GetBossName(idNum)
-                -- Mark as done if this boss has been killed enough times (or if achievement is complete)
-                done = current >= (tonumber(need) or 1)
-              end
-              
-              -- If achievement is complete, all bosses show as done
-              if achievementCompleted then
-                done = true
-              end
-              
-              if done then
-                GameTooltip:AddLine(bossName, 1, 1, 1) -- White for completed
-              else
-                GameTooltip:AddLine(bossName, 0.5, 0.5, 0.5) -- Gray for not completed
-              end
-            end
-            
-            -- Use ordered display if provided, otherwise use pairs
+            GameTooltip:AddLine("\nRequired Bosses:", 0, 1, 0)
             if bossOrder then
               for _, npcId in ipairs(bossOrder) do
                 local need = requiredKills[npcId]
                 if need then
-                  processBossEntry(npcId, need)
+                  processBossEntry(npcId, need, achievementCompleted)
                 end
               end
             else
               for npcId, need in pairs(requiredKills) do
-                processBossEntry(npcId, need)
+                processBossEntry(npcId, need, achievementCompleted)
               end
             end
           end
@@ -1262,7 +1241,11 @@ function DungeonCommon.registerDungeonAchievement(def)
     StorePointsAtKill()
     SaveProgress()
     UpdateTooltip()
-    print("|cff008066[Hardcore Achievements]|r |cffffd100" .. HCA_GetBossName(npcId) .. " killed as part of achievement: " .. title .. "|r")
+    -- Only print for the first eligible variation (processKill iterates base then Trio, Duo, Solo)
+    if _G.HCA_DungeonKillPrintedForGUID ~= destGUID then
+        _G.HCA_DungeonKillPrintedForGUID = destGUID
+        print("|cff008066[Hardcore Achievements]|r |cffffd100" .. HCA_GetBossName(npcId) .. " killed as part of achievement: " .. title .. "|r")
+    end
 
     -- Check if achievement should be completed
     local progress = HardcoreAchievements_GetProgress(achId)
