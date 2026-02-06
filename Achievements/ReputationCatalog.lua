@@ -1,6 +1,8 @@
 -- Reputation achievement definitions
 -- Each achievement requires reaching Exalted with a specific faction
 -- Only factions that the player has discovered will show up in the achievement list
+local addonName, addon = ...
+local ClassColor = (addon and addon.GetClassColor)
 local table_insert = table.insert
 
 local Reputations = {
@@ -9,7 +11,7 @@ local Reputations = {
   {
     achId = "Stormwind",
     title = "Exalted with Stormwind",
-    tooltip = "Reach Exalted reputation with " .. HCA_SharedUtils.GetClassColor() .. "Stormwind|r",
+    tooltip = "Reach Exalted reputation with " .. ClassColor .. "Stormwind|r",
     icon = 236681,
     points = 100,
     factionId = 72,
@@ -17,7 +19,7 @@ local Reputations = {
   }, {
     achId = "Darnassus",
     title = "Exalted with Darnassus",
-    tooltip = "Reach Exalted reputation with " .. HCA_SharedUtils.GetClassColor() .. "Darnassus|r",
+    tooltip = "Reach Exalted reputation with " .. ClassColor .. "Darnassus|r",
     icon = 236681,
     points = 100,
     factionId = 69,
@@ -25,7 +27,7 @@ local Reputations = {
   }, {
     achId = "Ironforge",
     title = "Exalted with Ironforge",
-    tooltip = "Reach Exalted reputation with " .. HCA_SharedUtils.GetClassColor() .. "Ironforge|r",
+    tooltip = "Reach Exalted reputation with " .. ClassColor .. "Ironforge|r",
     icon = 236681,
     points = 100,
     factionId = 47,
@@ -33,7 +35,7 @@ local Reputations = {
   }, {
     achId = "Gnomeregan Exiles",
     title = "Exalted with Gnomeregan Exiles",
-    tooltip = "Reach Exalted reputation with " .. HCA_SharedUtils.GetClassColor() .. "Gnomeregan Exiles|r",
+    tooltip = "Reach Exalted reputation with " .. ClassColor .. "Gnomeregan Exiles|r",
     icon = 236681,
     points = 100,
     factionId = 54,
@@ -44,7 +46,7 @@ local Reputations = {
   {
     achId = "Orgrimmar",
     title = "Exalted with Orgrimmar",
-    tooltip = "Reach Exalted reputation with " .. HCA_SharedUtils.GetClassColor() .. "Orgrimmar|r",
+    tooltip = "Reach Exalted reputation with " .. ClassColor .. "Orgrimmar|r",
     icon = 236681,
     points = 100,
     factionId = 76,
@@ -52,7 +54,7 @@ local Reputations = {
   }, {
     achId = "Thunder Bluff",
     title = "Exalted with Thunder Bluff",
-    tooltip = "Reach Exalted reputation with " .. HCA_SharedUtils.GetClassColor() .. "Thunder Bluff|r",
+    tooltip = "Reach Exalted reputation with " .. ClassColor .. "Thunder Bluff|r",
     icon = 236681,
     points = 100,
     factionId = 81,
@@ -60,7 +62,7 @@ local Reputations = {
   }, {
     achId = "Undercity",
     title = "Exalted with Undercity",
-    tooltip = "Reach Exalted reputation with " .. HCA_SharedUtils.GetClassColor() .. "Undercity|r",
+    tooltip = "Reach Exalted reputation with " .. ClassColor .. "Undercity|r",
     icon = 236681,
     points = 100,
     factionId = 68,
@@ -68,7 +70,7 @@ local Reputations = {
   }, {
     achId = "Darkspear Trolls",
     title = "Exalted with Darkspear Trolls",
-    tooltip = "Reach Exalted reputation with " .. HCA_SharedUtils.GetClassColor() .. "Darkspear Trolls|r",
+    tooltip = "Reach Exalted reputation with " .. ClassColor .. "Darkspear Trolls|r",
     icon = 236681,
     points = 100,
     factionId = 530,
@@ -79,7 +81,7 @@ local Reputations = {
   {
     achId = "BootyBay",
     title = "Exalted with Booty Bay",
-    tooltip = "Reach Exalted reputation with " .. HCA_SharedUtils.GetClassColor() .. "Booty Bay|r",
+    tooltip = "Reach Exalted reputation with " .. ClassColor .. "Booty Bay|r",
     icon = 236688,
     points = 200,
     factionId = 21,
@@ -87,7 +89,7 @@ local Reputations = {
   }, {
     achId = "Ratchet",
     title = "Exalted with Ratchet",
-    tooltip = "Reach Exalted reputation with " .. HCA_SharedUtils.GetClassColor() .. "Ratchet|r",
+    tooltip = "Reach Exalted reputation with " .. ClassColor .. "Ratchet|r",
     icon = 236688,
     points = 200,
     factionId = 470,
@@ -95,7 +97,7 @@ local Reputations = {
   }, {
     achId = "Everlook",
     title = "Exalted with Everlook",
-    tooltip = "Reach Exalted reputation with " .. HCA_SharedUtils.GetClassColor() .. "Everlook|r",
+    tooltip = "Reach Exalted reputation with " .. ClassColor .. "Everlook|r",
     icon = 236688,
     points = 200,
     factionId = 577,
@@ -103,7 +105,7 @@ local Reputations = {
   }, {
     achId = "Gadgetzan",
     title = "Exalted with Gadgetzan",
-    tooltip = "Reach Exalted reputation with " .. HCA_SharedUtils.GetClassColor() .. "Gadgetzan|r",
+    tooltip = "Reach Exalted reputation with " .. ClassColor .. "Gadgetzan|r",
     icon = 236688,
     points = 200,
     factionId = 369,
@@ -111,7 +113,7 @@ local Reputations = {
   }, {
     achId = "ArgentDawn",
     title = "Exalted with Argent Dawn",
-    tooltip = "Reach Exalted reputation with " .. HCA_SharedUtils.GetClassColor() .. "Argent Dawn|r",
+    tooltip = "Reach Exalted reputation with " .. ClassColor .. "Argent Dawn|r",
     icon = 236688,
     points = 150,
     factionId = 529,
@@ -119,7 +121,7 @@ local Reputations = {
   }, {
     achId = "Timbermaw",
     title = "Exalted with Timbermaw Hold",
-    tooltip = "Reach Exalted reputation with " .. HCA_SharedUtils.GetClassColor() .. "Timbermaw Hold|r",
+    tooltip = "Reach Exalted reputation with " .. ClassColor .. "Timbermaw Hold|r",
     icon = 236688,
     points = 200,
     factionId = 576,
@@ -127,7 +129,7 @@ local Reputations = {
   }, {
     achId = "CenarionCircle",
     title = "Exalted with Cenarion Circle",
-    tooltip = "Reach Exalted reputation with " .. HCA_SharedUtils.GetClassColor() .. "Cenarion Circle|r",
+    tooltip = "Reach Exalted reputation with " .. ClassColor .. "Cenarion Circle|r",
     icon = 236688,
     points = 150,
     factionId = 609,
@@ -135,7 +137,7 @@ local Reputations = {
   }, {
     achId = "ThoriumBrotherhood",
     title = "Exalted with Thorium Brotherhood",
-    tooltip = "Reach Exalted reputation with " .. HCA_SharedUtils.GetClassColor() .. "Thorium Brotherhood|r",
+    tooltip = "Reach Exalted reputation with " .. ClassColor .. "Thorium Brotherhood|r",
     icon = 236688,
     points = 150,
     factionId = 59,
@@ -143,7 +145,7 @@ local Reputations = {
   }, {
     achId = "Hydraxian",
     title = "Exalted with Hydraxian Waterlords",
-    tooltip = "Reach Exalted reputation with " .. HCA_SharedUtils.GetClassColor() .. "Hydraxian Waterlords|r",
+    tooltip = "Reach Exalted reputation with " .. ClassColor .. "Hydraxian Waterlords|r",
     icon = 236688,
     points = 150,
     factionId = 749,
@@ -151,7 +153,7 @@ local Reputations = {
   }, {
     achId = "Zandalar",
     title = "Exalted with Zandalar Tribe",
-    tooltip = "Reach Exalted reputation with " .. HCA_SharedUtils.GetClassColor() .. "Zandalar Tribe|r",
+    tooltip = "Reach Exalted reputation with " .. ClassColor .. "Zandalar Tribe|r",
     icon = 236688,
     points = 150,
     factionId = 270,
@@ -159,7 +161,7 @@ local Reputations = {
   }, {
     achId = "Nozdormu",
     title = "Exalted with Brood of Nozdormu",
-    tooltip = "Reach Exalted reputation with " .. HCA_SharedUtils.GetClassColor() .. "Brood of Nozdormu|r",
+    tooltip = "Reach Exalted reputation with " .. ClassColor .. "Brood of Nozdormu|r",
     icon = 236688,
     points = 150,
     factionId = 910,
@@ -170,7 +172,7 @@ local Reputations = {
   {
     achId = "Bloodsail",
     title = "Exalted with Bloodsail Buccaneers",
-    tooltip = "Reach Exalted reputation with " .. HCA_SharedUtils.GetClassColor() .. "Bloodsail Buccaneers|r",
+    tooltip = "Reach Exalted reputation with " .. ClassColor .. "Bloodsail Buccaneers|r",
     icon = 236685,
     points = 200,
     factionId = 87,
@@ -178,7 +180,7 @@ local Reputations = {
   }, {
     achId = "Wintersaber",
     title = "Exalted with Wintersaber Trainers",
-    tooltip = "Reach Exalted reputation with " .. HCA_SharedUtils.GetClassColor() .. "Wintersaber Trainers|r",
+    tooltip = "Reach Exalted reputation with " .. ClassColor .. "Wintersaber Trainers|r",
     icon = 236685,
     points = 200,
     factionId = 589,
@@ -189,7 +191,7 @@ local Reputations = {
   {
     achId = "Ravenholdt",
     title = "Exalted with Ravenholdt |cfffff468[Rogue]|r",
-    tooltip = "Reach Exalted reputation with " .. HCA_SharedUtils.GetClassColor() .. "Ravenholdt|r",
+    tooltip = "Reach Exalted reputation with " .. ClassColor .. "Ravenholdt|r",
     icon = 236686,
     points = 200,
     factionId = 349,
@@ -199,13 +201,15 @@ local Reputations = {
 }
 
 -- Defer registration until PLAYER_LOGIN to prevent load timeouts
-_G.HCA_RegistrationQueue = _G.HCA_RegistrationQueue or {}
-
--- Queue all reputation achievements for deferred registration
-for _, def in ipairs(Reputations) do
-  if _G.ReputationCommon and _G.ReputationCommon.registerReputationAchievement then
-    table_insert(_G.HCA_RegistrationQueue, function()
-      _G.ReputationCommon.registerReputationAchievement(def)
-    end)
+if addon then
+  addon.RegistrationQueue = addon.RegistrationQueue or {}
+  local queue = addon.RegistrationQueue
+  local ReputationCommon = addon and addon.ReputationCommon
+  if ReputationCommon and ReputationCommon.registerReputationAchievement then
+    for _, def in ipairs(Reputations) do
+      table_insert(queue, function()
+        ReputationCommon.registerReputationAchievement(def)
+      end)
+    end
   end
 end

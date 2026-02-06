@@ -30,6 +30,8 @@
 -- Tp find coordinates for a location using the mouse pointer on the world map, run:
 -- /dump WorldMapFrame.ScrollContainer:GetNormalizedCursorPosition()
 
+local addonName, addon = ...
+local C_MapExplorationInfo = C_MapExplorationInfo
 local table_insert = table.insert
 local string_format = string.format
 
@@ -295,26 +297,4 @@ local function CheckZoneDiscovery(zone, threshold)
     return isDiscovered, message, discoveredCount, totalCount
 end
 
----------------------------------------
--- Export functions globally for use in achievements and other files
----------------------------------------
-_G.CheckMapDiscovery = CheckMapDiscovery
-_G.CheckMapDiscoveryByLocation = CheckMapDiscoveryByLocation
-_G.CheckMapDiscoveryByCoords = CheckMapDiscoveryByCoords
-_G.CheckZoneDiscovery = CheckZoneDiscovery
-
--- Export internal functions if needed for debugging
-_G.HCA_GetMapIDForZone = GetMapIDForZone
-_G.HCA_GetLocationCoords = GetLocationCoords
-
-return {
-    CheckMapDiscovery = CheckMapDiscovery,
-    CheckMapDiscoveryByLocation = CheckMapDiscoveryByLocation,
-    CheckMapDiscoveryByCoords = CheckMapDiscoveryByCoords,
-    CheckZoneDiscovery = CheckZoneDiscovery,
-    GetMapIDForZone = GetMapIDForZone,
-    GetLocationCoords = GetLocationCoords,
-    ZoneMapIDs = ZoneMapIDs,
-    LocationMap = LocationMap,
-}
-
+addon.CheckZoneDiscovery = CheckZoneDiscovery

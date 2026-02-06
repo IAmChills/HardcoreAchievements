@@ -8,8 +8,7 @@ local REFRESH_DELAY_SEC = 0.1      -- Delay before refreshing UI after failure
 
 local NO_JUMP_ACHIEVEMENT_ID = "NoJumpChallenge"
 
--- Localize frequently-used WoW API globals (micro-optimization, no behavior change)
-local _G = _G
+local addonName, addon = ...
 local UnitLevel = UnitLevel
 local UnitGUID = UnitGUID
 local GetExpansionLevel = GetExpansionLevel
@@ -32,13 +31,13 @@ local function FailNoJumpChallengeIfNeeded(cdb, refreshUI)
     
     -- Only fail if not already completed or failed
     if not rec or (not rec.completed and not rec.failed) then
-        if _G.HCA_EnsureFailureTimestamp then
-            _G.HCA_EnsureFailureTimestamp(NO_JUMP_ACHIEVEMENT_ID)
+        if addon and addon.EnsureFailureTimestamp then
+            addon.EnsureFailureTimestamp(NO_JUMP_ACHIEVEMENT_ID)
             
             -- Refresh outleveled status to show the failure state
-            if refreshUI and _G.HCA_RefreshOutleveledAll then
+            if refreshUI and addon and addon.RefreshOutleveledAll then
                 C_Timer.After(REFRESH_DELAY_SEC, function()
-                    _G.HCA_RefreshOutleveledAll()
+                    addon.RefreshOutleveledAll()
                 end)
             end
         end
@@ -95,12 +94,12 @@ jumpTrackingFrame:SetScript("OnEvent", function(self, event, addonName)
             end
 
             -- Wait for prerequisites
-            if not UnitGUID("player") or not _G.HardcoreAchievements_GetCharDB then
+            if not UnitGUID("player") or not (addon and addon.GetCharDB) then
                 return
             end
 
             -- Get character database
-            local _, cdb = _G.HardcoreAchievements_GetCharDB()
+            local _, cdb = addon.GetCharDB()
             if not cdb then
                 return
             end
@@ -133,8 +132,8 @@ jumpTrackingFrame:SetScript("OnEvent", function(self, event, addonName)
 
             -- Check for achievement completion on initial load (in case player already has 100k jumps)
             C_Timer.After(EVAL_DELAY_SEC, function()
-                if _G.EvaluateCustomCompletions then
-                    _G.EvaluateCustomCompletions()
+                if addon and addon.EvaluateCustomCompletions then
+                    addon.EvaluateCustomCompletions()
                 end
             end)
 
@@ -144,7 +143,7 @@ jumpTrackingFrame:SetScript("OnEvent", function(self, event, addonName)
                 self.lastJump = GetTime()
                 
                 -- Update our database
-                local _, cdb = _G.HardcoreAchievements_GetCharDB()
+                local _, cdb = addon.GetCharDB()
                 if cdb then
                     cdb.stats = cdb.stats or {}
                     cdb.stats.playerJumps = self.count
@@ -156,8 +155,8 @@ jumpTrackingFrame:SetScript("OnEvent", function(self, event, addonName)
                 end
                 
                 -- Check for custom achievement completions (e.g., Jump Master at 100k jumps)
-                if _G.EvaluateCustomCompletions then
-                    _G.EvaluateCustomCompletions()
+                if addon and addon.EvaluateCustomCompletions then
+                    addon.EvaluateCustomCompletions()
                 end
             end
 

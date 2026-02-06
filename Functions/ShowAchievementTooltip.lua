@@ -1,6 +1,13 @@
 -- Centralized function to show achievement tooltip
 -- Can be called from main window or embed UI
-
+local addonName, addon = ...
+local GameTooltip = GameTooltip
+local GetItemInfo = GetItemInfo
+local GetItemCount = GetItemCount
+local pairs = pairs
+local ipairs = ipairs
+local tonumber = tonumber
+local type = type
 local table_insert = table.insert
 local table_concat = table.concat
 
@@ -92,10 +99,10 @@ end
 
 -- Get achievement definition from HCA_AchievementDefs
 local function GetAchievementDefinition(achId)
-    if not achId or not _G.HCA_AchievementDefs then
+    if not achId or not (addon and addon.AchievementDefs) then
         return nil
     end
-    return _G.HCA_AchievementDefs[tostring(achId)]
+    return addon.AchievementDefs[tostring(achId)]
 end
 
 -- Show boss requirements in tooltip
@@ -107,7 +114,7 @@ local function ShowBossRequirements(achId, requiredKills, bossOrder, achievement
     GameTooltip:AddLine("\nRequired Bosses:", 0, 1, 0) -- Green header
     
     -- Get progress from database
-    local progress = _G.HardcoreAchievements_GetProgress and _G.HardcoreAchievements_GetProgress(achId)
+    local progress = addon and addon.GetProgress and addon.GetProgress(achId)
     local counts = progress and progress.counts or {}
     
     -- Check if this is a raid achievement
@@ -119,7 +126,7 @@ local function ShowBossRequirements(achId, requiredKills, bossOrder, achievement
         local bossName = ""
         
         -- Determine which boss name function to use (raid vs dungeon)
-        local getBossNameFn = isRaid and _G.HCA_GetRaidBossName or _G.HCA_GetBossName
+        local getBossNameFn = isRaid and (addon and addon.GetRaidBossName) or (addon and addon.GetBossName)
         
         -- Support both single NPC IDs and arrays of NPC IDs
         if type(need) == "table" then
@@ -216,15 +223,15 @@ local function ShowMetaAchievementRequirements(requiredAchievements, achievement
     for _, reqAchId in ipairs(achievementsToShow) do
         -- Get achievement title from HCA_AchievementDefs
         local reqAchTitle = tostring(reqAchId) -- Fallback to ID
-        if _G.HCA_AchievementDefs then
-            local reqAchDef = _G.HCA_AchievementDefs[tostring(reqAchId)]
+        if addon and addon.AchievementDefs then
+            local reqAchDef = addon.AchievementDefs[tostring(reqAchId)]
             if reqAchDef and reqAchDef.title then
                 reqAchTitle = reqAchDef.title
             end
         end
         -- Fallback: check AchievementPanel.achievements (for quest and profession achievements)
-        if reqAchTitle == tostring(reqAchId) and _G.AchievementPanel and _G.AchievementPanel.achievements then
-            for _, row in ipairs(_G.AchievementPanel.achievements) do
+        if reqAchTitle == tostring(reqAchId) and (addon and addon.AchievementPanel) and (addon and addon.AchievementPanel).achievements then
+            for _, row in ipairs((addon and addon.AchievementPanel).achievements) do
                 local rowId = row.id or row.achId
                 if rowId and tostring(rowId) == tostring(reqAchId) then
                     if row.Title and row.Title.GetText then
@@ -239,12 +246,12 @@ local function ShowMetaAchievementRequirements(requiredAchievements, achievement
         
         -- Check if required achievement is completed
         -- First check progress database
-        local reqProgress = _G.HardcoreAchievements_GetProgress and _G.HardcoreAchievements_GetProgress(reqAchId)
+        local reqProgress = addon and addon.GetProgress and addon.GetProgress(reqAchId)
         local reqCompleted = reqProgress and reqProgress.completed
         
         -- Also check the row's completed status directly (for profession achievements and others)
-        if not reqCompleted and _G.AchievementPanel and _G.AchievementPanel.achievements then
-            for _, row in ipairs(_G.AchievementPanel.achievements) do
+        if not reqCompleted and (addon and addon.AchievementPanel) and (addon and addon.AchievementPanel).achievements then
+            for _, row in ipairs((addon and addon.AchievementPanel).achievements) do
                 local rowId = row.id or row.achId
                 if rowId and tostring(rowId) == tostring(reqAchId) then
                     if row.completed then
@@ -269,7 +276,7 @@ end
 -- Main Function
 ---------------------------------------
 
-function HCA_ShowAchievementTooltip(frame, data)
+local function ShowAchievementTooltip(frame, data)
     -- Extract all data from row object or data table
     local extracted = ExtractAchievementData(data)
     local title = extracted.title
@@ -291,7 +298,7 @@ function HCA_ShowAchievementTooltip(frame, data)
     
     -- Check database for completion status if not already set
     if not achievementCompleted and achId then
-        local getCharDB = _G.GetCharDB or _G.HardcoreAchievements_GetCharDB
+        local getCharDB = addon and addon.GetCharDB
         if type(getCharDB) == "function" then
             local _, cdb = getCharDB()
             if cdb and cdb.achievements then
@@ -315,8 +322,8 @@ function HCA_ShowAchievementTooltip(frame, data)
         elseif def and def.secretPoints ~= nil then
             points = tonumber(def.secretPoints) or 0
         -- Fallback: look up from catalog if achId is available
-        elseif achId and _G.Achievements then
-            for _, achievementDef in ipairs(_G.Achievements) do
+        elseif achId and addon and addon.CatalogAchievements then
+            for _, achievementDef in ipairs(addon.CatalogAchievements) do
                 if achievementDef.achId == achId and achievementDef.secretPoints ~= nil then
                     points = tonumber(achievementDef.secretPoints) or 0
                     break
@@ -329,7 +336,7 @@ function HCA_ShowAchievementTooltip(frame, data)
     
     -- Check if SSF mode is enabled and this achievement supports it
     -- Secret achievements should not show "Solo bonus"
-    local isSoloMode = _G.HardcoreAchievements_IsSoloModeEnabled and _G.HardcoreAchievements_IsSoloModeEnabled() or false
+    local isSoloMode = (addon and addon.IsSoloModeEnabled and addon.IsSoloModeEnabled()) or false
     if isSoloMode and allowSoloDouble and not isSecretAchievement then
         -- Show title with "Solo bonus" on the right when SSF is enabled
         local soloText = "Solo bonus"
@@ -360,8 +367,8 @@ function HCA_ShowAchievementTooltip(frame, data)
     -- Check if this is a catalog achievement (not secret) and SSF is not checked
     -- If so, append "(including all party members)" to the tooltip
     local isCatalogAchievement = false
-    if _G.Achievements and achId then
-        for _, achievementDef in ipairs(_G.Achievements) do
+    if addon and addon.CatalogAchievements and achId then
+        for _, achievementDef in ipairs(addon.CatalogAchievements) do
             if achievementDef.achId == achId then
                 isCatalogAchievement = true
                 break
@@ -382,7 +389,7 @@ function HCA_ShowAchievementTooltip(frame, data)
         end
     end
     
-    if isCatalogAchievement and not isSecret and not isProfessionAchievement and not isSoloMode and (_G.IsLevelMilestone and not _G.IsLevelMilestone(achId)) and not requiresItemOnly then
+    if isCatalogAchievement and not isSecret and not isProfessionAchievement and not isSoloMode and (addon and addon.IsLevelMilestone and not addon.IsLevelMilestone(achId)) and not requiresItemOnly then
         tooltip = tooltip .. "|cffffd100 (including all party members)|r"
     end
     
@@ -460,5 +467,7 @@ function HCA_ShowAchievementTooltip(frame, data)
     GameTooltip:AddLine("\nShift click to link in chat\nor add to tracking list", 0.5, 0.5, 0.5)
     GameTooltip:Show()
 end
-_G.HCA_ShowAchievementTooltip = HCA_ShowAchievementTooltip
 
+if addon then
+    addon.ShowAchievementTooltip = ShowAchievementTooltip
+end

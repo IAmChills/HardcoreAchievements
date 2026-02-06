@@ -1,6 +1,15 @@
-local ProfessionTracker = {}
+local addonName, addon = ...
+local GetNumSkillLines = GetNumSkillLines
+local GetSkillLineInfo = GetSkillLineInfo
+local CreateFrame = CreateFrame
+local C_Timer = C_Timer
+local pairs = pairs
+local tonumber = tonumber
+local type = type
 local table_insert = table.insert
 local table_sort = table.sort
+
+local ProfessionTracker = {}
 
 -- =========================================================
 -- Profession data
@@ -20,8 +29,8 @@ local ProfessionList = {
     { key = "Fishing",       skillID = 356, name = "Fishing",       icon = 136245, secondary = true },
     { key = "FirstAid",      skillID = 129, name = "First Aid",     icon = 135966, secondary = true },
     { key = "Lockpicking",   skillID = 633, name = "Lockpicking",   icon = 134237, secondary = true },
-    -- { key = "Poisons",       skillID = 40,  name = "Poisons",       icon = 132273, secondary = true },
-    -- { key = "Riding",        skillID = 762, name = "Riding",        icon = 132261, secondary = true },
+ -- { key = "Poisons",       skillID = 40,  name = "Poisons",       icon = 132273, secondary = true },
+ -- { key = "Riding",        skillID = 762, name = "Riding",        icon = 132261, secondary = true },
 }
 
 local ProfessionByID = {}
@@ -32,8 +41,6 @@ for _, entry in ipairs(ProfessionList) do
     ProfessionNameToID[entry.name] = entry.skillID
 end
 
-_G.HCA_ProfessionList = ProfessionList
-
 -- =========================================================
 -- Internal state
 -- =========================================================
@@ -42,7 +49,7 @@ local ProfessionState = {}    -- [skillID] = { rank, maxRank, known, localizedNa
 local ProfessionRows = {}     -- [skillID] = { rows... }
 
 local function GetCharacterDB()
-    local getter = _G.HardcoreAchievements_GetCharDB
+    local getter = addon and addon.GetCharDB
     if type(getter) == "function" then
         local _, cdb = getter()
         return cdb
@@ -84,23 +91,19 @@ end
 -- Public helpers
 -- =========================================================
 
-function ProfessionTracker.GetProfessionList()
+local function GetProfessionList()
     return ProfessionList
 end
 
-function ProfessionTracker.GetSkillRank(skillID)
+local function GetSkillRank(skillID)
     local state = ProfessionState[skillID]
     return state and state.rank or 0
 end
 
-function ProfessionTracker.PlayerHasSkill(skillID)
+local function PlayerHasSkill(skillID)
     local state = ProfessionState[skillID]
     return state and state.known or false
 end
-
--- Maintain external compatibility helpers
-_G.HCA_GetProfessionSkillRank = ProfessionTracker.GetSkillRank
-_G.HCA_PlayerHasProfessionSkill = ProfessionTracker.PlayerHasSkill
 
 local function IsRowCompleted(row, cdb)
     if row.completed then
@@ -120,13 +123,13 @@ local function IsRowCompleted(row, cdb)
 end
 
 local function ApplyFilterIfAvailable()
-    local apply = _G.HCA_ApplyFilter
+    local apply = addon and addon.ApplyFilter
     if type(apply) == "function" then
         apply()
         return
     end
 
-    local panel = _G.AchievementPanel
+    local panel = addon and addon.AchievementPanel
     if panel and panel.achievements then
         for _, row in ipairs(panel.achievements) do
             if row and row.Hide and row.Show then
@@ -265,12 +268,12 @@ local function EvaluateCompletions(skillID)
         end
     end
 
-    if anyCompleted and type(_G.HCA_RefreshOutleveledAll) == "function" then
-        _G.HCA_RefreshOutleveledAll()
+    if anyCompleted and addon and type(addon.RefreshOutleveledAll) == "function" then
+        addon.RefreshOutleveledAll()
     end
 end
 
-function ProfessionTracker.RegisterRow(row, def)
+local function RegisterRow(row, def)
     if not row or not def then return end
     local skillID = def.requireProfessionSkillID
     if not skillID then return end
@@ -285,7 +288,7 @@ function ProfessionTracker.RegisterRow(row, def)
     UpdateProfessionRowVisibility(skillID)
 end
 
-function ProfessionTracker.NotifyRowCompleted(row)
+local function NotifyRowCompleted(row)
     if not row then return end
     local def = row._def
     local skillID = (def and def.requireProfessionSkillID) or row._professionSkillID
@@ -401,13 +404,8 @@ eventFrame:SetScript("OnEvent", function(_, event, ...)
     end
 end)
 
--- =========================================================
--- Public API
--- =========================================================
-
-function ProfessionTracker.RefreshAll()
+local function RefreshAll()
     ScanSkills()
-    -- Also evaluate completions for all known profession skills in case they weren't triggered by skill changes
     for skillID, state in pairs(ProfessionState) do
         if state.known then
             EvaluateCompletions(skillID)
@@ -416,8 +414,14 @@ function ProfessionTracker.RefreshAll()
     UpdateAllProfessionRowVisibility()
 end
 
-_G.HCA_ProfessionCommon = ProfessionTracker
+ProfessionTracker.GetProfessionList = GetProfessionList
+ProfessionTracker.GetSkillRank = GetSkillRank
+ProfessionTracker.PlayerHasSkill = PlayerHasSkill
+ProfessionTracker.RegisterRow = RegisterRow
+ProfessionTracker.NotifyRowCompleted = NotifyRowCompleted
+ProfessionTracker.RefreshAll = RefreshAll
 
-return ProfessionTracker
-
-
+if addon then
+    addon.Profession = ProfessionTracker
+    addon.ProfessionList = ProfessionList
+end

@@ -1,6 +1,8 @@
 ---------------------------------------
 -- Raid Achievement Definitions
 ---------------------------------------
+local addonName, addon = ...
+local ClassColor = (addon and addon.GetClassColor)
 local table_insert = table.insert
 
 local Raids = {
@@ -8,7 +10,7 @@ local Raids = {
   {
     achId = "UBRS",
     title = "Upper Blackrock Spire",
-    tooltip = "Defeat the bosses of " .. HCA_SharedUtils.GetClassColor() .. "Upper Blackrock Spire|r",
+    tooltip = "Defeat the bosses of " .. ClassColor .. "Upper Blackrock Spire|r",
     icon = 254648,
     points = 50,
     requiredQuestId = nil,
@@ -28,7 +30,7 @@ local Raids = {
   {
     achId = "MC",
     title = "Molten Core",
-    tooltip = "Defeat the bosses of " .. HCA_SharedUtils.GetClassColor() .. "Molten Core|r",
+    tooltip = "Defeat the bosses of " .. ClassColor .. "Molten Core|r",
     icon = 254652,
     points = 50,
     requiredQuestId = nil,
@@ -53,7 +55,7 @@ local Raids = {
   {
     achId = "ONY",
     title = "Onyxia's Lair",
-    tooltip = "Defeat " .. HCA_SharedUtils.GetClassColor() .. "Onyxia|r",
+    tooltip = "Defeat " .. ClassColor .. "Onyxia|r",
     icon = 254650,
     points = 50,
     requiredQuestId = nil,
@@ -69,7 +71,7 @@ local Raids = {
   {
     achId = "BWL",
     title = "Blackwing Lair",
-    tooltip = "Defeat the bosses of " .. HCA_SharedUtils.GetClassColor() .. "Blackwing Lair|r",
+    tooltip = "Defeat the bosses of " .. ClassColor .. "Blackwing Lair|r",
     icon = 254649,
     points = 50,
     requiredQuestId = nil,
@@ -92,7 +94,7 @@ local Raids = {
   {
     achId = "ZG",
     title = "Zul'Gurub",
-    tooltip = "Defeat the bosses of " .. HCA_SharedUtils.GetClassColor() .. "Zul'Gurub|r",
+    tooltip = "Defeat the bosses of " .. ClassColor .. "Zul'Gurub|r",
     icon = 236413,
     points = 50,
     requiredQuestId = nil,
@@ -117,7 +119,7 @@ local Raids = {
   {
     achId = "AQ20",
     title = "Ruins of Ahn'Qiraj",
-    tooltip = "Defeat the bosses of " .. HCA_SharedUtils.GetClassColor() .. "Ruins of Ahn'Qiraj|r",
+    tooltip = "Defeat the bosses of " .. ClassColor .. "Ruins of Ahn'Qiraj|r",
     icon = 236428,
     points = 50,
     requiredQuestId = nil,
@@ -138,7 +140,7 @@ local Raids = {
   {
     achId = "AQ40",
     title = "Temple of Ahn'Qiraj",
-    tooltip = "Defeat the bosses of " .. HCA_SharedUtils.GetClassColor() .. "Temple of Ahn'Qiraj|r",
+    tooltip = "Defeat the bosses of " .. ClassColor .. "Temple of Ahn'Qiraj|r",
     icon = 236407,
     points = 50,
     requiredQuestId = nil,
@@ -165,7 +167,7 @@ local Raids = {
   {
     achId = "NAXX",
     title = "Naxxramas",
-    tooltip = "Defeat the bosses of " .. HCA_SharedUtils.GetClassColor() .. "Naxxramas|r",
+    tooltip = "Defeat the bosses of " .. ClassColor .. "Naxxramas|r",
     icon = 254100,
     points = 50,
     requiredQuestId = nil,
@@ -200,15 +202,17 @@ local Raids = {
 ---------------------------------------
 
 -- Defer registration until PLAYER_LOGIN to prevent load timeouts
-_G.HCA_RegistrationQueue = _G.HCA_RegistrationQueue or {}
-
--- Queue all raid achievements for deferred registration
 -- Note: RaidCommon must be loaded before this file (RaidCommon.lua should be in .toc before RaidCatalog.lua)
-if _G.RaidCommon and _G.RaidCommon.registerRaidAchievement then
-  for _, raid in ipairs(Raids) do
-    table_insert(_G.HCA_RegistrationQueue, function()
-      RaidCommon.registerRaidAchievement(raid)
-    end)
+if addon then
+  addon.RegistrationQueue = addon.RegistrationQueue or {}
+  local queue = addon.RegistrationQueue
+  local RaidCommon = addon and addon.RaidCommon
+  if RaidCommon and RaidCommon.registerRaidAchievement then
+    for _, raid in ipairs(Raids) do
+      table_insert(queue, function()
+        RaidCommon.registerRaidAchievement(raid)
+      end)
+    end
   end
 end
 

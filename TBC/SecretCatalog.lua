@@ -1,11 +1,16 @@
 ---------------------------------------
--- Secret Achievement Definitions
+-- Secret Achievement Definitions (TBC)
 ---------------------------------------
--- Localize frequently-used WoW API globals (micro-optimization, no behavior change)
+local addonName, addon = ...
+local ClassColor = (addonName and addonName.GetClassColor)
 local UnitGUID = UnitGUID
+local UnitIsDeadOrGhost = UnitIsDeadOrGhost
+local UnitBuff = UnitBuff
 local UnitClass = UnitClass
+local UnitRace = UnitRace
 local UnitFactionGroup = UnitFactionGroup
 local GetUnitName = GetUnitName
+local GetItemCount = GetItemCount
 local strsplit = strsplit
 local table_insert = table.insert
 local string_format = string.format
@@ -61,7 +66,7 @@ local Secrets = {
     achId = "Secret001",
     title = "Rats! Rats! Rats!",
     level = nil,
-    tooltip = "You have completed the secret achievement: " .. HCA_SharedUtils.GetClassColor() .. "Kill a rat|r",
+    tooltip = "You have completed the secret achievement: " .. ClassColor .. "Kill a rat|r",
     icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_rat.png", -- ??
     points = 0,
     targetNpcId = {4075, 13016, 2110},
@@ -75,7 +80,7 @@ local Secrets = {
     achId = "Secret002",
     title = "Taking the Edge Off",
     level = nil,
-    tooltip = "You have completed the secret achievement: " .. HCA_SharedUtils.GetClassColor() .. "Drink some Noggenfogger|r",
+    tooltip = "You have completed the secret achievement: " .. ClassColor .. "Drink some Noggenfogger|r",
     icon = 134863,
     points = 0,
     customIsCompleted = function() return false end,
@@ -95,7 +100,7 @@ local Secrets = {
     achId = "Secret003",
     title = "Who's A Good Boy?",
     level = nil,
-    tooltip = "You have completed the secret achievement: " .. HCA_SharedUtils.GetClassColor() .. "Pet Spot the Wolf|r",
+    tooltip = "You have completed the secret achievement: " .. ClassColor .. "Pet Spot the Wolf|r",
     icon = 132203,
     points = 0,
     faction = FACTION_ALLIANCE,
@@ -138,7 +143,7 @@ local Secrets = {
     achId = "Secret005",
     title = "Mak'gora",
     level = nil,
-    tooltip = "Obtain an ear by winning a " .. HCA_SharedUtils.GetClassColor() .. "Mak'gora|r",
+    tooltip = "Obtain an ear by winning a " .. ClassColor .. "Mak'gora|r",
     icon = 133854,
     points = 0,
     customIsCompleted = function() return false end,
@@ -183,14 +188,15 @@ local Secrets = {
     achId = "Secret008",
     title = "Jump Master",
     level = nil,
-    tooltip = "You have completed the secret achievement: " .. HCA_SharedUtils.GetClassColor() .. "Jump 100,000 times|r",
+    tooltip = "You have completed the secret achievement: " .. ClassColor .. "Jump 100,000 times|r",
     icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\INV_Icon_Feather01a.png", -- ??
     points = 0,
     customIsCompleted = function()
-        if not _G.HardcoreAchievements_GetCharDB then
+        local GetCharDB = addon and addon.GetCharDB
+        if not GetCharDB then
             return false
         end
-        local _, cdb = _G.HardcoreAchievements_GetCharDB()
+        local _, cdb = GetCharDB()
         if not cdb or not cdb.stats or not cdb.stats.playerJumps then
             return false
         end
@@ -242,7 +248,7 @@ local Secrets = {
     achId = "Secret0012",
     title = "Level 18? Ughhh",
     level = nil,
-    tooltip = "You have completed the secret achievement: " .. HCA_SharedUtils.GetClassColor() .. "Obtain the Forest Leather Belt|r",
+    tooltip = "You have completed the secret achievement: " .. ClassColor .. "Obtain the Forest Leather Belt|r",
     icon = 132492,
     points = 0,
     customIsCompleted = function() return false end,
@@ -337,64 +343,71 @@ end
 for _, def in ipairs(Secrets) do
   if IsEligible(def) then
     if def.customKill then
-      _G[def.achId .. "_Kill"] = def.customKill
-      _G[def.achId .. "_IsCompleted"] = _G[def.achId .. "_IsCompleted"] or function() return false end
+      if addon and addon.RegisterCustomAchievement then
+        addon.RegisterCustomAchievement(def.achId, def.customKill, def.customIsCompleted or function() return false end)
+      end
     elseif def.customIsCompleted then
-      _G[def.achId .. "_IsCompleted"] = def.customIsCompleted
+      if addon and addon.RegisterCustomAchievement then
+        addon.RegisterCustomAchievement(def.achId, nil, def.customIsCompleted)
+      end
     else
-      _G.Achievements_Common.registerQuestAchievement{
-        achId           = def.achId,
-        requiredQuestId = def.requiredQuestId,
-        targetNpcId     = def.targetNpcId,
-        requiredKills   = def.requiredKills,
-        maxLevel        = def.level,
-        faction         = def.faction,
-        race            = def.race,
-        class           = def.class,
-        allowKillsBeforeQuest = def.allowKillsBeforeQuest,
-      }
+      if addon and addon.registerQuestAchievement then
+        addon.registerQuestAchievement{
+          achId           = def.achId,
+          requiredQuestId = def.requiredQuestId,
+          targetNpcId     = def.targetNpcId,
+          requiredKills   = def.requiredKills,
+          maxLevel        = def.level,
+          faction         = def.faction,
+          race            = def.race,
+          class           = def.class,
+          allowKillsBeforeQuest = def.allowKillsBeforeQuest,
+        }
+      end
     end
   end
 end
 
--- Export secrets to global scope for AdminPanel access
-_G.Secrets = Secrets
+if addon then
+  addon.Secrets = Secrets
+end
 
 ---------------------------------------
 -- Deferred Registration Queue
 ---------------------------------------
+if addon then
+  addon.RegistrationQueue = addon.RegistrationQueue or {}
+  local queue = addon.RegistrationQueue
+  local CreateAchievementRow = addon.CreateAchievementRow
+  local AchievementPanel = addon.AchievementPanel
+  local RegisterAchievementDef = addon.RegisterAchievementDef or (HCA_SharedUtils and HCA_SharedUtils.RegisterAchievementDef)
 
--- Defer registration until PLAYER_LOGIN to prevent load timeouts
-_G.HCA_RegistrationQueue = _G.HCA_RegistrationQueue or {}
-
--- Queue all secret achievements for deferred registration
-for _, def in ipairs(Secrets) do
-  if IsEligible(def) then
-    -- Mark as secret for filtering
-    def.isSecret = true
-    -- Queue achievement registration
-    table_insert(_G.HCA_RegistrationQueue, function()
-      if def.customIsCompleted then
-        _G[def.achId .. "_IsCompleted"] = def.customIsCompleted
-      end
-      
-      local killFn = def.customKill or ((def.targetNpcId or def.requiredKills) and _G.HardcoreAchievements_GetAchievementFunction(def.achId, "Kill")) or nil
-      local questFn = (def.requiredQuestId and _G.HardcoreAchievements_GetAchievementFunction(def.achId, "Quest")) or nil
-
-      CreateAchievementRow(
-        AchievementPanel,
-        def.achId,
-        def.title,
-        def.tooltip,
-        def.icon,
-        def.level,
-        def.points or 0,
-        killFn,
-        questFn,
-        def.staticPoints,
-        def.zone,
-        def
-      )
-    end)
+  for _, def in ipairs(Secrets) do
+    if IsEligible(def) then
+      def.isSecret = true
+      table_insert(queue, function()
+        local killFn = def.customKill or ((def.targetNpcId or def.requiredKills) and addon and addon.GetAchievementFunction and addon.GetAchievementFunction(def.achId, "Kill")) or nil
+        local questFn = (def.requiredQuestId and addon and addon.GetAchievementFunction and addon.GetAchievementFunction(def.achId, "Quest")) or nil
+        if RegisterAchievementDef then
+          RegisterAchievementDef(def)
+        end
+        if CreateAchievementRow and AchievementPanel then
+          CreateAchievementRow(
+            AchievementPanel,
+            def.achId,
+            def.title,
+            def.tooltip,
+            def.icon,
+            def.level,
+            def.points or 0,
+            killFn,
+            questFn,
+            def.staticPoints,
+            def.zone,
+            def
+          )
+        end
+      end)
+    end
   end
 end

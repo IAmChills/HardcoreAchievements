@@ -1,6 +1,5 @@
--- GetStatusText.lua
--- Helper function to determine achievement status text based on current state
-
+local addonName, addon = ...
+local C_GameRules = C_GameRules
 local function GetStatusText(params)
     local completed = params.completed or false
     local hasSoloStatus = params.hasSoloStatus or false
@@ -94,8 +93,6 @@ local function SetStatusTextOnRow(row, params)
     end
 end
 
--- Export globally
-_G.HCA_GetStatusText = GetStatusText
-_G.HCA_SetStatusTextOnRow = SetStatusTextOnRow
-
-return GetStatusText
+if addon then
+    addon.SetStatusTextOnRow = SetStatusTextOnRow
+end

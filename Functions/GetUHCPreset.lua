@@ -1,8 +1,10 @@
--- Localize frequently-used WoW API globals (micro-optimization, no behavior change)
-local _G = _G
+local addonName, addon = ...
+local C_GameRules = C_GameRules
 local UnitGUID = UnitGUID
 local CreateFrame = CreateFrame
 local C_Timer = C_Timer
+local RefreshAllAchievementPoints = (addon and addon.RefreshAllAchievementPoints)
+local IsSelfFound = (addon and addon.IsSelfFound)
 local table_insert = table.insert
 local table_concat = table.concat
 
@@ -104,7 +106,7 @@ local function hasAny(have, subset)
     return false
 end
 
-function GetPresetMultiplier(preset)
+local function GetPresetMultiplier(preset)
     local POINT_MULTIPLIER = {
       lite            = 1.20,
       liteplus        = 1.30,
@@ -131,7 +133,7 @@ end
 -- Centralized function to update multiplier text for any frame
 -- multiplierTextElement: FontString element to update (e.g., DashboardFrame.MultiplierText)
 -- textColor: Optional color table {r, g, b} or nil for default (0.8, 0.8, 0.8)
-function UpdateMultiplierText(multiplierTextElement, textColor)
+local function UpdateMultiplierText(multiplierTextElement, textColor)
     if not multiplierTextElement then
         return
     end
@@ -141,14 +143,13 @@ function UpdateMultiplierText(multiplierTextElement, textColor)
     -- Check if hardcore is active (for Self Found detection)
     -- In TBC, this will be false, so Self Found will never be active
     local isHardcoreActive = C_GameRules and C_GameRules.IsHardcoreActive and C_GameRules.IsHardcoreActive() or false
-    local isSelfFound = false
-    if isHardcoreActive and IsSelfFound and IsSelfFound() then
+    if isHardcoreActive and IsSelfFound() then
         isSelfFound = true
     end
     
     -- Check solo mode from character database (works in both Hardcore and TBC)
     -- This checks the soloAchievements setting from character database
-    local isSoloMode = _G.HardcoreAchievements_IsSoloModeEnabled and _G.HardcoreAchievements_IsSoloModeEnabled() or false
+    local isSoloMode = (addon and addon.IsSoloModeEnabled and addon.IsSoloModeEnabled()) or false
     
     local labelText = ""
     local modifiers = {}
@@ -186,9 +187,6 @@ function UpdateMultiplierText(multiplierTextElement, textColor)
     end
 end
 
--- Export UpdateMultiplierText globally for use by other files
-_G.UpdateMultiplierText = UpdateMultiplierText
-
 -- Event frame for ADDON_LOADED
 local eventFrame = CreateFrame("Frame")
 eventFrame:RegisterEvent("ADDON_LOADED")
@@ -217,14 +215,12 @@ eventFrame:SetScript("OnEvent", function(self, event, addonName)
             end
 
             -- Update all achievement points with new multiplier and bonus
-            if RefreshAllAchievementPoints then
-                RefreshAllAchievementPoints()
-            end
+            RefreshAllAchievementPoints()
         end)
     end
 end)
 
-function GetPlayerPresetFromSettings()
+local function GetPlayerPresetFromSettings()
     -- Return early if UltraHardcoreDB doesn't exist
     if not UltraHardcoreDB then
         return
@@ -275,5 +271,8 @@ function GetPlayerPresetFromSettings()
     end
 end
 
-
-
+if addon then
+    addon.GetPresetMultiplier = GetPresetMultiplier
+    addon.UpdateMultiplierText = UpdateMultiplierText
+    addon.GetPlayerPresetFromSettings = GetPlayerPresetFromSettings
+end

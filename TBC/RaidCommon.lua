@@ -1,11 +1,12 @@
 local RaidCommon = {}
 
--- Localize frequently-used WoW API globals (micro-optimization, no behavior change)
-local _G = _G
+local addonName, addon = ...
 local UnitLevel = UnitLevel
 local GetNumGroupMembers = GetNumGroupMembers
 local GetInstanceInfo = GetInstanceInfo
 local C_Timer = C_Timer
+local GetPresetMultiplier = (addon and addon.GetPresetMultiplier)
+local RefreshAllAchievementPoints = (addon and addon.RefreshAllAchievementPoints)
 local table_insert = table.insert
 local table_concat = table.concat
 
@@ -111,7 +112,7 @@ function RaidCommon.registerRaidAchievement(def)
   local faction = def.faction
 
   -- Expose this definition for external lookups (e.g., chat link tooltips)
-  HCA_SharedUtils.RegisterAchievementDef({
+  addon.RegisterAchievementDef({
     achId = achId,
     title = title,
     tooltip = tooltip,
@@ -142,7 +143,7 @@ function RaidCommon.registerRaidAchievement(def)
 
   -- Load progress from database on initialization
   local function LoadProgress()
-    local progress = HardcoreAchievements_GetProgress(achId)
+    local progress = addon and addon.GetProgress and addon.GetProgress(achId)
     if progress and progress.counts then
       state.counts = progress.counts
     end
@@ -154,9 +155,9 @@ function RaidCommon.registerRaidAchievement(def)
 
   -- Save progress to database
   local function SaveProgress()
-    HardcoreAchievements_SetProgress(achId, "counts", state.counts)
+    if addon and addon.SetProgress then addon.SetProgress(achId, "counts", state.counts) end
     if state.completed then
-      HardcoreAchievements_SetProgress(achId, "completed", true)
+      if addon and addon.SetProgress then addon.SetProgress(achId, "completed", true) end
     end
   end
 
@@ -335,6 +336,7 @@ function RaidCommon.registerRaidAchievement(def)
     npcId = npcId and tonumber(npcId) or nil
     return npcId
   end
+  if addon then addon.GetRaidBossName = HCA_GetRaidBossName end
 
   local function IsOnRequiredMap()
     -- If no map restriction, allow anywhere
@@ -398,8 +400,9 @@ function RaidCommon.registerRaidAchievement(def)
 
   -- Calculate and store points for this achievement
   local function StorePointsAtKill()
+    local AchievementPanel = addon and addon.AchievementPanel
     if not AchievementPanel or not AchievementPanel.achievements then return end
-    local row = _G[rowVarName]
+    local row = addon[rowVarName]
     if not row or not row.points then return end
     
     -- Store pointsAtKill WITHOUT the self-found bonus.
@@ -407,11 +410,11 @@ function RaidCommon.registerRaidAchievement(def)
     local base = tonumber(row.originalPoints) or tonumber(row.points) or 0
     local pointsToStore = base
     if not row.staticPoints then
-      local preset = _G.GetPlayerPresetFromSettings and _G.GetPlayerPresetFromSettings() or nil
-      local multiplier = _G.GetPresetMultiplier and _G.GetPresetMultiplier(preset) or 1.0
+      local preset = (addon and addon.GetPlayerPresetFromSettings and addon.GetPlayerPresetFromSettings()) or nil
+      local multiplier = GetPresetMultiplier(preset) or 1.0
       pointsToStore = math.floor(base * multiplier + 0.5)
     end
-    HardcoreAchievements_SetProgress(achId, "pointsAtKill", pointsToStore)
+    if addon and addon.SetProgress then addon.SetProgress(achId, "pointsAtKill", pointsToStore) end
   end
 
   ---------------------------------------
@@ -420,7 +423,7 @@ function RaidCommon.registerRaidAchievement(def)
 
   -- Update tooltip when progress changes (local; closes over the local generator)
   local function UpdateTooltip()
-    local row = _G[rowVarName]
+    local row = addon[rowVarName]
     if row then
       -- Store the base tooltip for the main tooltip
       local baseTooltip = tooltip or ""
@@ -428,8 +431,8 @@ function RaidCommon.registerRaidAchievement(def)
 
       local frame = row.frame
       if not frame then
-        if _G.HCA_AddRowUIInit then
-          _G.HCA_AddRowUIInit(row, function()
+        if addon and addon.AddRowUIInit then
+          addon.AddRowUIInit(row, function()
             C_Timer.After(0, UpdateTooltip)
           end)
         end
@@ -454,7 +457,7 @@ function RaidCommon.registerRaidAchievement(def)
           local bossNames = {}
           for _, id in pairs(need) do
             local current = (state.counts[id] or state.counts[tostring(id)] or 0)
-            local name = HCA_GetRaidBossName(id)
+            local name = (addon and addon.GetRaidBossName and addon.GetRaidBossName(id)) or tostring(id)
             table_insert(bossNames, name)
             if current >= 1 then done = true end
           end
@@ -466,7 +469,7 @@ function RaidCommon.registerRaidAchievement(def)
         else
           local idNum = tonumber(npcId) or npcId
           local current = (state.counts[idNum] or state.counts[tostring(idNum)] or 0)
-          bossName = HCA_GetRaidBossName(idNum)
+          bossName = (addon and addon.GetRaidBossName and addon.GetRaidBossName(idNum)) or tostring(idNum)
           done = current >= (tonumber(need) or 1)
         end
         if achievementCompleted then done = true end
@@ -556,12 +559,12 @@ function RaidCommon.registerRaidAchievement(def)
 
         -- Store the level when this boss was killed (for tracking purposes)
         local killLevel = UnitLevel("player") or 1
-        HardcoreAchievements_SetProgress(achId, "levelAtKill", killLevel)
+        if addon and addon.SetProgress then addon.SetProgress(achId, "levelAtKill", killLevel) end
 
         -- Store points (raids do not support solo doubling)
         StorePointsAtKill()
 
-        print("|cff008066[Hardcore Achievements]|r |cffffd100" .. HCA_GetRaidBossName(npcId) .. " killed as part of achievement: " .. title .. "|r")
+        print("|cff008066[Hardcore Achievements]|r |cffffd100" .. ((addon and addon.GetRaidBossName and addon.GetRaidBossName(npcId)) or tostring(npcId)) .. " killed as part of achievement: " .. title .. "|r")
       end
     end
 
@@ -570,7 +573,7 @@ function RaidCommon.registerRaidAchievement(def)
       UpdateTooltip() -- Update tooltip to show progress
 
       -- Check if achievement should be completed
-      local progress = HardcoreAchievements_GetProgress(achId)
+      local progress = addon and addon.GetProgress and addon.GetProgress(achId)
       if progress and progress.completed then
         state.completed = true
         return true
@@ -579,7 +582,7 @@ function RaidCommon.registerRaidAchievement(def)
       -- Check if all bosses are killed
       if CountsSatisfied() then
         state.completed = true
-        HardcoreAchievements_SetProgress(achId, "completed", true)
+        if addon and addon.SetProgress then addon.SetProgress(achId, "completed", true) end
         return true
       end
     end
@@ -590,8 +593,8 @@ function RaidCommon.registerRaidAchievement(def)
   -- No global tracker function for raids - we use BOSS_KILL event with encounter IDs instead
   
   -- Register functions in local registry to reduce global pollution
-  if _G.HardcoreAchievements_RegisterAchievementFunction then
-    _G.HardcoreAchievements_RegisterAchievementFunction(achId, "IsCompleted", function() return state.completed end)
+  if addon and addon.RegisterAchievementFunction then
+    addon.RegisterAchievementFunction(achId, "IsCompleted", function() return state.completed end)
   end
 
   ---------------------------------------
@@ -608,9 +611,9 @@ function RaidCommon.registerRaidAchievement(def)
   end
 
   -- Create the registration function dynamically
-  _G[registerFuncName] = function()
-    if not _G.CreateAchievementRow then return end
-    if _G[rowVarName] then return end
+  addon[registerFuncName] = function()
+    if not (addon and addon.CreateAchievementRow) then return end
+    if addon[rowVarName] then return end
     
     -- Check if player is eligible for this achievement
     if not IsEligible() then return end
@@ -624,7 +627,8 @@ function RaidCommon.registerRaidAchievement(def)
     raidDef.isRaid = true
     raidDef.level = nil  -- No level requirement for raids
     
-    _G[rowVarName] = CreateAchievementRow(
+    local AchievementPanel = addon and addon.AchievementPanel
+    addon[rowVarName] = addon.CreateAchievementRow(
       AchievementPanel,
       achId,
       title,
@@ -641,22 +645,22 @@ function RaidCommon.registerRaidAchievement(def)
     
     -- Store requiredKills on the row for the embed UI to access
     if requiredKills and next(requiredKills) then
-      _G[rowVarName].requiredKills = requiredKills
+      addon[rowVarName].requiredKills = requiredKills
     end
     
     -- Store the ProcessBossKillByEncounterID function on the row for BOSS_KILL event handler
-    _G[rowVarName].processBossKillByEncounterID = ProcessBossKillByEncounterID
+    addon[rowVarName].processBossKillByEncounterID = ProcessBossKillByEncounterID
     
     -- Load completion status from database on registration
     -- If the achievement was previously completed, mark the row as completed without showing toast
     if state.completed then
-      if _G.HCA_MarkRowCompleted then
-        _G.HCA_MarkRowCompleted(_G[rowVarName])
+      if addon and addon.MarkRowCompleted then
+        addon.MarkRowCompleted(addon[rowVarName])
       end
     end
     
     -- Refresh points with multipliers after creation
-    if not _G.HCA_Initializing and RefreshAllAchievementPoints then
+    if not (addon and addon.Initializing) then
       RefreshAllAchievementPoints()
     end
     
@@ -665,8 +669,8 @@ function RaidCommon.registerRaidAchievement(def)
   end
 
   -- Auto-register the achievement immediately if the panel is ready
-  if _G.CreateAchievementRow then
-    _G[registerFuncName]()
+  if addon and addon.CreateAchievementRow then
+    addon[registerFuncName]()
   end
 
   -- Note: Event handling is now centralized in HardcoreAchievements.lua
@@ -677,4 +681,4 @@ end
 -- Module Export
 ---------------------------------------
 
-_G.RaidCommon = RaidCommon
+if addon then addon.RaidCommon = RaidCommon end

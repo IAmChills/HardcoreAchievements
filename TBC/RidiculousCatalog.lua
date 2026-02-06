@@ -2,7 +2,7 @@
 -- Ridiculous Achievement Definitions
 ---------------------------------------
 -- These achievements are hidden by default and do not count towards total unless completed
--- Localize frequently-used WoW API globals (micro-optimization, no behavior change)
+local addonName, addon = ...
 local _G = _G
 local UnitLevel = UnitLevel
 local table_insert = table.insert
@@ -16,10 +16,11 @@ local RidiculousAchievements = {
     icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_guildperk_honorablemention.png", -- 413584
     points = 0,
     customIsCompleted = function()
-      if not _G.HardcoreAchievements_GetCharDB then
+      local GetCharDB = addon and addon.GetCharDB
+      if not GetCharDB then
         return false
       end
-      local _, cdb = _G.HardcoreAchievements_GetCharDB()
+      local _, cdb = GetCharDB()
       if not cdb or not cdb.stats or not cdb.stats.playerJumps then
         return false
       end
@@ -47,16 +48,16 @@ local function GetKillTracker(def)
     if def.customKill then
         return def.customKill
     end
-    if def.targetNpcId or def.requiredKills then
-        return _G.HardcoreAchievements_GetAchievementFunction and _G.HardcoreAchievements_GetAchievementFunction(def.achId, "Kill") or nil
+    if (def.targetNpcId or def.requiredKills) and addon and addon.GetAchievementFunction then
+        return addon.GetAchievementFunction(def.achId, "Kill")
     end
     return nil
 end
 
 -- Get quest tracker function for an achievement definition
 local function GetQuestTracker(def)
-    if def.requiredQuestId then
-        return _G.HardcoreAchievements_GetAchievementFunction and _G.HardcoreAchievements_GetAchievementFunction(def.achId, "Quest") or nil
+    if def.requiredQuestId and addon and addon.GetAchievementFunction then
+        return addon.GetAchievementFunction(def.achId, "Quest")
     end
     return nil
 end
@@ -64,37 +65,42 @@ end
 ---------------------------------------
 -- Registration
 ---------------------------------------
+if addon then
+  for _, def in ipairs(RidiculousAchievements) do
+    if def.customIsCompleted and addon.RegisterCustomAchievement then
+      addon.RegisterCustomAchievement(def.achId, nil, def.customIsCompleted)
+    end
+  end
+  addon.RegistrationQueue = addon.RegistrationQueue or {}
+  local queue = addon.RegistrationQueue
+  local CreateAchievementRow = addon.CreateAchievementRow
+  local AchievementPanel = addon.AchievementPanel
+  local RegisterAchievementDef = addon.RegisterAchievementDef or (HCA_SharedUtils and HCA_SharedUtils.RegisterAchievementDef)
 
--- Defer registration until PLAYER_LOGIN to prevent load timeouts
-_G.HCA_RegistrationQueue = _G.HCA_RegistrationQueue or {}
-
--- Queue all ridiculous achievements for deferred registration
-for _, def in ipairs(RidiculousAchievements) do
-    -- Mark as ridiculous for filtering
+  for _, def in ipairs(RidiculousAchievements) do
     def.isRidiculous = true
-    
-    -- Queue achievement registration
-    table_insert(_G.HCA_RegistrationQueue, function()
-        if def.customIsCompleted then
-            _G[def.achId .. "_IsCompleted"] = def.customIsCompleted
-        end
-        
-        local killFn = GetKillTracker(def)
-        local questFn = GetQuestTracker(def)
-
+    table_insert(queue, function()
+      local killFn = GetKillTracker(def)
+      local questFn = GetQuestTracker(def)
+      if RegisterAchievementDef then
+        RegisterAchievementDef(def)
+      end
+      if CreateAchievementRow and AchievementPanel then
         CreateAchievementRow(
-            AchievementPanel,
-            def.achId,
-            def.title,
-            def.tooltip,
-            def.icon,
-            def.level,
-            def.points or 0,
-            killFn,
-            questFn,
-            def.staticPoints,
-            def.zone,
-            def
+          AchievementPanel,
+          def.achId,
+          def.title,
+          def.tooltip,
+          def.icon,
+          def.level,
+          def.points or 0,
+          killFn,
+          questFn,
+          def.staticPoints,
+          def.zone,
+          def
         )
+      end
     end)
+  end
 end

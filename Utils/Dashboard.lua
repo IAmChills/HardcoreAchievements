@@ -5,17 +5,25 @@ local ICON_SIZE = 60
 local ICON_PADDING = 12
 local GRID_COLS = 7  -- Number of columns in the grid
 
--- Localize frequently-used WoW API globals (micro-optimization, no behavior change)
+local addonName, addon = ...
 local UnitClass = UnitClass
 local UnitLevel = UnitLevel
 local GetLocale = GetLocale
 local time = time
-local select = select
 local GetExpansionLevel = GetExpansionLevel
 local IsShiftKeyDown = IsShiftKeyDown
 local ChatEdit_GetActiveWindow = ChatEdit_GetActiveWindow
 local CreateFrame = CreateFrame
 local hooksecurefunc = hooksecurefunc
+local UpdateMultiplierText = (addon and addon.UpdateMultiplierText)
+local PlayerHasSkill = (addon and addon.Profession and addon.Profession.PlayerHasSkill)
+local RefreshAllAchievementPoints = (addon and addon.RefreshAllAchievementPoints)
+local ShowAchievementTooltip = (addon and addon.ShowAchievementTooltip)
+local GetAchievementBracket = (addon and addon.GetAchievementBracket)
+local AchievementTracker = (addon and addon.AchievementTracker)
+local GetCharDB = (addon and addon.GetCharDB)
+local IsRowOutleveledGlobal = (addon and addon.IsRowOutleveled)
+local IsSelfFound = (addon and addon.IsSelfFound)
 local table_insert = table.insert
 local table_sort = table.sort
 local string_format = string.format
@@ -260,8 +268,8 @@ end
 
 -- Helper function to check if modern rows is enabled
 local function IsModernRowsEnabled()
-    if type(HardcoreAchievements_GetCharDB) == "function" then
-        local _, cdb = HardcoreAchievements_GetCharDB()
+    if type(GetCharDB) == "function" then
+        local _, cdb = GetCharDB()
         if cdb then
             cdb.settings = cdb.settings or {}
             if cdb.settings.modernRows == nil then
@@ -284,7 +292,7 @@ local function UpdateLayoutCheckboxes(useModernRows)
 end
 
 -- Use FilterDropdown for checkbox filtering logic
-local FilterDropdown = _G.FilterDropdown
+local FilterDropdown = (addon and addon.FilterDropdown)
 local function ShouldShowByCheckboxFilter(def, isCompleted, checkboxIndex, variationType)
     if FilterDropdown and FilterDropdown.ShouldShowByCheckboxFilter then
         return FilterDropdown.ShouldShowByCheckboxFilter(def, isCompleted, checkboxIndex, variationType)
@@ -358,8 +366,8 @@ local function ApplyCustomCheckboxTextures(checkbox)
 end
 
 local function SetModernRowsEnabled(enabled)
-    if type(HardcoreAchievements_GetCharDB) == "function" then
-        local _, cdb = HardcoreAchievements_GetCharDB()
+    if type(GetCharDB) == "function" then
+        local _, cdb = GetCharDB()
         if cdb then
             cdb.settings = cdb.settings or {}
             cdb.settings.modernRows = enabled and true or false
@@ -368,8 +376,9 @@ local function SetModernRowsEnabled(enabled)
 
     UpdateLayoutCheckboxes(enabled)
 
-    if _G._HardcoreAchievementsOptionsPanel and _G._HardcoreAchievementsOptionsPanel.modernRows then
-        _G._HardcoreAchievementsOptionsPanel.modernRows:SetChecked(enabled)
+    local opts = addon and addon.OptionsPanel
+    if opts and opts.modernRows then
+        opts.modernRows:SetChecked(enabled)
     end
 
     if DASHBOARD and DASHBOARD.Rebuild then
@@ -377,7 +386,7 @@ local function SetModernRowsEnabled(enabled)
     end
 end
 
-_G.HCA_SetModernRowsEnabled = SetModernRowsEnabled
+if addon then addon.SetModernRowsEnabled = SetModernRowsEnabled end
 
 local function EmbedHasVisibleText(value)
     if type(value) ~= "string" then
@@ -447,12 +456,10 @@ end
 -- Helper function to check if row is outleveled
 -- Use the global function from HardcoreAchievements.lua if available, otherwise fallback to local logic
 local function IsRowOutleveled(row)
-  -- Use the global function if available (it has all the proper checks)
-  if _G.IsRowOutleveled and type(_G.IsRowOutleveled) == "function" then
-    return _G.IsRowOutleveled(row)
+  if IsRowOutleveledGlobal and type(IsRowOutleveledGlobal) == "function" then
+    return IsRowOutleveledGlobal(row)
   end
-  
-  -- Fallback to basic check if global function not available
+  -- Fallback to basic check if delegate not available
   if not row or row.completed then return false end
   if not row.maxLevel then return false end
   
@@ -540,15 +547,15 @@ end
 
 -- Helper function to update status text using the same logic as main panel
 local function UpdateStatusTextDashboard(row)
-    if not row or not row.Sub or not _G.HCA_SetStatusTextOnRow then return end
+    if not row or not row.Sub or not SetStatusTextOnRow then return end
     
     local rowId = row.achId or row.id
     if not rowId then return end
     
     -- Get progress data
     local progress = nil
-    if _G.HardcoreAchievements_GetProgress then
-        progress = _G.HardcoreAchievements_GetProgress(rowId)
+    if addon and addon.GetProgress then
+        progress = addon.GetProgress(rowId)
     end
     
     local hasSoloStatus = progress and (progress.soloKill or progress.soloQuest)
@@ -568,8 +575,8 @@ local function UpdateStatusTextDashboard(row)
             if progress.eligibleCounts then
                 -- Find the achievement definition to check requiredKills
                 local achDef = nil
-                if _G.Achievements then
-                    for _, def in ipairs(_G.Achievements) do
+                if addon and addon.CatalogAchievements then
+                    for _, def in ipairs(addon.CatalogAchievements) do
                         if def.achId == rowId then
                             achDef = def
                             break
@@ -601,16 +608,14 @@ local function UpdateStatusTextDashboard(row)
         killsSatisfied = hasKill and questNotTurnedIn
     end
     
-    -- Get self-found and solo mode status
-    local isSelfFound = _G.IsSelfFound and _G.IsSelfFound() or false
-    local isSoloMode = _G.HardcoreAchievements_IsSoloModeEnabled and _G.HardcoreAchievements_IsSoloModeEnabled() or false
+    -- Get solo mode status
+    local isSoloMode = (addon and addon.IsSoloModeEnabled and addon.IsSoloModeEnabled()) or false
     
     -- Check if achievement was completed solo
     local wasSolo = false
     if row.completed then
-        local getCharDB = _G.GetCharDB or _G.HardcoreAchievements_GetCharDB
-        if getCharDB then
-            local _, cdb = getCharDB()
+        if GetCharDB then
+            local _, cdb = GetCharDB()
             if cdb and cdb.achievements and rowId then
                 local achRec = cdb.achievements[rowId]
                 wasSolo = achRec and achRec.wasSolo or false
@@ -619,13 +624,13 @@ local function UpdateStatusTextDashboard(row)
     end
     
     -- Use the centralized status text function
-    _G.HCA_SetStatusTextOnRow(row, {
+    SetStatusTextOnRow(row, {
         completed = row.completed or false,
         hasSoloStatus = hasSoloStatus,
         hasIneligibleKill = hasIneligibleKill,
         requiresBoth = requiresBoth,
         killsSatisfied = killsSatisfied,
-        isSelfFound = isSelfFound,
+        isSelfFound = IsSelfFound(),
         isSoloMode = isSoloMode,
         wasSolo = wasSolo,
         allowSoloDouble = row.allowSoloDouble,
@@ -867,7 +872,7 @@ end
 -- ---------- Source ----------
 local function GetSourceRows()
   -- Prefer the data model so Dashboard can work without building Character Panel row frames.
-  local model = _G.HCA_AchievementRowModel
+  local model = addon and addon.AchievementRowModel
   if type(model) == "table" and #model > 0 then
     return model
   end
@@ -897,7 +902,7 @@ local function ReadRowData(src)
       requiredKills = src.requiredKills,
     outleveled = IsRowOutleveled(src),
     hiddenUntilComplete = not not src.hiddenUntilComplete,
-    -- Profession milestones can "overwrite" previous tiers via ProfessionTracker
+    -- Profession milestones can "overwrite" previous tiers via addon.Profession
     hiddenByProfession = not not src.hiddenByProfession,
   }
 end
@@ -908,8 +913,8 @@ local function GetMostRecentCompletedSet(srcRows, maxCount)
   if not srcRows or type(srcRows) ~= "table" then return set, order end
 
   local _, cdb = nil, nil
-  if type(HardcoreAchievements_GetCharDB) == "function" then
-    _, cdb = HardcoreAchievements_GetCharDB()
+  if type(GetCharDB) == "function" then
+    _, cdb = GetCharDB()
   end
   if not (cdb and cdb.achievements) then return set, order end
 
@@ -1010,8 +1015,8 @@ local function CreateDashboardIcon(parent)
       self.Highlight:Show()
     end
     -- Use centralized tooltip function with source row directly
-    if _G.HCA_ShowAchievementTooltip and self.sourceRow then
-      _G.HCA_ShowAchievementTooltip(self, self.sourceRow)
+    if ShowAchievementTooltip and self.sourceRow then
+      ShowAchievementTooltip(self, self.sourceRow)
     end
   end)
   
@@ -1023,7 +1028,7 @@ local function CreateDashboardIcon(parent)
       -- Check if chat edit box is active/visible
       if editBox and editBox:IsVisible() then
         -- Chat edit box is active: link achievement (original behavior)
-        local bracket = _G.HCA_GetAchievementBracket and _G.HCA_GetAchievementBracket(self.achId) or string_format("[HCA:(%s)]", tostring(self.achId))
+        local bracket = GetAchievementBracket and GetAchievementBracket(self.achId) or string_format("[HCA:(%s)]", tostring(self.achId))
         local currentText = editBox:GetText() or ""
         if currentText == "" then
           editBox:SetText(bracket)
@@ -1033,7 +1038,6 @@ local function CreateDashboardIcon(parent)
         editBox:SetFocus()
       else
         -- Chat edit box is NOT active: track/untrack achievement
-        local AchievementTracker = _G.HardcoreAchievementsTracker
         if not AchievementTracker then
           print("|cffff0000[Hardcore Achievements]|r Achievement tracker not available. Please reload your UI (/reload).")
           return
@@ -1150,16 +1154,14 @@ function DASHBOARD:BuildClassicGrid(srcRows)
       local shouldShow = false
       
       local isCompleted = data.completed == true
-      -- Use the global IsRowOutleveled function directly on the source row for accurate failure detection
       local isFailed = false
-      if _G.IsRowOutleveled and type(_G.IsRowOutleveled) == "function" then
-        isFailed = _G.IsRowOutleveled(srow)
+      if IsRowOutleveled and type(IsRowOutleveled) == "function" then
+        isFailed = IsRowOutleveled(srow)
       else
-        -- Fallback to data.outleveled if global function not available
         isFailed = data.outleveled or false
       end
       local isAvailable = not isCompleted and not isFailed
-      
+
       -- Status filters (Completed/Available/Failed) were previously controlled by the dropdown.
       -- Tabs replace the dropdown, so for now default to showing all statuses.
       local showCompleted, showAvailable, showFailed = true, true, true
@@ -1216,12 +1218,10 @@ function DASHBOARD:BuildClassicGrid(srcRows)
         end
 
         -- Set icon appearance based on status
-        -- Use the global IsRowOutleveled function directly on the source row for accurate failure detection
         local isFailed = false
-        if _G.IsRowOutleveled and type(_G.IsRowOutleveled) == "function" then
-          isFailed = _G.IsRowOutleveled(srow)
+        if IsRowOutleveled and type(IsRowOutleveled) == "function" then
+          isFailed = IsRowOutleveled(srow)
         else
-          -- Fallback to data.outleveled if global function not available
           isFailed = data.outleveled or false
         end
 
@@ -1291,7 +1291,7 @@ local function CreateDashboardModernRow(parent, srow)
     local achId = srow.achId or srow.id
     local level = srow.maxLevel or 0
     local points = srow.points or 0
-    local def = srow._def or (_G.HCA_AchievementDefs and _G.HCA_AchievementDefs[achId])
+    local def = srow._def or (addon and addon.AchievementDefs and addon.AchievementDefs[achId])
     
     -- icon
     row.Icon = row:CreateTexture(nil, "ARTWORK")
@@ -1438,8 +1438,8 @@ local function CreateDashboardModernRow(parent, srow)
             self.highlight:SetVertexColor(1, 1, 1, 0.75)
         end
         self.highlight:Show()
-        if _G.HCA_ShowAchievementTooltip then
-            _G.HCA_ShowAchievementTooltip(self, self)
+        if ShowAchievementTooltip then
+            ShowAchievementTooltip(self, self)
         end
     end)
     
@@ -1455,7 +1455,7 @@ local function CreateDashboardModernRow(parent, srow)
             -- Check if chat edit box is active/visible
             if editBox and editBox:IsVisible() then
                 -- Chat edit box is active: link achievement (original behavior)
-                local bracket = _G.HCA_GetAchievementBracket and _G.HCA_GetAchievementBracket(self.achId) or string_format("[HCA:(%s)]", tostring(self.achId))
+                local bracket = GetAchievementBracket and GetAchievementBracket(self.achId) or string_format("[HCA:(%s)]", tostring(self.achId))
                 local currentText = editBox:GetText() or ""
                 if currentText == "" then
                     editBox:SetText(bracket)
@@ -1465,7 +1465,6 @@ local function CreateDashboardModernRow(parent, srow)
                 editBox:SetFocus()
             else
                 -- Chat edit box is NOT active: track/untrack achievement
-                local AchievementTracker = _G.HardcoreAchievementsTracker
                 if not AchievementTracker then
                     print("|cffff0000[Hardcore Achievements]|r Achievement tracker not available. Please reload your UI (/reload).")
                     return
@@ -1507,7 +1506,7 @@ local function CreateDashboardModernRow(parent, srow)
     -- Store reference to source row
     row._achId = achId
     row._title = title
-    row._def = def or (srow and srow._def) or (_G.HCA_AchievementDefs and _G.HCA_AchievementDefs[achId])
+    row._def = def or (srow and srow._def) or (addon and addon.AchievementDefs and addon.AchievementDefs[achId])
     row._tooltip = tooltip
     row._zone = zone
     row._def = def
@@ -1551,7 +1550,7 @@ local function UpdateDashboardModernRow(row, srow)
     local points = srow.points or 0
     local level = srow.maxLevel or 0
     local achId = srow.achId or srow.id
-    local def = srow._def or (_G.HCA_AchievementDefs and _G.HCA_AchievementDefs[achId])
+    local def = srow._def or (addon and addon.AchievementDefs and addon.AchievementDefs[achId])
     
     if row.Icon then row.Icon:SetTexture(iconTex) end
     if row.Title then row.Title:SetText(title) end
@@ -1602,8 +1601,8 @@ local function UpdateDashboardModernRow(row, srow)
     
     -- Update timestamp display based on completion or failure state
     if row.TS then
-        if row.completed and type(HardcoreAchievements_GetCharDB) == "function" then
-            local _, cdb = HardcoreAchievements_GetCharDB()
+        if row.completed and type(GetCharDB) == "function" then
+            local _, cdb = GetCharDB()
             local achKey = tostring(achId or "")
             if achKey ~= "" and cdb and cdb.achievements and cdb.achievements[achKey] then
                 local timestamp = cdb.achievements[achKey].completedAt
@@ -1617,11 +1616,11 @@ local function UpdateDashboardModernRow(row, srow)
             end
         elseif IsRowOutleveled(row) then
             local failedAt = nil
-            if _G.HCA_GetFailureTimestamp then
-                failedAt = _G.HCA_GetFailureTimestamp(tostring(achId or ""))
+            if addon and addon.GetFailureTimestamp then
+                failedAt = addon.GetFailureTimestamp(tostring(achId or ""))
             end
-            if not failedAt and _G.HCA_EnsureFailureTimestamp then
-                failedAt = _G.HCA_EnsureFailureTimestamp(tostring(achId or ""))
+            if not failedAt and addon and addon.EnsureFailureTimestamp then
+                failedAt = addon.EnsureFailureTimestamp(tostring(achId or ""))
             end
             failedAt = failedAt or time()
             row.TS:SetText(FormatTimestampDashboard(failedAt))
@@ -1806,10 +1805,10 @@ local function IsSummaryDataReady(srcRows)
     end
   end
   if not hasAnyDef then return false end
-  if type(HardcoreAchievements_GetCharDB) ~= "function" then
+  if type(GetCharDB) ~= "function" then
     return false
   end
-  local _, cdb = HardcoreAchievements_GetCharDB()
+  local _, cdb = GetCharDB()
   if not (cdb and cdb.achievements) then
     return false
   end
@@ -1859,8 +1858,8 @@ local function UpdateDashboardProgressOverview(srcRows)
     return
   end
   local _, cdb = nil, nil
-  if type(HardcoreAchievements_GetCharDB) == "function" then
-    _, cdb = HardcoreAchievements_GetCharDB()
+  if type(GetCharDB) == "function" then
+    _, cdb = GetCharDB()
   end
   local achievements = cdb and cdb.achievements or {}
   if not achievements or next(achievements) == nil then
@@ -1918,16 +1917,16 @@ local function UpdateDashboardProgressOverview(srcRows)
     local c, t
     if key == "all" then
       -- Match addon-wide "core + completed misc" counts (same logic as points summary).
-      if _G.HCA_AchievementCount then
-        c, t = _G.HCA_AchievementCount()
+      if addon and addon.AchievementCount then
+        c, t = addon.AchievementCount()
       else
         c, t = GetCoreAchievementCountsFallback(srcRows)
       end
     elseif key == "profession" then
       -- Only count profession achievements for professions the player actually has.
-      -- (Profession rows exist for all professions; ProfessionTracker hides irrelevant ones.)
+      -- (Profession rows exist for all professions; addon.Profession hides irrelevant ones.)
       local completed, total = 0, 0
-      local hasSkillFn = _G.HCA_PlayerHasProfessionSkill
+      local hasSkillFn = PlayerHasSkill
       for _, row in ipairs(srcRows) do
         local def = row and row._def
         if def and def.isProfession == true then
@@ -2155,16 +2154,14 @@ function DASHBOARD:BuildModernRows(srcRows)
       local shouldShow = false
       
       local isCompleted = data.completed == true
-      -- Use the global IsRowOutleveled function directly on the source row for accurate failure detection
       local isFailed = false
-      if _G.IsRowOutleveled and type(_G.IsRowOutleveled) == "function" then
-        isFailed = _G.IsRowOutleveled(srow)
+      if IsRowOutleveled and type(IsRowOutleveled) == "function" then
+        isFailed = IsRowOutleveled(srow)
       else
-        -- Fallback to data.outleveled if global function not available
         isFailed = data.outleveled or false
       end
       local isAvailable = not isCompleted and not isFailed
-      
+
       -- Status filters (Completed/Available/Failed) were previously controlled by the dropdown.
       -- Tabs replace the dropdown, so for now default to showing all statuses.
       local showCompleted, showAvailable, showFailed = true, true, true
@@ -2207,12 +2204,11 @@ function DASHBOARD:BuildModernRows(srcRows)
   end
   
   -- Sort rows (failed to bottom, maintaining level order)
-  -- Get database access for timestamps
   local _, cdb = nil, nil
-  if type(HardcoreAchievements_GetCharDB) == "function" then
-    _, cdb = HardcoreAchievements_GetCharDB()
+  if type(GetCharDB) == "function" then
+    _, cdb = GetCharDB()
   end
-  
+
   table_sort(visibleRows, function(a, b)
     local aFailed = IsRowOutleveled(a)
     local bFailed = IsRowOutleveled(b)
@@ -2406,8 +2402,8 @@ end
 -- Function to update multiplier text
 -- Use centralized UpdateMultiplierText function from GetUHCPreset.lua
 local function UpdateDashboardMultiplierText()
-  if DashboardFrame and DashboardFrame.MultiplierText and _G.UpdateMultiplierText then
-    _G.UpdateMultiplierText(DashboardFrame.MultiplierText, {0.922, 0.871, 0.761})
+  if DashboardFrame and DashboardFrame.MultiplierText and UpdateMultiplierText then
+    UpdateMultiplierText(DashboardFrame.MultiplierText, {0.922, 0.871, 0.761})
   end
 end
 
@@ -2416,8 +2412,8 @@ local function UpdateTotalPointsText()
   if not DashboardFrame or not DashboardFrame.TotalPointsText then return end
   
   local totalPoints = 0
-  if _G.HCA_GetTotalPoints then
-    totalPoints = _G.HCA_GetTotalPoints()
+  if addon and addon.GetTotalPoints then
+    totalPoints = addon.GetTotalPoints()
   end
   
   -- Update the number text and its shadow
@@ -2436,8 +2432,8 @@ local function UpdateTotalPointsText()
 
   if DashboardFrame.CountsText then
     local completed, totalCount
-    if _G.HCA_AchievementCount then
-      completed, totalCount = _G.HCA_AchievementCount()
+    if addon and addon.AchievementCount then
+      completed, totalCount = addon.AchievementCount()
     end
     if completed and totalCount then
       DashboardFrame.CountsText:SetText(string_format(" (%d/%d)", completed or 0, totalCount or 0))
@@ -2520,10 +2516,9 @@ function DASHBOARD:Rebuild()
     end
   end
   
-  -- Sync solo mode checkbox state (for both modes)
   if DashboardFrame and DashboardFrame.SoloModeCheckbox then
-    if type(HardcoreAchievements_GetCharDB) == "function" then
-      local _, cdb = HardcoreAchievements_GetCharDB()
+    if type(GetCharDB) == "function" then
+      local _, cdb = GetCharDB()
       local isChecked = (cdb and cdb.settings and cdb.settings.soloAchievements) or false
       DashboardFrame.SoloModeCheckbox:SetChecked(isChecked)
       
@@ -2536,8 +2531,7 @@ function DASHBOARD:Rebuild()
         DashboardFrame.SoloModeCheckbox.tooltip = "|cffffffffSolo|r \nToggling this option on will display the total points you will receive if you complete this achievement solo (no help from nearby players)."
       else
         -- In Non-Hardcore mode, checkbox is only enabled if Self-Found is active
-        local isSelfFound = _G.IsSelfFound and _G.IsSelfFound() or false
-        if isSelfFound then
+        if IsSelfFound() then
           DashboardFrame.SoloModeCheckbox:Enable()
           DashboardFrame.SoloModeCheckbox.Text:SetTextColor(0.922, 0.871, 0.761, 1)
           DashboardFrame.SoloModeCheckbox.Text:SetText("SSF")
@@ -2562,6 +2556,7 @@ local function BuildDashboardFrame()
     local backdropTemplate = BackdropTemplateMixin and "BackdropTemplate" or nil
     DashboardFrame = CreateFrame("Frame", "HardcoreAchievementsDashboard", UIParent, backdropTemplate)
     tinsert(UISpecialFrames, "HardcoreAchievementsDashboard")
+    if addon then addon.DashboardFrame = DashboardFrame end
     DashboardFrame:SetSize(700, 640) -- +150px to make room for left-side tab panel
     DashboardFrame:SetPoint("CENTER", UIParent, "CENTER", 0, 30)
     DashboardFrame:SetMovable(true)
@@ -3098,8 +3093,8 @@ local function BuildDashboardFrame()
     
     -- Click handler to open Options panel
     DashboardFrame.SettingsButton:SetScript("OnClick", function(self)
-      if _G.HardcoreAchievements_OpenOptionsPanel then
-        _G.HardcoreAchievements_OpenOptionsPanel()
+      if addon and addon.OpenOptionsPanel then
+        addon.OpenOptionsPanel()
       end
     end)
     
@@ -3187,14 +3182,12 @@ local function BuildDashboardFrame()
     DashboardFrame.SoloModeCheckbox:SetScript("OnClick", function(self)
       if self:IsEnabled() then
         local isChecked = self:GetChecked()
-        if type(HardcoreAchievements_GetCharDB) == "function" then
-          local _, cdb = HardcoreAchievements_GetCharDB()
+        if type(GetCharDB) == "function" then
+          local _, cdb = GetCharDB()
           if cdb and cdb.settings then
             cdb.settings.soloAchievements = isChecked
             -- Refresh all achievement points immediately
-            if RefreshAllAchievementPoints then
-              RefreshAllAchievementPoints()
-            end
+            RefreshAllAchievementPoints()
             -- Update status text for all embed rows after solo mode toggle
             if DASHBOARD and DASHBOARD.rows then
               for _, row in ipairs(DASHBOARD.rows) do
@@ -3242,21 +3235,21 @@ local function BuildDashboardFrame()
     ApplyCustomCheckboxTextures(DashboardFrame.UseCharacterPanelCheckbox)
     
     -- Initialize checkbox state
-    local useCharacterPanel = _G.HCA_SharedUtils and _G.HCA_SharedUtils.GetSetting("useCharacterPanel", true) or true
+    local useCharacterPanel = (addon and addon.GetSetting) and addon.GetSetting("useCharacterPanel", true) or true
     DashboardFrame.UseCharacterPanelCheckbox:SetChecked(useCharacterPanel)
     
     -- Handle checkbox changes
     DashboardFrame.UseCharacterPanelCheckbox:SetScript("OnClick", function(self)
       local isChecked = self:GetChecked()
-      if _G.HCA_SharedUtils and _G.HCA_SharedUtils.SetUseCharacterPanel then
-        _G.HCA_SharedUtils.SetUseCharacterPanel(isChecked)
+      if addon and addon.SetUseCharacterPanel then
+        addon.SetUseCharacterPanel(isChecked)
       end
     end)
   end
 
   -- Apply saved state on initialization
-  if _G.HCA_SharedUtils and _G.HCA_SharedUtils.UpdateCharacterPanelTabVisibility then
-    _G.HCA_SharedUtils.UpdateCharacterPanelTabVisibility()
+  if addon and addon.UpdateCharacterPanelTabVisibility then
+    addon.UpdateCharacterPanelTabVisibility()
   end
 
   -- Only hook once to prevent duplicate scripts
@@ -3269,8 +3262,8 @@ local function BuildDashboardFrame()
       ApplyFilter()
       UpdateDashboardMultiplierText() -- Update multiplier text when frame is shown
       -- Sync UseCharacterPanel checkbox with current setting (in case it was changed elsewhere)
-      if DashboardFrame.UseCharacterPanelCheckbox and _G.HCA_SharedUtils then
-        local useCharacterPanel = _G.HCA_SharedUtils.GetSetting("useCharacterPanel", true)
+      if DashboardFrame.UseCharacterPanelCheckbox and (addon and addon.GetSetting) then
+        local useCharacterPanel = addon.GetSetting("useCharacterPanel", true)
         DashboardFrame.UseCharacterPanelCheckbox:SetChecked(useCharacterPanel)
       end
     end)
@@ -3317,13 +3310,13 @@ local function HookSourceSignals()
       end
     end)
   end
-  if type(CheckPendingCompletions) == "function" then
-    hooksecurefunc("CheckPendingCompletions", function()
+  if addon and addon.CheckPendingCompletions and type(addon.CheckPendingCompletions) == "function" then
+    hooksecurefunc(addon.CheckPendingCompletions, function()
       RequestRebuild()
     end)
   end
-  if type(HCA_UpdateTotalPoints) == "function" then
-    hooksecurefunc("HCA_UpdateTotalPoints", function()
+  if addon and addon.UpdateTotalPoints and type(addon.UpdateTotalPoints) == "function" then
+    hooksecurefunc(addon.UpdateTotalPoints, function()
       RequestRebuild()
     end)
   end
@@ -3362,8 +3355,7 @@ function DASHBOARD:Toggle()
   end
 end
 
--- Global function to show dashboard
-_G.HCA_ShowDashboard = function()
+local function ShowDashboard()
   DASHBOARD:Show()
 end
 
@@ -3380,5 +3372,7 @@ f:SetScript("OnEvent", function(self, event, addonName)
   end
 end)
 
--- Export DASHBOARD module
-HardcoreAchievements_Dashboard = DASHBOARD
+if addon then
+  addon.Dashboard = DASHBOARD
+  addon.ShowDashboard = ShowDashboard
+end

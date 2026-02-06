@@ -1,10 +1,16 @@
--- RefreshAllAchievementPoints.lua
--- Function to refresh all achievement points and status text from scratch
-
--- Localize frequently-used WoW API globals (micro-optimization, no behavior change)
-local _G = _G
+local addonName, addon = ...
+local C_GameRules = C_GameRules
+local C_Timer = C_Timer
 local UnitLevel = UnitLevel
-local time = time
+local math = math
+local GetPresetMultiplier = (addon and addon.GetPresetMultiplier)
+local UpdateMultiplierText = (addon and addon.UpdateMultiplierText)
+local IsSelfFound = (addon and addon.IsSelfFound)
+local tonumber = tonumber
+local pairs = pairs
+local type = type
+local ipairs = ipairs
+local tostring = tostring
 
 ---------------------------------------
 -- Helper Functions
@@ -29,7 +35,7 @@ local function CalculateAchievementPoints(row, preset, isSelfFound, isSoloMode, 
         finalPoints = tonumber(progress.pointsAtKill) or finalPoints
     elseif not staticPoints then
         -- Apply preset multiplier (replaces base points)
-        local multiplier = (_G.GetPresetMultiplier and _G.GetPresetMultiplier(preset)) or 1.0
+        local multiplier = GetPresetMultiplier(preset) or 1.0
         finalPoints = math.floor(originalPoints * multiplier + 0.5)
         
         -- Visual preview: if solo mode toggle is on and no stored points, show doubled points
@@ -45,7 +51,7 @@ local function CalculateAchievementPoints(row, preset, isSelfFound, isSoloMode, 
     -- Self-found bonus should be reflected in the displayed points (preview + stored),
     -- with a simple rule: 0-point achievements remain 0 (bonus computes to 0).
     if isSelfFound then
-        local getBonus = _G.HCA_GetSelfFoundBonus
+        local getBonus = addon and addon.GetSelfFoundBonus
         local bonus = (type(getBonus) == "function") and getBonus(originalPoints) or 0
         if bonus > 0 and finalPoints > 0 then
             finalPoints = finalPoints + bonus
@@ -110,10 +116,10 @@ local function UpdateRowStatusText(row, rowId, progress, isSelfFound, isSoloMode
     local requiresBoth = row.questTracker and row.killTracker
     
     -- Use helper function to set status text
-    if _G.HCA_SetStatusTextOnRow then
+    if SetStatusTextOnRow then
         local wasSolo = false
         if row.completed then
-            local getCharDB = _G.GetCharDB or _G.HardcoreAchievements_GetCharDB
+            local getCharDB = addon and addon.GetCharDB
             if getCharDB then
                 local _, cdb = getCharDB()
                 if cdb and cdb.achievements and rowId then
@@ -141,7 +147,7 @@ local function UpdateRowStatusText(row, rowId, progress, isSelfFound, isSoloMode
             end
         end
 
-        _G.HCA_SetStatusTextOnRow(row, {
+        SetStatusTextOnRow(row, {
             completed = row.completed or false,
             hasSoloStatus = hasSoloStatus,
             hasIneligibleKill = hasIneligibleKill,
@@ -177,30 +183,30 @@ end
 ---------------------------------------
 
 -- Function to refresh all achievement points from scratch
-function RefreshAllAchievementPoints()
-    local rows = _G.HCA_AchievementRowModel or {}
+local function RefreshAllAchievementPoints()
+    local rows = (addon and addon.AchievementRowModel) or {}
     if #rows == 0 then return end
 
     -- Re-entrancy guard: Meta achievement checkers (and other UI updaters) may request a refresh
     -- while a refresh is already running. Nested refresh calls cause infinite recursion and
     -- "script ran too long". Instead, coalesce into one extra refresh after this pass.
-    if _G.HCA_RefreshingPoints then
-        _G.HCA_PointsRefreshPending = true
+    if addon and addon.RefreshingPoints then
+        addon.PointsRefreshPending = true
         return
     end
-    _G.HCA_RefreshingPoints = true
+    if addon then addon.RefreshingPoints = true end
     
     -- Calculate shared values once at the top
-    local preset = (_G.GetPlayerPresetFromSettings and _G.GetPlayerPresetFromSettings()) or nil
-    local isSelfFound = (_G.IsSelfFound and _G.IsSelfFound()) or false
-    local isSoloMode = _G.HardcoreAchievements_IsSoloModeEnabled and _G.HardcoreAchievements_IsSoloModeEnabled() or false
+    local preset = (addon and addon.GetPlayerPresetFromSettings and addon.GetPlayerPresetFromSettings()) or nil
+    local isSoloMode = (addon and addon.IsSoloModeEnabled and addon.IsSoloModeEnabled()) or false
     local isHardcoreActive = C_GameRules and C_GameRules.IsHardcoreActive and C_GameRules.IsHardcoreActive() or false
-    local allowSoloBonus = isSelfFound or not isHardcoreActive
+    local allowSoloBonus = IsSelfFound() or not isHardcoreActive
 
     -- Build a fast lookup table for achievement definitions (by achId) once.
     local defById = {}
-    if _G.Achievements then
-        for _, def in ipairs(_G.Achievements) do
+    local achievementsList = (addon and addon.CatalogAchievements)
+    if achievementsList then
+        for _, def in ipairs(achievementsList) do
             if def and def.achId ~= nil then
                 defById[tostring(def.achId)] = def
             end
@@ -212,10 +218,10 @@ function RefreshAllAchievementPoints()
         local rowId = row.id or row.achId
         if rowId and not row.completed then
             -- Get progress once for this row
-            local progress = HardcoreAchievements_GetProgress and HardcoreAchievements_GetProgress(rowId)
+            local progress = addon and addon.GetProgress and addon.GetProgress(rowId)
             
             -- Calculate and set points
-            local finalPoints = CalculateAchievementPoints(row, preset, isSelfFound, isSoloMode, progress)
+            local finalPoints = CalculateAchievementPoints(row, preset, IsSelfFound(), isSoloMode, progress)
             
             row.points = finalPoints
             local frame = row.frame
@@ -227,21 +233,21 @@ function RefreshAllAchievementPoints()
             end
             
             -- Re-apply point-circle UI rules (e.g., 0-point shield icon) after recalculation
-            if frame and _G.HCA_UpdatePointsDisplay then
-                _G.HCA_UpdatePointsDisplay(frame)
+            if frame and addon and addon.UpdatePointsDisplay then
+                addon.UpdatePointsDisplay(frame)
             end
             
             -- Update Sub text - check if we have stored solo status or ineligible status from previous kills/quests
             -- Only update Sub text for incomplete achievements to preserve completed achievement solo indicators
             if frame and not row.completed then
-                UpdateRowStatusText(frame, rowId, progress, isSelfFound, isSoloMode, isHardcoreActive, allowSoloBonus, defById)
+                UpdateRowStatusText(frame, rowId, progress, IsSelfFound(), isSoloMode, isHardcoreActive, allowSoloBonus, defById)
             end
         end
     end
     
     -- Check meta achievements for completion
-    if _G.HCA_MetaAchievementCheckers then
-        for achId, checkFn in pairs(_G.HCA_MetaAchievementCheckers) do
+    if addon and addon.MetaAchievementCheckers then
+        for achId, checkFn in pairs(addon.MetaAchievementCheckers) do
             if type(checkFn) == "function" then
                 checkFn()
             end
@@ -249,17 +255,17 @@ function RefreshAllAchievementPoints()
     end
     
     -- Update total points
-    if HCA_UpdateTotalPoints then
-        HCA_UpdateTotalPoints()
+    if addon and addon.UpdateTotalPoints then
+        addon.UpdateTotalPoints()
     end
     
     -- Update multiplier text if it exists (using centralized function)
-    if AchievementPanel and AchievementPanel.MultiplierText and _G.UpdateMultiplierText then
-        _G.UpdateMultiplierText(AchievementPanel.MultiplierText)
+    if AchievementPanel and AchievementPanel.MultiplierText and UpdateMultiplierText then
+        UpdateMultiplierText(AchievementPanel.MultiplierText)
     end
     -- Update Dashboard multiplier text if it exists
-    if DashboardFrame and DashboardFrame.MultiplierText and _G.UpdateMultiplierText then
-        _G.UpdateMultiplierText(DashboardFrame.MultiplierText, {0.922, 0.871, 0.761})
+    if DashboardFrame and DashboardFrame.MultiplierText and UpdateMultiplierText then
+        UpdateMultiplierText(DashboardFrame.MultiplierText, {0.922, 0.871, 0.761})
     end
     
     -- Sync character panel checkbox state if it exists
@@ -267,16 +273,18 @@ function RefreshAllAchievementPoints()
         AchievementPanel.SoloModeCheckbox:SetChecked(isSoloMode)
     end
 
-    _G.HCA_RefreshingPoints = nil
-    if _G.HCA_PointsRefreshPending then
-        _G.HCA_PointsRefreshPending = nil
+    if addon then addon.RefreshingPoints = nil end
+    if addon and addon.PointsRefreshPending then
+        addon.PointsRefreshPending = nil
         C_Timer.After(0, function()
-            if not _G.HCA_RefreshingPoints then
+            if not (addon and addon.RefreshingPoints) then
                 RefreshAllAchievementPoints()
             end
         end)
     end
 end
 
-return RefreshAllAchievementPoints
+if addon then
+    addon.RefreshAllAchievementPoints = RefreshAllAchievementPoints
+end
 

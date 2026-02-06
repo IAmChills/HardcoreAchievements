@@ -3,8 +3,7 @@
 ---------------------------------------
 local DungeonSetCommon = {}
 
--- Localize frequently-used WoW API globals (micro-optimization, no behavior change)
-local _G = _G
+local addonName, addon = ...
 local GetItemInfo = GetItemInfo
 local GetItemCount = GetItemCount
 local UnitClass = UnitClass
@@ -17,8 +16,7 @@ local C_Timer = C_Timer
 ---------------------------------------
 
 -- Get item names from item IDs (you can expand this with a lookup table)
--- Export globally so tooltip function can use it
-function HCA_GetItemName(itemId)
+local function HCA_GetItemName(itemId)
   -- This is a basic mapping - you can expand this with more item names
   local itemNames = {
     -- Defias Set (Rogue)
@@ -329,7 +327,7 @@ function DungeonSetCommon.registerDungeonSetAchievement(def)
 
   -- Load progress from database
   local function LoadProgress()
-    local progress = HardcoreAchievements_GetProgress and HardcoreAchievements_GetProgress(achId)
+    local progress = addon and addon.GetProgress and addon.GetProgress(achId)
     if progress then
       state.completed = progress.completed or false
       -- Load item ownership state if stored
@@ -341,9 +339,9 @@ function DungeonSetCommon.registerDungeonSetAchievement(def)
   
   -- Save progress to database
   local function SaveProgress()
-    if HardcoreAchievements_SetProgress then
-      HardcoreAchievements_SetProgress(achId, "completed", state.completed)
-      HardcoreAchievements_SetProgress(achId, "itemOwned", state.itemOwned)
+    if addon and addon.SetProgress then
+      addon.SetProgress(achId, "completed", state.completed)
+      addon.SetProgress(achId, "itemOwned", state.itemOwned)
     end
   end
   
@@ -393,7 +391,7 @@ function DungeonSetCommon.registerDungeonSetAchievement(def)
   ---------------------------------------
 
   local function UpdateTooltip()
-    local row = _G[rowVarName]
+    local row = addon[rowVarName]
     if row then
       -- Store the base tooltip for the main tooltip
       local baseTooltip = tooltip or ""
@@ -402,8 +400,8 @@ function DungeonSetCommon.registerDungeonSetAchievement(def)
       -- UI is created lazily; only touch frame methods when the row frame exists
       local frame = row.frame
       if not frame then
-        if _G.HCA_AddRowUIInit then
-          _G.HCA_AddRowUIInit(row, function()
+        if addon and addon.AddRowUIInit then
+          addon.AddRowUIInit(row, function()
             C_Timer.After(0, UpdateTooltip)
           end)
         end
@@ -533,9 +531,9 @@ function DungeonSetCommon.registerDungeonSetAchievement(def)
     -- Check if achievement should be completed
     if CheckCompletion() then
       -- Mark achievement as completed in the row if it exists
-      local row = _G[rowVarName]
-      if row and _G.HCA_MarkRowCompleted then
-        _G.HCA_MarkRowCompleted(row)
+      local row = addon[rowVarName]
+      if row and addon and addon.MarkRowCompleted then
+        addon.MarkRowCompleted(row)
       end
       UpdateTooltip()
       return true
@@ -550,8 +548,8 @@ function DungeonSetCommon.registerDungeonSetAchievement(def)
   -- Tracker function is passed directly to CreateAchievementRow and stored on row
   
   -- Register functions in local registry to reduce global pollution
-  if _G.HardcoreAchievements_RegisterAchievementFunction then
-    _G.HardcoreAchievements_RegisterAchievementFunction(achId, "IsCompleted", function() 
+  if addon and addon.RegisterAchievementFunction then
+    addon.RegisterAchievementFunction(achId, "IsCompleted", function() 
       UpdateItemOwnership()
       return CheckCompletion()
     end)
@@ -595,9 +593,9 @@ function DungeonSetCommon.registerDungeonSetAchievement(def)
   -- Registration Logic
   ---------------------------------------
 
-  _G[registerFuncName] = function()
-    if not _G.CreateAchievementRow then return end
-    if _G[rowVarName] then return end
+  addon[registerFuncName] = function()
+    if not (addon and addon.CreateAchievementRow) then return end
+    if addon[rowVarName] then return end
     
     -- Check if player is eligible for this achievement
     if not IsEligible() then return end
@@ -609,7 +607,7 @@ function DungeonSetCommon.registerDungeonSetAchievement(def)
     -- Mark as dungeon set achievement (similar to isVariation for filtering)
     def.isDungeonSet = true
     
-    _G[rowVarName] = CreateAchievementRow(
+    addon[rowVarName] = addon.CreateAchievementRow(
       nil,
       achId,
       title,
@@ -626,7 +624,7 @@ function DungeonSetCommon.registerDungeonSetAchievement(def)
     
     -- Store requiredItems on the row for easy access
     if requiredItems and next(requiredItems) then
-      _G[rowVarName].requiredItems = requiredItems
+      addon[rowVarName].requiredItems = requiredItems
     end
     
     -- Update tooltip after creation to ensure it shows current progress
@@ -634,8 +632,8 @@ function DungeonSetCommon.registerDungeonSetAchievement(def)
   end
   
   -- Auto-register the achievement immediately if the panel is ready
-  if _G.CreateAchievementRow then
-    _G[registerFuncName]()
+  if addon and addon.CreateAchievementRow then
+    addon[registerFuncName]()
   end
   
   -- Create the event frame dynamically
@@ -645,14 +643,14 @@ function DungeonSetCommon.registerDungeonSetAchievement(def)
   eventFrame:SetScript("OnEvent", function()
     LoadProgress()
     UpdateItemOwnership()
-    _G[registerFuncName]()
+    addon[registerFuncName]()
   end)
   
   if _G.CharacterFrame and _G.CharacterFrame.HookScript then
     CharacterFrame:HookScript("OnShow", function()
       LoadProgress()
       UpdateItemOwnership()
-      _G[registerFuncName]()
+      addon[registerFuncName]()
     end)
   end
 end
@@ -661,5 +659,8 @@ end
 -- Module Export
 ---------------------------------------
 
-_G.DungeonSetCommon = DungeonSetCommon
+if addon then
+  addon.GetItemName = HCA_GetItemName
+  addon.DungeonSetCommon = DungeonSetCommon
+end
 

@@ -1,3 +1,4 @@
+local addonName, addon = ...
 local table_insert = table.insert
 
 local achievements = {
@@ -18,45 +19,44 @@ local achievements = {
 }
 
 -- Publish defs/trigger index immediately (so awarding works even if UI rows haven't been created yet).
-_G.HCA_GuildFirst_DefById = _G.HCA_GuildFirst_DefById or {}
-_G.HCA_GuildFirst_ByTrigger = _G.HCA_GuildFirst_ByTrigger or {}
-for _, def in ipairs(achievements) do
+if addon then
+  addon.GuildFirst_DefById = addon.GuildFirst_DefById or {}
+  addon.GuildFirst_ByTrigger = addon.GuildFirst_ByTrigger or {}
+  for _, def in ipairs(achievements) do
     def.isSecret = true
     def.isGuildFirst = true
-
-    _G.HCA_GuildFirst_DefById[def.achId] = def
+    addon.GuildFirst_DefById[def.achId] = def
     if def.triggerAchievementId then
-        local k = tostring(def.triggerAchievementId)
-        _G.HCA_GuildFirst_ByTrigger[k] = _G.HCA_GuildFirst_ByTrigger[k] or {}
-        table_insert(_G.HCA_GuildFirst_ByTrigger[k], def.achId)
+      local k = tostring(def.triggerAchievementId)
+      addon.GuildFirst_ByTrigger[k] = addon.GuildFirst_ByTrigger[k] or {}
+      table_insert(addon.GuildFirst_ByTrigger[k], def.achId)
     end
-end
+  end
+  addon.RegistrationQueue = addon.RegistrationQueue or {}
+  local queue = addon.RegistrationQueue
+  local CreateAchievementRow = addon.CreateAchievementRow
+  local AchievementPanel = addon.AchievementPanel
 
--- Register all achievements
-for _, def in ipairs(achievements) do
-    _G.HCA_RegistrationQueue = _G.HCA_RegistrationQueue or {}
-    
-    table_insert(_G.HCA_RegistrationQueue, function()
-        if not _G.CreateAchievementRow or not _G.AchievementPanel then
-            return
-        end
-
-        -- Store the row in a global so GuildFirst module can award it without scanning.
-        local globalName = "HCA_GuildFirst_" .. def.achId .. "_Row"
-        _G[globalName] = CreateAchievementRow(
-            AchievementPanel,
-            def.achId,
-            def.title,
-            def.tooltip,
-            def.icon,
-            def.level,
-            def.points or 0,
-            nil,
-            nil,
-            def.staticPoints,
-            def.zone,
-            def
+  for _, def in ipairs(achievements) do
+    table_insert(queue, function()
+      if CreateAchievementRow and AchievementPanel then
+        local row = CreateAchievementRow(
+          AchievementPanel,
+          def.achId,
+          def.title,
+          def.tooltip,
+          def.icon,
+          def.level,
+          def.points or 0,
+          nil,
+          nil,
+          def.staticPoints,
+          def.zone,
+          def
         )
+        addon["GuildFirst_" .. def.achId .. "_Row"] = row
+      end
     end)
+  end
 end
 

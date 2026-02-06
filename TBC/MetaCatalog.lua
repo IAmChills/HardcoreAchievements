@@ -1,8 +1,9 @@
 ---------------------------------------
 -- Meta Achievement Definitions (TBC)
 ---------------------------------------
--- Note: MetaCommon should be loaded before this file (via .toc) and exports via _G.MetaCommon
+-- Note: MetaCommon should be loaded before this file (via .toc) and exports via addon.MetaCommon
 
+local addonName, addon = ...
 local table_insert = table.insert
 
 ---------------------------------------
@@ -211,19 +212,20 @@ local MetaAchievements = {
 ---------------------------------------
 
 -- Defer registration until PLAYER_LOGIN to prevent load timeouts
-_G.HCA_RegistrationQueue = _G.HCA_RegistrationQueue or {}
-
--- Queue all meta achievements for deferred registration
-for _, meta in ipairs(MetaAchievements) do
-    table_insert(_G.HCA_RegistrationQueue, function()
-        if _G.MetaCommon and _G.MetaCommon.registerMetaAchievement then
-            -- For QuestMeta, set achievements list at registration time
-            if meta.achId == "QuestMeta" then
-                local questAchievements = GetQuestMasterAchievements()
-                meta.requiredAchievements = questAchievements
-                meta.achievementOrder = questAchievements
-            end
-            _G.MetaCommon.registerMetaAchievement(meta)
+if addon then
+  addon.RegistrationQueue = addon.RegistrationQueue or {}
+  local queue = addon.RegistrationQueue
+  local MetaCommon = addon and addon.MetaCommon
+  if MetaCommon and MetaCommon.registerMetaAchievement then
+    for _, meta in ipairs(MetaAchievements) do
+      table_insert(queue, function()
+        if meta.achId == "QuestMeta" then
+          local questAchievements = GetQuestMasterAchievements()
+          meta.requiredAchievements = questAchievements
+          meta.achievementOrder = questAchievements
         end
-    end)
+        MetaCommon.registerMetaAchievement(meta)
+      end)
+    end
+  end
 end

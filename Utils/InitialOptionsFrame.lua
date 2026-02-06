@@ -8,8 +8,8 @@ local CHECKBOX_TEXTURE_NORMAL = "Interface\\AddOns\\HardcoreAchievements\\Images
 local CHECKBOX_TEXTURE_ACTIVE = "Interface\\AddOns\\HardcoreAchievements\\Images\\box_active.png"
 local TITLE_COLOR = { 0.922, 0.871, 0.761 }
 
--- Localize frequently-used WoW API globals (micro-optimization, no behavior change)
-local _G = _G
+local addonName, addon = ...
+local GetCharDB = addon and addon.GetCharDB
 local UnitClass = UnitClass
 local CreateFrame = CreateFrame
 
@@ -65,8 +65,8 @@ local function ApplyCustomCheckboxTextures(checkbox)
 end
 
 local function getSetting(name, default)
-    if type(HardcoreAchievements_GetCharDB) ~= "function" then return default end
-    local _, cdb = HardcoreAchievements_GetCharDB()
+    if type(GetCharDB) ~= "function" then return default end
+    local _, cdb = GetCharDB()
     if cdb and cdb.settings and cdb.settings[name] ~= nil then
         return cdb.settings[name]
     end
@@ -74,8 +74,8 @@ local function getSetting(name, default)
 end
 
 local function setSetting(name, value)
-    if type(HardcoreAchievements_GetCharDB) ~= "function" then return end
-    local _, cdb = HardcoreAchievements_GetCharDB()
+    if type(GetCharDB) ~= "function" then return end
+    local _, cdb = GetCharDB()
     if cdb then
         cdb.settings = cdb.settings or {}
         cdb.settings[name] = value
@@ -234,11 +234,11 @@ local function CreateInitialOptionsFrame()
         local isChecked = self:GetChecked()
         setSetting("useCharacterPanel", isChecked)
         setSetting("showCustomTab", isChecked)
-        if _G.HCA_SharedUtils and _G.HCA_SharedUtils.UpdateCharacterPanelTabVisibility then
-            _G.HCA_SharedUtils.UpdateCharacterPanelTabVisibility()
+        if addon and addon.UpdateCharacterPanelTabVisibility then
+            addon.UpdateCharacterPanelTabVisibility()
         end
         -- Sync Dashboard checkbox if it exists (so Dashboard stays in sync when open)
-        local dashboardFrame = _G.HardcoreAchievementsDashboard
+        local dashboardFrame = addon and addon.DashboardFrame
         if dashboardFrame and dashboardFrame.UseCharacterPanelCheckbox then
             dashboardFrame.UseCharacterPanelCheckbox:SetChecked(isChecked)
         end
@@ -250,16 +250,17 @@ local function CreateInitialOptionsFrame()
     doneBtn:SetPoint("BOTTOM", frame, "BOTTOM", 0, 16)
     doneBtn:SetText("Save and Close")
     doneBtn:SetScript("OnClick", function()
-        if type(HardcoreAchievements_GetCharDB) == "function" then
-            local _, cdb = HardcoreAchievements_GetCharDB()
+        if type(GetCharDB) == "function" then
+            local _, cdb = GetCharDB()
             if cdb then
                 cdb.settings = cdb.settings or {}
                 cdb.settings.initialSetupDone = true
             end
         end
         frame:Hide()
-        if _HardcoreAchievementsOptionsPanel and _HardcoreAchievementsOptionsPanel.refresh then
-            _HardcoreAchievementsOptionsPanel:refresh()
+        local opts = addon and addon.OptionsPanel
+        if opts and opts.refresh then
+            opts:refresh()
         end
     end)
 
@@ -267,12 +268,16 @@ local function CreateInitialOptionsFrame()
     return frame
 end
 
-function HardcoreAchievements_ShowInitialOptionsIfNeeded()
-    if type(HardcoreAchievements_GetCharDB) ~= "function" then return end
-    local _, cdb = HardcoreAchievements_GetCharDB()
+local function ShowInitialOptionsIfNeeded()
+    if type(GetCharDB) ~= "function" then return end
+    local _, cdb = GetCharDB()
     if not cdb then return end
     cdb.settings = cdb.settings or {}
     if cdb.settings.initialSetupDone == true then return end
     local frame = CreateInitialOptionsFrame()
     frame:Show()
+end
+
+if addon then
+    addon.ShowInitialOptionsIfNeeded = ShowInitialOptionsIfNeeded
 end

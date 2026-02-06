@@ -1,14 +1,18 @@
+local addonName, addon = ...
 local REQUIRED_MAP_ID = 48 -- Blackfathom Deeps map id
 local MAX_LEVEL = 30
 
+local ClassColor = (addon and addon.GetClassColor)
 local achId = "FourCandle"
 local title = "Four Candles"
-local tooltip = "Light all four candles at once within " .. HCA_SharedUtils.GetClassColor() .. "Blackfathom Deeps|r and survive before any party member reaches level 31"
+local tooltip = "Light all four candles at once within " .. ClassColor .. "Blackfathom Deeps|r and survive before any party member reaches level 31"
 local icon = 133750
 local level = MAX_LEVEL
 local points = 25
 local targetNpcId = nil
-local requiredQuestId = _G.FourCandle
+local REQUIRED_QUEST_ID = 971  -- Quest ID for Four Candles (export on addon for other modules if needed)
+if addon then addon.FourCandle = REQUIRED_QUEST_ID end
+local requiredQuestId = REQUIRED_QUEST_ID
 local staticPoints = false
 local zone = "Blackfathom Deeps"
 
@@ -110,7 +114,7 @@ local function IsPartyInCombat()
   return false
 end
 
-function FourCandle(destGUID)
+local function FourCandle(destGUID)
   if not IsOnRequiredMap() then return false end
 
   -- Allow counting if player is feigning/Stealthing or party is in combat
@@ -151,12 +155,15 @@ f:SetScript("OnEvent", function(_, event)
   end
 end)
 
--- Four Candles self-registration (kept minimal)
-_G.FourCandle_IsCompleted = function() return false end
+-- Register custom IsCompleted (always false) so main addon's EvaluateCustomCompletions can resolve it
+if addon and addon.RegisterCustomAchievement then
+  addon.RegisterCustomAchievement(achId, FourCandle, function() return false end)
+end
 
 -- Expose this definition so chat link tooltips can resolve details
-_G.HCA_AchievementDefs = _G.HCA_AchievementDefs or {}
-_G.HCA_AchievementDefs[tostring(achId)] = {
+if addon then
+  addon.AchievementDefs = addon.AchievementDefs or {}
+  addon.AchievementDefs[tostring(achId)] = {
   achId = achId,
   title = title,
   tooltip = tooltip,
@@ -164,11 +171,12 @@ _G.HCA_AchievementDefs[tostring(achId)] = {
   points = points,
   zone = zone,
   mapID = REQUIRED_MAP_ID,
-}
+  }
+end
 
 local function HCA_RegisterFourCandles()
-  if not _G.CreateAchievementRow or not _G.AchievementPanel then return end
-  if _G.FourCandle_Row then return end
+  if not addon or not addon.CreateAchievementRow or not addon.AchievementPanel then return end
+  if addon and addon.FourCandle_Row then return end
 
   -- Create def object with isDungeon flag so it shows with dungeons
   local def = {
@@ -176,8 +184,8 @@ local function HCA_RegisterFourCandles()
     excludeFromCount = true,  -- Exclude from total count
   }
 
-  _G.FourCandle_Row = CreateAchievementRow(
-    AchievementPanel,
+  if addon then addon.FourCandle_Row = addon.CreateAchievementRow(
+    addon.AchievementPanel,
     achId,
     title,
     tooltip,
@@ -189,7 +197,7 @@ local function HCA_RegisterFourCandles()
     staticPoints,
     zone,
     def
-  )
+  ) end
 end
 
 local fc_reg = CreateFrame("Frame")
@@ -199,6 +207,6 @@ fc_reg:SetScript("OnEvent", function()
   HCA_RegisterFourCandles()
 end)
 
-if _G.CharacterFrame and _G.CharacterFrame.HookScript then
+if CharacterFrame and CharacterFrame.HookScript then
   CharacterFrame:HookScript("OnShow", HCA_RegisterFourCandles)
 end

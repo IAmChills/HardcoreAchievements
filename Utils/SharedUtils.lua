@@ -1,11 +1,7 @@
--- HCA_SharedUtils.lua
--- Shared utility functions used across multiple files in the Hardcore Achievements addon
--- This reduces code duplication and centralizes common logic
-
 HCA_SharedUtils = {}
 
--- Localize frequently-used WoW API globals (micro-optimization, no behavior change)
-local _G = _G
+local addonName, addon = ...
+local UnitBuff = UnitBuff
 local UnitClass = UnitClass
 local GetClassColor = GetClassColor
 local CreateFrame = CreateFrame
@@ -15,9 +11,9 @@ local CreateFrame = CreateFrame
 -- =========================================================
 
 -- Get a setting value from character database
-function HCA_SharedUtils.GetSetting(settingName, defaultValue)
-    if type(HardcoreAchievements_GetCharDB) == "function" then
-        local _, cdb = HardcoreAchievements_GetCharDB()
+local function GetSetting(settingName, defaultValue)
+    if addon and type(addon.GetCharDB) == "function" then
+        local _, cdb = addon.GetCharDB()
         if cdb and cdb.settings then
             local value = cdb.settings[settingName]
             if value ~= nil then
@@ -29,9 +25,9 @@ function HCA_SharedUtils.GetSetting(settingName, defaultValue)
 end
 
 -- Set a setting value in character database
-function HCA_SharedUtils.SetSetting(settingName, value)
-    if type(HardcoreAchievements_GetCharDB) == "function" then
-        local _, cdb = HardcoreAchievements_GetCharDB()
+local function SetSetting(settingName, value)
+    if addon and type(addon.GetCharDB) == "function" then
+        local _, cdb = addon.GetCharDB()
         if cdb then
             cdb.settings = cdb.settings or {}
             cdb.settings[settingName] = value
@@ -55,7 +51,7 @@ local function InitializeClassColor()
     return cachedClassColor
 end
 
-function HCA_SharedUtils.GetClassColor()
+local function GetClassColor()
     -- Return cached value, initializing if needed
     if not cachedClassColor then
         InitializeClassColor()
@@ -78,12 +74,12 @@ end)
 -- =========================================================
 
 -- Get the Character Frame achievement tab
-function HCA_SharedUtils.GetAchievementTab()
+local function GetAchievementTab()
     return _G["CharacterFrameTab" .. (CharacterFrame.numTabs + 1)]
 end
 
 -- Check if tab is the achievement tab
-function HCA_SharedUtils.IsAchievementTab(tab)
+local function IsAchievementTab(tab)
     if not tab or not tab.GetText then return false end
     local tabText = tab:GetText()
     if not tabText then return false end
@@ -91,32 +87,32 @@ function HCA_SharedUtils.IsAchievementTab(tab)
 end
 
 -- Show or hide the Character Panel achievement tab based on useCharacterPanel setting
-function HCA_SharedUtils.UpdateCharacterPanelTabVisibility()
+local function UpdateCharacterPanelTabVisibility()
     -- Get the actual Tab frame directly (more reliable than searching by name)
     local tab = nil
-    if type(_G.HardcoreAchievements_GetTab) == "function" then
-        tab = _G.HardcoreAchievements_GetTab()
+    if addon and type(addon.GetTab) == "function" then
+        tab = addon.GetTab()
     end
     
     -- Fallback to finding by name if getter not available
     if not tab then
-        tab = HCA_SharedUtils.GetAchievementTab()
-        if not tab or not HCA_SharedUtils.IsAchievementTab(tab) then 
+        tab = GetAchievementTab()
+        if not tab or not IsAchievementTab(tab) then 
             -- Tab not found, but still call LoadTabPosition which will handle it
-            if type(_G.HardcoreAchievements_LoadTabPosition) == "function" then
-                _G.HardcoreAchievements_LoadTabPosition()
+            if addon and type(addon.LoadTabPosition) == "function" then
+                addon.LoadTabPosition()
             end
             return 
         end
     end
     
-    local useCharacterPanel = HCA_SharedUtils.GetSetting("useCharacterPanel", true)
+    local useCharacterPanel = GetSetting("useCharacterPanel", true)
     
     if useCharacterPanel then
         -- Show custom tab (Character Panel mode) - LoadTabPosition will handle the actual showing
         -- Also restore vertical tab if it was in vertical mode
-        if type(_G.HardcoreAchievements_LoadTabPosition) == "function" then
-            _G.HardcoreAchievements_LoadTabPosition()
+        if addon and type(addon.LoadTabPosition) == "function" then
+            addon.LoadTabPosition()
         end
     else
         -- Hide custom tab (Dashboard mode) - hide immediately
@@ -129,31 +125,47 @@ function HCA_SharedUtils.UpdateCharacterPanelTabVisibility()
             end
         end
         -- Also hide vertical tab immediately
-        if type(_G.HardcoreAchievements_HideVerticalTab) == "function" then
-            _G.HardcoreAchievements_HideVerticalTab()
+        if addon and type(addon.HideVerticalTab) == "function" then
+            addon.HideVerticalTab()
         end
     end
 end
 
 -- Set useCharacterPanel setting and update tab visibility
-function HCA_SharedUtils.SetUseCharacterPanel(enabled)
-    HCA_SharedUtils.SetSetting("useCharacterPanel", enabled)
+local function SetUseCharacterPanel(enabled)
+    SetSetting("useCharacterPanel", enabled)
     
     -- Sync showCustomTab with useCharacterPanel to keep them in sync
-    if type(HardcoreAchievements_GetCharDB) == "function" then
-        local _, cdb = HardcoreAchievements_GetCharDB()
+    if addon and type(addon.GetCharDB) == "function" then
+        local _, cdb = addon.GetCharDB()
         if cdb then
             cdb.settings = cdb.settings or {}
             cdb.settings.showCustomTab = enabled
         end
     end
     
-    HCA_SharedUtils.UpdateCharacterPanelTabVisibility()
+    UpdateCharacterPanelTabVisibility()
     
     -- Reload tab position only when enabling (positioning). When disabling, we already hid it directly.
-    if enabled and type(_G.HardcoreAchievements_LoadTabPosition) == "function" then
-        _G.HardcoreAchievements_LoadTabPosition()
+    if enabled and addon and type(addon.LoadTabPosition) == "function" then
+        addon.LoadTabPosition()
     end
+end
+
+-- =========================================================
+-- Self Found: returns true if player has Self-Found buff, else false.
+-- Other files: local IsSelfFound = addon.IsSelfFound; call IsSelfFound() for true/false.
+-- =========================================================
+
+local function IsSelfFound()
+    for i = 1, 40 do
+        local name, _, _, _, _, _, _, _, _, spellId = UnitBuff("player", i)
+        if not name then break end
+        if spellId == 431567 or name == "Self-Found Adventurer" then
+            return true
+        end
+    end
+    return false
 end
 
 -- =========================================================
@@ -165,12 +177,11 @@ end
 -- Parameters:
 --   def: The achievement definition table (from Catalog files)
 --   overrides: Optional table of field overrides (e.g., { level = nil } for raids)
-function HCA_SharedUtils.RegisterAchievementDef(def, overrides)
-    if not def or not def.achId then
+local function RegisterAchievementDef(def, overrides)
+    if not def or not def.achId or not addon then
         return
     end
-    
-    _G.HCA_AchievementDefs = _G.HCA_AchievementDefs or {}
+    addon.AchievementDefs = addon.AchievementDefs or {}
     
     -- Build the definition entry with all common fields
     local achDef = {
@@ -212,5 +223,17 @@ function HCA_SharedUtils.RegisterAchievementDef(def, overrides)
         end
     end
     
-    _G.HCA_AchievementDefs[tostring(def.achId)] = achDef
+    addon.AchievementDefs[tostring(def.achId)] = achDef
+end
+
+---------------------------------------
+-- Export: internal (addon)
+---------------------------------------
+if addon then
+    addon.GetSetting = GetSetting
+    addon.GetClassColor = GetClassColor
+    addon.UpdateCharacterPanelTabVisibility = UpdateCharacterPanelTabVisibility
+    addon.SetUseCharacterPanel = SetUseCharacterPanel
+    addon.RegisterAchievementDef = RegisterAchievementDef
+    addon.IsSelfFound = IsSelfFound
 end

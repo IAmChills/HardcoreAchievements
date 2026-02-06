@@ -1,13 +1,15 @@
 ---------------------------------------
 -- Meta Achievement Common Module
 ---------------------------------------
+local addonName, addon = ...
+local RefreshAllAchievementPoints = (addon and addon.RefreshAllAchievementPoints)
 local MetaCommon = {}
 
 ---------------------------------------
 -- Registration Function
 ---------------------------------------
 
-function MetaCommon.registerMetaAchievement(def)
+local function registerMetaAchievement(def)
   local achId = def.achId
   local title = def.title
   local tooltip = def.tooltip
@@ -17,7 +19,8 @@ function MetaCommon.registerMetaAchievement(def)
   local achievementOrder = def.achievementOrder -- Optional ordering for tooltip display
 
   -- Expose this definition for external lookups (e.g., chat link tooltips)
-  HCA_SharedUtils.RegisterAchievementDef({
+  if addon and addon.RegisterAchievementDef then
+    addon.RegisterAchievementDef({
     achId = achId,
     title = title,
     tooltip = tooltip,
@@ -27,6 +30,7 @@ function MetaCommon.registerMetaAchievement(def)
     achievementOrder = achievementOrder,
     isMetaAchievement = true,
   })
+  end
   
   -- Meta achievements only allow solo bonuses when hardcore is active (self-found buff)
   -- Set allowSoloDouble on def to control this behavior
@@ -48,7 +52,7 @@ function MetaCommon.registerMetaAchievement(def)
 
   -- Load progress from database on initialization
   local function LoadProgress()
-    local progress = HardcoreAchievements_GetProgress(achId)
+    local progress = addon and addon.GetProgress and addon.GetProgress(achId)
     -- Check if already completed in previous session
     if progress and progress.completed then
       state.completed = true
@@ -58,17 +62,17 @@ function MetaCommon.registerMetaAchievement(def)
   -- Save progress to database
   local function SaveProgress()
     if state.completed then
-      HardcoreAchievements_SetProgress(achId, "completed", true)
+      if addon and addon.SetProgress then addon.SetProgress(achId, "completed", true) end
     end
   end
 
   -- Find an achievement row by achievement ID
   local function FindAchievementRow(reqAchId)
-    if not _G.AchievementPanel or not _G.AchievementPanel.achievements then
+    if not addon or not addon.AchievementPanel or not addon.AchievementPanel.achievements then
       return nil
     end
     
-    for _, row in ipairs(_G.AchievementPanel.achievements) do
+    for _, row in ipairs(addon.AchievementPanel.achievements) do
       local rowId = row.id or row.achId
       if rowId and tostring(rowId) == tostring(reqAchId) then
         return row
@@ -85,7 +89,7 @@ function MetaCommon.registerMetaAchievement(def)
 
     for _, reqAchId in ipairs(requiredAchievements) do
       local row = FindAchievementRow(reqAchId)
-      if row and _G.IsRowOutleveled and _G.IsRowOutleveled(row) then
+      if row and addon and addon.IsRowOutleveled and addon.IsRowOutleveled(row) then
         return true
       end
     end
@@ -100,7 +104,7 @@ function MetaCommon.registerMetaAchievement(def)
     end
 
     for _, reqAchId in ipairs(requiredAchievements) do
-      local progress = HardcoreAchievements_GetProgress(reqAchId)
+      local progress = addon and addon.GetProgress and addon.GetProgress(reqAchId)
       if not progress or not progress.completed then
         return false
       end
@@ -111,8 +115,8 @@ function MetaCommon.registerMetaAchievement(def)
 
   -- Mark meta achievement as failed
   local function MarkAsFailed()
-    if _G.HCA_EnsureFailureTimestamp then
-      _G.HCA_EnsureFailureTimestamp(achId)
+    if addon and addon.EnsureFailureTimestamp then
+      addon.EnsureFailureTimestamp(achId)
     end
   end
 
@@ -120,29 +124,27 @@ function MetaCommon.registerMetaAchievement(def)
   local function UpdateUI(row)
     if not row then return end
     
-    if _G.UpdatePointsDisplay then
-      _G.UpdatePointsDisplay(row)
+    if addon and addon.UpdatePointsDisplay then
+      addon.UpdatePointsDisplay(row)
     end
     -- IMPORTANT: don't call RefreshAllAchievementPoints() directly here.
     -- RefreshAllAchievementPoints() itself calls meta checkers, which call UpdateUI again.
     -- Direct calls cause infinite recursion and "script ran too long".
-    if _G.HCA_Initializing then
+    if addon and addon.Initializing then
       return
     end
 
     -- If a refresh is already running, mark pending; otherwise schedule one refresh on the next frame.
-    if _G.HCA_RefreshingPoints then
-      _G.HCA_PointsRefreshPending = true
+    if addon and addon.RefreshingPoints then
+      addon.PointsRefreshPending = true
       return
     end
 
-    if _G.RefreshAllAchievementPoints and not _G.HCA_PointsRefreshScheduled then
-      _G.HCA_PointsRefreshScheduled = true
+    if RefreshAllAchievementPoints and addon and not addon.PointsRefreshScheduled then
+      addon.PointsRefreshScheduled = true
       C_Timer.After(0, function()
-        _G.HCA_PointsRefreshScheduled = nil
-        if _G.RefreshAllAchievementPoints then
-          _G.RefreshAllAchievementPoints()
-        end
+        addon.PointsRefreshScheduled = nil
+        RefreshAllAchievementPoints()
       end)
     end
   end
@@ -183,7 +185,7 @@ function MetaCommon.registerMetaAchievement(def)
   local function MetaTracker()
     -- Check completion on any event (this will be called periodically)
     if CheckComplete() then
-      local row = _G[rowVarName]
+      local row = addon and addon.MetaRows and addon.MetaRows[rowVarName]
       if row and not row.completed then
         row.completed = true
         UpdateUI(row)
@@ -196,23 +198,24 @@ function MetaCommon.registerMetaAchievement(def)
   -- Registration Logic
   ---------------------------------------
 
-  _G[registerFuncName] = function()
-    if not _G.CreateAchievementRow then return end
-    if _G[rowVarName] then return end
-    
+  local function doRegister()
+    if not addon or not addon.CreateAchievementRow or not addon.AchievementPanel then return end
+    addon.MetaRows = addon.MetaRows or {}
+    if addon.MetaRows[rowVarName] then return end
+
     -- Load progress from database
     LoadProgress()
-    
+
     -- Check completion before creating row
     CheckComplete()
-    
+
     -- Set meta flag on def
     local metaDef = def or {}
     metaDef.isMeta = true
-    
+
     -- Create the achievement row (meta achievements don't need level or questTracker)
-    _G[rowVarName] = CreateAchievementRow(
-      AchievementPanel,
+    addon.MetaRows[rowVarName] = addon.CreateAchievementRow(
+      addon.AchievementPanel,
       achId,
       title,
       tooltip,
@@ -225,52 +228,58 @@ function MetaCommon.registerMetaAchievement(def)
       nil,  -- zone
       metaDef  -- Pass def with isMeta flag
     )
-    
+
     -- Store requiredAchievements on the row for tooltip access
-    if requiredAchievements and #requiredAchievements > 0 then
-      _G[rowVarName].requiredAchievements = requiredAchievements
-      _G[rowVarName].achievementOrder = achievementOrder
+    local row = addon.MetaRows[rowVarName]
+    if row and requiredAchievements and #requiredAchievements > 0 then
+      row.requiredAchievements = requiredAchievements
+      row.achievementOrder = achievementOrder
     end
-    
+
     -- Refresh points with multipliers after creation
-    if not _G.HCA_Initializing and RefreshAllAchievementPoints then
+    if not (addon and addon.Initializing) and RefreshAllAchievementPoints then
       RefreshAllAchievementPoints()
     end
-    
+
     -- Check completion initially and store checker function
     CheckComplete()
-    
-    -- Store checker function globally so it can be called when achievements refresh
-    if not _G.HCA_MetaAchievementCheckers then
-      _G.HCA_MetaAchievementCheckers = {}
-    end
-    _G.HCA_MetaAchievementCheckers[achId] = function()
-      local row = _G[rowVarName]
-      if not row or row.completed then
-        return
-      end
-      
-      -- Check if any required achievement is failed
-      if AnyRequiredAchievementFailed() then
-        MarkAsFailed()
-        UpdateUI(row)
-      elseif CheckComplete() then
-        -- All required achievements completed
-        row.completed = true
-        UpdateUI(row)
+
+    -- Store checker function on addon so it can be called when achievements refresh
+    if addon then
+      addon.MetaAchievementCheckers = addon.MetaAchievementCheckers or {}
+      addon.MetaAchievementCheckers[achId] = function()
+        local r = addon.MetaRows and addon.MetaRows[rowVarName]
+        if not r or r.completed then
+          return
+        end
+
+        if AnyRequiredAchievementFailed() then
+          MarkAsFailed()
+          UpdateUI(r)
+        elseif CheckComplete() then
+          r.completed = true
+          UpdateUI(r)
+        end
       end
     end
   end
-  
+
+  if addon then
+    addon[registerFuncName] = doRegister
+  end
+
   -- Auto-register the achievement immediately if the panel is ready
-  if _G.CreateAchievementRow then
-    _G[registerFuncName]()
+  if addon and addon.CreateAchievementRow then
+    doRegister()
   end
 end
+
+MetaCommon.registerMetaAchievement = registerMetaAchievement
 
 ---------------------------------------
 -- Module Export
 ---------------------------------------
 
-_G.MetaCommon = MetaCommon
-return MetaCommon
+if addon then
+  addon.MetaCommon = MetaCommon
+end

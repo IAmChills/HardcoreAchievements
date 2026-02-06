@@ -1,16 +1,8 @@
--- PlayerIsSolo.lua
 -- Solo-detection using threat + lightweight combat-log correlation.
 -- Allows target dummies / hunter/warlock pets / Dog Whistle etc., but disqualifies
 -- meaningful help from other PLAYERS. Nameplates are NOT required.
 
----------------------------------------
--- Configuration
----------------------------------------
-local OTHER_PLAYER_THREAT_THRESHOLD = 10  -- % threat from grouped players to fail
-local PLAYER_SOLO_THREAT_THRESHOLD  = 90  -- % threat you must maintain (unless mob is a non-player)
-local HELPER_TIMEOUT_SEC            = 8   -- seconds to remember recent player helpers vs your current target
-
--- Localize frequently-used WoW API globals (micro-optimization, no behavior change)
+local addonName, addon = ...
 local UnitGUID = UnitGUID
 local GetTime = GetTime
 local UnitExists = UnitExists
@@ -27,6 +19,13 @@ local UnitIsTapDenied = UnitIsTapDenied
 local UnitAffectingCombat = UnitAffectingCombat
 local UnitCanAttack = UnitCanAttack
 local CreateFrame = CreateFrame
+
+---------------------------------------
+-- Configuration
+---------------------------------------
+local OTHER_PLAYER_THREAT_THRESHOLD = 10  -- % threat from grouped players to fail
+local PLAYER_SOLO_THREAT_THRESHOLD  = 90  -- % threat you must maintain (unless mob is a non-player)
+local HELPER_TIMEOUT_SEC            = 8   -- seconds to remember recent player helpers vs your current target
 
 ---------------------------------------
 -- Internal state (helpers per mob GUID)
@@ -295,10 +294,7 @@ local function CheckSoloStatusForGUID(targetGUID)
     return true
 end
 
----------------------------------------
--- Public API: PlayerIsSolo() - checks current target
----------------------------------------
-function PlayerIsSolo()
+local function PlayerIsSolo()
     local mobUnit = "target"
 
     if UnitExists(mobUnit)
@@ -356,10 +352,7 @@ function PlayerIsSolo()
     return true
 end
 
----------------------------------------
--- Public API: Get stored solo status for a GUID (used at kill time)
----------------------------------------
-function PlayerIsSoloForGUID(targetGUID)
+local function PlayerIsSoloForGUID(targetGUID)
     if not targetGUID then return nil end
     
     local status = soloStatusByGUID[targetGUID]
@@ -376,10 +369,7 @@ function PlayerIsSoloForGUID(targetGUID)
     return nil
 end
 
----------------------------------------
--- Public API: Update solo status for a GUID (called during combat)
----------------------------------------
-function PlayerIsSolo_UpdateStatusForGUID(targetGUID)
+local function PlayerIsSolo_UpdateStatusForGUID(targetGUID)
     if not targetGUID then return end
     
     -- Only update if target exists and matches GUID
@@ -410,15 +400,15 @@ end
 ---------------------------------------
 -- Event frame: register handlers
 ---------------------------------------
-local _PlayerIsSolo_EventFrame = _PlayerIsSolo_EventFrame or CreateFrame("Frame")
-_PlayerIsSolo_EventFrame:UnregisterAllEvents() -- avoid duplicates on reloads
-_PlayerIsSolo_EventFrame:RegisterEvent("COMBAT_LOG_EVENT_UNFILTERED")
-_PlayerIsSolo_EventFrame:RegisterEvent("UNIT_THREAT_SITUATION_UPDATE")
-_PlayerIsSolo_EventFrame:RegisterEvent("UNIT_THREAT_LIST_UPDATE")
-_PlayerIsSolo_EventFrame:RegisterEvent("PLAYER_REGEN_ENABLED")  -- leave combat
-_PlayerIsSolo_EventFrame:RegisterEvent("PLAYER_ENTERING_WORLD") -- zone loads
+local PlayerIsSolo_EventFrame = PlayerIsSolo_EventFrame or CreateFrame("Frame")
+PlayerIsSolo_EventFrame:UnregisterAllEvents() -- avoid duplicates on reloads
+PlayerIsSolo_EventFrame:RegisterEvent("COMBAT_LOG_EVENT_UNFILTERED")
+PlayerIsSolo_EventFrame:RegisterEvent("UNIT_THREAT_SITUATION_UPDATE")
+PlayerIsSolo_EventFrame:RegisterEvent("UNIT_THREAT_LIST_UPDATE")
+PlayerIsSolo_EventFrame:RegisterEvent("PLAYER_REGEN_ENABLED")  -- leave combat
+PlayerIsSolo_EventFrame:RegisterEvent("PLAYER_ENTERING_WORLD") -- zone loads
 
-_PlayerIsSolo_EventFrame:SetScript("OnEvent", function(_, event, ...)
+PlayerIsSolo_EventFrame:SetScript("OnEvent", function(_, event, ...)
     if event == "COMBAT_LOG_EVENT_UNFILTERED" then
         OnCombatLogEvent()
         UpdateSoloStatusForCurrentTarget()
@@ -445,12 +435,8 @@ _PlayerIsSolo_EventFrame:SetScript("OnEvent", function(_, event, ...)
     end
 end)
 
--- Optional: expose a tiny debug helper (comment out for release)
--- /dump _PlayerIsSolo_Debug()
-function _PlayerIsSolo_Debug()
-    local tGUID = UnitGUID("target")
-    return {
-        targetGUID = tGUID,
-        helpers = tGUID and helpersByTarget[tGUID] or nil,
-    }
+if addon then
+    addon.PlayerIsSolo = PlayerIsSolo
+    addon.PlayerIsSoloForGUID = PlayerIsSoloForGUID
+    addon.PlayerIsSolo_UpdateStatusForGUID = PlayerIsSolo_UpdateStatusForGUID
 end

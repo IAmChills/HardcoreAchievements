@@ -27,11 +27,14 @@ if not LibP2PDB then return end
 local TABLE_NAME = "Claims"
 local databases = {}  -- [scopeKey] = { db = DBHandle, prefix = string, discoverTicker = ticker }
 
-local M = {}
-_G.HCA_GuildFirst = M
+local addonName, addon = ...
+local MarkRowCompleted = addon and addon.MarkRowCompleted
+local ApplyFilter = addon and addon.ApplyFilter
+local DebugPrint = addon and addon.DebugPrint
+local ShowAchievementWindow = addon and (addon.ShowAchievementWindow or addon.ShowAchievementTab)
 
--- Localize frequently-used WoW API globals (micro-optimization, no behavior change)
-local _G = _G
+local M = {}
+
 local UnitGUID = UnitGUID
 local UnitName = UnitName
 local UnitExists = UnitExists
@@ -139,9 +142,8 @@ local function CreateGuildFirstToast()
 
     f:EnableMouse(true)
     f:SetScript("OnMouseUp", function(_, button)
-        if button == "LeftButton" and (_G.ShowHardcoreAchievementWindow or _G.HCA_ShowAchievementTab) then
-            if _G.ShowHardcoreAchievementWindow then _G.ShowHardcoreAchievementWindow()
-            else _G.HCA_ShowAchievementTab() end
+        if button == "LeftButton" and ShowAchievementWindow then
+            ShowAchievementWindow()
         end
     end)
 
@@ -196,8 +198,8 @@ local function GetGuildName()
 end
 
 local function Debug(msg)
-    if type(_G.HCA_DebugPrint) == "function" then
-        _G.HCA_DebugPrint("[GuildFirst] " .. tostring(msg))
+    if type(DebugPrint) == "function" then
+        DebugPrint("[GuildFirst] " .. tostring(msg))
     end
 end
 
@@ -277,10 +279,10 @@ local function GetScopeKey(scope)
 end
 
 local function FindRowByAchId(achId)
-    if not _G.AchievementPanel or not _G.AchievementPanel.achievements then
+    if not (addon and addon.AchievementPanel and addon.AchievementPanel.achievements) then
         return nil
     end
-    for _, row in ipairs(_G.AchievementPanel.achievements) do
+    for _, row in ipairs(addon.AchievementPanel.achievements) do
         if tostring(row.id or row.achId or "") == tostring(achId) then
             return row
         end
@@ -296,8 +298,9 @@ local function GetGuildFirstDef(achId, row)
     if row and row._def and row._def.isGuildFirst then
         return row._def
     end
-    if _G.HCA_GuildFirst_DefById then
-        return _G.HCA_GuildFirst_DefById[tostring(achId)]
+    local defById = addon and addon.GuildFirst_DefById
+    if defById then
+        return defById[tostring(achId)]
     end
     return nil
 end
@@ -350,7 +353,7 @@ end
 --- True if the given claim record includes the current player as a winner.
 --- @param rec table?
 --- @return boolean
-function M:IsWinnerRecord(rec)
+local function IsWinnerRecord(self, rec)
     local myGUID = UnitGUID("player") or ""
     return RecordIncludesGUID(rec, myGUID)
 end
@@ -459,9 +462,9 @@ local function EnsureDBForScope(scopeKey)
                         -- Mark row completed when we receive the claim (e.g. from sync or broadcast).
                         -- Do NOT show toast here: onChange also fires on load/relog when we ImportDatabase,
                         -- so we only show the toast in CanClaimAndAward when we actually just claimed.
-                        local row = _G["HCA_GuildFirst_" .. tostring(key) .. "_Row"] or FindRowByAchId(tostring(key))
-                        if row and not row.completed and type(_G.HCA_MarkRowCompleted) == "function" then
-                            _G.HCA_MarkRowCompleted(row)
+                        local row = (addon and addon["GuildFirst_" .. tostring(key) .. "_Row"]) or FindRowByAchId(tostring(key))
+                        if row and not row.completed and type(MarkRowCompleted) == "function" then
+                            MarkRowCompleted(row)
                         end
                     else
                         Debug("Received claim update: Achievement '" .. tostring(key) .. "' claimed by " .. tostring(data.winnerName or "?") .. " - not eligible (silent fail)")
@@ -470,9 +473,9 @@ local function EnsureDBForScope(scopeKey)
                     Debug("Received claim update: Achievement '" .. tostring(key) .. "' claim removed")
                 end
                 
-                if type(_G.HCA_ApplyFilter) == "function" then
+                if type(ApplyFilter) == "function" then
                     C_Timer.After(0.1, function()
-                        _G.HCA_ApplyFilter()
+                        ApplyFilter()
                     end)
                 end
             end,
@@ -480,7 +483,7 @@ local function EnsureDBForScope(scopeKey)
     end)
 
     -- Load persisted state
-    local root = _G.HardcoreAchievementsDB
+    local root = addon and addon.HardcoreAchievementsDB
     if root and root.guildFirst and root.guildFirst[scopeKey] and root.guildFirst[scopeKey].state then
         Debug("Loading persisted state for scope: " .. tostring(scopeKey))
         pcall(function()
@@ -512,7 +515,7 @@ local function EnsureDBForScope(scopeKey)
     if not databases[scopeKey].saveTicker then
         databases[scopeKey].saveTicker = C_Timer.NewTicker(60.0, function()
             if databases[scopeKey] and databases[scopeKey].db then
-                local root = _G.HardcoreAchievementsDB or {}
+                local root = (addon and addon.HardcoreAchievementsDB) or {}
                 root.guildFirst = root.guildFirst or {}
                 local dbState = LibP2PDB:ExportDatabase(databases[scopeKey].db)
                 if dbState then
@@ -572,7 +575,7 @@ end
 --- @param achievementId string
 --- @param row table? Optional achievement row (to determine scope)
 --- @return boolean isClaimed, table? winnerRecord
-function M:IsClaimed(achievementId, row)
+local function IsClaimed(self, achievementId, row)
     achievementId = tostring(achievementId)
     local scope = GetAchievementScope(row, achievementId)
     local scopeKey = GetScopeKey(scope)
@@ -606,7 +609,7 @@ end
 --- @param achievementId string
 --- @param row table? Optional achievement row (to determine scope)
 --- @return boolean isClaimedByMe
-function M:IsClaimedByMe(achievementId, row)
+local function IsClaimedByMe(self, achievementId, row)
     local scope = GetAchievementScope(row, achievementId)
     local scopeKey = GetScopeKey(scope)
     if not scopeKey then
@@ -631,7 +634,7 @@ end
 --- @param row table? Optional achievement row (will find if not provided, also used to determine scope)
 --- @param winnersGUIDs string? Optional ';' delimited GUID list for multi-winner claims (e.g. a raid)
 --- @return boolean awarded
-function M:CanClaimAndAward(achievementId, row, winnersGUIDs)
+local function CanClaimAndAward(self, achievementId, row, winnersGUIDs)
     achievementId = tostring(achievementId or "")
     if achievementId == "" then
         Debug("CanClaimAndAward: Empty achievement ID")
@@ -640,9 +643,9 @@ function M:CanClaimAndAward(achievementId, row, winnersGUIDs)
 
     Debug("CanClaimAndAward(" .. achievementId .. "): Starting claim attempt")
 
-    -- Get row if not provided (check global first; catalog stores row there so we can award/toast even if panel scan misses it)
+    -- Get row if not provided (catalog stores row on addon or legacy global)
     if not row then
-        row = _G["HCA_GuildFirst_" .. achievementId .. "_Row"] or FindRowByAchId(achievementId)
+        row = (addon and addon["GuildFirst_" .. achievementId .. "_Row"]) or FindRowByAchId(achievementId)
         if row then
             Debug("CanClaimAndAward(" .. achievementId .. "): Found achievement row")
         else
@@ -700,7 +703,7 @@ function M:CanClaimAndAward(achievementId, row, winnersGUIDs)
         
         -- Save immediately after claiming (don't wait for periodic save)
         if databases[scopeKey] then
-            local root = _G.HardcoreAchievementsDB or {}
+            local root = (addon and addon.HardcoreAchievementsDB) or {}
             root.guildFirst = root.guildFirst or {}
             local dbState = LibP2PDB:ExportDatabase(db)
             if dbState then
@@ -717,9 +720,9 @@ function M:CanClaimAndAward(achievementId, row, winnersGUIDs)
 
     -- Award the achievement (row may be a UI frame or the model/data if panel wasn't built yet)
     if RecordIncludesGUID(claim, myGUID) then
-        if row and type(_G.HCA_MarkRowCompleted) == "function" and not row.completed then
+        if row and type(MarkRowCompleted) == "function" and not row.completed then
             Debug("CanClaimAndAward(" .. achievementId .. "): Awarding achievement to player")
-            _G.HCA_MarkRowCompleted(row)
+            MarkRowCompleted(row)
         end
         -- Always show guild-first toast when we're a winner (use row or def so we show even when row is nil)
         local def = GetGuildFirstDef(achievementId, row)
@@ -739,12 +742,12 @@ end
 --- Data-driven trigger: claim + award using the catalog definition (or overrides).
 --- @param guildFirstAchId string
 --- @param opts table? { winnersGUIDs?: string, awardMode?: string, requireSameGuild?: boolean }
-function M:Trigger(guildFirstAchId, opts)
+local function Trigger(self, guildFirstAchId, opts)
     guildFirstAchId = tostring(guildFirstAchId or "")
     if guildFirstAchId == "" then return false end
 
     opts = opts or {}
-    local row = _G["HCA_GuildFirst_" .. guildFirstAchId .. "_Row"] or FindRowByAchId(guildFirstAchId)
+    local row = (addon and addon["GuildFirst_" .. guildFirstAchId .. "_Row"]) or FindRowByAchId(guildFirstAchId)
     local def = GetGuildFirstDef(guildFirstAchId, row)
 
     local awardMode = opts.awardMode or (def and def.awardMode) or "solo"
@@ -758,7 +761,7 @@ function M:Trigger(guildFirstAchId, opts)
         winnersGUIDs = BuildWinnersGUIDList(awardMode, requireSameGuild)
     end
 
-    return self:CanClaimAndAward(guildFirstAchId, row, winnersGUIDs, nil)
+    return self:CanClaimAndAward(guildFirstAchId, row, winnersGUIDs)
 end
 
 -- Initialize databases on login/guild events (lazy initialization per scope)
@@ -789,23 +792,36 @@ local function OnAchievementCompleted(achievementData)
     local triggerId = tostring(achievementData.achievementId or "")
     if triggerId == "" then return end
 
-    local idx = _G.HCA_GuildFirst_ByTrigger
+    local idx = addon and addon.GuildFirst_ByTrigger
     if not idx then return end
 
     local list = idx[triggerId]
     if type(list) ~= "table" then return end
 
     for _, gfAchId in ipairs(list) do
-        local row = _G["HCA_GuildFirst_" .. tostring(gfAchId) .. "_Row"] or FindRowByAchId(tostring(gfAchId))
+        local id = tostring(gfAchId)
+        local row = (addon and addon["GuildFirst_" .. id .. "_Row"]) or FindRowByAchId(id)
         local def = GetGuildFirstDef(gfAchId, row)
         local awardMode = (def and def.awardMode) or "solo"
         local requireSameGuild = DefaultRequireSameGuild(def)
         local winnersGUIDs = BuildWinnersGUIDList(awardMode, requireSameGuild)
-        M:CanClaimAndAward(tostring(gfAchId), row, winnersGUIDs)
+        M:CanClaimAndAward(id, row, winnersGUIDs)
     end
 end
 
-if _G.HardcoreAchievements_Hooks and _G.HardcoreAchievements_Hooks.HookScript then
-    _G.HardcoreAchievements_Hooks:HookScript("OnAchievement", OnAchievementCompleted)
+-- Assign local functions to module (no globals)
+M.IsWinnerRecord = IsWinnerRecord
+M.IsClaimed = IsClaimed
+M.IsClaimedByMe = IsClaimedByMe
+M.CanClaimAndAward = CanClaimAndAward
+M.Trigger = Trigger
+
+if addon then
+    addon.GuildFirst = M
+end
+
+local Hooks = addon and addon.Hooks
+if Hooks and Hooks.HookScript then
+    Hooks:HookScript("OnAchievement", OnAchievementCompleted)
 end
 

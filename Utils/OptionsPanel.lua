@@ -1,18 +1,16 @@
--- OptionsPanel.lua
--- Options panel for Hardcore Achievements addon
-
-local ADDON_NAME = "HardcoreAchievements"
+local addonName, addon = ...
+local GetCharDB = addon and addon.GetCharDB
 
 -- Load AceSerializer (still needed for old format fallback)
 local AceSerialize = LibStub("AceSerializer-3.0")
 
 -- Use the standalone encoding functions from DataEncoding.lua
--- HCA_EncodeData and HCA_DecodeData are available globally after DataEncoding.lua loads
+-- EncodeData and DecodeData are available globally after DataEncoding.lua loads
 
 -- Helper function to get settings
 local function GetSetting(settingName, defaultValue)
-    if type(HardcoreAchievements_GetCharDB) == "function" then
-        local _, cdb = HardcoreAchievements_GetCharDB()
+    if type(GetCharDB) == "function" then
+        local _, cdb = GetCharDB()
         if cdb and cdb.settings then
             local value = cdb.settings[settingName]
             if value ~= nil then
@@ -25,8 +23,8 @@ end
 
 -- Helper function to set settings
 local function SetSetting(settingName, value)
-    if type(HardcoreAchievements_GetCharDB) == "function" then
-        local _, cdb = HardcoreAchievements_GetCharDB()
+    if type(GetCharDB) == "function" then
+        local _, cdb = GetCharDB()
         if cdb then
             cdb.settings = cdb.settings or {}
             cdb.settings[settingName] = value
@@ -34,11 +32,10 @@ local function SetSetting(settingName, value)
     end
 end
 
--- Helper function to check if screenshots are disabled
--- This will be called before Screenshot() in HardcoreAchievements.lua
-function HardcoreAchievements_ShouldTakeScreenshot()
-    if type(HardcoreAchievements_GetCharDB) == "function" then
-        local _, cdb = HardcoreAchievements_GetCharDB()
+-- Helper function to check if screenshots are disabled (called before Screenshot in HardcoreAchievements.lua)
+local function ShouldTakeScreenshot()
+    if type(GetCharDB) == "function" then
+        local _, cdb = GetCharDB()
         if cdb and cdb.settings and cdb.settings.disableScreenshots then
             return false
         end
@@ -47,9 +44,9 @@ function HardcoreAchievements_ShouldTakeScreenshot()
 end
 
 -- Helper function to check if solo achievements mode is enabled
-function HardcoreAchievements_IsSoloModeEnabled()
-    if type(HardcoreAchievements_GetCharDB) == "function" then
-        local _, cdb = HardcoreAchievements_GetCharDB()
+local function IsSoloModeEnabled()
+    if type(GetCharDB) == "function" then
+        local _, cdb = GetCharDB()
         if cdb and cdb.settings and cdb.settings.soloAchievements then
             return true
         end
@@ -58,9 +55,9 @@ function HardcoreAchievements_IsSoloModeEnabled()
 end
 
 -- Helper function to check if award on kill is enabled
-function HardcoreAchievements_IsAwardOnKillEnabled()
-    if type(HardcoreAchievements_GetCharDB) == "function" then
-        local _, cdb = HardcoreAchievements_GetCharDB()
+local function IsAwardOnKillEnabled()
+    if type(GetCharDB) == "function" then
+        local _, cdb = GetCharDB()
         if cdb and cdb.settings and cdb.settings.awardOnKill then
             return true
         end
@@ -69,11 +66,10 @@ function HardcoreAchievements_IsAwardOnKillEnabled()
 end
 
 -- Helper function to check if achievements should be announced in guild chat (default: true)
-function HardcoreAchievements_ShouldAnnounceInGuildChat()
-    if type(HardcoreAchievements_GetCharDB) == "function" then
-        local _, cdb = HardcoreAchievements_GetCharDB()
+local function ShouldAnnounceInGuildChat()
+    if type(GetCharDB) == "function" then
+        local _, cdb = GetCharDB()
         if cdb and cdb.settings then
-            -- Default to true; only false when explicitly set to false
             if cdb.settings.announceInGuildChat == false then
                 return false
             end
@@ -468,7 +464,7 @@ local function CreateBackupRestoreFrame()
         end
         
         -- Try to decode and deserialize
-        local success, data = HCA_DecodeData(text)
+        local success, data = addon.DecodeData(text)
         if not success then
             -- Fallback: try old format (non-encoded) for backward compatibility
             local oldSuccess, oldData = AceSerialize:Deserialize(text)
@@ -489,7 +485,7 @@ local function CreateBackupRestoreFrame()
         end
         
         -- Import the entire database structure
-        if _G.HardcoreAchievementsDB then
+        if addon and addon.HardcoreAchievementsDB then
             -- Deep copy function
             local function DeepCopy(orig)
                 local orig_type = type(orig)
@@ -507,7 +503,7 @@ local function CreateBackupRestoreFrame()
             end
             
             -- Replace the entire database with imported data
-            _G.HardcoreAchievementsDB = DeepCopy(data)
+            addon.HardcoreAchievementsDB = DeepCopy(data)
             
             print("|cff00ff00Hardcore Achievements:|r Database imported successfully! All characters and settings have been restored.")
             print("|cffffd100Hardcore Achievements:|r Reloading UI...")
@@ -533,7 +529,7 @@ end
 -- Function to export database
 local function ExportDatabase()
     -- Access the full database structure
-    if not _G.HardcoreAchievementsDB then
+    if not addon or not addon.HardcoreAchievementsDB then
         print("|cffff0000Hardcore Achievements:|r No database found.")
         return
     end
@@ -554,10 +550,10 @@ local function ExportDatabase()
         return copy
     end
     
-    local exportData = DeepCopy(_G.HardcoreAchievementsDB)
+    local exportData = DeepCopy(addon.HardcoreAchievementsDB)
     
     -- Serialize, compress, and encode the data
-    local encoded = HCA_EncodeData(exportData)
+    local encoded = addon.EncodeData(exportData)
     
     -- Show the unified backup/restore frame with Backup tab active
     local frame = CreateBackupRestoreFrame()
@@ -659,8 +655,8 @@ local function CreateOptionsPanel()
     resetTabButton:SetWidth(220)
     resetTabButton:SetHeight(25)
     resetTabButton:SetScript("OnClick", function(self)
-        if type(_G.ResetTabPosition) == "function" then
-            _G.ResetTabPosition()
+        if addon and type(addon.ResetTabPosition) == "function" then
+            addon.ResetTabPosition()
         end
     end)
     AddTooltipToCheckbox(resetTabButton, "Used to reset the position of the Achievements tab in case it's hidden")
@@ -767,16 +763,7 @@ local function CreateOptionsPanel()
     
     -- Store category in addon table (similar to BugSack pattern)
     -- Access addon table from global namespace
-    local addon = _G[ADDON_NAME]
-    if not addon then
-        -- Create addon table if it doesn't exist
-        addon = {}
-        _G[ADDON_NAME] = addon
-    end
     addon.settingsCategory = category
-    
-    -- Also store globally as backup
-    _HardcoreAchievementsOptionsCategory = category
     
     return panel
 end
@@ -784,12 +771,17 @@ end
 -- Initialize the options panel when the addon loads
 local optionsPanel = CreateOptionsPanel()
 
--- Global reference for external access if needed
-_HardcoreAchievementsOptionsPanel = optionsPanel
-
--- Global function to open backup/restore frame
-function HardcoreAchievements_ShowBackupRestore()
+local function ShowBackupRestore()
     local frame = CreateBackupRestoreFrame()
     SwitchTab("Backup")
     ExportDatabase()
+end
+
+if addon then
+    addon.ShouldTakeScreenshot = ShouldTakeScreenshot
+    addon.IsSoloModeEnabled = IsSoloModeEnabled
+    addon.IsAwardOnKillEnabled = IsAwardOnKillEnabled
+    addon.ShouldAnnounceInGuildChat = ShouldAnnounceInGuildChat
+    addon.ShowBackupRestore = ShowBackupRestore
+    addon.OptionsPanel = optionsPanel
 end

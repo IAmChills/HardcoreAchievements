@@ -1,4 +1,3 @@
--- IsGroupEligibleForAchievement.lua
 -- Checks if the player's group is eligible for an achievement based on level requirements
 -- Uses threat system to allow kills even with overleveled players nearby,
 -- as long as NO overleveled player (party or non-party) has >10% threat (scaled or raw)
@@ -12,9 +11,24 @@
 -- Configuration
 local OTHER_PLAYER_THREAT_THRESHOLD = 10  -- % threat from overleveled players to fail (if ANY has >10% threat, disqualify)
 
+local addonName, addon = ...
+local IsInRaid = IsInRaid
+local UnitExists = UnitExists
+local UnitLevel = UnitLevel
+local UnitIsPlayer = UnitIsPlayer
+local UnitInParty = UnitInParty
+local UnitInRaid = UnitInRaid
+local GetNumGroupMembers = GetNumGroupMembers
+local UnitDetailedThreatSituation = UnitDetailedThreatSituation
+local UnitTokenFromGUID = UnitTokenFromGUID
+local UnitAffectingCombat = UnitAffectingCombat
+local UnitCanAttack = UnitCanAttack
+local UnitGUID = UnitGUID
+local UnitIsUnit = UnitIsUnit
+local UnitInRange = UnitInRange
 local table_insert = table.insert
 
-function IsGroupEligibleForAchievement(MAX_LEVEL, ACH_ID, destGUID)
+local function IsGroupEligibleForAchievement(MAX_LEVEL, ACH_ID, destGUID)
     -- If in a raid, not eligible
     if IsInRaid() then
         return false
@@ -387,4 +401,8 @@ function IsGroupEligibleForAchievement(MAX_LEVEL, ACH_ID, destGUID)
 
     -- All checks passed: no overleveled party OR non-party player is meaningfully helping
     return true
+end
+
+if addon then
+    addon.IsGroupEligibleForAchievement = IsGroupEligibleForAchievement
 end

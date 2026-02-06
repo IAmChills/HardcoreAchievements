@@ -17,13 +17,11 @@
 local AceComm = LibStub("AceComm-3.0")
 local AceSerialize = LibStub("AceSerializer-3.0")
 
-local CharacterInspection = {}
 local INSPECTION_COMM_PREFIX = "HCA_Inspect" -- AceComm prefix for inspection requests
 local INSPECTION_RESPONSE_PREFIX = "HCA_InspectResp" -- AceComm prefix for inspection responses
 local INSPECTION_DATA_PREFIX = "HCA_InspectData" -- AceComm prefix for achievement data
 
--- Localize frequently-used WoW API globals (micro-optimization, no behavior change)
-local _G = _G
+local addonName, addon = ...
 local UnitLevel = UnitLevel
 local UnitName = UnitName
 local UnitIsPlayer = UnitIsPlayer
@@ -37,6 +35,8 @@ local wipe = wipe
 local hooksecurefunc = hooksecurefunc
 local IsShiftKeyDown = IsShiftKeyDown
 local ChatEdit_GetActiveWindow = ChatEdit_GetActiveWindow
+local ShowAchievementTooltip = (addon and addon.ShowAchievementTooltip)
+local GetAchievementBracket = (addon and addon.GetAchievementBracket)
 local table_insert = table.insert
 local table_sort = table.sort
 local table_concat = table.concat
@@ -322,8 +322,6 @@ local function ClearInspectionAchievementRows(statusText, statusColor)
     end
 end
 
-CharacterInspection.ClearInspectionAchievementRows = ClearInspectionAchievementRows
-
 local function CancelInspectionHandshakeTimer()
     if handshakeTimer and handshakeTimer.Cancel then
         handshakeTimer:Cancel()
@@ -410,8 +408,8 @@ local function GetAchievementDefinition(achId)
         return achievementDefinitionCache[key]
     end
 
-    if _G.HCA_AchievementDefs and _G.HCA_AchievementDefs[key] then
-        local def = _G.HCA_AchievementDefs[key]
+    if addon and addon.AchievementDefs and addon.AchievementDefs[key] then
+        local def = addon.AchievementDefs[key]
         achievementDefinitionCache[key] = {
             achId = def.achId or achId,
             title = def.title or (type(achId) == "string" and achId or "Unknown Achievement"),
@@ -429,39 +427,26 @@ local function GetAchievementDefinition(achId)
     return nil
 end
 
-CharacterInspection.GetAchievementDefinition = GetAchievementDefinition
-
--- Initialize the inspection system
-local function InitializeInspectionSystem()
-    -- Register AceComm handlers
-    AceComm:RegisterComm(INSPECTION_COMM_PREFIX, CharacterInspection.OnInspectionRequest)
-    AceComm:RegisterComm(INSPECTION_RESPONSE_PREFIX, CharacterInspection.OnInspectionResponse)
-    AceComm:RegisterComm(INSPECTION_DATA_PREFIX, CharacterInspection.OnInspectionData)
-    
-    -- Hook into the inspection frame
-    CharacterInspection.HookInspectionFrame()
-end
-
 -- Hook into the inspection frame to add our achievement tab
-function CharacterInspection.HookInspectionFrame()
+local function HookInspectionFrame()
     -- Wait for inspection frame to be available
     local frame = CreateFrame("Frame")
     frame:RegisterEvent("ADDON_LOADED")
     frame:SetScript("OnEvent", function(self, event, addonName)
         if addonName == "Blizzard_InspectUI" or InspectFrame then
-            CharacterInspection.SetupInspectionTab()
+            SetupInspectionTab()
             self:UnregisterAllEvents()
         end
     end)
     
     -- Also try to hook immediately if frame already exists
     if InspectFrame then
-        CharacterInspection.SetupInspectionTab()
+        SetupInspectionTab()
     end
 end
 
 -- Setup the achievement tab on the inspection frame
-function CharacterInspection.SetupInspectionTab()
+local function SetupInspectionTab()
     if not InspectFrame or inspectionAchievementPanel then return end
     
     -- Create achievement tab
@@ -482,7 +467,7 @@ function CharacterInspection.SetupInspectionTab()
     inspectionAchievementPanel:SetAllPoints(InspectFrame)
     
     -- Setup the achievement panel UI (similar to main achievement panel)
-    CharacterInspection.SetupInspectionAchievementPanel()
+    SetupInspectionAchievementPanel()
     
     -- Tab click handler
     achievementTab.subFrame = "InspectAchievementPanel"
@@ -491,7 +476,7 @@ function CharacterInspection.SetupInspectionTab()
         if InspectFrame_ShowSubFrame then
             InspectFrame_ShowSubFrame(self.subFrame)
         else
-            CharacterInspection.ShowInspectionAchievementTab()
+            ShowInspectionAchievementTab()
         end
     end)
     
@@ -499,7 +484,7 @@ function CharacterInspection.SetupInspectionTab()
     if InspectFrame_ShowSubFrame then
         hooksecurefunc("InspectFrame_ShowSubFrame", function(frameName)
             if frameName == "InspectAchievementPanel" then
-                CharacterInspection.ShowInspectionAchievementTab()
+                ShowInspectionAchievementTab()
             elseif inspectionAchievementPanel and inspectionAchievementPanel:IsShown() then
                 inspectionAchievementPanel:Hide()
             end
@@ -507,7 +492,7 @@ function CharacterInspection.SetupInspectionTab()
     elseif InspectFrameTab_OnClick then
         hooksecurefunc("InspectFrameTab_OnClick", function(tabID)
             if tabID == inspectionTabID then
-                CharacterInspection.ShowInspectionAchievementTab()
+                ShowInspectionAchievementTab()
             elseif inspectionAchievementPanel and inspectionAchievementPanel:IsShown() then
                 inspectionAchievementPanel:Hide()
             end
@@ -530,7 +515,7 @@ function CharacterInspection.SetupInspectionTab()
 end
 
 -- Setup the inspection achievement panel UI
-function CharacterInspection.SetupInspectionAchievementPanel()
+local function SetupInspectionAchievementPanel()
     if not inspectionAchievementPanel then return end
     
     -- Title
@@ -631,7 +616,7 @@ function CharacterInspection.SetupInspectionAchievementPanel()
 end
 
 -- Show the inspection achievement tab
-function CharacterInspection.ShowInspectionAchievementTab()
+local function ShowInspectionAchievementTab()
     if not InspectFrame or not inspectionAchievementPanel then return end
     
     -- Play tab sound
@@ -678,12 +663,12 @@ function CharacterInspection.ShowInspectionAchievementTab()
     -- Request achievement data if we have a target
     local targetName = UnitName("target")
     if targetName and UnitIsPlayer("target") and not UnitIsUnit("target", "player") then
-        CharacterInspection.RequestAchievementData(targetName)
+        RequestAchievementData(targetName)
     end
 end
 
 -- Request achievement data from target player
-function CharacterInspection.RequestAchievementData(targetName)
+local function RequestAchievementData(targetName)
     if not targetName then return end
     
     currentInspectionTarget = targetName
@@ -693,7 +678,7 @@ function CharacterInspection.RequestAchievementData(targetName)
     local cachedData = inspectionCache[cacheKey]
     if cachedData and (time() - cachedData.timestamp) < CACHE_DURATION then
         CancelInspectionHandshakeTimer()
-        CharacterInspection.DisplayAchievementData(cachedData.data)
+        DisplayAchievementData(cachedData.data)
         return
     end
     
@@ -715,7 +700,7 @@ function CharacterInspection.RequestAchievementData(targetName)
 end
 
 -- Handle incoming inspection requests
-function CharacterInspection.OnInspectionRequest(prefix, message, distribution, sender)
+local function OnInspectionRequest(prefix, message, distribution, sender)
     if prefix ~= INSPECTION_COMM_PREFIX then return end
     
     local success, payload = AceSerialize:Deserialize(message)
@@ -735,11 +720,11 @@ function CharacterInspection.OnInspectionRequest(prefix, message, distribution, 
     end
     
     -- Send achievement data
-    CharacterInspection.SendAchievementData(sender)
+    SendAchievementData(sender)
 end
 
 -- Handle incoming inspection responses
-function CharacterInspection.OnInspectionResponse(prefix, message, distribution, sender)
+local function OnInspectionResponse(prefix, message, distribution, sender)
     if prefix ~= INSPECTION_RESPONSE_PREFIX then return end
     
     local success, payload = AceSerialize:Deserialize(message)
@@ -765,7 +750,7 @@ function CharacterInspection.OnInspectionResponse(prefix, message, distribution,
 end
 
 -- Handle incoming achievement data
-function CharacterInspection.OnInspectionData(prefix, message, distribution, sender)
+local function OnInspectionData(prefix, message, distribution, sender)
     if prefix ~= INSPECTION_DATA_PREFIX then return end
     
     local success, payload = AceSerialize:Deserialize(message)
@@ -783,15 +768,16 @@ function CharacterInspection.OnInspectionData(prefix, message, distribution, sen
     }
     
     -- Display the data
-    CharacterInspection.DisplayAchievementData(payload.data)
+    DisplayAchievementData(payload.data)
 end
 
 -- Send achievement data to requester
-function CharacterInspection.SendAchievementData(targetName)
+local function SendAchievementData(targetName)
     if not targetName then return end
     
     -- Get our achievement data
-    local _, charDB = HardcoreAchievements_GetCharDB()
+    local _, charDB
+    if addon and addon.GetCharDB then _, charDB = addon.GetCharDB() end
     if not charDB or not charDB.achievements then
         return
     end
@@ -847,7 +833,7 @@ function CharacterInspection.SendAchievementData(targetName)
 end
 
 -- Display achievement data in the inspection panel
-function CharacterInspection.DisplayAchievementData(data)
+local function DisplayAchievementData(data)
     if not inspectionAchievementPanel or not data then return end
     
     inspectionAchievementPanel.achievements = inspectionAchievementPanel.achievements or {}
@@ -889,7 +875,7 @@ function CharacterInspection.DisplayAchievementData(data)
         end
         local points = achievementData.points or (definition and definition.points) or 0
         
-        local inspectionRow = CharacterInspection.CreateInspectionAchievementRow(
+        local inspectionRow = CreateInspectionAchievementRow(
             inspectionAchievementPanel.Content,
             achId,
             title,
@@ -927,11 +913,11 @@ function CharacterInspection.DisplayAchievementData(data)
     end
     
     -- Sort and position rows
-    CharacterInspection.SortInspectionAchievementRows()
+    SortInspectionAchievementRows()
 end
 
 -- Create an achievement row for inspection display
-function CharacterInspection.CreateInspectionAchievementRow(parent, achId, title, tooltip, icon, level, points, achievementData, definition)
+local function CreateInspectionAchievementRow(parent, achId, title, tooltip, icon, level, points, achievementData, definition)
     local index = (#inspectionAchievementPanel.achievements) + 1
     local row = CreateFrame("Frame", nil, parent)
     row:SetSize(310, 42)
@@ -1060,8 +1046,8 @@ function CharacterInspection.CreateInspectionAchievementRow(parent, achId, title
         self.highlight:SetColorTexture(1, 1, 1, 0.10)
         self.highlight:Show()
         
-        if _G.HCA_ShowAchievementTooltip then
-            _G.HCA_ShowAchievementTooltip(row, self)
+        if ShowAchievementTooltip then
+            ShowAchievementTooltip(row, self)
         else
             GameTooltip:SetOwner(row, "ANCHOR_RIGHT")
             GameTooltip:SetText(row._title or row.Title:GetText() or "", 1, 1, 1)
@@ -1080,7 +1066,7 @@ function CharacterInspection.CreateInspectionAchievementRow(parent, achId, title
     row:SetScript("OnMouseUp", function(self, button)
         if button == "LeftButton" and IsShiftKeyDown() and row.achId then
             -- Use centralized function to generate bracket format (icon looked up client-side)
-            local bracket = _G.HCA_GetAchievementBracket and _G.HCA_GetAchievementBracket(row.achId) or string_format("[HCA:(%s)]", tostring(row.achId))
+            local bracket = GetAchievementBracket and GetAchievementBracket(row.achId) or string_format("[HCA:(%s)]", tostring(row.achId))
             
             local editBox = ChatEdit_GetActiveWindow()
             if not editBox or not editBox:IsVisible() then
@@ -1154,7 +1140,7 @@ function CharacterInspection.CreateInspectionAchievementRow(parent, achId, title
 end
 
 -- Sort inspection achievement rows
-function CharacterInspection.SortInspectionAchievementRows()
+local function SortInspectionAchievementRows()
     if not inspectionAchievementPanel or not inspectionAchievementPanel.achievements then return end
     
     -- Sort by level cap (same as main panel)
@@ -1213,6 +1199,15 @@ local function HookInspectionEvents()
     end)
 end
 
+
+-- Initialize the inspection system (registers comm handlers and hooks frame)
+local function InitializeInspectionSystem()
+    AceComm:RegisterComm(INSPECTION_COMM_PREFIX, OnInspectionRequest)
+    AceComm:RegisterComm(INSPECTION_RESPONSE_PREFIX, OnInspectionResponse)
+    AceComm:RegisterComm(INSPECTION_DATA_PREFIX, OnInspectionData)
+    HookInspectionFrame()
+end
+
 -- -- Hook into unit popup menu to add "Inspect Achievements" option
 -- local function HookUnitPopupMenu()
 --     -- Try modern Menu API first (if available, likely Retail)
@@ -1256,6 +1251,3 @@ initFrame:SetScript("OnEvent", function(self, event)
         self:UnregisterAllEvents()
     end
 end)
-
--- Export functions
-_G.CharacterInspection = CharacterInspection

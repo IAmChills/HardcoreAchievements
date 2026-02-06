@@ -3,8 +3,7 @@
 ---------------------------------------
 local DungeonCommon = {}
 
--- Localize frequently-used WoW API globals (micro-optimization, no behavior change)
-local _G = _G
+local addonName, addon = ...
 local UnitLevel = UnitLevel
 local UnitGUID = UnitGUID
 local UnitName = UnitName
@@ -15,6 +14,8 @@ local GetNumGroupMembers = GetNumGroupMembers
 local IsInInstance = IsInInstance
 local GetInstanceInfo = GetInstanceInfo
 local CreateFrame = CreateFrame
+local GetPresetMultiplier = (addon and addon.GetPresetMultiplier)
+local RefreshAllAchievementPoints = (addon and addon.RefreshAllAchievementPoints)
 local table_insert = table.insert
 local table_concat = table.concat
 
@@ -78,28 +79,28 @@ end
 -- Helper function to check and print eligibility messages for achievements matching a mapId
 local function CheckAndPrintEligibilityMessages(mapId, entryData)
     if not mapId or not entryData then return end
-    if not _G.HCA_AchievementDefs then return end
+    if not (addon and addon.AchievementDefs) then return end
     
-    for achId, achDef in pairs(_G.HCA_AchievementDefs) do
+    for achId, achDef in pairs(addon.AchievementDefs) do
         if achDef.mapID == mapId then
             -- Only show messages for visible achievements (checked in filter)
             local isVisible = false
-            if _G.HCA_IsAchievementVisible then
-                isVisible = _G.HCA_IsAchievementVisible(achId)
+            if addon.IsAchievementVisible then
+                isVisible = addon.IsAchievementVisible(achId)
             end
             
             if isVisible then
                 -- Only show messages for available achievements (not completed, not failed)
-                local progress = HardcoreAchievements_GetProgress and HardcoreAchievements_GetProgress(achId)
+                local progress = addon and addon.GetProgress and addon.GetProgress(achId)
                 local isCompleted = progress and progress.completed
                 local isFailed = progress and progress.failed
                 
                 -- Also check if row exists and is outleveled
-                if not isFailed and _G.AchievementPanel and _G.AchievementPanel.achievements then
-                    for _, row in ipairs(_G.AchievementPanel.achievements) do
+                if not isFailed and (addon and addon.AchievementPanel) and (addon and addon.AchievementPanel).achievements then
+                    for _, row in ipairs((addon and addon.AchievementPanel).achievements) do
                         local rowId = row.id or row.achId
                         if rowId and tostring(rowId) == tostring(achId) then
-                            if _G.IsRowOutleveled and _G.IsRowOutleveled(row) then
+                            if addon and addon.IsRowOutleveled and addon.IsRowOutleveled(row) then
                                 isFailed = true
                             end
                             break
@@ -141,8 +142,8 @@ local function UpdatePartyMemberLevels(mapId, entryData)
                         local currentLevel = UnitLevel(unit) or 1
                         local unitName = UnitName(unit) or ("Party" .. i)
                         entryData.partyLevels[guid] = currentLevel
-                        if _G.HCA_DebugPrint then
-                            _G.HCA_DebugPrint("Party member " .. unitName .. " joined dungeon - level stored: " .. currentLevel)
+                        if addon.DebugPrint then
+                            addon.DebugPrint("Party member " .. unitName .. " joined dungeon - level stored: " .. currentLevel)
                         end
                     end
                 end
@@ -165,8 +166,8 @@ dungeonEventFrame:SetScript("OnEvent", function(self, event, unitIndex)
         if inInstance and instanceType == "party" then
             wasDeadOnExit = true
             local mapId = select(8, GetInstanceInfo())
-            if _G.HCA_DebugPrint then
-                _G.HCA_DebugPrint("Tracking death in dungeon (mapId: " .. (mapId or "unknown") .. ")")
+            if addon.DebugPrint then
+                addon.DebugPrint("Tracking death in dungeon (mapId: " .. (mapId or "unknown") .. ")")
             end
         end
     elseif event == "PARTY_MEMBER_DISABLE" then
@@ -190,13 +191,13 @@ dungeonEventFrame:SetScript("OnEvent", function(self, event, unitIndex)
                                 if not isDeadOrGhost then
                                     -- Party member left normally (not dead/ghost) - clear their data to allow replacement
                                     entryData.partyLevels[guid] = nil
-                                    if _G.HCA_DebugPrint then
-                                        _G.HCA_DebugPrint("Party member " .. unitName .. " left dungeon - data cleared (can be replaced)")
+                                    if addon.DebugPrint then
+                                        addon.DebugPrint("Party member " .. unitName .. " left dungeon - data cleared (can be replaced)")
                                     end
                                 else
                                     -- Party member is dead/ghost - keep their data (they're running back from graveyard)
-                                    if _G.HCA_DebugPrint then
-                                        _G.HCA_DebugPrint("Party member " .. unitName .. " left dungeon (dead/ghost) - data preserved")
+                                    if addon.DebugPrint then
+                                        addon.DebugPrint("Party member " .. unitName .. " left dungeon (dead/ghost) - data preserved")
                                     end
                                 end
                             end
@@ -204,8 +205,8 @@ dungeonEventFrame:SetScript("OnEvent", function(self, event, unitIndex)
                     else
                         -- Unit already gone - debug message only
                         local unitName = unitIndex
-                        if _G.HCA_DebugPrint then
-                            _G.HCA_DebugPrint("Party member " .. unitName .. " left dungeon (disabled)")
+                        if addon.DebugPrint then
+                            addon.DebugPrint("Party member " .. unitName .. " left dungeon (disabled)")
                         end
                     end
                 end
@@ -234,19 +235,19 @@ dungeonEventFrame:SetScript("OnEvent", function(self, event, unitIndex)
                                 -- Party member re-entered - update stored level (allow leveling outside if they return)
                                 if entryData.wasDeadOnExit then
                                     -- Player was dead when leaving - don't update level (preserve original entry level)
-                                    if _G.HCA_DebugPrint then
-                                        _G.HCA_DebugPrint("Party member " .. unitName .. " re-entered after player death - level preserved (stored: " .. storedLevel .. ", current: " .. currentLevel .. ")")
+                                    if addon.DebugPrint then
+                                        addon.DebugPrint("Party member " .. unitName .. " re-entered after player death - level preserved (stored: " .. storedLevel .. ", current: " .. currentLevel .. ")")
                                     end
                                 else
                                     -- Update stored level to current level (accepts leveling outside as long as they re-enter)
                                     entryData.partyLevels[guid] = currentLevel
                                     if currentLevel > storedLevel then
-                                        if _G.HCA_DebugPrint then
-                                            _G.HCA_DebugPrint("Party member " .. unitName .. " re-entered with increased level (was " .. storedLevel .. ", now " .. currentLevel .. ") - stored level updated")
+                                        if addon.DebugPrint then
+                                            addon.DebugPrint("Party member " .. unitName .. " re-entered with increased level (was " .. storedLevel .. ", now " .. currentLevel .. ") - stored level updated")
                                         end
                                     else
-                                        if _G.HCA_DebugPrint then
-                                            _G.HCA_DebugPrint("Party member " .. unitName .. " re-entered - level unchanged (" .. currentLevel .. ")")
+                                        if addon.DebugPrint then
+                                            addon.DebugPrint("Party member " .. unitName .. " re-entered - level unchanged (" .. currentLevel .. ")")
                                         end
                                     end
                                 end
@@ -256,8 +257,8 @@ dungeonEventFrame:SetScript("OnEvent", function(self, event, unitIndex)
                                     entryData.partyLevels = {}
                                 end
                                 entryData.partyLevels[guid] = currentLevel
-                                if _G.HCA_DebugPrint then
-                                    _G.HCA_DebugPrint("Party member " .. unitName .. " joined dungeon - level stored: " .. currentLevel)
+                                if addon.DebugPrint then
+                                    addon.DebugPrint("Party member " .. unitName .. " joined dungeon - level stored: " .. currentLevel)
                                 end
                             end
                         end
@@ -303,8 +304,8 @@ dungeonEventFrame:SetScript("OnEvent", function(self, event, unitIndex)
                 if not currentPartyGUIDs[storedGUID] then
                     -- This party member left the group - clear their data
                     entryData.partyLevels[storedGUID] = nil
-                    if _G.HCA_DebugPrint then
-                        _G.HCA_DebugPrint("Party member left group - data cleared (GUID: " .. (storedGUID or "unknown") .. ", mapId: " .. (mapId or "unknown") .. ")")
+                    if addon.DebugPrint then
+                        addon.DebugPrint("Party member left group - data cleared (GUID: " .. (storedGUID or "unknown") .. ", mapId: " .. (mapId or "unknown") .. ")")
                     end
                 end
             end
@@ -324,12 +325,12 @@ dungeonEventFrame:SetScript("OnEvent", function(self, event, unitIndex)
                                 if currentLevel and currentLevel > 0 then
                                     local unitName = UnitName(unit) or ("Party" .. i)
                                     entryData.partyLevels[guid] = currentLevel
-                                    if _G.HCA_DebugPrint then
-                                        _G.HCA_DebugPrint("Party member joined group - level stored: " .. currentLevel .. " (" .. unitName .. ", mapId: " .. (mapId or "unknown") .. ")")
+                                    if addon.DebugPrint then
+                                        addon.DebugPrint("Party member joined group - level stored: " .. currentLevel .. " (" .. unitName .. ", mapId: " .. (mapId or "unknown") .. ")")
                                     end
-                                elseif _G.HCA_DebugPrint then
+                                elseif addon.DebugPrint then
                                     local unitName = UnitName(unit) or ("Party" .. i)
-                                    _G.HCA_DebugPrint("Party member joined group but level not available yet (" .. (unitName or "unknown") .. ") - will be handled on entry")
+                                    addon.DebugPrint("Party member joined group but level not available yet (" .. (unitName or "unknown") .. ") - will be handled on entry")
                                 end
                             end
                         end
@@ -356,8 +357,8 @@ dungeonEventFrame:SetScript("OnEvent", function(self, event, unitIndex)
                         -- Player was dead when leaving, skip level check and clear the flag
                         existingEntry.wasDeadOnExit = nil
                         wasDeadOnExit = false
-                        if _G.HCA_DebugPrint then
-                            _G.HCA_DebugPrint("Re-entry after death - level check omitted")
+                        if addon.DebugPrint then
+                            addon.DebugPrint("Re-entry after death - level check omitted")
                         end
                     else
                         -- Normal re-entry: update stored level (allow leveling outside if they return)
@@ -366,12 +367,12 @@ dungeonEventFrame:SetScript("OnEvent", function(self, event, unitIndex)
                         if playerLevel > oldPlayerLevel then
                             -- Player leveled up outside - update stored level
                             existingEntry.playerLevel = playerLevel
-                            if _G.HCA_DebugPrint then
-                                _G.HCA_DebugPrint("Player re-entered with increased level (was " .. oldPlayerLevel .. ", now " .. playerLevel .. ") - stored level updated")
+                            if addon.DebugPrint then
+                                addon.DebugPrint("Player re-entered with increased level (was " .. oldPlayerLevel .. ", now " .. playerLevel .. ") - stored level updated")
                             end
                         else
-                            if _G.HCA_DebugPrint then
-                                _G.HCA_DebugPrint("Player re-entered - level unchanged (" .. playerLevel .. ")")
+                            if addon.DebugPrint then
+                                addon.DebugPrint("Player re-entered - level unchanged (" .. playerLevel .. ")")
                             end
                         end
                     end
@@ -393,19 +394,19 @@ dungeonEventFrame:SetScript("OnEvent", function(self, event, unitIndex)
                                         -- This party member was in the instance before - update stored level
                                         if existingEntry.wasDeadOnExit then
                                             -- Player was dead when leaving - preserve original stored level
-                                            if _G.HCA_DebugPrint then
-                                                _G.HCA_DebugPrint("Party member " .. unitName .. " re-entry after player death - level preserved (stored: " .. storedLevel .. ", current: " .. currentLevel .. ")")
+                                            if addon.DebugPrint then
+                                                addon.DebugPrint("Party member " .. unitName .. " re-entry after player death - level preserved (stored: " .. storedLevel .. ", current: " .. currentLevel .. ")")
                                             end
                                         else
                                             -- Normal re-entry: update stored level to current level
                                             existingEntry.partyLevels[guid] = currentLevel
                                             if currentLevel > storedLevel then
-                                                if _G.HCA_DebugPrint then
-                                                    _G.HCA_DebugPrint("Party member " .. unitName .. " re-entered with increased level (was " .. storedLevel .. ", now " .. currentLevel .. ") - stored level updated")
+                                                if addon.DebugPrint then
+                                                    addon.DebugPrint("Party member " .. unitName .. " re-entered with increased level (was " .. storedLevel .. ", now " .. currentLevel .. ") - stored level updated")
                                                 end
                                             else
-                                                if _G.HCA_DebugPrint then
-                                                    _G.HCA_DebugPrint("Party member " .. unitName .. " re-entered - level unchanged (" .. currentLevel .. ")")
+                                                if addon.DebugPrint then
+                                                    addon.DebugPrint("Party member " .. unitName .. " re-entered - level unchanged (" .. currentLevel .. ")")
                                                 end
                                             end
                                         end
@@ -415,8 +416,8 @@ dungeonEventFrame:SetScript("OnEvent", function(self, event, unitIndex)
                                             existingEntry.partyLevels = {}
                                         end
                                         existingEntry.partyLevels[guid] = currentLevel
-                                        if _G.HCA_DebugPrint then
-                                            _G.HCA_DebugPrint("Party member " .. unitName .. " joined on re-entry - level stored: " .. currentLevel)
+                                        if addon.DebugPrint then
+                                            addon.DebugPrint("Party member " .. unitName .. " joined on re-entry - level stored: " .. currentLevel)
                                         end
                                     end
                                 end
@@ -451,8 +452,8 @@ dungeonEventFrame:SetScript("OnEvent", function(self, event, unitIndex)
                     instanceEntryLevels[mapId] = entryData
                     lastInstanceMapId = mapId
                     wasDeadOnExit = false
-                    if _G.HCA_DebugPrint then
-                        _G.HCA_DebugPrint("Dungeon entry levels stored: " .. levelStr)
+                    if addon.DebugPrint then
+                        addon.DebugPrint("Dungeon entry levels stored: " .. levelStr)
                     end
                     -- Also update party member levels in case any joined during the zone load
                     UpdatePartyMemberLevels(mapId, entryData)
@@ -468,14 +469,14 @@ dungeonEventFrame:SetScript("OnEvent", function(self, event, unitIndex)
                 -- Otherwise, clear entry levels (normal exit)
                 if wasDeadOnExit then
                     instanceEntryLevels[lastInstanceMapId].wasDeadOnExit = true
-                    if _G.HCA_DebugPrint then
-                        _G.HCA_DebugPrint("Left instance after death - entry levels preserved for re-entry")
+                    if addon.DebugPrint then
+                        addon.DebugPrint("Left instance after death - entry levels preserved for re-entry")
                     end
                 else
                     -- Player left normally (not dead) - clear entry levels for this map
                     instanceEntryLevels[lastInstanceMapId] = nil
-                    if _G.HCA_DebugPrint then
-                        _G.HCA_DebugPrint("Left instance normally - entry levels cleared")
+                    if addon.DebugPrint then
+                        addon.DebugPrint("Left instance normally - entry levels cleared")
                     end
                 end
             else
@@ -565,7 +566,7 @@ function DungeonCommon.registerDungeonAchievement(def)
   local faction = def.faction
 
   -- Expose this definition for external lookups (e.g., chat link tooltips)
-  HCA_SharedUtils.RegisterAchievementDef({
+  addon.RegisterAchievementDef({
     achId = achId,
     title = title,
     tooltip = tooltip,
@@ -594,7 +595,7 @@ function DungeonCommon.registerDungeonAchievement(def)
 
   -- Load progress from database on initialization
   local function LoadProgress()
-    local progress = HardcoreAchievements_GetProgress(achId)
+    local progress = addon and addon.GetProgress and addon.GetProgress(achId)
     if progress and progress.counts then
       state.counts = progress.counts
     end
@@ -606,9 +607,9 @@ function DungeonCommon.registerDungeonAchievement(def)
 
   -- Save progress to database
   local function SaveProgress()
-    HardcoreAchievements_SetProgress(achId, "counts", state.counts)
+    if addon and addon.SetProgress then addon.SetProgress(achId, "counts", state.counts) end
     if state.completed then
-      HardcoreAchievements_SetProgress(achId, "completed", true)
+      if addon and addon.SetProgress then addon.SetProgress(achId, "completed", true) end
     end
   end
 
@@ -690,7 +691,7 @@ function DungeonCommon.registerDungeonAchievement(def)
   -- Calculate and store points for this achievement
   local function StorePointsAtKill()
     if not AchievementPanel or not AchievementPanel.achievements then return end
-    local row = _G[rowVarName]
+    local row = addon[rowVarName]
     if not row or not row.points then return end
     
     -- Store pointsAtKill WITHOUT the self-found bonus.
@@ -698,11 +699,11 @@ function DungeonCommon.registerDungeonAchievement(def)
     local base = tonumber(row.originalPoints) or tonumber(row.points) or 0
     local pointsToStore = base
     if not row.staticPoints then
-      local preset = _G.GetPlayerPresetFromSettings and _G.GetPlayerPresetFromSettings() or nil
-      local multiplier = _G.GetPresetMultiplier and _G.GetPresetMultiplier(preset) or 1.0
+      local preset = (addon and addon.GetPlayerPresetFromSettings and addon.GetPlayerPresetFromSettings()) or nil
+      local multiplier = GetPresetMultiplier(preset) or 1.0
       pointsToStore = math.floor(base * multiplier + 0.5)
     end
-    HardcoreAchievements_SetProgress(achId, "pointsAtKill", pointsToStore)
+    if addon and addon.SetProgress then addon.SetProgress(achId, "pointsAtKill", pointsToStore) end
   end
 
   -- Get boss names from NPC IDs (you can expand this with a lookup table)
@@ -1019,7 +1020,7 @@ function DungeonCommon.registerDungeonAchievement(def)
 
   -- Lazy tooltip setup - only initialize when first hovered (optimization)
   local function CreateTooltipHandler()
-    local row = _G[rowVarName]
+    local row = addon[rowVarName]
     if not row then return noop end
     local frame = row.frame
     if not frame then return noop end
@@ -1228,9 +1229,9 @@ function DungeonCommon.registerDungeonAchievement(def)
       -- Group is ineligible - don't count this kill
       -- Player can return later with an eligible group to kill this boss
       -- Only print message if the achievement is still available (not completed or failed) and visible
-      local progress = HardcoreAchievements_GetProgress(achId)
+      local progress = addon and addon.GetProgress and addon.GetProgress(achId)
       local isStillAvailable = not state.completed and not (progress and progress.failed)
-      if isStillAvailable and _G.HCA_IsAchievementVisible and _G.HCA_IsAchievementVisible(achId) then
+      if isStillAvailable and addon.IsAchievementVisible and addon.IsAchievementVisible(achId) then
         print("|cff008066[Hardcore Achievements]|r |cffffd100" .. HCA_GetBossName(npcId) .. " killed but group is ineligible - kill not counted for achievement: " .. title .. "|r")
       end
       return false
@@ -1242,13 +1243,13 @@ function DungeonCommon.registerDungeonAchievement(def)
     SaveProgress()
     UpdateTooltip()
     -- Only print for the first eligible variation (processKill iterates base then Trio, Duo, Solo)
-    if _G.HCA_DungeonKillPrintedForGUID ~= destGUID then
-        _G.HCA_DungeonKillPrintedForGUID = destGUID
+    if addon and addon.HCA_DungeonKillPrintedForGUID ~= destGUID then
+        addon.HCA_DungeonKillPrintedForGUID = destGUID
         print("|cff008066[Hardcore Achievements]|r |cffffd100" .. HCA_GetBossName(npcId) .. " killed as part of achievement: " .. title .. "|r")
     end
 
     -- Check if achievement should be completed
-    local progress = HardcoreAchievements_GetProgress(achId)
+    local progress = addon and addon.GetProgress and addon.GetProgress(achId)
     if progress and progress.completed then
       state.completed = true
       return true
@@ -1259,7 +1260,7 @@ function DungeonCommon.registerDungeonAchievement(def)
       -- Since we only count kills when group is eligible (using entry levels when in instance),
       -- if CountsSatisfied() is true, all bosses were killed while eligible
       state.completed = true
-      HardcoreAchievements_SetProgress(achId, "completed", true)
+      if addon and addon.SetProgress then addon.SetProgress(achId, "completed", true) end
       return true
     end
 
@@ -1269,9 +1270,9 @@ function DungeonCommon.registerDungeonAchievement(def)
   -- Tracker function is passed directly to CreateAchievementRow and stored on row.killTracker
 
   -- Register functions in local registry to reduce global pollution
-  if _G.HardcoreAchievements_RegisterAchievementFunction then
-    _G.HardcoreAchievements_RegisterAchievementFunction(achId, "Kill", KillTracker)
-    _G.HardcoreAchievements_RegisterAchievementFunction(achId, "IsCompleted", function() return state.completed end)
+  if addon and addon.RegisterAchievementFunction then
+    addon.RegisterAchievementFunction(achId, "Kill", KillTracker)
+    addon.RegisterAchievementFunction(achId, "IsCompleted", function() return state.completed end)
   end
 
   ---------------------------------------
@@ -1288,9 +1289,9 @@ function DungeonCommon.registerDungeonAchievement(def)
   end
 
   -- Create the registration function dynamically
-  _G[registerFuncName] = function()
-    if not _G.CreateAchievementRow then return end
-    if _G[rowVarName] then return end
+  addon[registerFuncName] = function()
+    if not (addon and addon.CreateAchievementRow) then return end
+    if addon[rowVarName] then return end
     
     -- Check if player is eligible for this achievement
     if not IsEligible() then return end
@@ -1308,7 +1309,8 @@ function DungeonCommon.registerDungeonAchievement(def)
         dungeonDef.isDungeon = true
     end
     
-    _G[rowVarName] = CreateAchievementRow(
+    local AchievementPanel = addon and addon.AchievementPanel
+    local row = (addon and addon.CreateAchievementRow) and addon.CreateAchievementRow(
       AchievementPanel,
       achId,
       title,
@@ -1322,22 +1324,23 @@ function DungeonCommon.registerDungeonAchievement(def)
       nil,
       dungeonDef  -- Pass def with allowSoloDouble forced to false for dungeons
     )
+    if row then addon[rowVarName] = row end
     
     -- Store requiredKills on the row for the embed UI to access
-    if requiredKills and next(requiredKills) then
-      _G[rowVarName].requiredKills = requiredKills
+    if row and requiredKills and next(requiredKills) then
+      addon[rowVarName].requiredKills = requiredKills
     end
     
     -- Refresh points with multipliers after creation
-    if not _G.HCA_Initializing and RefreshAllAchievementPoints then
+    if not (addon and addon.Initializing) then
       RefreshAllAchievementPoints()
     end
     
     -- Set up lazy tooltip initialization - only set up handlers on first hover
-    local row = _G[rowVarName]
+    row = addon[rowVarName]
     if row then
-      if _G.HCA_AddRowUIInit then
-        _G.HCA_AddRowUIInit(row, function(frame)
+      if addon and addon.AddRowUIInit then
+        addon.AddRowUIInit(row, function(frame)
           frame:EnableMouse(true)
           -- Lazy OnEnter handler - creates tooltip handler on first hover
           frame:SetScript("OnEnter", function(self)
@@ -1356,8 +1359,8 @@ function DungeonCommon.registerDungeonAchievement(def)
   end
 
   -- Auto-register the achievement immediately if the panel is ready
-  if _G.CreateAchievementRow then
-    _G[registerFuncName]()
+  if addon and addon.CreateAchievementRow then
+    addon[registerFuncName]()
   end
 
   -- Note: Event handling is now centralized in HardcoreAchievements.lua
@@ -1390,11 +1393,11 @@ end
 -- Function to refresh variation registrations (for when checkboxes change)
 -- This forces re-registration of variation achievements by clearing their row variables
 function DungeonCommon.refreshDungeonVariations()
-  if not _G.HCA_AchievementDefs then return end
+  if not (addon and addon.AchievementDefs) then return end
   
   -- Get all base dungeon IDs (those without variation suffixes)
   local baseDungeonIds = {}
-  for achId, def in pairs(_G.HCA_AchievementDefs) do
+  for achId, def in pairs(addon.AchievementDefs) do
     if not def.isVariation and def.mapID then  -- Dungeons have mapID
       table_insert(baseDungeonIds, achId)
     end
@@ -1406,10 +1409,10 @@ function DungeonCommon.refreshDungeonVariations()
     for _, variation in ipairs(VARIATIONS) do
       local variationId = baseId .. variation.suffix
       local rowVarName = variationId .. "_Row"
-      if _G[rowVarName] then
+      if addon[rowVarName] then
         -- Hide and clear the row so it can be re-registered
-        _G[rowVarName]:Hide()
-        _G[rowVarName] = nil
+        addon[rowVarName]:Hide()
+        addon[rowVarName] = nil
       end
     end
   end
@@ -1420,8 +1423,8 @@ function DungeonCommon.refreshDungeonVariations()
     for _, variation in ipairs(VARIATIONS) do
       local variationId = baseId .. variation.suffix
       local registerFuncName = "HCA_Register" .. variationId
-      if _G[registerFuncName] and type(_G[registerFuncName]) == "function" then
-        _G[registerFuncName]()
+      if addon[registerFuncName] and type(addon[registerFuncName]) == "function" then
+        addon[registerFuncName]()
       end
     end
   end
@@ -1431,4 +1434,4 @@ end
 -- Module Export
 ---------------------------------------
 
-_G.DungeonCommon = DungeonCommon
+if addon then addon.DungeonCommon = DungeonCommon end

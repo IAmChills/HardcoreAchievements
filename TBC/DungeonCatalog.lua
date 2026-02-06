@@ -1,6 +1,8 @@
 ---------------------------------------
 -- Dungeon Achievement Definitions
 ---------------------------------------
+local addonName, addon = ...
+local ClassColor = (addon and addon.GetClassColor)
 local table_insert = table.insert
 
 local Dungeons = {
@@ -23,7 +25,7 @@ local Dungeons = {
   {
     achId = "RFC",
     title = DUNGEON_FLOOR_RAGEFIRE1,
-    tooltip = "Defeat the bosses of " .. HCA_SharedUtils.GetClassColor() .. ""..DUNGEON_FLOOR_RAGEFIRE1.."|r with every party member at level 14 or lower upon entering the dungeon",
+    tooltip = "Defeat the bosses of " .. ClassColor .. ""..DUNGEON_FLOOR_RAGEFIRE1.."|r with every party member at level 14 or lower upon entering the dungeon",
     icon = 136216,
     level = 14,
     points = 10,
@@ -44,7 +46,7 @@ local Dungeons = {
   {
     achId = "VC",
     title = DUNGEON_FLOOR_THEDEADMINES1,
-    tooltip = "Defeat the bosses of " .. HCA_SharedUtils.GetClassColor() .. ""..DUNGEON_FLOOR_THEDEADMINES1.."|r with every party member at level 18 or lower upon entering the dungeon",
+    tooltip = "Defeat the bosses of " .. ClassColor .. ""..DUNGEON_FLOOR_THEDEADMINES1.."|r with every party member at level 18 or lower upon entering the dungeon",
     icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_boss_edwinvancleef.png", -- 236409
     level = 18,
     points = 10,
@@ -66,7 +68,7 @@ local Dungeons = {
   {
     achId = "WC",
     title = DUNGEON_FLOOR_WAILINGCAVERNS1,
-    tooltip = "Defeat the bosses of " .. HCA_SharedUtils.GetClassColor() .. ""..DUNGEON_FLOOR_WAILINGCAVERNS1.."|r with every party member at level 18 or lower upon entering the dungeon",
+    tooltip = "Defeat the bosses of " .. ClassColor .. ""..DUNGEON_FLOOR_WAILINGCAVERNS1.."|r with every party member at level 18 or lower upon entering the dungeon",
     icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_boss_mutanus_the_devourer.png", -- 236425
     level = 18,
     points = 10,
@@ -90,7 +92,7 @@ local Dungeons = {
   {
     achId = "SFK",
     title = "Shadowfang Keep",
-    tooltip = "Defeat the bosses of " .. HCA_SharedUtils.GetClassColor() .. "Shadowfang Keep|r with every party member at level 19 or lower upon entering the dungeon",
+    tooltip = "Defeat the bosses of " .. ClassColor .. "Shadowfang Keep|r with every party member at level 19 or lower upon entering the dungeon",
     icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_boss_archmagearugal.png", -- 254646
     level = 19,
     points = 10,
@@ -115,7 +117,7 @@ local Dungeons = {
   {
     achId = "BFD",
     title = "Blackfathom Deeps",
-    tooltip = "Defeat the bosses of " .. HCA_SharedUtils.GetClassColor() .. "Blackfathom Deeps|r with every party member at level 22 or lower upon entering the dungeon",
+    tooltip = "Defeat the bosses of " .. ClassColor .. "Blackfathom Deeps|r with every party member at level 22 or lower upon entering the dungeon",
     icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_boss_bazil_akumai.png", -- 236403
     level = 22,
     points = 10,
@@ -139,7 +141,7 @@ local Dungeons = {
   {
     achId = "STOCK",
     title = DUNGEON_FLOOR_THESTOCKADE1,
-    tooltip = "Defeat the bosses of " .. HCA_SharedUtils.GetClassColor() .. ""..DUNGEON_FLOOR_THESTOCKADE1.."|r with every party member at level 23 or lower upon entering the dungeon",
+    tooltip = "Defeat the bosses of " .. ClassColor .. ""..DUNGEON_FLOOR_THESTOCKADE1.."|r with every party member at level 23 or lower upon entering the dungeon",
     icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_boss_bazil_thredd.png", -- 236404
     level = 23,
     points = 10,
@@ -161,7 +163,7 @@ local Dungeons = {
   {
     achId = "RFK",
     title = DUNGEON_FLOOR_RAZORFENKRAUL1,
-    tooltip = "Defeat the bosses of " .. HCA_SharedUtils.GetClassColor() .. ""..DUNGEON_FLOOR_RAZORFENKRAUL1.."|r with every party member at level 25 or lower upon entering the dungeon",
+    tooltip = "Defeat the bosses of " .. ClassColor .. ""..DUNGEON_FLOOR_RAZORFENKRAUL1.."|r with every party member at level 25 or lower upon entering the dungeon",
     icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_boss_charlgarazorflank.png", -- 236405
     level = 25,
     points = 10,
@@ -183,7 +185,7 @@ local Dungeons = {
   {
     achId = "GNOM",
     title = DUNGEON_FLOOR_DUNMOROGH10,
-    tooltip = "Defeat the bosses of " .. HCA_SharedUtils.GetClassColor() .. ""..DUNGEON_FLOOR_DUNMOROGH10.."|r with every party member at level 26 or lower upon entering the dungeon",
+    tooltip = "Defeat the bosses of " .. ClassColor .. ""..DUNGEON_FLOOR_DUNMOROGH10.."|r with every party member at level 26 or lower upon entering the dungeon",
     icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_Boss_Mekgineer_Thermaplugg.png", -- 236424
     level = 26,
     points = 10,
@@ -205,7 +207,7 @@ local Dungeons = {
   --  {
   --   achId = "CurseOfDuskwood",
   --   title = "The Curse of Duskwood",
-  --   tooltip = "Defeat the enemies of " .. HCA_SharedUtils.GetClassColor() .. "Duskwood|r with every party member at level 35 or lower upon entering the dungeon",
+  --   tooltip = "Defeat the enemies of " .. ClassColor .. "Duskwood|r with every party member at level 35 or lower upon entering the dungeon",
   --   icon = 236757,
   --   level = 35,
   --   points = 10,
@@ -226,7 +228,7 @@ local Dungeons = {
   {
     achId = "SM",
     title = "Scarlet Monastery",
-    tooltip = "Defeat the bosses of " .. HCA_SharedUtils.GetClassColor() .. "Scarlet Monastery|r with every party member at level 38 or lower upon entering the dungeon",
+    tooltip = "Defeat the bosses of " .. ClassColor .. "Scarlet Monastery|r with every party member at level 38 or lower upon entering the dungeon",
     icon = 133154,
     level = 38,
     points = 10,
@@ -250,7 +252,7 @@ local Dungeons = {
   {
     achId = "RFD",
     title = DUNGEON_FLOOR_RAZORFENDOWNS1,
-    tooltip = "Defeat the bosses of " .. HCA_SharedUtils.GetClassColor() .. ""..DUNGEON_FLOOR_RAZORFENDOWNS1.."|r with every party member at level 35 or lower upon entering the dungeon",
+    tooltip = "Defeat the bosses of " .. ClassColor .. ""..DUNGEON_FLOOR_RAZORFENDOWNS1.."|r with every party member at level 35 or lower upon entering the dungeon",
     icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_boss_amnennar_the_coldbringer.png", -- 236400
     level = 35,
     points = 10,
@@ -272,7 +274,7 @@ local Dungeons = {
   {
     achId = "ULD",
     title = "Uldaman",
-    tooltip = "Defeat the bosses of " .. HCA_SharedUtils.GetClassColor() .. "Uldaman|r with every party member at level 38 or lower upon entering the dungeon",
+    tooltip = "Defeat the bosses of " .. ClassColor .. "Uldaman|r with every party member at level 38 or lower upon entering the dungeon",
     icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_boss_archaedas.png", -- 236401
     level = 38,
     points = 10,
@@ -296,7 +298,7 @@ local Dungeons = {
   {
     achId = "ZF",
     title = DUNGEON_FLOOR_ZULFARRAK,
-    tooltip = "Defeat the bosses of " .. HCA_SharedUtils.GetClassColor() .. ""..DUNGEON_FLOOR_ZULFARRAK.."|r with every party member at level 44 or lower upon entering the dungeon",
+    tooltip = "Defeat the bosses of " .. ClassColor .. ""..DUNGEON_FLOOR_ZULFARRAK.."|r with every party member at level 44 or lower upon entering the dungeon",
     icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_boss_chiefukorzsandscalp.png", -- 236406
     level = 44,
     points = 10,
@@ -321,7 +323,7 @@ local Dungeons = {
   {
     achId = "MARA",
     title = "Maraudon",
-    tooltip = "Defeat the bosses of " .. HCA_SharedUtils.GetClassColor() .. "Maraudon|r with every party member at level 46 or lower upon entering the dungeon",
+    tooltip = "Defeat the bosses of " .. ClassColor .. "Maraudon|r with every party member at level 46 or lower upon entering the dungeon",
     icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_boss_princesstheradras.png", -- 236432
     level = 46,
     points = 10,
@@ -345,7 +347,7 @@ local Dungeons = {
   {
     achId = "ST",
     title = DUNGEON_FLOOR_THETEMPLEOFATALHAKKAR1,
-    tooltip = "Defeat the bosses of " .. HCA_SharedUtils.GetClassColor() .. ""..DUNGEON_FLOOR_THETEMPLEOFATALHAKKAR1.."|r with every party member at level 48 or lower upon entering the dungeon",
+    tooltip = "Defeat the bosses of " .. ClassColor .. ""..DUNGEON_FLOOR_THETEMPLEOFATALHAKKAR1.."|r with every party member at level 48 or lower upon entering the dungeon",
     icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_boss_shadeoferanikus.png", -- 236434
     level = 48,
     points = 10,
@@ -370,7 +372,7 @@ local Dungeons = {
   {
     achId = "BRD",
     title = DUNGEON_FLOOR_BURNINGSTEPPES16,
-    tooltip = "Defeat the bosses of " .. HCA_SharedUtils.GetClassColor() .. ""..DUNGEON_FLOOR_BURNINGSTEPPES16.."|r with every party member at level 54 or lower upon entering the dungeon",
+    tooltip = "Defeat the bosses of " .. ClassColor .. ""..DUNGEON_FLOOR_BURNINGSTEPPES16.."|r with every party member at level 54 or lower upon entering the dungeon",
     icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_boss_emperordagranthaurissan.png", -- 236410
     level = 54,
     points = 10,
@@ -402,7 +404,7 @@ local Dungeons = {
   {
     achId = "BRS",
     title = "Lower Blackrock Spire",
-    tooltip = "Defeat the bosses of " .. HCA_SharedUtils.GetClassColor() .. "Lower Blackrock Spire|r with every party member at level 59 or lower upon entering the dungeon",
+    tooltip = "Defeat the bosses of " .. ClassColor .. "Lower Blackrock Spire|r with every party member at level 59 or lower upon entering the dungeon",
     icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_boss_overlord_wyrmthalak.png", -- 236429
     level = 59,
     points = 10,
@@ -427,7 +429,7 @@ local Dungeons = {
   {
     achId = "STRAT",
     title = "Stratholme",
-    tooltip = "Defeat the bosses of " .. HCA_SharedUtils.GetClassColor() .. "Stratholme|r with every party member at level 60 or lower upon entering the dungeon",
+    tooltip = "Defeat the bosses of " .. ClassColor .. "Stratholme|r with every party member at level 60 or lower upon entering the dungeon",
     icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Spell_deathknight_armyofthedead.png", -- 237511
     level = 60,
     points = 10,
@@ -462,7 +464,7 @@ local Dungeons = {
   {
     achId = "DM",
     title = "Dire Maul",
-    tooltip = "Defeat the bosses of " .. HCA_SharedUtils.GetClassColor() .. "Dire Maul|r with every party member at level 60 or lower upon entering the dungeon",
+    tooltip = "Defeat the bosses of " .. ClassColor .. "Dire Maul|r with every party member at level 60 or lower upon entering the dungeon",
     icon = 132340,
     level = 60,
     points = 10,
@@ -496,7 +498,7 @@ local Dungeons = {
   {
     achId = "SCHOLO",
     title = "Scholomance",
-    tooltip = "Defeat the bosses of " .. HCA_SharedUtils.GetClassColor() .. "Scholomance|r with every party member at level 60 or lower upon entering the dungeon",
+    tooltip = "Defeat the bosses of " .. ClassColor .. "Scholomance|r with every party member at level 60 or lower upon entering the dungeon",
     icon = 135974,
     level = 60,
     points = 10,
@@ -525,7 +527,7 @@ local Dungeons = {
   {
     achId = "RAMPARTS",
     title = "Hellfire Ramparts",
-    tooltip = "Defeat the bosses of " .. HCA_SharedUtils.GetClassColor() .. "Hellfire Ramparts|r with every party member at level 60 or lower upon entering the dungeon",
+    tooltip = "Defeat the bosses of " .. ClassColor .. "Hellfire Ramparts|r with every party member at level 60 or lower upon entering the dungeon",
     icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_boss_omartheunscarred_01.png", -- 236427
     level = 60,
     points = 10,
@@ -545,7 +547,7 @@ local Dungeons = {
   {
     achId = "BLOODFURNACE",
     title = "Blood Furnace",
-    tooltip = "Defeat the bosses of " .. HCA_SharedUtils.GetClassColor() .. "Blood Furnace|r with every party member at level 61 or lower upon entering the dungeon",
+    tooltip = "Defeat the bosses of " .. ClassColor .. "Blood Furnace|r with every party member at level 61 or lower upon entering the dungeon",
     icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_boss_kelidanthebreaker.png", -- 236417
     level = 61,
     points = 10,
@@ -564,7 +566,7 @@ local Dungeons = {
   {
     achId = "SLAVEPENS",
     title = "The Slave Pens",
-    tooltip = "Defeat the bosses of " .. HCA_SharedUtils.GetClassColor() .. "The Slave Pens|r with every party member at level 62 or lower upon entering the dungeon",
+    tooltip = "Defeat the bosses of " .. ClassColor .. "The Slave Pens|r with every party member at level 62 or lower upon entering the dungeon",
     icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_boss_quagmirran.png", -- 236433
     level = 62,
     points = 10,
@@ -583,7 +585,7 @@ local Dungeons = {
   {
     achId = "UNDERBOG",
     title = "The Underbog",
-    tooltip = "Defeat the bosses of " .. HCA_SharedUtils.GetClassColor() .. "The Underbog|r with every party member at level 63 or lower upon entering the dungeon",
+    tooltip = "Defeat the bosses of " .. ClassColor .. "The Underbog|r with every party member at level 63 or lower upon entering the dungeon",
     icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_boss_theblackstalker.png", -- 254502
     level = 63,
     points = 10,
@@ -603,7 +605,7 @@ local Dungeons = {
   {
     achId = "MANATOMBS",
     title = "Mana-Tombs",
-    tooltip = "Defeat the bosses of " .. HCA_SharedUtils.GetClassColor() .. "Mana-Tombs|r with every party member at level 64 or lower upon entering the dungeon",
+    tooltip = "Defeat the bosses of " .. ClassColor .. "Mana-Tombs|r with every party member at level 64 or lower upon entering the dungeon",
     icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_boss_nexus_prince_shaffar.png", -- 236426
     level = 64,
     points = 10,
@@ -622,7 +624,7 @@ local Dungeons = {
   {
     achId = "AC",
     title = "Auchenai Crypts",
-    tooltip = "Defeat the bosses of " .. HCA_SharedUtils.GetClassColor() .. "Auchenai Crypts|r with every party member at level 65 or lower upon entering the dungeon",
+    tooltip = "Defeat the bosses of " .. ClassColor .. "Auchenai Crypts|r with every party member at level 65 or lower upon entering the dungeon",
     icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_boss_exarch_maladaar.png", -- 236411
     level = 65,
     points = 10,
@@ -640,7 +642,7 @@ local Dungeons = {
   {
     achId = "OLDHILLSBRAD",
     title = "Old Hillsbrad Foothills",
-    tooltip = "Defeat the bosses of " .. HCA_SharedUtils.GetClassColor() .. "Old Hillsbrad Foothills|r with every party member at level 66 or lower upon entering the dungeon",
+    tooltip = "Defeat the bosses of " .. ClassColor .. "Old Hillsbrad Foothills|r with every party member at level 66 or lower upon entering the dungeon",
     icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_boss_epochhunter.png", -- 254647
     level = 66,
     points = 10,
@@ -659,7 +661,7 @@ local Dungeons = {
   {
     achId = "SETHEKK",
     title = "Sethekk Halls",
-    tooltip = "Defeat the bosses of " .. HCA_SharedUtils.GetClassColor() .. "Sethekk Halls|r",
+    tooltip = "Defeat the bosses of " .. ClassColor .. "Sethekk Halls|r",
     icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_boss_talonkingikiss.png", -- 236435
     level = 70,
     points = 10,
@@ -677,7 +679,7 @@ local Dungeons = {
   {
     achId = "BLACKMORASS",
     title = "The Black Morass",
-    tooltip = "Defeat the bosses of " .. HCA_SharedUtils.GetClassColor() .. "The Black Morass|r",
+    tooltip = "Defeat the bosses of " .. ClassColor .. "The Black Morass|r",
     icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_boss_aeonus_01.png", -- 254086
     level = 70,
     points = 10,
@@ -696,7 +698,7 @@ local Dungeons = {
   {
     achId = "MECHANAR",
     title = "The Mechanar",
-    tooltip = "Defeat the bosses of " .. HCA_SharedUtils.GetClassColor() .. "The Mechanar|r",
+    tooltip = "Defeat the bosses of " .. ClassColor .. "The Mechanar|r",
     icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_boss_pathaleonthecalculator.png", -- 236430
     level = 70,
     points = 10,
@@ -715,7 +717,7 @@ local Dungeons = {
   {
     achId = "SHATTEREDHALLS",
     title = "The Shattered Halls",
-    tooltip = "Defeat the bosses of " .. HCA_SharedUtils.GetClassColor() .. "The Shattered Halls|r",
+    tooltip = "Defeat the bosses of " .. ClassColor .. "The Shattered Halls|r",
     icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_boss_kargathbladefist_01.png", -- 254093
     level = 70,
     points = 10,
@@ -734,7 +736,7 @@ local Dungeons = {
   {
     achId = "SLABS",
     title = "Shadow Labyrinth",
-    tooltip = "Defeat the bosses of " .. HCA_SharedUtils.GetClassColor() .. "Shadow Labyrinth|r",
+    tooltip = "Defeat the bosses of " .. ClassColor .. "Shadow Labyrinth|r",
     icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_boss_murmur.png", -- 254501
     level = 70,
     points = 10,
@@ -754,7 +756,7 @@ local Dungeons = {
   {
     achId = "STEAMVAULT",
     title = "The Steamvault",
-    tooltip = "Defeat the bosses of " .. HCA_SharedUtils.GetClassColor() .. "The Steamvault|r",
+    tooltip = "Defeat the bosses of " .. ClassColor .. "The Steamvault|r",
     icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_boss_warlord_kalithresh.png", -- 236436
     level = 70,
     points = 10,
@@ -773,7 +775,7 @@ local Dungeons = {
   {
     achId = "BOTANICA",
     title = "The Botanica",
-    tooltip = "Defeat the bosses of " .. HCA_SharedUtils.GetClassColor() .. "The Botanica|r",
+    tooltip = "Defeat the bosses of " .. ClassColor .. "The Botanica|r",
     icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_boss_warpsplinter.png", -- 236437
     level = 70,
     points = 10,
@@ -794,7 +796,7 @@ local Dungeons = {
   {
     achId = "MT",
     title = "Magisters' Terrace",
-    tooltip = "Defeat the bosses of " .. HCA_SharedUtils.GetClassColor() .. "Magisters' Terrace|r",
+    tooltip = "Defeat the bosses of " .. ClassColor .. "Magisters' Terrace|r",
     icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_Boss_Kael'thasSunstrider_01.png", -- 250117
     level = 70,
     points = 10,
@@ -814,7 +816,7 @@ local Dungeons = {
   {
     achId = "ARCATRAZ",
     title = "The Arcatraz",
-    tooltip = "Defeat the bosses of " .. HCA_SharedUtils.GetClassColor() .. "The Arcatraz|r",
+    tooltip = "Defeat the bosses of " .. ClassColor .. "The Arcatraz|r",
     icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_boss_harbinger_skyriss.png", -- 236414
     level = 70,
     points = 10,
@@ -836,18 +838,20 @@ local Dungeons = {
 ---------------------------------------
 
 -- Defer registration until PLAYER_LOGIN to prevent load timeouts
-_G.HCA_RegistrationQueue = _G.HCA_RegistrationQueue or {}
-
--- Queue all dungeon achievements for deferred registration
-for _, dungeon in ipairs(Dungeons) do
-  -- Queue base dungeon achievement
-  table_insert(_G.HCA_RegistrationQueue, function()
-    DungeonCommon.registerDungeonAchievement(dungeon)
-  end)
-  -- Queue variations (if checkboxes are enabled)
-  if DungeonCommon.registerDungeonVariations then
-    table_insert(_G.HCA_RegistrationQueue, function()
-      DungeonCommon.registerDungeonVariations(dungeon)
-    end)
+if addon then
+  addon.RegistrationQueue = addon.RegistrationQueue or {}
+  local queue = addon.RegistrationQueue
+  local DungeonCommon = addon and addon.DungeonCommon
+  if DungeonCommon and DungeonCommon.registerDungeonAchievement then
+    for _, dungeon in ipairs(Dungeons) do
+      table_insert(queue, function()
+        DungeonCommon.registerDungeonAchievement(dungeon)
+      end)
+      if DungeonCommon.registerDungeonVariations then
+        table_insert(queue, function()
+          DungeonCommon.registerDungeonVariations(dungeon)
+        end)
+      end
+    end
   end
 end

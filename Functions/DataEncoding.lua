@@ -1,10 +1,6 @@
--- DataEncoding.lua
--- Standalone Base64 encoding/decoding and data serialization functions
--- Can be used anywhere in the addon to encode/decode data structures
-
--- Load AceSerializer
 local AceSerialize = LibStub("AceSerializer-3.0")
 
+local addonName, addon = ...
 local string_byte = string.byte
 local table_concat = table.concat
 
@@ -156,7 +152,7 @@ end
 -- Encodes any Lua data structure into a Base64 string
 -- @param data: Any Lua data structure (table, string, number, etc.)
 -- @return: Base64 encoded string
-function HCA_EncodeData(data)
+local function EncodeData(data)
     local serialized = AceSerialize:Serialize(data)
     -- Just encode to base64 - still makes it non-readable and slightly smaller
     return base64encode(serialized)
@@ -166,7 +162,7 @@ end
 -- Decodes a Base64 string back into a Lua data structure
 -- @param encoded: Base64 encoded string
 -- @return: success (boolean), data or error message
-function HCA_DecodeData(encoded)
+local function DecodeData(encoded)
     if not encoded or encoded == "" then
         return false, "Empty encoded data"
     end
@@ -193,3 +189,7 @@ function HCA_DecodeData(encoded)
     return deserializeSuccess, deserializeResult
 end
 
+if addon then
+    addon.EncodeData = EncodeData
+    addon.DecodeData = DecodeData
+end

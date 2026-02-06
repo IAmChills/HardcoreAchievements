@@ -3,8 +3,9 @@
 
 local HCA_LINK_PREFIX = "hcaach"
 
--- Localize frequently-used WoW API globals (micro-optimization, no behavior change)
-local _G = _G
+local addonName, addon = ...
+local GuildFirst = (addon and addon.GuildFirst)
+local GuildFirst_DefById = addon and addon.GuildFirst_DefById
 local UnitGUID = UnitGUID
 local UnitName = UnitName
 local UnitLevel = UnitLevel
@@ -16,24 +17,24 @@ local table_concat = table.concat
 local string_format = string.format
 
 local function GetAchievementById(achId)
-	if _G.Achievements then
-		for _, rec in ipairs(_G.Achievements) do
+	if addon and addon.CatalogAchievements then
+		for _, rec in ipairs(addon.CatalogAchievements) do
 			if tostring(rec.achId) == tostring(achId) then
 				return rec
 			end
 		end
 	end
 	-- Fallback to dungeon/other defs registry if present
-	if _G.HCA_AchievementDefs and _G.HCA_AchievementDefs[tostring(achId)] then
-		return _G.HCA_AchievementDefs[tostring(achId)]
+	if addon and addon.AchievementDefs and addon.AchievementDefs[tostring(achId)] then
+		return addon.AchievementDefs[tostring(achId)]
 	end
-	-- Guild-first achievements (from GuildFirstCatalog, stored in HCA_GuildFirst_DefById)
-	if _G.HCA_GuildFirst_DefById and _G.HCA_GuildFirst_DefById[tostring(achId)] then
-		return _G.HCA_GuildFirst_DefById[tostring(achId)]
+	-- Guild-first achievements (from GuildFirstCatalog)
+	if GuildFirst_DefById and GuildFirst_DefById[tostring(achId)] then
+		return GuildFirst_DefById[tostring(achId)]
 	end
 	-- Check achievement panel rows for reputation and dungeon set achievements
-	if _G.AchievementPanel and _G.AchievementPanel.achievements then
-		for _, row in ipairs(_G.AchievementPanel.achievements) do
+	if (addon and addon.AchievementPanel) and (addon and addon.AchievementPanel).achievements then
+		for _, row in ipairs((addon and addon.AchievementPanel).achievements) do
 			local rowId = row.id or row.achId
 			if rowId and tostring(rowId) == tostring(achId) then
 				-- Return the definition from row._def if available, or construct from row data
@@ -57,26 +58,26 @@ end
 
 --- Guild-first achievements use secret/hiddenUntilComplete in the UI but should never show secret placeholders when linked in chat.
 local function IsGuildFirstAchievement(achId)
-	return _G.HCA_GuildFirst_DefById and _G.HCA_GuildFirst_DefById[tostring(achId or "")]
+	return GuildFirst_DefById and GuildFirst_DefById[tostring(achId or "")]
 end
 
 local function ViewerHasCompletedAchievement(achId)
     local key = tostring(achId)
     -- Guild-first achievements: completion is "claimed by me" in the guild-first DB
-    if _G.HCA_GuildFirst_DefById and _G.HCA_GuildFirst_DefById[key] and _G.HCA_GuildFirst and type(_G.HCA_GuildFirst.IsClaimedByMe) == "function" then
-        if _G.HCA_GuildFirst:IsClaimedByMe(key) then
+    if GuildFirst_DefById and GuildFirst_DefById[key] and GuildFirst and type(GuildFirst.IsClaimedByMe) == "function" then
+        if GuildFirst:IsClaimedByMe(key) then
             return true
         end
     end
-    local getDB = _G.HardcoreAchievements_GetCharDB
+    local getDB = addon and addon.GetCharDB
     if type(getDB) == "function" then
         local _, cdb = getDB()
         if cdb and cdb.achievements and cdb.achievements[key] and cdb.achievements[key].completed then
             return true
         end
     end
-    if _G.AchievementPanel and _G.AchievementPanel.achievements then
-        for _, row in ipairs(_G.AchievementPanel.achievements) do
+    if (addon and addon.AchievementPanel) and (addon and addon.AchievementPanel).achievements then
+        for _, row in ipairs((addon and addon.AchievementPanel).achievements) do
             if tostring(row.id) == key and row.completed then
                 return true
             end
@@ -85,9 +86,9 @@ local function ViewerHasCompletedAchievement(achId)
     return false
 end
 
--- Public: build a bracket format string for chat (used before chat filter converts to hyperlink)
+-- Build a bracket format string for chat (used before chat filter converts to hyperlink)
 -- Format: [HCA:(achId)] - icon, points, and other data are looked up locally on receiver's end
-function HCA_GetAchievementBracket(achId)
+local function GetAchievementBracket(achId)
 	-- For some achievements, the title is player-specific (e.g., includes the sender's name).
 	-- In those cases, send an expanded bracket form so receivers don't recompute a different title locally.
 	-- Pattern handled by ChatFilter_HCA below: [HCA: Title (achId)]
@@ -100,7 +101,7 @@ end
 
 -- Public: build a hyperlink string for an achievement id and title
 -- Icon and other data are looked up locally on the receiver's end using the achId
-function HCA_GetAchievementHyperlink(achId, title, senderName, senderGuid)
+local function GetAchievementHyperlink(achId, title, senderName, senderGuid)
 	-- We intentionally do NOT encode icon/points in the link; those are always looked up locally.
 	-- We do include sender identity metadata so certain achievements can render a sender-stable title
 	local guid = senderGuid
@@ -194,8 +195,8 @@ if Old_ItemRef_SetHyperlink then
             if not usingSecretPoints then
                 -- First try to get points from the achievement row (calculated with multipliers)
                 local rowPoints = nil
-                if _G.AchievementPanel and _G.AchievementPanel.achievements then
-                    for _, row in ipairs(_G.AchievementPanel.achievements) do
+                if (addon and addon.AchievementPanel) and (addon and addon.AchievementPanel).achievements then
+                    for _, row in ipairs((addon and addon.AchievementPanel).achievements) do
                         if tostring(row.id) == tostring(achId) or tostring(row.achId) == tostring(achId) then
                             rowPoints = row.points
                             break
@@ -227,13 +228,13 @@ if Old_ItemRef_SetHyperlink then
 				showedDungeonDetails = true
 				ItemRefTooltip:AddLine(" ")
 				ItemRefTooltip:AddLine("Required Bosses:", 0, 1, 0)
-				local progressFn = _G.HardcoreAchievements_GetProgress
+				local progressFn = addon and addon.GetProgress
 				local progress = progressFn and progressFn(rec.achId) or nil
 				local counts = (progress and progress.counts) or {}
 				
 				-- Determine which boss name function to use (raid vs dungeon)
 				local isRaid = rec.isRaid or false
-				local getBossNameFn = isRaid and _G.HCA_GetRaidBossName or _G.HCA_GetBossName
+				local getBossNameFn = isRaid and (addon and addon.GetRaidBossName) or (addon and addon.GetBossName)
 				
 				-- Use bossOrder if available (for raids), otherwise build sorted list
 				local keys = {}
@@ -315,7 +316,7 @@ if Old_ItemRef_SetHyperlink then
 				showedDungeonSetDetails = true
 				ItemRefTooltip:AddLine(" ")
 				ItemRefTooltip:AddLine("Required Items:", 0, 1, 0)
-				local progressFn = _G.HardcoreAchievements_GetProgress
+				local progressFn = addon and addon.GetProgress
 				local progress = progressFn and progressFn(rec.achId) or nil
 				local itemOwned = (progress and progress.itemOwned) or {}
 				local isCompleted = ViewerHasCompletedAchievement(achId)
@@ -337,7 +338,7 @@ if Old_ItemRef_SetHyperlink then
 						owned = true
 					end
 					
-					local itemName = _G.HCA_GetItemName and _G.HCA_GetItemName(itemId) or ("Item " .. tostring(itemId))
+					local itemName = addon and addon.GetItemName and addon.GetItemName(itemId) or ("Item " .. tostring(itemId))
 					local lr, lg, lb = owned and 1 or 0.5, owned and 1 or 0.5, owned and 1 or 0.5
 					ItemRefTooltip:AddLine(itemName, lr, lg, lb)
 				end
@@ -371,8 +372,8 @@ if Old_ItemRef_SetHyperlink then
             if not isCompleted then
                 -- Look up the row from AchievementPanel to get maxLevel
                 local row = nil
-                if _G.AchievementPanel and _G.AchievementPanel.achievements then
-                    for _, r in ipairs(_G.AchievementPanel.achievements) do
+                if (addon and addon.AchievementPanel) and (addon and addon.AchievementPanel).achievements then
+                    for _, r in ipairs((addon and addon.AchievementPanel).achievements) do
                         if tostring(r.id) == tostring(achId) or tostring(r.achId) == tostring(achId) then
                             row = r
                             break
@@ -438,7 +439,7 @@ local function ChatFilter_HCA(chatFrame, event, msg, author, ...)
 			-- Prefer the sender-supplied title from the message, so player-specific titles remain stable.
             displayTitle = (title and title ~= "" and title) or (rec and rec.title) or tostring(id)
         end
-        local link = HCA_GetAchievementHyperlink(id, displayTitle, senderNameForLink)
+        local link = GetAchievementHyperlink(id, displayTitle, senderNameForLink)
         changed = true
         return link
     end)
@@ -451,7 +452,7 @@ local function ChatFilter_HCA(chatFrame, event, msg, author, ...)
         else
             displayTitle = (rec and rec.title) or tostring(id)
         end
-        local link = HCA_GetAchievementHyperlink(id, displayTitle, senderNameForLink)
+        local link = GetAchievementHyperlink(id, displayTitle, senderNameForLink)
         changed = true
         return link
     end)
@@ -479,4 +480,7 @@ if ChatFrame_AddMessageEventFilter then
 	ChatFrame_AddMessageEventFilter("CHAT_MSG_CHANNEL", ChatFilter_HCA)
 end
 
-
+if addon then
+	addon.GetAchievementBracket = GetAchievementBracket
+	addon.GetAchievementHyperlink = GetAchievementHyperlink
+end
