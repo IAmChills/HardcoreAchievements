@@ -16,7 +16,7 @@ local C_Timer = C_Timer
 ---------------------------------------
 
 -- Get item names from item IDs (you can expand this with a lookup table)
-local function HCA_GetItemName(itemId)
+local function GetItemName(itemId)
   -- This is a basic mapping - you can expand this with more item names
   local itemNames = {
     -- Defias Set (Rogue)
@@ -310,7 +310,7 @@ function DungeonSetCommon.registerDungeonSetAchievement(def)
   
   -- Create unique variable names
   local rowVarName = achId .. "_Row"
-  local registerFuncName = "HCA_Register" .. achId
+  local registerFuncName = "Register" .. achId
   
   ---------------------------------------
   -- State Management
@@ -467,7 +467,7 @@ function DungeonSetCommon.registerDungeonSetAchievement(def)
                 owned = true
               end
               
-              local itemName = HCA_GetItemName(itemId)
+              local itemName = GetItemName(itemId)
               
               if owned then
                 GameTooltip:AddLine(itemName, 1, 1, 1) -- White for owned
@@ -660,7 +660,7 @@ end
 ---------------------------------------
 
 if addon then
-  addon.GetItemName = HCA_GetItemName
+  addon.GetItemName = GetItemName
   addon.DungeonSetCommon = DungeonSetCommon
 end
 

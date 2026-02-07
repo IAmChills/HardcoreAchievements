@@ -4,6 +4,7 @@
 local HCA_LINK_PREFIX = "hcaach"
 
 local addonName, addon = ...
+local GetAchievementDisplayValues = (addon and addon.GetAchievementDisplayValues)
 local GuildFirst = (addon and addon.GuildFirst)
 local GuildFirst_DefById = addon and addon.GuildFirst_DefById
 local UnitGUID = UnitGUID
@@ -123,8 +124,8 @@ if Old_ItemRef_SetHyperlink then
 		-- Extract the visible title from the link text (between |h[ and ]|h) if present.
 		-- This is what was shown in chat, and is sender-stable when the sender provided it.
 		local displayTitleFromLink = string.match(linkStr, "%|h%[([^%]]-)%]%|h")
-        -- Extract hyperlink part (between |H and |h) or use the whole string if no |H wrapper
-        local hyperlinkPart = string.match(linkStr, "^%|H([^|]+)%|h") or linkStr
+        -- Extract hyperlink part (between |H and |h); link may start with |cAARRGGBB color code
+        local hyperlinkPart = string.match(linkStr, "%|H([^|]+)%|h") or linkStr
         -- Parse link format:
 		-- v1: hcaach:achId:senderGuid
 		-- v2: hcaach:achId:senderGuid:senderName
@@ -143,10 +144,22 @@ if Old_ItemRef_SetHyperlink then
 			ItemRefTooltip:ClearLines()
 
             local rec = GetAchievementById(achId)
-            local title = rec and rec.title or ("Achievement " .. tostring(achId))
-            local tooltip = rec and rec.tooltip or ""
-            local icon = 136116  -- Default fallback icon
-            local points = 0
+            local viewerCompleted = ViewerHasCompletedAchievement(achId)
+            local skipSecrecy = IsGuildFirstAchievement(achId)
+            -- Use centralized display logic: client-side per-viewer secrecy
+            local icon, title, tooltip, points
+            if GetAchievementDisplayValues and rec then
+                icon, title, tooltip, points = GetAchievementDisplayValues(rec, {
+                    useSourceCompletion = false,
+                    viewerCompleted = viewerCompleted,
+                    skipSecrecy = skipSecrecy,
+                })
+            else
+                icon = rec and rec.icon or 136116
+                title = rec and rec.title or ("Achievement " .. tostring(achId))
+                tooltip = rec and rec.tooltip or ""
+                points = rec and tonumber(rec.points) or 0
+            end
 
 			-- Sender-stable title override for player-specific titles:
 			-- if the achievement opts in, prefer the visible title from the link text itself.
@@ -164,34 +177,27 @@ if Old_ItemRef_SetHyperlink then
 				end
 			end
 
-            -- Per-viewer secrecy: if secret and viewer hasn't completed, show secret placeholders (never for guild-first links)
-            local isSecret = rec and rec.secret and not IsGuildFirstAchievement(achId)
-            local viewerCompleted = ViewerHasCompletedAchievement(achId)
-            local usingSecretPoints = false
-            if isSecret and not viewerCompleted then
-                title = (rec and rec.secretTitle) or "Secret"
-                tooltip = (rec and rec.secretTooltip) or "Hidden"
-                icon = (rec and rec.secretIcon) or icon
-                points = (rec and tonumber(rec.secretPoints)) or 0
-                usingSecretPoints = true
-            else
-                -- Always use icon from local achievement data (client-side lookup)
-                if rec and rec.icon then
-                    icon = rec.icon
-                end
-            end
-
+            local usingSecretPoints = (rec and (rec.secret or rec.secretTitle) and not skipSecrecy and not viewerCompleted)
 			-- Sender-stable tooltip override (only when the viewer is allowed to see the real tooltip).
 			-- Define `def.linkTooltip = function(senderName, senderGuid) return "..." end` on an achievement.
-			if (not isSecret or viewerCompleted) and rec and type(rec.linkTooltip) == "function" and (senderName ~= "" or senderGuid ~= "") then
-				local ok, linkTip = pcall(rec.linkTooltip, senderName, senderGuid)
+			-- Prefer sender name from link payload; fallback: extract from displayTitleFromLink for "X the Keeper" style.
+			local tooltipSenderName = (senderName and senderName ~= "") and senderName or nil
+			if not tooltipSenderName and displayTitleFromLink and displayTitleFromLink ~= "" and rec and rec.linkUsesSenderTitle then
+				local extracted = displayTitleFromLink:match("^(.+) the Keeper$")
+				if extracted and extracted ~= "" then
+					tooltipSenderName = extracted
+				end
+			end
+			-- Always use linkTooltip when defined (it produces sender-stable tooltip; pass senderName or "" if unknown)
+			if (not usingSecretPoints) and rec and type(rec.linkTooltip) == "function" then
+				local ok, linkTip = pcall(rec.linkTooltip, tooltipSenderName or "", senderGuid or "")
 				if ok and type(linkTip) == "string" and linkTip ~= "" then
 					tooltip = linkTip
 				end
 			end
 
             -- Always use local points, ignore sender's points from the link
-            -- Only set points if we're not using secret points (which were already set above)
+            -- For non-secret: prefer row points (multiplier-calculated) over def base points
             if not usingSecretPoints then
                 -- First try to get points from the achievement row (calculated with multipliers)
                 local rowPoints = nil
@@ -345,22 +351,20 @@ if Old_ItemRef_SetHyperlink then
 			end
 
             -- Non-dungeon: Zone only (points shown with completion status)
+            -- Do not use mapName/mapID here - they often fall back to title; avoid showing title in zone slot
             if not showedDungeonDetails and not showedDungeonSetDetails then
                 local zoneText
                 if rec then
-                    if type(rec.zone) == "string" then
+                    if type(rec.zone) == "string" and rec.zone ~= "" then
                         zoneText = rec.zone
-                    elseif type(rec.zoneName) == "string" then
+                    elseif type(rec.zoneName) == "string" and rec.zoneName ~= "" then
                         zoneText = rec.zoneName
-                    elseif type(rec.zoneText) == "string" then
+                    elseif type(rec.zoneText) == "string" and rec.zoneText ~= "" then
                         zoneText = rec.zoneText
-                    elseif rec.mapName then
-                        zoneText = tostring(rec.mapName)
-                    elseif rec.mapID then
-                        zoneText = tostring(rec.mapID)
                     end
                 end
-                if zoneText and zoneText ~= "" then
+                -- Skip if zoneText equals title (e.g. mapName fallback) - don't show title in zone slot
+                if zoneText and zoneText ~= "" and zoneText ~= title then
                     ItemRefTooltip:AddLine(zoneText, 0.412, 0.678, 0.788)
                 end
             end
@@ -430,25 +434,44 @@ local function ChatFilter_HCA(chatFrame, event, msg, author, ...)
         return ViewerHasCompletedAchievement(id)
     end
     -- Extended form with title: [HCA: Title (id)]
+    -- Title from message is sender-stable; prefer it for linkUsesSenderTitle
     msg = msg:gsub("%[HCA:%s*(.-)%s*%(([^%)]+)%)%]", function(title, id)
         local rec = GetAchievementById(id)
         local displayTitle
-        if rec and rec.secret and not ViewerHasCompleted(id) and not IsGuildFirstAchievement(id) then
-            displayTitle = rec.secretTitle or "Secret"
+        if rec and rec.linkUsesSenderTitle and title and title ~= "" then
+            displayTitle = title
+        elseif rec and rec.linkUsesSenderTitle and senderNameForLink ~= "" and type(rec.linkTitle) == "function" then
+            local ok, linkTitle = pcall(rec.linkTitle, senderNameForLink, "", title)
+            displayTitle = (ok and type(linkTitle) == "string" and linkTitle ~= "") and linkTitle or (rec.title or tostring(id))
+        elseif GetAchievementDisplayValues and rec then
+            local _, linkTitle = GetAchievementDisplayValues(rec, {
+                useSourceCompletion = false,
+                viewerCompleted = ViewerHasCompleted(id),
+                skipSecrecy = IsGuildFirstAchievement(id),
+            })
+            displayTitle = linkTitle
         else
-			-- Prefer the sender-supplied title from the message, so player-specific titles remain stable.
-            displayTitle = (title and title ~= "" and title) or (rec and rec.title) or tostring(id)
+            displayTitle = (rec and rec.title) or tostring(id)
         end
         local link = GetAchievementHyperlink(id, displayTitle, senderNameForLink)
         changed = true
         return link
     end)
     -- Compact form without title: [HCA:(id)]
+    -- For linkUsesSenderTitle: use linkTitle(senderNameForLink) so all viewers see sender's name
     msg = msg:gsub("%[HCA:%s*%(([^%)]+)%)%]", function(id)
         local rec = GetAchievementById(id)
         local displayTitle
-        if rec and rec.secret and not ViewerHasCompleted(id) and not IsGuildFirstAchievement(id) then
-            displayTitle = rec.secretTitle or "Secret"
+        if rec and rec.linkUsesSenderTitle and senderNameForLink ~= "" and type(rec.linkTitle) == "function" then
+            local ok, linkTitle = pcall(rec.linkTitle, senderNameForLink, "", nil)
+            displayTitle = (ok and type(linkTitle) == "string" and linkTitle ~= "") and linkTitle or (rec.title or tostring(id))
+        elseif GetAchievementDisplayValues and rec then
+            local _, linkTitle = GetAchievementDisplayValues(rec, {
+                useSourceCompletion = false,
+                viewerCompleted = ViewerHasCompleted(id),
+                skipSecrecy = IsGuildFirstAchievement(id),
+            })
+            displayTitle = linkTitle
         else
             displayTitle = (rec and rec.title) or tostring(id)
         end

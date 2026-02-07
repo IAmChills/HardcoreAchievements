@@ -259,10 +259,10 @@ local function EvaluateCompletions(skillID)
         if not IsRowCompleted(row, cdb) and type(completionFn) == "function" then
             local ok, result = pcall(completionFn)
             if ok and result == true then
-                HCA_MarkRowCompleted(row)
+                MarkRowCompleted(row)
                 local icon = row.Icon and row.Icon:GetTexture() or 136116
                 local title = row.Title and row.Title:GetText() or "Achievement"
-                HCA_AchToast_Show(icon, title, row.points, row)
+                CreateAchToast(icon, title, row.points, row)
                 anyCompleted = true
             end
         end

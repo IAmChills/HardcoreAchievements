@@ -1,5 +1,3 @@
-HCA_SharedUtils = {}
-
 local addonName, addon = ...
 local UnitBuff = UnitBuff
 local UnitClass = UnitClass
@@ -169,10 +167,45 @@ local function IsSelfFound()
 end
 
 -- =========================================================
+-- Achievement Display Values (centralized for frames and links)
+-- =========================================================
+-- Returns icon, title, tooltip, points to display.
+-- For frames: pass row/srow with .completed; useSourceCompletion=true (default).
+-- For links: pass def; useSourceCompletion=false, viewerCompleted=ViewerHasCompletedAchievement(achId).
+-- skipSecrecy: if true (e.g. guild-first), never use secret placeholders.
+local function GetAchievementDisplayValues(source, options)
+    if not source then return 136116, "Achievement", "", 0 end
+    options = options or {}
+    local useSourceCompletion = options.useSourceCompletion ~= false
+    local viewerCompleted = options.viewerCompleted or false
+    local skipSecrecy = options.skipSecrecy or false
+    
+    local completed = useSourceCompletion and (source.completed == true) or viewerCompleted
+    local isSecret = not skipSecrecy and (
+        source.secret or source.isSecretAchievement or
+        source.secretTitle or source.secretTooltip or source.secretIcon or source.secretPoints
+    )
+    local useSecret = isSecret and not completed
+    
+    if useSecret then
+        return
+            source.secretIcon or 134400,
+            source.secretTitle or "Secret",
+            source.secretTooltip or "Hidden",
+            tonumber(source.secretPoints) or 0
+    end
+    local icon = (source.Icon and source.Icon.GetTexture and source.Icon:GetTexture()) or source.icon or source.revealIcon or 136116
+    local title = (source.Title and source.Title.GetText and source.Title:GetText()) or source.title or source.revealTitle or (source.id or source.achId or "")
+    local tooltip = source.tooltip or source.revealTooltip or ""
+    local points = tonumber(source.points) or 0
+    return icon, title, tooltip, points
+end
+
+-- =========================================================
 -- Achievement Definition Registration
 -- =========================================================
 
--- Unified function to register achievement definitions to HCA_AchievementDefs
+-- Unified function to register achievement definitions to AchievementDefs
 -- This ensures all achievement types (quest, dungeon, raid, meta, etc.) use the same structure
 -- Parameters:
 --   def: The achievement definition table (from Catalog files)
@@ -214,6 +247,16 @@ local function RegisterAchievementDef(def, overrides)
         isMetaAchievement = def.isMetaAchievement or false,
         isVariation = def.isVariation or false,
         baseAchId = def.baseAchId,
+        -- Secret achievement fields (for links and UI)
+        secret = def.secret,
+        secretTitle = def.secretTitle,
+        secretTooltip = def.secretTooltip,
+        secretIcon = def.secretIcon,
+        secretPoints = def.secretPoints,
+        -- Link display (sender-stable title/tooltip)
+        linkUsesSenderTitle = def.linkUsesSenderTitle,
+        linkTitle = def.linkTitle,
+        linkTooltip = def.linkTooltip,
     }
     
     -- Apply any overrides (e.g., raids might set level = nil)
@@ -232,6 +275,7 @@ end
 if addon then
     addon.GetSetting = GetSetting
     addon.GetClassColor = GetClassColor
+    addon.GetAchievementDisplayValues = GetAchievementDisplayValues
     addon.UpdateCharacterPanelTabVisibility = UpdateCharacterPanelTabVisibility
     addon.SetUseCharacterPanel = SetUseCharacterPanel
     addon.RegisterAchievementDef = RegisterAchievementDef

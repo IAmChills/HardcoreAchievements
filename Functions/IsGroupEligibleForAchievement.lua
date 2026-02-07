@@ -267,8 +267,9 @@ local function IsGroupEligibleForAchievement(MAX_LEVEL, ACH_ID, destGUID)
     -------------------------------------------------------------------------
     -- Primary: Check external players tracked by event bridge
     -- This works even if we can't check threat directly (uses stored threat data from combat)
-    if targetGUID and _G.GetExternalPlayersForNPC then
-            local externalPlayers = _G.GetExternalPlayersForNPC(targetGUID)
+    if targetGUID then
+            local GetExternalPlayersForNPC = addon and addon.GetExternalPlayersForNPC
+            local externalPlayers = (type(GetExternalPlayersForNPC) == "function" and GetExternalPlayersForNPC(targetGUID)) or {}
             local playerThreat = 0
             
             -- Only check player threat if we have a valid target unit
@@ -385,8 +386,9 @@ local function IsGroupEligibleForAchievement(MAX_LEVEL, ACH_ID, destGUID)
     
     -- If destGUID was provided but we couldn't check threat (e.g., targeting a player),
     -- and external players were tracked, be conservative and check them
-    if destGUID and not canCheckThreat and _G.GetExternalPlayersForNPC then
-        local externalPlayers = _G.GetExternalPlayersForNPC(destGUID)
+    if destGUID and not canCheckThreat then
+        local GetExternalPlayersForNPC = addon and addon.GetExternalPlayersForNPC
+        local externalPlayers = (type(GetExternalPlayersForNPC) == "function" and GetExternalPlayersForNPC(destGUID)) or {}
         -- If any external players were tracked, disqualify (conservative approach when we can't verify)
         for externalGUID, data in pairs(externalPlayers) do
             -- If we have threat data and it's significant, disqualify

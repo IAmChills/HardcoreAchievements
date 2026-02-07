@@ -24,6 +24,7 @@ local AchievementTracker = (addon and addon.AchievementTracker)
 local GetCharDB = (addon and addon.GetCharDB)
 local IsRowOutleveledGlobal = (addon and addon.IsRowOutleveled)
 local IsSelfFound = (addon and addon.IsSelfFound)
+local SetStatusTextOnRow = (addon and addon.SetStatusTextOnRow)
 local table_insert = table.insert
 local table_sort = table.sort
 local string_format = string.format
@@ -545,102 +546,17 @@ local function ApplyDashboardRecentCompactLayout(row)
   end
 end
 
--- Helper function to update status text using the same logic as main panel
+-- Helper function to update status text using centralized logic (same as character panel)
 local function UpdateStatusTextDashboard(row)
-    if not row or not row.Sub or not SetStatusTextOnRow then return end
-    
+    if not row or not row.Sub or type(SetStatusTextOnRow) ~= "function" then return end
     local rowId = row.achId or row.id
     if not rowId then return end
-    
-    -- Get progress data
-    local progress = nil
-    if addon and addon.GetProgress then
-        progress = addon.GetProgress(rowId)
-    end
-    
-    local hasSoloStatus = progress and (progress.soloKill or progress.soloQuest)
-    local hasIneligibleKill = progress and progress.ineligibleKill
-    local isOutleveled = IsRowOutleveled(row)
-    
-    -- Check if achievement requires both kill and quest
-    local requiresBoth = (row.killTracker ~= nil) and (row.questTracker ~= nil)
-    
-    -- Check if kills are satisfied but quest is pending
-    local killsSatisfied = false
-    if requiresBoth and progress and not isOutleveled then
-        local hasKill = false
-        if progress.killed then
-            hasKill = true
-        elseif progress.counts and next(progress.counts) ~= nil then
-            if progress.eligibleCounts then
-                -- Find the achievement definition to check requiredKills
-                local achDef = nil
-                if addon and addon.CatalogAchievements then
-                    for _, def in ipairs(addon.CatalogAchievements) do
-                        if def.achId == rowId then
-                            achDef = def
-                            break
-                        end
-                    end
-                end
-                
-                if achDef and achDef.requiredKills then
-                    local allSatisfied = true
-                    for npcId, requiredCount in pairs(achDef.requiredKills) do
-                        local idNum = tonumber(npcId) or npcId
-                        local current = progress.eligibleCounts[idNum] or progress.eligibleCounts[tostring(idNum)] or 0
-                        local required = tonumber(requiredCount) or 1
-                        if current < required then
-                            allSatisfied = false
-                            break
-                        end
-                    end
-                    hasKill = allSatisfied
-                else
-                    hasKill = progress.killed or false
-                end
-            elseif progress.killed then
-                hasKill = true
-            end
-        end
-        
-        local questNotTurnedIn = not progress.quest
-        killsSatisfied = hasKill and questNotTurnedIn
-    end
-    
-    -- Get solo mode status
-    local isSoloMode = (addon and addon.IsSoloModeEnabled and addon.IsSoloModeEnabled()) or false
-    
-    -- Check if achievement was completed solo
-    local wasSolo = false
-    if row.completed then
-        if GetCharDB then
-            local _, cdb = GetCharDB()
-            if cdb and cdb.achievements and rowId then
-                local achRec = cdb.achievements[rowId]
-                wasSolo = achRec and achRec.wasSolo or false
-            end
-        end
-    end
-    
-    -- Use the centralized status text function
-    SetStatusTextOnRow(row, {
-        completed = row.completed or false,
-        hasSoloStatus = hasSoloStatus,
-        hasIneligibleKill = hasIneligibleKill,
-        requiresBoth = requiresBoth,
-        killsSatisfied = killsSatisfied,
-        isSelfFound = IsSelfFound(),
-        isSoloMode = isSoloMode,
-        wasSolo = wasSolo,
-        allowSoloDouble = row.allowSoloDouble,
-        maxLevel = row.maxLevel,
-        isOutleveled = isOutleveled
-    })
-
-    if isOutleveled and progress then
-        progress.soloKill = nil
-        progress.soloQuest = nil
+    local params = (addon and addon.GetStatusParamsForAchievement) and addon.GetStatusParamsForAchievement(rowId, row)
+    if not params then return end
+    SetStatusTextOnRow(row, params)
+    if params.isOutleveled and addon and addon.GetProgress then
+        local p = addon.GetProgress(rowId)
+        if p then p.soloKill = nil p.soloQuest = nil end
     end
 end
 
@@ -882,15 +798,31 @@ local function GetSourceRows()
   end
 end
 
+-- Use centralized display logic (SharedUtils); for frames we use source.completed
+local function getDisplayValues(srow)
+  local fn = addon and addon.GetAchievementDisplayValues
+  if fn then
+    return fn(srow, { useSourceCompletion = true })
+  end
+  local iconTex = (srow.Icon and srow.Icon.GetTexture and srow.Icon:GetTexture()) or srow.icon or 136116
+  local title = (srow.Title and srow.Title.GetText and srow.Title:GetText()) or srow.title or (srow.id or "")
+  local tooltip = srow.tooltip or ""
+  local points = srow.points or 0
+  return iconTex, title, tooltip, points
+end
+
 local function ReadRowData(src)
   if not src then return end
   
   -- Extract only the data we need directly from the source row
+  local useSecret = (src.isSecretAchievement and not src.completed)
   local iconTex = nil
   if src.Icon and src.Icon.GetTexture then
     iconTex = src.Icon:GetTexture()
+  elseif useSecret then
+    iconTex = src.secretIcon or 134400
   else
-    iconTex = src.icon or (src.isSecretAchievement and src.secretIcon) or nil
+    iconTex = src.icon or nil
   end
   
   return {
@@ -1283,14 +1215,11 @@ local function CreateDashboardModernRow(parent, srow)
     row:SetSize(containerWidth, 60)
     row:SetClipsChildren(false)
     
-    -- Extract data from source row
-    local iconTex = (srow.Icon and srow.Icon.GetTexture and srow.Icon:GetTexture()) or srow.icon or (srow.isSecretAchievement and srow.secretIcon) or 136116
-    local title = (srow.Title and srow.Title.GetText and srow.Title:GetText()) or srow.title or (srow.id or "")
-    local tooltip = srow.tooltip or ""
+    -- Extract data from source row (use secret placeholders for incomplete secret achievements)
+    local iconTex, title, tooltip, points = getDisplayValues(srow)
     local zone = srow.zone or ""
     local achId = srow.achId or srow.id
     local level = srow.maxLevel or 0
-    local points = srow.points or 0
     local def = srow._def or (addon and addon.AchievementDefs and addon.AchievementDefs[achId])
     
     -- icon
@@ -1345,7 +1274,10 @@ local function CreateDashboardModernRow(parent, srow)
     do
         local defaultSub = srow._defaultSubText
         if defaultSub == nil then
-            if level and level > 0 then
+            -- Incomplete secret achievements: hide level/subtext (match character frame behavior)
+            if srow.isSecretAchievement and not srow.completed then
+                defaultSub = ""
+            elseif level and level > 0 then
                 defaultSub = (LEVEL or "Level") .. " " .. level
             else
                 defaultSub = ""
@@ -1544,10 +1476,8 @@ end
 local function UpdateDashboardModernRow(row, srow)
     if not row or not srow then return end
     
-    -- Update data from source row
-    local iconTex = (srow.Icon and srow.Icon.GetTexture and srow.Icon:GetTexture()) or srow.icon or (srow.isSecretAchievement and srow.secretIcon) or 136116
-    local title = (srow.Title and srow.Title.GetText and srow.Title:GetText()) or srow.title or (srow.id or "")
-    local points = srow.points or 0
+    -- Update data from source row (use secret placeholders for incomplete secret achievements)
+    local iconTex, title, tooltip, points = getDisplayValues(srow)
     local level = srow.maxLevel or 0
     local achId = srow.achId or srow.id
     local def = srow._def or (addon and addon.AchievementDefs and addon.AchievementDefs[achId])
@@ -1566,7 +1496,7 @@ local function UpdateDashboardModernRow(row, srow)
     row.sourceRow = srow
     row._def = def
     row.requiredKills = srow.requiredKills
-    row.tooltip = srow.tooltip or srow._tooltip or ""
+    row.tooltip = tooltip or srow.tooltip or srow._tooltip or ""
     row._tooltip = row.tooltip
     row.zone = srow.zone or srow._zone
     row._zone = row.zone
@@ -3311,12 +3241,12 @@ local function HookSourceSignals()
     end)
   end
   if addon and addon.CheckPendingCompletions and type(addon.CheckPendingCompletions) == "function" then
-    hooksecurefunc(addon.CheckPendingCompletions, function()
+    hooksecurefunc(addon, "CheckPendingCompletions", function()
       RequestRebuild()
     end)
   end
   if addon and addon.UpdateTotalPoints and type(addon.UpdateTotalPoints) == "function" then
-    hooksecurefunc(addon.UpdateTotalPoints, function()
+    hooksecurefunc(addon, "UpdateTotalPoints", function()
       RequestRebuild()
     end)
   end

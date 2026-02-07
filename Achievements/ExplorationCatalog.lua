@@ -1,5 +1,5 @@
 local addonName, addon = ...
-local ClassColor = (addon and addon.GetClassColor)
+local ClassColor = (addon and addon.GetClassColor())
 local CheckZoneDiscovery = (addon and addon.CheckZoneDiscovery)
 local UnitName = UnitName
 local UnitLevel = UnitLevel
@@ -83,34 +83,34 @@ if addon then
   end
   addon.RegistrationQueue = addon.RegistrationQueue or {}
   local queue = addon.RegistrationQueue
-  local CreateAchievementRow = addon.CreateAchievementRow
-  local AchievementPanel = addon.AchievementPanel
-  local RegisterAchievementDef = addon.RegisterAchievementDef or (HCA_SharedUtils and HCA_SharedUtils.RegisterAchievementDef)
+  local RegisterAchievementDef = addon.RegisterAchievementDef
 
   for _, def in ipairs(ExplorationAchievements) do
-    if IsEligible(def) then
-      def.isExploration = true
-      table_insert(queue, function()
-        if RegisterAchievementDef then
-          RegisterAchievementDef(def)
-        end
-        if CreateAchievementRow and AchievementPanel then
-          CreateAchievementRow(
-            AchievementPanel,
-            def.achId,
-            def.title,
-            def.tooltip,
-            def.icon,
-            def.level,
-            def.points or 0,
-            nil,
-            def.staticPoints,
-            def.zone,
-            def
-          )
-        end
-      end)
-    end
+    def.isExploration = true
+    table_insert(queue, function()
+      if not IsEligible(def) then return end
+      if RegisterAchievementDef then
+        RegisterAchievementDef(def)
+      end
+      local CreateAchievementRow = addon.CreateAchievementRow
+      local AchievementPanel = addon.AchievementPanel
+      if CreateAchievementRow and AchievementPanel then
+        CreateAchievementRow(
+          AchievementPanel,
+          def.achId,
+          def.title,
+          def.tooltip,
+          def.icon,
+          def.level,
+          def.points or 0,
+          nil,
+          nil,
+          def.staticPoints,
+          def.zone,
+          def
+        )
+      end
+    end)
   end
 end
 

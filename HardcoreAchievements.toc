@@ -27,9 +27,9 @@ TBC\ProfessionTracker.lua [AllowLoadGameType tbc]
 
 Utils\SharedUtils.lua
 Utils\FilterDropdown.lua
+Utils\AchievementTracker.lua
 HardcoreAchievements.lua
 Utils\GuildFirst.lua
-Utils\AchievementTracker.lua
 
 Achievements\Common.lua
 Achievements\DungeonCommon.lua [AllowLoadGameType vanilla]

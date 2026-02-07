@@ -2,7 +2,7 @@
 -- Each achievement requires reaching Exalted with a specific faction
 -- Only factions that the player has discovered will show up in the achievement list
 local addonName, addon = ...
-local ClassColor = (addon and addon.GetClassColor)
+local ClassColor = (addon and addon.GetClassColor())
 local table_insert = table.insert
 
 local Reputations = {

@@ -3,7 +3,7 @@
 ---------------------------------------
 local addonName, addon = ...
 local table_insert = table.insert
-local ClassColor = (addon and addon.GetClassColor)
+local ClassColor = (addon and addon.GetClassColor())
 
 local Dungeons = {
   -- Test achievement

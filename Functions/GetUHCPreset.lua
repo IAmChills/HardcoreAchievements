@@ -5,6 +5,7 @@ local CreateFrame = CreateFrame
 local C_Timer = C_Timer
 local RefreshAllAchievementPoints = (addon and addon.RefreshAllAchievementPoints)
 local IsSelfFound = (addon and addon.IsSelfFound)
+local GetPlayerPresetFromSettings
 local table_insert = table.insert
 local table_concat = table.concat
 
@@ -214,13 +215,14 @@ eventFrame:SetScript("OnEvent", function(self, event, addonName)
                 UpdateMultiplierText(DashboardFrame.MultiplierText, {0.922, 0.871, 0.761})
             end
 
-            -- Update all achievement points with new multiplier and bonus
-            RefreshAllAchievementPoints()
+            -- Update all achievement points with new multiplier and bonus (resolve at call time; main addon loads after this file)
+            local RefreshAllAchievementPoints = addon and addon.RefreshAllAchievementPoints
+            if type(RefreshAllAchievementPoints) == "function" then RefreshAllAchievementPoints() end
         end)
     end
 end)
 
-local function GetPlayerPresetFromSettings()
+function GetPlayerPresetFromSettings()
     -- Return early if UltraHardcoreDB doesn't exist
     if not UltraHardcoreDB then
         return

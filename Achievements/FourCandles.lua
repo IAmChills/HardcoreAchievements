@@ -2,7 +2,7 @@ local addonName, addon = ...
 local REQUIRED_MAP_ID = 48 -- Blackfathom Deeps map id
 local MAX_LEVEL = 30
 
-local ClassColor = (addon and addon.GetClassColor)
+local ClassColor = (addon and addon.GetClassColor())
 local achId = "FourCandle"
 local title = "Four Candles"
 local tooltip = "Light all four candles at once within " .. ClassColor .. "Blackfathom Deeps|r and survive before any party member reaches level 31"
@@ -174,7 +174,7 @@ if addon then
   }
 end
 
-local function HCA_RegisterFourCandles()
+local function RegisterFourCandles()
   if not addon or not addon.CreateAchievementRow or not addon.AchievementPanel then return end
   if addon and addon.FourCandle_Row then return end
 
@@ -204,9 +204,9 @@ local fc_reg = CreateFrame("Frame")
 fc_reg:RegisterEvent("PLAYER_LOGIN")
 fc_reg:RegisterEvent("ADDON_LOADED")
 fc_reg:SetScript("OnEvent", function()
-  HCA_RegisterFourCandles()
+  RegisterFourCandles()
 end)
 
 if CharacterFrame and CharacterFrame.HookScript then
-  CharacterFrame:HookScript("OnShow", HCA_RegisterFourCandles)
+  CharacterFrame:HookScript("OnShow", RegisterFourCandles)
 end

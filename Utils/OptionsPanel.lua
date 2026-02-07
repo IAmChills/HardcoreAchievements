@@ -502,8 +502,10 @@ local function CreateBackupRestoreFrame()
                 return copy
             end
             
-            -- Replace the entire database with imported data
-            addon.HardcoreAchievementsDB = DeepCopy(data)
+            -- Replace the entire database with imported data (write to SavedVariables global so it persists)
+            local imported = DeepCopy(data)
+            HardcoreAchievementsDB = imported
+            if addon then addon.HardcoreAchievementsDB = HardcoreAchievementsDB end
             
             print("|cff00ff00Hardcore Achievements:|r Database imported successfully! All characters and settings have been restored.")
             print("|cffffd100Hardcore Achievements:|r Reloading UI...")

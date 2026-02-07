@@ -162,7 +162,7 @@ function RaidCommon.registerRaidAchievement(def)
   end
 
   -- Dynamic names first so functions capture these locals
-  local registerFuncName = "HCA_Register" .. achId
+  local registerFuncName = "Register" .. achId
   local rowVarName       = achId .. "_Row"
 
   -- Helper function to get NPC IDs from encounter ID
@@ -173,7 +173,7 @@ function RaidCommon.registerRaidAchievement(def)
 
   -- Get boss names from NPC IDs
   -- Export globally so tooltip function can use it
-  function HCA_GetRaidBossName(npcId)
+  local function GetRaidBossName(npcId)
     local bossNames = {
       -- Lower Blackrock Spire
       [9816] = "Pyroguard Emberseer",
@@ -336,7 +336,7 @@ function RaidCommon.registerRaidAchievement(def)
     npcId = npcId and tonumber(npcId) or nil
     return npcId
   end
-  if addon then addon.GetRaidBossName = HCA_GetRaidBossName end
+  if addon then addon.GetRaidBossName = GetRaidBossName end
 
   local function IsOnRequiredMap()
     -- If no map restriction, allow anywhere
@@ -564,7 +564,7 @@ function RaidCommon.registerRaidAchievement(def)
         -- Store points (raids do not support solo doubling)
         StorePointsAtKill()
 
-        print("|cff008066[Hardcore Achievements]|r |cffffd100" .. ((addon and addon.GetRaidBossName and addon.GetRaidBossName(npcId)) or tostring(npcId)) .. " killed as part of achievement: " .. title .. "|r")
+        print("|cff008066[Hardcore Achievements]|r |cffffd100" .. GetRaidBossName(npcId) .. " killed as part of achievement: " .. title .. "|r")
       end
     end
 
@@ -681,4 +681,7 @@ end
 -- Module Export
 ---------------------------------------
 
-if addon then addon.RaidCommon = RaidCommon end
+if addon then
+  addon.RaidCommon = RaidCommon
+  addon.GetRaidBossName = GetRaidBossName
+end

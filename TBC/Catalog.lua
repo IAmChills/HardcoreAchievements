@@ -2,7 +2,7 @@
 -- Achievement Definitions (Quest/Milestone catalog for TBC)
 ---------------------------------------
 local addonName, addon = ...
-local ClassColor = (addonName and addonName.GetClassColor)
+local ClassColor = (addon and addon.GetClassColor())
 local UnitLevel = UnitLevel
 local UnitClass = UnitClass
 local UnitFactionGroup = UnitFactionGroup
@@ -15,7 +15,7 @@ local Achievements = {
 
 --{ achId="Test",  title="Boar Test",  level=4, tooltip="Kill " .. ClassColor .. "a boar", icon=134400, points=10, requiredQuestId=nil, targetNpcId=3098, faction="Horde", zone="Durotar" },
 --{ achId="Test2", title="Easy Quest Test", level=2, tooltip="Orc starter quest", icon=134400, points=10, requiredQuestId=4641, targetNpcId=nil, faction="Horde", zone="Durotar" },
---{ achId="Test3", title="Kill + Quest", level=5, tooltip="Kill a boar and complete the orc starter quest", icon=134400, points=10, requiredQuestId=4641, targetNpcId=3098, faction="Horde", zone="Durotar" },
+--{ achId="Test3", title="Kill + Quest", level=5, tooltip="Kill a boar and complete the orc starter quest", icon=134400, points=10, requiredQuestId=788, targetNpcId=3098, faction="Horde", zone="Durotar" },
 --{ achId="Test4", title="Kill 3 Boars", level=2, tooltip="Kill 3 boars", icon=134400, points=10, requiredQuestId=nil, requiredKills = { [3098] = 3, }, faction="Horde", zone="Durotar" },
 
 -- Alliance
@@ -856,36 +856,35 @@ end
 if addon then
   addon.RegistrationQueue = addon.RegistrationQueue or {}
   local queue = addon.RegistrationQueue
-  local CreateAchievementRow = addon.CreateAchievementRow
-  local AchievementPanel = addon.AchievementPanel
-  local RegisterAchievementDef = addon.RegisterAchievementDef or (HCA_SharedUtils and HCA_SharedUtils.RegisterAchievementDef)
+  local RegisterAchievementDef = addon.RegisterAchievementDef
 
   for _, def in ipairs(Achievements) do
-    if IsEligible(def) then
-      def.isQuest = true
-      table_insert(queue, function()
-        local killFn = GetKillTracker(def)
-        local questFn = GetQuestTracker(def)
-        if RegisterAchievementDef then
-          RegisterAchievementDef(def)
-        end
-        if CreateAchievementRow and AchievementPanel then
-          CreateAchievementRow(
-            AchievementPanel,
-            def.achId,
-            def.title,
-            def.tooltip,
-            def.icon,
-            def.level,
-            def.points or 0,
-            killFn,
-            questFn,
-            def.staticPoints,
-            def.zone,
-            def
-          )
-        end
-      end)
-    end
+    def.isQuest = true
+    table_insert(queue, function()
+      if not IsEligible(def) then return end
+      local killFn = GetKillTracker(def)
+      local questFn = GetQuestTracker(def)
+      if RegisterAchievementDef then
+        RegisterAchievementDef(def)
+      end
+      local CreateAchievementRow = addon.CreateAchievementRow
+      local AchievementPanel = addon.AchievementPanel
+      if CreateAchievementRow and AchievementPanel then
+        CreateAchievementRow(
+          AchievementPanel,
+          def.achId,
+          def.title,
+          def.tooltip,
+          def.icon,
+          def.level,
+          def.points or 0,
+          killFn,
+          questFn,
+          def.staticPoints,
+          def.zone,
+          def
+        )
+      end
+    end)
   end
 end

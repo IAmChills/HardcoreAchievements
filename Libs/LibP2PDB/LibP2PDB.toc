@@ -2,7 +2,7 @@
 ## Title: LibP2PDB
 ## Author: Erunehtar
 ## Notes: A lightweight, embeddable library for peer-to-peer distributed-database synchronization in WoW addons.
-## Version: 1
+## Version: 2
 ## Dependencies: AceComm-3.0, LibBucketedHashSet
 ## OptionalDeps: LibPatternedBloomFilter, LibSerialize, LibDeflate
 

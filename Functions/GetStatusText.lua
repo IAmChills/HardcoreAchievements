@@ -1,6 +1,65 @@
 local addonName, addon = ...
 local C_GameRules = C_GameRules
+
+-- Centralized: compute status params for an achievement. Use this everywhere so status logic is identical.
+-- row: model entry or frame with questTracker, killTracker, requiredKills/_def, completed, maxLevel, allowSoloDouble
+-- Returns params table for GetStatusText/SetStatusTextOnRow, or nil if row/achId missing
+local function GetStatusParamsForAchievement(achId, row)
+    if not achId or not row then return nil end
+    local progress = (addon and addon.GetProgress) and addon.GetProgress(achId) or nil
+    local rowId = achId
+    local requiresBoth = (row.questTracker ~= nil) and (row.killTracker ~= nil or (row.requiredKills and next(row.requiredKills)) or (row._def and (row._def.requiredKills and next(row._def.requiredKills) or row._def.targetNpcId)))
+    local killsSatisfied = false
+    if requiresBoth and progress and not (addon and addon.IsRowOutleveled and addon.IsRowOutleveled(row)) then
+        local hasKill = false
+        if progress.killed then
+            hasKill = true
+        elseif progress.eligibleCounts and next(progress.eligibleCounts) ~= nil then
+            local reqKills = row.requiredKills or (row._def and row._def.requiredKills)
+            if reqKills then
+                local allSat = true
+                for npcId, need in pairs(reqKills) do
+                    local idNum = tonumber(npcId) or npcId
+                    local cur = progress.eligibleCounts[idNum] or progress.eligibleCounts[tostring(idNum)] or 0
+                    if cur < (tonumber(need) or 1) then allSat = false break end
+                end
+                hasKill = allSat
+            else
+                hasKill = progress.killed or false
+            end
+        elseif progress.killed then
+            hasKill = true
+        end
+        killsSatisfied = hasKill and not progress.quest
+    end
+    local hasSoloStatus = progress and (progress.soloKill or progress.soloQuest)
+    local isSelfFound = (addon and addon.IsSelfFound) and addon.IsSelfFound() or false
+    local isSoloMode = (addon and addon.IsSoloModeEnabled) and addon.IsSoloModeEnabled() or false
+    local wasSolo = false
+    if row.completed and addon and addon.GetCharDB then
+        local _, cdb = addon.GetCharDB()
+        if cdb and cdb.achievements and rowId then
+            local rec = cdb.achievements[tostring(rowId)]
+            wasSolo = rec and rec.wasSolo or false
+        end
+    end
+    return {
+        completed = row.completed or false,
+        hasSoloStatus = hasSoloStatus,
+        hasIneligibleKill = progress and progress.ineligibleKill,
+        requiresBoth = requiresBoth,
+        killsSatisfied = killsSatisfied,
+        isSelfFound = isSelfFound,
+        isSoloMode = isSoloMode,
+        wasSolo = wasSolo,
+        allowSoloDouble = row.allowSoloDouble,
+        maxLevel = row.maxLevel,
+        isOutleveled = (addon and addon.IsRowOutleveled) and addon.IsRowOutleveled(row),
+    }
+end
+
 local function GetStatusText(params)
+    local ClassColor = (addon and addon.GetClassColor())
     local completed = params.completed or false
     local hasSoloStatus = params.hasSoloStatus or false
     local hasIneligibleKill = params.hasIneligibleKill or false
@@ -33,24 +92,24 @@ local function GetStatusText(params)
     local allowSoloBonus = isSelfFound or not isHardcoreActive
     
     if completed and wasSolo and allowSoloBonus then
-        return HCA_SharedUtils.GetClassColor() .. "Solo|r"
+        return ClassColor .. "Solo|r"
     end
     
     -- Check if kills are satisfied but quest is pending (for achievements requiring both)
     if not completed and requiresBoth and killsSatisfied then
         if hasSoloStatus and allowSoloBonus then
-            return HCA_SharedUtils.GetClassColor() .. "Pending Turn-in (solo)|r"
+            return ClassColor .. "Pending Turn-in (solo)|r"
         else
-            return HCA_SharedUtils.GetClassColor() .. "Pending Turn-in|r"
+            return ClassColor .. "Pending Turn-in|r"
         end
     end
     
     if not completed and requiresBoth and hasSoloStatus and allowSoloBonus then
-        return HCA_SharedUtils.GetClassColor() .. "Pending Turn-in (solo)|r"
+        return ClassColor .. "Pending Turn-in (solo)|r"
     end
     
     if not completed and isSoloMode and allowSoloDouble and not hasSoloStatus and allowSoloBonus then
-        return HCA_SharedUtils.GetClassColor() .. "Solo bonus|r"
+        return ClassColor .. "Solo bonus|r"
     end
     
     -- No special status
@@ -95,4 +154,6 @@ end
 
 if addon then
     addon.SetStatusTextOnRow = SetStatusTextOnRow
+    addon.GetStatusText = GetStatusText
+    addon.GetStatusParamsForAchievement = GetStatusParamsForAchievement
 end

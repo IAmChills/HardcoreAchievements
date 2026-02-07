@@ -3,7 +3,6 @@
 -- Contains all filter-related logic including checkbox state management
 
 local addonName, addon = ...
-local GetCharDB = addon and addon.GetCharDB
 local CreateFrame = CreateFrame
 local GetExpansionLevel = GetExpansionLevel
 
@@ -16,8 +15,9 @@ local FilterDropdown = {}
 -- Get status filter states (completed, available, failed) from database with proper defaults
 local function GetStatusFilterStates()
     local statusFilters = { true, true, true }  -- completed, available, failed (all default to true)
-    if type(GetCharDB) == "function" then
-        local _, cdb = GetCharDB()
+    local getCharDB = addon and addon.GetCharDB
+    if type(getCharDB) == "function" then
+        local _, cdb = getCharDB()
         if cdb and cdb.settings and cdb.settings.statusFilters then
             local states = cdb.settings.statusFilters
             if type(states) == "table" then
@@ -34,8 +34,9 @@ end
 
 -- Save status filter states to character database
 local function SaveStatusFilterStates(statusFilters)
-    if type(GetCharDB) == "function" then
-        local _, cdb = GetCharDB()
+    local getCharDB = addon and addon.GetCharDB
+    if type(getCharDB) == "function" then
+        local _, cdb = getCharDB()
         if cdb then
             cdb.settings = cdb.settings or {}
             cdb.settings.statusFilters = {
@@ -50,8 +51,9 @@ end
 -- Get checkbox states from database with proper defaults
 local function GetCheckboxStates()
     local checkboxStates = { true, true, true, true, true, true, false, false, false, false, false, false, false, false }
-    if type(GetCharDB) == "function" then
-        local _, cdb = GetCharDB()
+    local getCharDB = addon and addon.GetCharDB
+    if type(getCharDB) == "function" then
+        local _, cdb = getCharDB()
         if cdb and cdb.settings and cdb.settings.filterCheckboxes then
             local states = cdb.settings.filterCheckboxes
             if type(states) == "table" then
@@ -79,8 +81,9 @@ end
 
 -- Save checkbox states to character database
 local function SaveCheckboxStates(checkboxStates)
-    if type(GetCharDB) == "function" then
-        local _, cdb = GetCharDB()
+    local getCharDB = addon and addon.GetCharDB
+    if type(getCharDB) == "function" then
+        local _, cdb = getCharDB()
         if cdb then
             cdb.settings = cdb.settings or {}
             cdb.settings.filterCheckboxes = {

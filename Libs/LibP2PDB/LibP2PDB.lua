@@ -1,8 +1,30 @@
+-- MIT License
+--
+-- Copyright (c) 2026 Erunehtar
+--
+-- Permission is hereby granted, free of charge, to any person obtaining a copy
+-- of this software and associated documentation files (the "Software"), to deal
+-- in the Software without restriction, including without limitation the rights
+-- to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+-- copies of the Software, and to permit persons to whom the Software is
+-- furnished to do so, subject to the following conditions:
+--
+-- The above copyright notice and this permission notice shall be included in all
+-- copies or substantial portions of the Software.
+--
+-- THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+-- IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+-- FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+-- AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+-- LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+-- OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+-- SOFTWARE.
+
 ------------------------------------------------------------------------------------------------------------------------
 -- LibP2PDB: A lightweight, embeddable library for peer-to-peer distributed-database synchronization in WoW addons.
 ------------------------------------------------------------------------------------------------------------------------
 
-local MAJOR, MINOR = "LibP2PDB", 1
+local MAJOR, MINOR = "LibP2PDB", 2
 assert(LibStub, MAJOR .. " requires LibStub")
 
 local LibP2PDB = LibStub:NewLibrary(MAJOR, MINOR)
@@ -44,6 +66,7 @@ local tinsert, tremove, tconcat, tsort = table.insert, table.remove, table.conca
 local unpack, select = unpack, select
 local setmetatable, getmetatable = setmetatable, getmetatable
 local securecallfunction = securecallfunction
+local fastrandom = fastrandom
 
 ------------------------------------------------------------------------------------------------------------------------
 -- Local WoW API References
@@ -53,12 +76,22 @@ local UnitName, UnitGUID = UnitName, UnitGUID
 local GetTime, GetServerTime = GetTime, GetServerTime
 local IsInGuild, IsInRaid, IsInGroup, IsInInstance = IsInGuild, IsInRaid, IsInGroup, IsInInstance
 
+local InActiveBattlefield
+if C_PvP and C_PvP.IsActiveBattlefield then
+    InActiveBattlefield = C_PvP.IsActiveBattlefield
+else
+    InActiveBattlefield = InActiveBattlefield --- @type fun(): boolean
+end
+
 ------------------------------------------------------------------------------------------------------------------------
 -- Constants
 ------------------------------------------------------------------------------------------------------------------------
 
 local NIL_MARKER = strchar(0) --- @type string Marker for nil values in serialization.
 local LOG2 = log(2)           --- @type number Precomputed log(2) for efficiency.
+local MIN_BUCKET_COUNT = 32   --- @type integer Minimum number of buckets for summary filters.
+local KEYS_PER_BUCKET = 32    --- @type integer Default bucket size for summary filters.
+local ROWS_PER_CHUNK = 256    --- @type integer Number of rows per chunk for chunked transmission.
 
 --- @enum LibP2PDB.Color Color codes for console output.
 local Color = {
@@ -75,12 +108,13 @@ local Color = {
 
 --- @enum LibP2PDB.CommMessageType Communication message types.
 local CommMessageType = {
-    PeerDiscoveryRequest = 1,
-    PeerDiscoveryResponse = 2,
-    DigestRequest = 3,
-    DigestResponse = 4,
-    RowsRequest = 5,
-    RowsResponse = 6,
+    Empty = 1,
+    PeerDiscoveryRequest = 2,
+    PeerDiscoveryResponse = 3,
+    DigestRequest = 4,
+    DigestResponse = 5,
+    RowsRequest = 6,
+    RowsResponse = 7,
 }
 
 --- @enum LibP2PDB.CommPriority Communication priorities.
@@ -580,7 +614,7 @@ end
 --- @param ... any Format arguments.
 --- @return string message The error message.
 local function ReportError(dbi, fmt, ...)
-    local success, message = pcall(format, fmt, ...)
+    local success, message = pcall(format, fmt, tostringall(...))
     if not success then
         message = fmt
     end
@@ -785,8 +819,12 @@ function LibP2PDB:NewDatabase(desc)
         --writePolicy = nil,
     }
 
-    -- Record self in peers list for easier comparisons (but never updated)
-    priv:RecordPeer(dbi, priv.peerId, priv.playerName, dbi.clock)
+    -- Add self in peers list for easier comparisons (but never updated)
+    dbi.peers[priv.peerId] = {
+        name = priv.playerName,
+        lastSeen = 0,
+    }
+    tinsert(dbi.peersSorted, priv.peerId)
 
     -- Setup default filter if none provided
     if not dbi.filter then
@@ -980,6 +1018,7 @@ end
 --- @class LibP2PDB.TableDesc Description for creating a new table in the database.
 --- @field name LibP2PDB.TableName Name of the table to create.
 --- @field keyType LibP2PDB.TableKeyType Data type of the primary key.
+--- @field sync boolean? Optional flag indicating if the table should be synchronized with peers (default: true).
 --- @field schema LibP2PDB.TableSchema? Optional table schema defining field names and their allowed data types.
 --- @field onValidate LibP2PDB.TableOnValidateCallback? Optional callback function(key, data) for custom row validation. Must return true if valid, false otherwise. Data is a copy and has not yet been applied when this is called.
 --- @field onChange LibP2PDB.TableOnChangeCallback? Optional callback function(key, data) on row data changes. Data is nil for deletions. Data is a copy, and has already been applied when this is called.
@@ -994,6 +1033,7 @@ function LibP2PDB:NewTable(db, desc)
     assert(IsNonEmptyString(desc.name), "desc.name must be a non-empty string")
     assert(IsNonEmptyString(desc.keyType), "desc.keyType must be a non-empty string")
     assert(desc.keyType == "string" or desc.keyType == "number", "desc.keyType must be 'string' or 'number'")
+    assert(IsBooleanOrNil(desc.sync), "desc.sync must be a boolean if provided")
     assert(IsNonEmptyTableOrNil(desc.schema), "desc.schema must be a non-empty table if provided")
     for fieldKey, allowedTypes in pairs(desc.schema or {}) do
         assert(IsNonEmptyString(fieldKey) or IsNumber(fieldKey), "each field key in desc.schema must be a non-empty string or number")
@@ -1020,6 +1060,12 @@ function LibP2PDB:NewTable(db, desc)
     -- Ensure table name is unique
     assert(dbi.tables[desc.name] == nil, "table '" .. desc.name .. "' already exists in the database")
 
+    -- Determine sync setting
+    local sync = desc.sync
+    if sync == nil then
+        sync = true
+    end
+
     -- Generate sorted schema
     local schemaSorted = nil --- @type LibP2PDB.TableSchemaSorted
     if desc.schema then
@@ -1035,13 +1081,14 @@ function LibP2PDB:NewTable(db, desc)
     end
 
     -- Create the bucketed hash set for the summary
-    local summary = LibBucketedHashSet.New(32)
+    local summary = LibBucketedHashSet.New(MIN_BUCKET_COUNT)
     summary.keyIndex = {} --- @type table<LibP2PDB.TableKey, integer>
 
     -- Create the table instance
     --- @type LibP2PDB.TableInstance
     dbi.tables[desc.name] = {
         keyType = desc.keyType,
+        sync = sync,
         schema = desc.schema,
         schemaSorted = schemaSorted,
         onValidate = desc.onValidate,
@@ -1399,9 +1446,33 @@ end
 -- Public API: Sync / Gossip Controls
 ------------------------------------------------------------------------------------------------------------------------
 
+--- Broadcast presence to all peers on the database's communication prefix.
+--- Used to announce availability to peers without having to send a key.
+--- If you periodically broadcast any keys, this may not be necessary.
+--- @param db LibP2PDB.DBHandle Database handle.
+function LibP2PDB:BroadcastPresence(db)
+    assert(IsEmptyTable(db), "db must be an empty table")
+
+    -- Validate db instance
+    local dbi = priv.databases[db]
+    assert(dbi, "db is not a recognized database handle")
+
+    -- Prune timed-out peers
+    priv:PruneTimedOutPeers(dbi)
+
+    -- Send an empty message
+    Spam("broadcasting presence message")
+    local obj = {
+        type = CommMessageType.Empty,
+        peer = priv.peerId,
+    }
+    priv:Broadcast(dbi, obj, dbi.channels, CommPriority.Low)
+end
+
 --- Discover peers on the database's communication prefix.
 --- If onDiscoveryComplete callback is defined, it will be invoked when discovery completes.
 --- @param db LibP2PDB.DBHandle Database handle.
+--- @deprecated Use LibP2PDB:BroadcastPresence instead.
 function LibP2PDB:DiscoverPeers(db)
     assert(IsEmptyTable(db), "db must be an empty table")
 
@@ -1548,7 +1619,7 @@ function LibP2PDB:SendKey(db, tableName, key, target)
     end
 
     -- Send the row to the target player
-    Spam("sending key '%s' from table(s) '%s' to '%s'", tostring(key), strjoin(", ", unpack(tableNames)), target)
+    Spam("sending key '%s' from table(s) '%s' to '%s'", key, strjoin(", ", unpack(tableNames)), target)
     local obj = {
         type = CommMessageType.RowsResponse,
         peer = priv.peerId,
@@ -1602,7 +1673,7 @@ function LibP2PDB:BroadcastKey(db, tableName, key)
     end
 
     -- Send the row to the target player
-    Spam("broadcasting key '%s' from table(s) '%s'", tostring(key), strjoin(", ", unpack(tableNames)))
+    Spam("broadcasting key '%s' from table(s) '%s'", key, strjoin(", ", unpack(tableNames)))
     local obj = {
         type = CommMessageType.RowsResponse,
         peer = priv.peerId,
@@ -1853,7 +1924,7 @@ end
 --- @field serializer LibP2PDB.Serializer Serializer interface.
 --- @field compressor LibP2PDB.Compressor Compressor interface.
 --- @field encoder LibP2PDB.Encoder Encoder interface.
---- @field peers table<string, LibP2PDB.PeerInfo> Known peers for this session.
+--- @field peers table<LibP2PDB.PeerID, LibP2PDB.PeerInfo> Known peers for this session.
 --- @field peersSorted LibP2PDB.PeerID[] Sorted array of peer IDs for efficient neighbors lookup.
 --- @field peerTimeout number Timeout in seconds for considering a peer inactive.
 --- @field buckets table Communication event buckets for burst control.
@@ -1869,11 +1940,11 @@ end
 
 --- @class LibP2PDB.PeerInfo Peer information.
 --- @field name string Name of the peer.
---- @field clock LibP2PDB.Clock Lamport clock of the peer's database.
 --- @field lastSeen number Local timestamp of the last time the peer was seen.
 
 --- @class LibP2PDB.TableInstance Table instance.
 --- @field keyType LibP2PDB.TableKeyType Primary key type for the table.
+--- @field sync boolean Whether the table is included in gossip syncs.
 --- @field schema LibP2PDB.TableSchema? Optional schema definition for the table.
 --- @field schemaSorted LibP2PDB.TableSchemaSorted? Cached sorted schema for the table.
 --- @field onValidate LibP2PDB.TableOnValidateCallback? Optional validation callback for rows.
@@ -1950,7 +2021,7 @@ function Private:SetKey(dbi, tableName, ti, key, rowData)
             ti.rowCount = ti.rowCount + 1
 
             -- Resize summary if needed
-            local requiredNumBucket = max(32, NextPowerOfTwo(ti.rowCount) / 32)
+            local requiredNumBucket = max(MIN_BUCKET_COUNT, NextPowerOfTwo(ti.rowCount) / MIN_BUCKET_COUNT)
             if requiredNumBucket > ti.summary.numBuckets then
                 self:ResizeTableSummary(ti, requiredNumBucket)
             end
@@ -2029,7 +2100,7 @@ function Private:MergeKey(dbi, dbClock, tableName, ti, key, rowData, rowVersion)
             ti.rowCount = ti.rowCount + 1
 
             -- Resize summary if needed
-            local requiredNumBucket = max(32, NextPowerOfTwo(ti.rowCount) / 32)
+            local requiredNumBucket = max(MIN_BUCKET_COUNT, NextPowerOfTwo(ti.rowCount) / KEYS_PER_BUCKET)
             if requiredNumBucket > ti.summary.numBuckets then
                 self:ResizeTableSummary(ti, requiredNumBucket)
             end
@@ -2386,28 +2457,28 @@ function Private:ImportRow(dbi, dbClock, tableName, ti, key, rowState)
     -- Validate row data (skipped for tombstone rows)
     local incomingData = rowState[1]
     if not IsTableOrNil(incomingData) and incomingData ~= NIL_MARKER then
-        ReportError(dbi, "invalid data in row state for key '%s' in table '%s'", tostring(key), tableName)
+        ReportError(dbi, "invalid data in row state for key '%s' in table '%s'", key, tableName)
         return
     end
 
     -- Validate version clock
     local incomingVersionClock = rowState[2]
     if not IsInteger(incomingVersionClock, 0) then
-        ReportError(dbi, "invalid clock in row version state for key '%s' in table '%s'", tostring(key), tableName)
+        ReportError(dbi, "invalid clock in row version state for key '%s' in table '%s'", key, tableName)
         return
     end
 
     -- Validate version peer
     local incomingVersionPeer = rowState[3]
     if not IsNonEmptyString(incomingVersionPeer) then
-        ReportError(dbi, "invalid peer in row version state for key '%s' in table '%s'", tostring(key), tableName)
+        ReportError(dbi, "invalid peer in row version state for key '%s' in table '%s'", key, tableName)
         return
     end
 
     -- Validate tombstone flag
     local incomingVersionTombstone = rowState[4]
     if not IsBooleanOrNil(incomingVersionTombstone) then
-        ReportError(dbi, "invalid tombstone flag in row version state for key '%s' in table '%s'", tostring(key), tableName)
+        ReportError(dbi, "invalid tombstone flag in row version state for key '%s' in table '%s'", key, tableName)
         return
     end
 
@@ -2549,7 +2620,7 @@ function Private:MigrateRow(target, source)
         }
         local success, newKey, newRowData = SafeCall(target.dbi, target.dbi.onMigrateRow, targetCtx, sourceCtx)
         if not success then
-            ReportError(target.dbi, "row data migration failed for key '%s' in table '%s'", tostring(source.key), source.tableName)
+            ReportError(target.dbi, "row data migration failed for key '%s' in table '%s'", source.key, source.tableName)
             return
         end
         if newKey then
@@ -2562,7 +2633,7 @@ function Private:MigrateRow(target, source)
 
     -- Validate key
     if not IsNonEmptyString(targetKey) and not IsNumber(targetKey) then
-        ReportError(target.dbi, "migrated key must be a non-empty string or number for key '%s' in table '%s'", tostring(source.key), source.tableName)
+        ReportError(target.dbi, "migrated key must be a non-empty string or number for key '%s' in table '%s'", source.key, source.tableName)
         return
     end
 
@@ -2575,7 +2646,7 @@ function Private:MigrateRow(target, source)
 
     -- Validate row data
     if not IsTableOrNil(targetRowData) then
-        ReportError(target.dbi, "migrated row data must be a table or nil for key '%s' in table '%s'", tostring(source.key), source.tableName)
+        ReportError(target.dbi, "migrated row data must be a table or nil for key '%s' in table '%s'", source.key, source.tableName)
         return
     end
 
@@ -2621,6 +2692,7 @@ function Private:GetNeighbors(dbi)
     -- Compute our virtual index, zero-based
     local peerIndex = IndexOf(dbi.peersSorted, self.peerId)
     if not peerIndex then
+        Error("local peer ID '%s' not found in peer list for prefix '%s'", self.peerId, dbi.prefix)
         return {}
     end
 
@@ -2643,6 +2715,9 @@ function Private:GetNeighbors(dbi)
     local multiplier = FindCoprimeMultiplier(numPeers)
     if multiplier then
         local skipIndex = (((peerIndex - 1) * multiplier) % numPeers) + 1
+        if skipIndex == peerIndex and numPeers >= 8 then
+            skipIndex = fastrandom(1, numPeers) -- Fallback to random if we land on ourselves
+        end
         if skipIndex ~= peerIndex then
             neighbors[dbi.peersSorted[skipIndex]] = true
         end
@@ -2660,26 +2735,26 @@ end
 function Private:Send(dbi, data, channel, target, priority)
     local serialized = dbi.serializer:Serialize(data)
     if not serialized then
-        Error("failed to serialize data for prefix '%s'", tostring(dbi.prefix))
+        Error("failed to serialize data for prefix '%s'", dbi.prefix)
         return
     end
 
     local compressed = dbi.compressor:Compress(serialized)
     if not compressed then
-        Error("failed to compress data for prefix '%s'", tostring(dbi.prefix))
+        Error("failed to compress data for prefix '%s'", dbi.prefix)
         return
     end
 
     local encoded = dbi.encoder:EncodeForChannel(compressed)
     if not encoded then
-        Error("failed to encode data for prefix '%s'", tostring(dbi.prefix))
+        Error("failed to encode data for prefix '%s'", dbi.prefix)
         return
     end
 
     if target then
-        Spam("sending %d bytes on prefix '%s' channel '%s' target '%s'", #encoded, tostring(dbi.prefix), tostring(channel), tostring(target))
+        Spam("sending %d bytes on prefix '%s' channel '%s' target '%s'", #encoded, dbi.prefix, channel, target)
     else
-        Spam("sending %d bytes on prefix '%s' channel '%s'", #encoded, tostring(dbi.prefix), tostring(channel))
+        Spam("sending %d bytes on prefix '%s' channel '%s'", #encoded, dbi.prefix, channel)
     end
     if DEBUG and VERBOSITY >= 5 then
         DevTools_Dump(data)
@@ -2697,23 +2772,23 @@ end
 function Private:Broadcast(dbi, data, channels, priority)
     local serialized = dbi.serializer:Serialize(data)
     if not serialized then
-        Error("failed to serialize message for prefix '%s'", tostring(dbi.prefix))
+        Error("failed to serialize message for prefix '%s'", dbi.prefix)
         return
     end
 
     local compressed = dbi.compressor:Compress(serialized)
     if not compressed then
-        Error("failed to compress message for prefix '%s'", tostring(dbi.prefix))
+        Error("failed to compress message for prefix '%s'", dbi.prefix)
         return
     end
 
     local encoded = dbi.encoder:EncodeForChannel(compressed)
     if not encoded then
-        Error("failed to encode message for prefix '%s'", tostring(dbi.prefix))
+        Error("failed to encode message for prefix '%s'", dbi.prefix)
         return
     end
 
-    Spam("broadcasting %d bytes on prefix '%s'", #encoded, tostring(dbi.prefix))
+    Spam("broadcasting %d bytes on prefix '%s'", #encoded, dbi.prefix)
     if DEBUG and VERBOSITY >= 5 then
         DevTools_Dump(data)
     end
@@ -2723,7 +2798,7 @@ function Private:Broadcast(dbi, data, channels, priority)
         AceComm.SendCommMessage(self, dbi.prefix, encoded, "GUILD", nil, priority)
     end
 
-    if IsInRaid() and not InActiveBattlefield()then
+    if IsInRaid() and not InActiveBattlefield() then
         --- @cast priority "ALERT"|"BULK"|"NORMAL"
         AceComm.SendCommMessage(self, dbi.prefix, encoded, "RAID", nil, priority)
     elseif IsInGroup() then
@@ -2772,48 +2847,48 @@ function Private:OnCommReceived(prefix, encoded, channel, sender)
     -- Get the database instance for this prefix
     local db = self.prefixes[prefix]
     if not db then
-        Error("received message for unknown prefix '%s' from channel '%s' sender '%s'", tostring(prefix), tostring(channel), tostring(sender))
+        Error("received message for unknown prefix '%s' from channel '%s' sender '%s'", prefix, channel, sender)
         return
     end
 
     local dbi = self.databases[db]
     if not dbi then
-        Error("received message for unregistered database prefix '%s' from channel '%s' sender '%s'", tostring(prefix), tostring(channel), tostring(sender))
+        Error("received message for unregistered database prefix '%s' from channel '%s' sender '%s'", prefix, channel, sender)
         return
     end
 
     -- Deserialize message
     local compressed = dbi.encoder:DecodeFromChannel(encoded)
     if not compressed then
-        Error("failed to decode message from prefix '%s' channel '%s' sender '%s'", tostring(prefix), tostring(channel), tostring(sender))
+        Error("failed to decode message from prefix '%s' channel '%s' sender '%s'", prefix, channel, sender)
         return
     end
 
     local serialized = dbi.compressor:Decompress(compressed)
     if not serialized then
-        Error("failed to decompress message from prefix '%s' channel '%s' sender '%s'", tostring(prefix), tostring(channel), tostring(sender))
+        Error("failed to decompress message from prefix '%s' channel '%s' sender '%s'", prefix, channel, sender)
         return
     end
 
     local obj = dbi.serializer:Deserialize(serialized)
     if not obj then
-        Error("failed to deserialize message from prefix '%s' channel '%s' sender '%s': %s", tostring(prefix), tostring(channel), tostring(sender), Dump(obj))
+        Error("failed to deserialize message from prefix '%s' channel '%s' sender '%s': %s", prefix, channel, sender, Dump(obj))
         return
     end
 
     -- Validate message structure
     if not IsTable(obj) then
-        Error("received invalid message structure from '%s' on channel '%s'", tostring(sender), tostring(channel))
+        Error("received invalid message structure from '%s' on channel '%s'", sender, channel)
         return
     end
 
     if not IsInteger(obj.type) then
-        Error("received message with missing or invalid type from '%s' on channel '%s'", tostring(sender), tostring(channel))
+        Error("received message with missing or invalid type from '%s' on channel '%s'", sender, channel)
         return
     end
 
     if not IsNonEmptyString(obj.peer) then
-        Error("received message with missing or invalid peer from '%s' on channel '%s'", tostring(sender), tostring(channel))
+        Error("received message with missing or invalid peer from '%s' on channel '%s'", sender, channel)
         return
     end
 
@@ -2839,8 +2914,11 @@ function Private:OnCommReceived(prefix, encoded, channel, sender)
         return
     end
 
-    -- Create a timer to process this message after 200 milliseconds
-    bucket[message.peer] = C_Timer.NewTimer(0.2, function()
+    -- Create a timer to process this message after 400 milliseconds
+    bucket[message.peer] = C_Timer.NewTimer(0.4, function()
+        -- Update peer information
+        self:UpdatePeer(message)
+
         -- Process the message
         self:DispatchMessage(message)
 
@@ -2857,7 +2935,9 @@ end
 --- Dispatch a received message to the appropriate handler.
 --- @param message LibP2PDB.Message
 function Private:DispatchMessage(message)
-    if message.type == CommMessageType.PeerDiscoveryRequest then
+    if message.type == CommMessageType.Empty then
+        -- Nothing to do
+    elseif message.type == CommMessageType.PeerDiscoveryRequest then
         self:PeerDiscoveryRequestHandler(message)
     elseif message.type == CommMessageType.PeerDiscoveryResponse then
         self:PeerDiscoveryResponseHandler(message)
@@ -2880,15 +2960,13 @@ end
 function Private:PeerDiscoveryRequestHandler(message)
     local dbi = message.dbi
     local sender = message.sender
-    Spam("received peer discovery request from '%s'", tostring(sender))
+    Spam("received peer discovery request from '%s'", sender)
 
     -- Record the peer
-    local peerID = message.peer
-    local peerClock = message.data --- @type LibP2PDB.Clock
-    self:RecordPeer(dbi, peerID, sender, peerClock)
+    self:UpdatePeer(message)
 
     -- Send peer discovery response
-    Spam("sending peer discovery response to '%s'", tostring(sender))
+    Spam("sending peer discovery response to '%s'", sender)
     local obj = {
         type = CommMessageType.PeerDiscoveryResponse,
         peer = self.peerId,
@@ -2903,7 +2981,7 @@ end
 function Private:PeerDiscoveryResponseHandler(message)
     local dbi = message.dbi
     local sender = message.sender
-    Spam("received peer discovery response from '%s'", tostring(sender))
+    Spam("received peer discovery response from '%s'", sender)
 
     -- Update last discovery time
     local now = GetTime()
@@ -2911,10 +2989,7 @@ function Private:PeerDiscoveryResponseHandler(message)
         dbi.lastDiscoveryResponseTime = now
     end
 
-    -- Record the peer
-    local peerID = message.peer
-    local clock = message.data --- @type LibP2PDB.Clock
-    self:RecordPeer(dbi, peerID, sender, clock)
+    self:UpdatePeer(message)
 end
 
 --- Handler for digest request messages.
@@ -2929,21 +3004,23 @@ function Private:DigestRequestHandler(message)
     -- Build digest for each table
     local databaseDigest = {} --- @type LibP2PDB.DBDigest
     for tableName, ti in pairs(dbi.tables) do
-        if ti.rowCount > 0 then
-            local filter = dbi.filter.New(ti.rowCount, ti.seed)
-            ti.seed = ti.seed + 1 -- increment seed for next use
-            for key in pairs(ti.rows) do
-                filter:Insert(key)
+        if ti.sync then       -- Only include tables marked for synchronization
+            if ti.rowCount > 0 then
+                local filter = dbi.filter.New(ti.rowCount, ti.seed)
+                ti.seed = ti.seed + 1 -- increment seed for next use
+                for key in pairs(ti.rows) do
+                    filter:Insert(key)
+                end
+                databaseDigest[tableName] = {
+                    filter = filter:Export(),
+                    summary = ti.summary:Export(),
+                }
+            else
+                databaseDigest[tableName] = {
+                    NIL_MARKER,
+                    NIL_MARKER,
+                }
             end
-            databaseDigest[tableName] = {
-                filter = filter:Export(),
-                summary = ti.summary:Export(),
-            }
-        else
-            databaseDigest[tableName] = {
-                NIL_MARKER,
-                NIL_MARKER,
-            }
         end
     end
 
@@ -2976,6 +3053,8 @@ function Private:DigestResponseHandler(message)
     local databaseDigest = message.data --- @type LibP2PDB.DBDigest
     local tableStateMap = {}            --- @type LibP2PDB.TableStateMap
     local databaseRequest = {}          --- @type LibP2PDB.DBRequest
+    local missingRowsCount = 0
+    local outdatedRowsCount = 0
     for tableName, tableDigest in pairs(databaseDigest or {}) do
         -- Check if table is defined in the database
         local ti = dbi.tables[tableName]
@@ -3007,11 +3086,13 @@ function Private:DigestResponseHandler(message)
                 if not filter or not filter:Contains(key) then
                     -- They are missing our row, send it to them
                     rowStateMap[key] = self:ExportRow(row, ti.schemaSorted)
+                    missingRowsCount = missingRowsCount + 1
                 elseif summary then -- Check if our row differs from their summary
                     local bucketIndex = ti.summary.keyIndex[key]
                     if summary.buckets[bucketIndex] ~= ti.summary.buckets[bucketIndex] then
                         -- Their summary differs from ours for this key, request the row
                         tableRequest[key] = row.version.clock
+                        outdatedRowsCount = outdatedRowsCount + 1
                     end
                 end
             end
@@ -3026,30 +3107,20 @@ function Private:DigestResponseHandler(message)
                 databaseRequest[tableName] = tableRequest
             end
         else
-            ReportError(dbi, "table '%s' in digest response from '%s' is not defined in the database", tableName, tostring(sender))
+            ReportError(dbi, "table '%s' in digest response from '%s' is not defined in the database", tableName, sender)
         end
     end
 
     -- Send rows they are missing
     if IsNonEmptyTable(tableStateMap) then
-        Spam("sending missing rows response to '%s'", sender)
-        local obj = {
-            type = CommMessageType.RowsResponse,
-            peer = self.peerId,
-            data = { dbi.version, dbi.clock, tableStateMap }, --- @type LibP2PDB.DBState
-        }
-        self:Send(dbi, obj, "WHISPER", sender, CommPriority.Normal)
+        Spam("sending %d missing rows response to '%s'", missingRowsCount, sender)
+        self:SendChunkedRowsResponse(dbi, ROWS_PER_CHUNK, sender, tableStateMap)
     end
 
     -- Request rows that differs from their summary
     if IsNonEmptyTable(databaseRequest) then
-        Spam("sending outdated rows request to '%s'", sender)
-        local obj = {
-            type = CommMessageType.RowsRequest,
-            peer = self.peerId,
-            data = databaseRequest, --- @type LibP2PDB.DBRequest
-        }
-        self:Send(dbi, obj, "WHISPER", sender, CommPriority.Normal)
+        Spam("sending %d outdated rows request to '%s'", outdatedRowsCount, sender)
+        self:SendChunkedRowsRequest(dbi, ROWS_PER_CHUNK, sender, databaseRequest)
     end
 end
 
@@ -3061,11 +3132,12 @@ function Private:RowsRequestHandler(message)
     local dbi = message.dbi
     local sender = message.sender
     local peerID = message.peer
-    Spam("received rows request from '%s'", tostring(sender))
+    Spam("received rows request from '%s'", sender)
 
     -- Export requested rows for each table
     local databaseRequest = message.data                           --- @type LibP2PDB.DBRequest
     local tableStateMap = {}                                       --- @type LibP2PDB.TableStateMap
+    local rowCount = 0
     for tableName, tableRequest in pairs(databaseRequest or {}) do --- @cast tableRequest LibP2PDB.TableRequest
         local ti = dbi.tables[tableName]
         if ti then
@@ -3075,6 +3147,7 @@ function Private:RowsRequestHandler(message)
                 local row = ti.rows[key]
                 if row and self:CompareVersion({ clock = clock, peer = peerID }, row.version) then
                     rowStateMap[key] = self:ExportRow(row, ti.schemaSorted)
+                    rowCount = rowCount + 1
                 end
             end
 
@@ -3083,24 +3156,19 @@ function Private:RowsRequestHandler(message)
                 tableStateMap[tableName] = rowStateMap
             end
         else
-            ReportError(dbi, "table '%s' in rows request from '%s' is not defined in the database", tableName, tostring(sender))
+            ReportError(dbi, "table '%s' in rows request from '%s' is not defined in the database", tableName, sender)
         end
     end
 
     -- Return if there are no rows to send
     if IsEmptyTable(tableStateMap) then
-        Spam("no rows to send to '%s'", tostring(sender))
+        Spam("no rows to send to '%s'", sender)
         return
     end
 
     -- Send rows response
-    Spam("sending rows response to '%s'", tostring(sender))
-    local obj = {
-        type = CommMessageType.RowsResponse,
-        peer = self.peerId,
-        data = { dbi.version, dbi.clock, tableStateMap }, --- @type LibP2PDB.DBState
-    }
-    self:Send(dbi, obj, "WHISPER", sender, CommPriority.Normal)
+    Spam("sending %d rows response to '%s'", rowCount, sender)
+    self:SendChunkedRowsResponse(dbi, ROWS_PER_CHUNK, sender, tableStateMap)
 end
 
 --- Handler for rows response messages.
@@ -3110,7 +3178,7 @@ end
 function Private:RowsResponseHandler(message)
     local dbi = message.dbi
     local sender = message.sender
-    Spam("received rows response from '%s'", tostring(sender))
+    Spam("received rows response from '%s'", sender)
 
     -- Import the database state we received
     local databaseState = message.data --- @type LibP2PDB.DBState
@@ -3138,24 +3206,127 @@ function Private:OnUpdate(dbi)
     end
 end
 
---- Record information about a new or existing peer.
+--- Send rows response in chunks to avoid transmission timeouts.
 --- @param dbi LibP2PDB.DBInstance Database instance.
---- @param peerID LibP2PDB.PeerID Peer ID.
---- @param peerName string Peer name.
---- @param peerClock LibP2PDB.Clock Peer clock.
-function Private:RecordPeer(dbi, peerID, peerName, peerClock)
+--- @param chunkSize integer Number of rows per chunk.
+--- @param sender string Target peer name.
+--- @param tableStateMap LibP2PDB.TableStateMap Complete table state map to send in chunks.
+function Private:SendChunkedRowsResponse(dbi, chunkSize, sender, tableStateMap)
+    local chunkTableStateMap = {} --- @type LibP2PDB.TableStateMap
+    local chunkRowCount = 0
+
+    -- Iterate through all tables and rows
+    for tableName, rowStateMap in pairs(tableStateMap) do
+        local chunkRowStateMap = {} --- @type LibP2PDB.RowStateMap
+
+        for key, rowState in pairs(rowStateMap) do
+            -- Add row to current chunk
+            chunkRowStateMap[key] = rowState
+            chunkRowCount = chunkRowCount + 1
+
+            -- Send chunk when it reaches the limit
+            if chunkRowCount >= chunkSize then
+                chunkTableStateMap[tableName] = chunkRowStateMap
+                local obj = {
+                    type = CommMessageType.RowsResponse,
+                    peer = self.peerId,
+                    data = { dbi.version, dbi.clock, chunkTableStateMap }, --- @type LibP2PDB.DBState
+                }
+                self:Send(dbi, obj, "WHISPER", sender, CommPriority.Normal)
+
+                -- Reset for next chunk
+                chunkTableStateMap = {}
+                chunkRowStateMap = {}
+                chunkRowCount = 0
+            end
+        end
+
+        -- Add remaining rows from this table to chunk
+        if IsNonEmptyTable(chunkRowStateMap) then
+            chunkTableStateMap[tableName] = chunkRowStateMap
+        end
+    end
+
+    -- Send final partial chunk if any rows remain
+    if chunkRowCount > 0 then
+        local obj = {
+            type = CommMessageType.RowsResponse,
+            peer = self.peerId,
+            data = { dbi.version, dbi.clock, chunkTableStateMap }, --- @type LibP2PDB.DBState
+        }
+        self:Send(dbi, obj, "WHISPER", sender, CommPriority.Normal)
+    end
+end
+
+--- Send rows request in chunks to avoid transmission timeouts.
+--- @param dbi LibP2PDB.DBInstance Database instance.
+--- @param chunkSize integer Number of rows per chunk.
+--- @param sender string Target peer name.
+--- @param databaseRequest LibP2PDB.DBRequest Complete database request to send in chunks.
+function Private:SendChunkedRowsRequest(dbi, chunkSize, sender, databaseRequest)
+    local chunkDatabaseRequest = {} --- @type LibP2PDB.DBRequest
+    local chunkRowCount = 0
+
+    -- Iterate through all tables and keys
+    for tableName, tableRequest in pairs(databaseRequest) do
+        local chunkTableRequest = {} --- @type LibP2PDB.TableRequest
+
+        for key, clock in pairs(tableRequest) do
+            -- Add key to current chunk
+            chunkTableRequest[key] = clock
+            chunkRowCount = chunkRowCount + 1
+
+            -- Send chunk when it reaches the limit
+            if chunkRowCount >= chunkSize then
+                chunkDatabaseRequest[tableName] = chunkTableRequest
+                local obj = {
+                    type = CommMessageType.RowsRequest,
+                    peer = self.peerId,
+                    data = chunkDatabaseRequest, --- @type LibP2PDB.DBRequest
+                }
+                self:Send(dbi, obj, "WHISPER", sender, CommPriority.Normal)
+
+                -- Reset for next chunk
+                chunkDatabaseRequest = {}
+                chunkTableRequest = {}
+                chunkRowCount = 0
+            end
+        end
+
+        -- Add remaining keys from this table to chunk
+        if IsNonEmptyTable(chunkTableRequest) then
+            chunkDatabaseRequest[tableName] = chunkTableRequest
+        end
+    end
+
+    -- Send final partial chunk if any keys remain
+    if chunkRowCount > 0 then
+        local obj = {
+            type = CommMessageType.RowsRequest,
+            peer = self.peerId,
+            data = chunkDatabaseRequest, --- @type LibP2PDB.DBRequest
+        }
+        self:Send(dbi, obj, "WHISPER", sender, CommPriority.Normal)
+    end
+end
+
+--- Update information about a new or existing peer.
+--- @param message LibP2PDB.Message The received message containing peer information.
+function Private:UpdatePeer(message)
+    local dbi = message.dbi
+    local peerID = message.peer
+    local peerName = message.sender
+
     -- Lookup existing peer info
     local now = GetTime()
     local peerInfo = dbi.peers[peerID]
 
     -- Update existing peer
     if peerInfo then
-        peerInfo.clock = peerClock
         peerInfo.lastSeen = now
     else -- Insert new peer
         peerInfo = {
             name = peerName,
-            clock = peerClock,
             lastSeen = now,
         }
         dbi.peers[peerID] = peerInfo
@@ -3717,6 +3888,7 @@ local UnitTests = {
             local ti = dbi.tables["Users1"]
             Assert.IsNonEmptyTable(ti)
             Assert.AreEqual(ti.keyType, "string")
+            Assert.AreEqual(ti.sync, true)
             Assert.IsNil(ti.schema)
             Assert.IsNil(ti.schemaSorted)
             Assert.IsNil(ti.onValidate)
@@ -3730,6 +3902,7 @@ local UnitTests = {
             LibP2PDB:NewTable(db, {
                 name = "Users2",
                 keyType = "number",
+                sync = false,
                 schema = {
                     name = "string",
                     age = { "number", "nil" },
@@ -3741,6 +3914,7 @@ local UnitTests = {
             local ti = dbi.tables["Users2"]
             Assert.IsNonEmptyTable(ti)
             Assert.AreEqual(ti.keyType, "number")
+            Assert.AreEqual(ti.sync, false)
             Assert.AreEqual(ti.schema, { name = "string", age = { "number", "nil" } })
             Assert.AreEqual(ti.schemaSorted, { { "age", { "number", "nil" } }, { "name", "string" } })
             Assert.IsFunction(ti.onValidate)
@@ -5686,7 +5860,7 @@ local UnitTests = {
                         end
                     end
                 end,
-                onMigrateRow =function (target, source)
+                onMigrateRow = function(target, source)
                     if source.version == 1 then
                         if source.tableName == "Users" then
                             return "user" .. source.key, nil -- always return invalid data to skip all rows
@@ -5735,7 +5909,7 @@ local UnitTests = {
                         end
                     end
                 end,
-                onMigrateRow =function (target, source)
+                onMigrateRow = function(target, source)
                     if source.version == 1 then
                         if source.tableName == "Users" then
                             local key = "user" .. source.key
@@ -5790,7 +5964,7 @@ local UnitTests = {
                         end
                     end
                 end,
-                onMigrateRow =function (target, source)
+                onMigrateRow = function(target, source)
                     if source.version == 1 then
                         if source.tableName == "Users" then
                             local key = "user" .. source.key
@@ -6101,6 +6275,86 @@ local numPeers = 8
 local numRounds = ceil(log(numPeers + 1) / log(2))
 
 local NetworkTests = {
+    BroadcastPresence = function()
+        local instances = {}
+        local databases = {}
+        for i = 1, numPeers do
+            instances[i] = NewPrivateInstance(i)
+            databases[i] = PrivateScope(instances[i], function()
+                return LibP2PDB:NewDatabase({ prefix = "LibP2PDBTests" })
+            end)
+        end
+
+        -- Have peer 1 broadcast its presence to all other peers
+        VerbosityScope(3, function()
+            PrivateScope(instances[1], function() LibP2PDB:BroadcastPresence(databases[1]) end)
+            TickPrivateInstances(instances)
+        end)
+
+        -- Check that peer 1 doesn't know about any other peers yet
+        local db = databases[1]
+        local dbi = instances[1].databases[db]
+        local peerCount = 0
+        for _ in pairs(dbi.peers) do
+            peerCount = peerCount + 1
+        end
+        Assert.AreEqual(peerCount, 1)
+
+        -- Check that all other peers know about peer 1
+        for i = 2, numPeers do
+            local db = databases[i]
+            local dbi = instances[i].databases[db]
+            Assert.ContainsKey(dbi.peers, instances[1].peerId)
+            Assert.AreEqual(dbi.peers[instances[1].peerId].name, "Player1")
+        end
+
+        -- Now have all other peers broadcast their presence
+        VerbosityScope(3, function()
+            for i = 2, numPeers do
+                PrivateScope(instances[i], function() LibP2PDB:BroadcastPresence(databases[i]) end)
+            end
+            TickPrivateInstances(instances)
+        end)
+
+        -- Check that all peers know about all other peers
+        for i = 1, numPeers do
+            local db = databases[i]
+            local dbi = instances[i].databases[db]
+            for j = 1, numPeers do
+                if i ~= j then
+                    Assert.ContainsKey(dbi.peers, instances[j].peerId)
+                    Assert.AreEqual(dbi.peers[instances[j].peerId].name, "Player" .. j)
+                end
+            end
+        end
+
+        -- Check that the sorted peers list is correct
+        for i = 1, numPeers do
+            PrivateScope(instances[i], function()
+                local db = databases[i]
+                local dbi = instances[i].databases[db]
+                local sortedPeers = ShallowCopy(dbi.peersSorted)
+                Assert.AreEqual(#sortedPeers, numPeers)
+                tsort(sortedPeers, function(a, b) return a < b end)
+                Assert.AreEqual(dbi.peersSorted, sortedPeers)
+            end)
+        end
+    end,
+
+    BroadcastPresence_DBIsInvalid_Throws = function()
+        local instance = NewPrivateInstance(1)
+        PrivateScope(instance, function()
+            Assert.Throws(function() LibP2PDB:BroadcastPresence(nil) end)
+            Assert.Throws(function() LibP2PDB:BroadcastPresence(true) end)
+            Assert.Throws(function() LibP2PDB:BroadcastPresence(false) end)
+            Assert.Throws(function() LibP2PDB:BroadcastPresence("") end)
+            Assert.Throws(function() LibP2PDB:BroadcastPresence("invalid") end)
+            Assert.Throws(function() LibP2PDB:BroadcastPresence(123) end)
+            Assert.Throws(function() LibP2PDB:BroadcastPresence({}) end)
+        end)
+    end,
+
+    --- @diagnostic disable: deprecated
     DiscoverPeers = function()
         local instances = {}
         local databases = {}
@@ -6151,6 +6405,7 @@ local NetworkTests = {
             Assert.Throws(function() LibP2PDB:DiscoverPeers({}) end)
         end)
     end,
+    --- @diagnostic enable: deprecated
 
     SyncDatabase = function()
         local instances = {}
@@ -6161,14 +6416,16 @@ local NetworkTests = {
                 local db = LibP2PDB:NewDatabase({ prefix = "LibP2PDBTests" })
                 LibP2PDB:NewTable(db, { name = "Users", keyType = "number", schema = { name = "string", age = "number" } })
                 LibP2PDB:InsertKey(db, "Users", i, { name = "Player" .. i, age = 20 + i })
+                LibP2PDB:NewTable(db, { name = "Scores", keyType = "number", sync = false, schema = { score = "number" } })
+                LibP2PDB:InsertKey(db, "Scores", i, { score = i * 10 })
                 return db
             end)
         end
 
-        -- Make all peers discover each other
+        -- Make all peers broadcast their presence
         VerbosityScope(3, function()
             for i = 1, numPeers do
-                PrivateScope(instances[i], function() LibP2PDB:DiscoverPeers(databases[i]) end)
+                PrivateScope(instances[i], function() LibP2PDB:BroadcastPresence(databases[i]) end)
             end
             TickPrivateInstances(instances)
         end)
@@ -6186,13 +6443,138 @@ local NetworkTests = {
         -- Check that all peers have all data
         for i = 1, numPeers do
             PrivateScope(instances[i], function()
+                -- Check that sync table got fully synchronized
                 local keys = LibP2PDB:ListKeys(databases[i], "Users")
-                --Debug("Peer " .. i .. " has keys: " .. table.concat(keys, ", "))
                 for j = 1, numPeers do
                     Assert.AreEqual(#keys, numPeers)
                     Assert.AreEqual(LibP2PDB:GetKey(databases[i], "Users", j), { name = "Player" .. j, age = 20 + j })
                 end
+
+                -- Check that non-sync table did not get synchronized
+                local scoreKeys = LibP2PDB:ListKeys(databases[i], "Scores")
+                Assert.AreEqual(#scoreKeys, 1)
+                Assert.AreEqual(LibP2PDB:GetKey(databases[i], "Scores", i), { score = i * 10 })
             end)
+        end
+    end,
+
+    SyncDatabase_OneKeyChange = function()
+        local instances = {}
+        local databases = {}
+        local numPeers = 4
+        for i = 1, numPeers do
+            instances[i] = NewPrivateInstance(i)
+            databases[i] = PrivateScope(instances[i], function()
+                local db = LibP2PDB:NewDatabase({ prefix = "LibP2PDBTests" })
+                LibP2PDB:NewTable(db, { name = "Users", keyType = "number", schema = { name = "string", age = "number" } })
+                for i = 1, 10 do
+                    LibP2PDB:InsertKey(db, "Users", i, { name = "Name" .. i, age = 20 + i })
+                end
+                return db
+            end)
+        end
+
+        -- Make all peers broadcast their presence
+        VerbosityScope(3, function()
+            for i = 1, numPeers do
+                PrivateScope(instances[i], function() LibP2PDB:BroadcastPresence(databases[i]) end)
+            end
+            TickPrivateInstances(instances)
+        end)
+
+        -- Make all peers sync their databases
+        VerbosityScope(3, function()
+            for r = 1, numRounds do
+                for i = 1, numPeers do
+                    PrivateScope(instances[i], function() LibP2PDB:SyncDatabase(databases[i]) end)
+                end
+                TickPrivateInstances(instances)
+            end
+        end)
+
+        -- Change one key on peer 1
+        PrivateScope(instances[1], function()
+            LibP2PDB:UpdateKey(databases[1], "Users", 5, function(data)
+                data.name = "Bob"
+                data.age = 35
+                return data
+            end)
+        end)
+
+        -- Sync databases again
+        VerbosityScope(3, function()
+            for r = 1, numRounds do
+                for i = 1, numPeers do
+                    PrivateScope(instances[i], function() LibP2PDB:SyncDatabase(databases[i]) end)
+                end
+                TickPrivateInstances(instances)
+            end
+        end)
+
+        -- Check that all peers have the updated key
+        for i = 1, numPeers do
+            PrivateScope(instances[i], function()
+                Assert.AreEqual(LibP2PDB:GetKey(databases[i], "Users", 5), { name = "Bob", age = 35 })
+            end)
+        end
+    end,
+
+    SyncDatabase_NoKeyChange = function()
+        local instances = {}
+        local databases = {}
+        local numPeers = 4
+        for i = 1, numPeers do
+            instances[i] = NewPrivateInstance(i)
+            databases[i] = PrivateScope(instances[i], function()
+                local db = LibP2PDB:NewDatabase({ prefix = "LibP2PDBTests" })
+                LibP2PDB:NewTable(db, { name = "Users", keyType = "number", schema = { name = "string", age = "number" } })
+                for i = 1, 10 do
+                    LibP2PDB:InsertKey(db, "Users", i, { name = "Name" .. i, age = 20 + i })
+                end
+                return db
+            end)
+        end
+
+        -- Make all peers broadcast their presence
+        VerbosityScope(3, function()
+            for i = 1, numPeers do
+                PrivateScope(instances[i], function() LibP2PDB:BroadcastPresence(databases[i]) end)
+            end
+            TickPrivateInstances(instances)
+        end)
+
+        -- Make all peers sync their databases
+        VerbosityScope(3, function()
+            for r = 1, numRounds do
+                for i = 1, numPeers do
+                    PrivateScope(instances[i], function() LibP2PDB:SyncDatabase(databases[i]) end)
+                end
+                TickPrivateInstances(instances)
+            end
+        end)
+
+        -- Record the state of each database after complete sync
+        local dbStates = {}
+        for i = 1, numPeers do
+            dbStates[i] = PrivateScope(instances[i], function()
+                return LibP2PDB:ExportDatabase(databases[i])
+            end)
+        end
+
+        -- Call SyncDatabase again on all peers
+        VerbosityScope(3, function()
+            for i = 1, numPeers do
+                PrivateScope(instances[i], function() LibP2PDB:SyncDatabase(databases[i]) end)
+            end
+            TickPrivateInstances(instances)
+        end)
+
+        -- Check that the state of each database is unchanged
+        for i = 1, numPeers do
+            local currentState = PrivateScope(instances[i], function()
+                return LibP2PDB:ExportDatabase(databases[i])
+            end)
+            Assert.AreEqual(currentState, dbStates[i])
         end
     end,
 
@@ -6222,10 +6604,10 @@ local NetworkTests = {
             end)
         end
 
-        -- Make all peers discover each other
+        -- Make all peers broadcast their presence
         VerbosityScope(3, function()
             for i = 1, numPeers do
-                PrivateScope(instances[i], function() LibP2PDB:DiscoverPeers(databases[i]) end)
+                PrivateScope(instances[i], function() LibP2PDB:BroadcastPresence(databases[i]) end)
             end
             TickPrivateInstances(instances)
         end)
@@ -6274,10 +6656,10 @@ local NetworkTests = {
             end)
         end
 
-        -- Make all peers discover each other
+        -- Make all peers broadcast their presence
         VerbosityScope(3, function()
             for i = 1, numPeers do
-                PrivateScope(instances[i], function() LibP2PDB:DiscoverPeers(databases[i]) end)
+                PrivateScope(instances[i], function() LibP2PDB:BroadcastPresence(databases[i]) end)
             end
             TickPrivateInstances(instances)
         end)
@@ -6385,10 +6767,10 @@ local NetworkTests = {
             end)
         end
 
-        -- Make all peers discover each other
+        -- Make all peers broadcast their presence
         VerbosityScope(3, function()
             for i = 1, numPeers do
-                PrivateScope(instances[i], function() LibP2PDB:DiscoverPeers(databases[i]) end)
+                PrivateScope(instances[i], function() LibP2PDB:BroadcastPresence(databases[i]) end)
             end
             TickPrivateInstances(instances)
         end)
@@ -6429,10 +6811,10 @@ local NetworkTests = {
             end)
         end
 
-        -- Make all peers discover each other
+        -- Make all peers broadcast their presence
         VerbosityScope(3, function()
             for i = 1, numPeers do
-                PrivateScope(instances[i], function() LibP2PDB:DiscoverPeers(databases[i]) end)
+                PrivateScope(instances[i], function() LibP2PDB:BroadcastPresence(databases[i]) end)
             end
             TickPrivateInstances(instances)
         end)
@@ -6527,10 +6909,10 @@ local NetworkTests = {
             end)
         end
 
-        -- Make all peers discover each other
+        -- Make all peers broadcast their presence
         VerbosityScope(3, function()
             for i = 1, numPeers do
-                PrivateScope(instances[i], function() LibP2PDB:DiscoverPeers(databases[i]) end)
+                PrivateScope(instances[i], function() LibP2PDB:BroadcastPresence(databases[i]) end)
             end
             TickPrivateInstances(instances)
         end)
@@ -6569,10 +6951,10 @@ local NetworkTests = {
             end)
         end
 
-        -- Make all peers discover each other
+        -- Make all peers broadcast their presence
         VerbosityScope(3, function()
             for i = 1, numPeers do
-                PrivateScope(instances[i], function() LibP2PDB:DiscoverPeers(databases[i]) end)
+                PrivateScope(instances[i], function() LibP2PDB:BroadcastPresence(databases[i]) end)
             end
             TickPrivateInstances(instances)
         end)
@@ -6649,10 +7031,10 @@ local NetworkTests = {
             end)
         end
 
-        -- Make all peers discover each other
+        -- Make all peers broadcast their presence
         VerbosityScope(3, function()
             for i = 1, numPeers do
-                PrivateScope(instances[i], function() LibP2PDB:DiscoverPeers(databases[i]) end)
+                PrivateScope(instances[i], function() LibP2PDB:BroadcastPresence(databases[i]) end)
             end
             TickPrivateInstances(instances)
         end)

@@ -41,12 +41,12 @@ local function SetDebugEnabled(enabled)
     addon.HardcoreAchievementsDB.debugEnabled = enabled and true or false
 end
 
-local function HCA_DebugPrint(message)
+local function DebugPrint(message)
     if GetDebugEnabled() then
         print("|cff008066[HCA DEBUG]|r |cffffd100" .. tostring(message) .. "|r")
     end
 end
-if addon then addon.DebugPrint = HCA_DebugPrint end
+if addon then addon.DebugPrint = DebugPrint end
 
 -- SECURITY: Get admin secret key from database (set by admin via slash command)
 -- This key is NOT in source code and must be set by the admin
@@ -622,18 +622,18 @@ local function OnPreciousCompletedMessage(prefix, message, distribution, sender)
     -- Don't notify the player who completed Precious
     local playerName = UnitName("player")
     if payload.playerName == playerName or sender == playerName then
-        HCA_DebugPrint("Precious completion message ignored (from self)")
+        DebugPrint("Precious completion message ignored (from self)")
         return
     end
     
-    HCA_DebugPrint("Precious completion message received from " .. tostring(sender))
+    DebugPrint("Precious completion message received from " .. tostring(sender))
     
     -- Call all registered callbacks
     for _, callback in ipairs(preciousCompletionCallbacks) do
         if type(callback) == "function" then
             local ok, err = pcall(callback, payload, sender)
             if not ok then
-                HCA_DebugPrint("Error in Precious completion callback: " .. tostring(err))
+                DebugPrint("Error in Precious completion callback: " .. tostring(err))
             end
         end
     end
@@ -818,7 +818,7 @@ local function SendPreciousCompletionMessage()
     local serializedMessage = AceSerialize:Serialize(messagePayload)
     if serializedMessage then
         AceComm:SendCommMessage(PRECIOUS_COMPLETE_PREFIX, serializedMessage, "SAY")
-        if HCA_DebugPrint then HCA_DebugPrint("Precious completion message sent") end
+        if DebugPrint then DebugPrint("Precious completion message sent") end
     end
 end
 

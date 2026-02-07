@@ -5,7 +5,7 @@ local UnitLevel = UnitLevel
 local math = math
 local GetPresetMultiplier = (addon and addon.GetPresetMultiplier)
 local UpdateMultiplierText = (addon and addon.UpdateMultiplierText)
-local IsSelfFound = (addon and addon.IsSelfFound)
+-- Resolve at call time: this file loads before SharedUtils so addon.IsSelfFound is nil at load
 local tonumber = tonumber
 local pairs = pairs
 local type = type
@@ -61,120 +61,17 @@ local function CalculateAchievementPoints(row, preset, isSelfFound, isSoloMode, 
     return finalPoints
 end
 
--- Check if kills are satisfied for an achievement that requires both kills and quest
-local function CheckKillsSatisfied(row, rowId, progress, defById)
-    if not progress then
-        return false
-    end
-    
-    local hasKill = false
-    
-    if progress.killed then
-        hasKill = true
-    elseif progress.counts and next(progress.counts) ~= nil then
-        -- Check if all required kills are satisfied using eligibleCounts
-        if progress.eligibleCounts then
-            -- Use a pre-built lookup table for definitions (avoid scanning the full catalog per row)
-            local achDef = defById and defById[tostring(rowId)] or nil
-            
-            if achDef and achDef.requiredKills then
-                local allSatisfied = true
-                for npcId, requiredCount in pairs(achDef.requiredKills) do
-                    local idNum = tonumber(npcId) or npcId
-                    local current = progress.eligibleCounts[idNum] or progress.eligibleCounts[tostring(idNum)] or 0
-                    local required = tonumber(requiredCount) or 1
-                    if current < required then
-                        allSatisfied = false
-                        break
-                    end
-                end
-                hasKill = allSatisfied
-            else
-                -- Single kill achievement, check killed flag
-                hasKill = progress.killed or false
-            end
-        elseif progress.killed then
-            hasKill = true
-        end
-    end
-    
-    -- Check if quest is not yet turned in
-    local questNotTurnedIn = not progress.quest
-    
-    return hasKill and questNotTurnedIn
-end
-
--- Update status text for an achievement row
+-- Update status text for an achievement row (uses centralized GetStatusParamsForAchievement)
 local function UpdateRowStatusText(row, rowId, progress, isSelfFound, isSoloMode, isHardcoreActive, allowSoloBonus, defById)
-    if not row.Sub or not row.maxLevel or row.maxLevel <= 0 then
-        return
-    end
-    
-    local levelText = LEVEL .. " " .. row.maxLevel
-    local hasSoloStatus = progress and (progress.soloKill or progress.soloQuest)
-    local hasIneligibleKill = progress and progress.ineligibleKill
-    local requiresBoth = row.questTracker and row.killTracker
-    
-    -- Use helper function to set status text
-    if SetStatusTextOnRow then
-        local wasSolo = false
-        if row.completed then
-            local getCharDB = addon and addon.GetCharDB
-            if getCharDB then
-                local _, cdb = getCharDB()
-                if cdb and cdb.achievements and rowId then
-                    local achRec = cdb.achievements[rowId]
-                    wasSolo = achRec and achRec.wasSolo or false
-                end
-            end
-        end
-        
-        -- Check if kills are satisfied but quest is pending
-        local killsSatisfied = false
-        if requiresBoth then
-            killsSatisfied = CheckKillsSatisfied(row, rowId, progress, defById)
-        end
-        
-        local playerLevel = UnitLevel("player") or 1
-        local isOutleveled = false
-        -- Check if player is over level, but don't mark as outleveled if there's pending turn-in
-        if (not row.completed) and row.maxLevel and (playerLevel > row.maxLevel) then
-            -- If kills are satisfied but quest is not turned in, keep achievement available
-            if killsSatisfied then
-                isOutleveled = false
-            else
-                isOutleveled = true
-            end
-        end
-
-        SetStatusTextOnRow(row, {
-            completed = row.completed or false,
-            hasSoloStatus = hasSoloStatus,
-            hasIneligibleKill = hasIneligibleKill,
-            requiresBoth = requiresBoth,
-            killsSatisfied = killsSatisfied,
-            isSelfFound = isSelfFound,
-            isSoloMode = isSoloMode,
-            wasSolo = wasSolo,
-            allowSoloDouble = row.allowSoloDouble,
-            maxLevel = row.maxLevel,
-            isOutleveled = isOutleveled
-        })
-
-        if isOutleveled and progress then
-            progress.soloKill = nil
-            progress.soloQuest = nil
-        end
-    else
-        -- Fallback if helper not available
-        if hasIneligibleKill then
-            local message = requiresBoth and "|cffff4646Ineligible Kill|r" or ""
-            row.Sub:SetText(levelText .. "\n" .. message)
-        elseif hasSoloStatus and allowSoloBonus then
-            row.Sub:SetText(levelText .. "\n|cffac81d6Pending solo|r")
-        else
-            row.Sub:SetText(levelText)
-        end
+    if not row or not row.Sub or not row.maxLevel or row.maxLevel <= 0 then return end
+    local setStatus = addon and addon.SetStatusTextOnRow
+    if not setStatus or not (addon and addon.GetStatusParamsForAchievement) then return end
+    local params = addon.GetStatusParamsForAchievement(rowId, row)
+    if not params then return end
+    setStatus(row, params)
+    if params.isOutleveled and progress then
+        progress.soloKill = nil
+        progress.soloQuest = nil
     end
 end
 
@@ -200,7 +97,8 @@ local function RefreshAllAchievementPoints()
     local preset = (addon and addon.GetPlayerPresetFromSettings and addon.GetPlayerPresetFromSettings()) or nil
     local isSoloMode = (addon and addon.IsSoloModeEnabled and addon.IsSoloModeEnabled()) or false
     local isHardcoreActive = C_GameRules and C_GameRules.IsHardcoreActive and C_GameRules.IsHardcoreActive() or false
-    local allowSoloBonus = IsSelfFound() or not isHardcoreActive
+    local isSelfFoundFn = addon and addon.IsSelfFound
+    local allowSoloBonus = (type(isSelfFoundFn) == "function" and isSelfFoundFn()) or not isHardcoreActive
 
     -- Build a fast lookup table for achievement definitions (by achId) once.
     local defById = {}
@@ -221,7 +119,7 @@ local function RefreshAllAchievementPoints()
             local progress = addon and addon.GetProgress and addon.GetProgress(rowId)
             
             -- Calculate and set points
-            local finalPoints = CalculateAchievementPoints(row, preset, IsSelfFound(), isSoloMode, progress)
+            local finalPoints = CalculateAchievementPoints(row, preset, (type(isSelfFoundFn) == "function" and isSelfFoundFn()), isSoloMode, progress)
             
             row.points = finalPoints
             local frame = row.frame
@@ -240,7 +138,7 @@ local function RefreshAllAchievementPoints()
             -- Update Sub text - check if we have stored solo status or ineligible status from previous kills/quests
             -- Only update Sub text for incomplete achievements to preserve completed achievement solo indicators
             if frame and not row.completed then
-                UpdateRowStatusText(frame, rowId, progress, IsSelfFound(), isSoloMode, isHardcoreActive, allowSoloBonus, defById)
+                UpdateRowStatusText(frame, rowId, progress, (type(isSelfFoundFn) == "function" and isSelfFoundFn()), isSoloMode, isHardcoreActive, allowSoloBonus, defById)
             end
         end
     end

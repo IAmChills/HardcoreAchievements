@@ -17,7 +17,7 @@
 --   - requireSameGuild: boolean (default: true for guild-scoped claims, else false)
 
 local addonName, addon = ...
-local ClassColor = (addon and addon.GetClassColor)
+local ClassColor = (addon and addon.GetClassColor())
 local table_insert = table.insert
 
 local achievements = {

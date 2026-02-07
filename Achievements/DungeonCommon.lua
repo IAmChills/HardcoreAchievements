@@ -16,6 +16,7 @@ local GetInstanceInfo = GetInstanceInfo
 local CreateFrame = CreateFrame
 local GetPresetMultiplier = (addon and addon.GetPresetMultiplier)
 local RefreshAllAchievementPoints = (addon and addon.RefreshAllAchievementPoints)
+local ClassColor = (addon and addon.GetClassColor()) or ""
 local table_insert = table.insert
 local table_concat = table.concat
 
@@ -585,7 +586,7 @@ local function CreateVariation(baseDef, variation)
     -- Update tooltip to reflect variation (clean, without "Variation" suffix)
     local partySizeText = variation.maxPartySize == 1 and "yourself only" or 
                           (variation.maxPartySize == 2 and "up to 2 party members" or "up to 3 party members")
-    variationDef.tooltip = "Defeat the bosses of " .. HCA_SharedUtils.GetClassColor() .. "" .. baseDef.title .. "|r with every party member at level " .. variationDef.level .. " or lower upon entering the dungeon" .. " (" .. partySizeText .. ")"
+    variationDef.tooltip = "Defeat the bosses of " .. ClassColor .. baseDef.title .. "|r with every party member at level " .. variationDef.level .. " or lower upon entering the dungeon" .. " (" .. partySizeText .. ")"
     
     -- Mark as variation
     variationDef.isVariation = true
@@ -758,7 +759,7 @@ local function registerDungeonAchievement(def)
 
   -- Get boss names from NPC IDs (you can expand this with a lookup table)
   -- Export globally so tooltip function can use it
-  function HCA_GetBossName(npcId)
+  local function GetBossName(npcId)
     -- This is a basic mapping - you can expand this with more boss names
     local bossNames = {
       [11520] = "Taragaman the Hungerer",
@@ -956,7 +957,7 @@ local function registerDungeonAchievement(def)
     }
     return bossNames[npcId] or ("Boss " .. npcId)
   end
-
+  if addon then addon.GetBossName = GetBossName end
 
   -- Lazy tooltip setup - only initialize when first hovered (optimization)
   local tooltipInitialized = false
@@ -996,7 +997,7 @@ local function registerDungeonAchievement(def)
         local bossNames = {}
         for _, id in pairs(need) do
           local current = (state.counts[id] or state.counts[tostring(id)] or 0)
-          local name = HCA_GetBossName(id)
+          local name = GetBossName(id)
           table_insert(bossNames, name)
           if current >= 1 then done = true end
         end
@@ -1008,7 +1009,7 @@ local function registerDungeonAchievement(def)
       else
         local idNum = tonumber(npcId) or npcId
         local current = (state.counts[idNum] or state.counts[tostring(idNum)] or 0)
-        bossName = HCA_GetBossName(idNum)
+        bossName = GetBossName(idNum)
         done = current >= (tonumber(need) or 1)
       end
       if achievementCompleted then done = true end
@@ -1177,7 +1178,7 @@ local function registerDungeonAchievement(def)
       local progress = addon and addon.GetProgress and addon.GetProgress(achId)
       local isStillAvailable = not state.completed and not (progress and progress.failed)
       if isStillAvailable and addon.IsAchievementVisible and addon.IsAchievementVisible(achId) then
-        print("|cff008066[Hardcore Achievements]|r |cffffd100" .. HCA_GetBossName(npcId) .. " killed but group is ineligible - kill not counted for achievement: " .. title .. "|r")
+        print("|cff008066[Hardcore Achievements]|r |cffffd100" .. GetBossName(npcId) .. " killed but group is ineligible - kill not counted for achievement: " .. title .. "|r")
       end
       return false
     end
@@ -1190,7 +1191,7 @@ local function registerDungeonAchievement(def)
     -- Only print for the first eligible variation (processKill iterates base then Trio, Duo, Solo)
     if addon and addon.DungeonKillPrintedForGUID ~= destGUID then
         addon.DungeonKillPrintedForGUID = destGUID
-        print("|cff008066[Hardcore Achievements]|r |cffffd100" .. HCA_GetBossName(npcId) .. " killed as part of achievement: " .. title .. "|r")
+        print("|cff008066[Hardcore Achievements]|r |cffffd100" .. GetBossName(npcId) .. " killed as part of achievement: " .. title .. "|r")
     end
 
     -- Check if achievement should be completed

@@ -20,11 +20,6 @@ local LibP2PDB = LibStub("LibP2PDB")
 ## Usage
 
 ```lua
--- More about this later, read below
-local function OnDiscoveryCompleteCallback()
-    LibP2PDB:SyncDatabase(db)
-end
-
 -- Make a new database
 local db = LibP2PDB:New("MyDatabase", {
     prefix = "MyAddon",
@@ -54,11 +49,10 @@ local exists = LibP2PDB:HasKey(db, "MyTableName", "user1")
 -- Get a row data
 local data = LibP2PDB:GetKey(db, "MyTableName", "user1")
 
--- Discover peers in the network cluster (usually called in a ticker)
-LibP2PDB:DiscoverPeers(db)
+-- Broadcast presence to other peers
+LibP2PDB:BroadcastPresence(db)
 
 -- Synchronize database with reachable active peers
--- This is usually called in the onDiscoveryComplete callback, see above
 LibP2PDB:SyncDatabase(db)
 ```
 

@@ -27,7 +27,7 @@ function ReputationCommon.registerReputationAchievement(def)
   
   -- Create unique variable names
   local rowVarName = achId .. "_Row"
-  local registerFuncName = "HCA_Register" .. achId
+  local registerFuncName = "Register" .. achId
   
   ---------------------------------------
   -- Helper Functions

@@ -30,7 +30,6 @@ local databases = {}  -- [scopeKey] = { db = DBHandle, prefix = string, discover
 local addonName, addon = ...
 local MarkRowCompleted = addon and addon.MarkRowCompleted
 local ApplyFilter = addon and addon.ApplyFilter
-local DebugPrint = addon and addon.DebugPrint
 local ShowAchievementWindow = addon and (addon.ShowAchievementWindow or addon.ShowAchievementTab)
 
 local M = {}
@@ -198,8 +197,8 @@ local function GetGuildName()
 end
 
 local function Debug(msg)
-    if type(DebugPrint) == "function" then
-        DebugPrint("[GuildFirst] " .. tostring(msg))
+    if addon and type(addon.DebugPrint) == "function" then
+        addon.DebugPrint("[GuildFirst] " .. tostring(msg))
     end
 end
 

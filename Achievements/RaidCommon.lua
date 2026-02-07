@@ -162,7 +162,7 @@ local function registerRaidAchievement(def)
   end
 
   -- Dynamic names first so functions capture these locals
-  local registerFuncName = "HCA_Register" .. achId
+  local registerFuncName = "Register" .. achId
   local rowVarName       = achId .. "_Row"
 
   -- Helper function to get NPC IDs from encounter ID
@@ -173,7 +173,7 @@ local function registerRaidAchievement(def)
 
   -- Get boss names from NPC IDs
   -- Export globally so tooltip function can use it
-  function HCA_GetRaidBossName(npcId)
+  local function GetRaidBossName(npcId)
     local bossNames = {
       -- Lower Blackrock Spire
       [9816] = "Pyroguard Emberseer",
@@ -389,7 +389,7 @@ local function registerRaidAchievement(def)
           local bossNames = {}
           for _, id in pairs(need) do
             local current = (state.counts[id] or state.counts[tostring(id)] or 0)
-            local name = HCA_GetRaidBossName(id)
+            local name = GetRaidBossName(id)
             table_insert(bossNames, name)
             if current >= 1 then done = true end
           end
@@ -401,7 +401,7 @@ local function registerRaidAchievement(def)
         else
           local idNum = tonumber(npcId) or npcId
           local current = (state.counts[idNum] or state.counts[tostring(idNum)] or 0)
-          bossName = HCA_GetRaidBossName(idNum)
+          bossName = GetRaidBossName(idNum)
           done = current >= (tonumber(need) or 1)
         end
         if achievementCompleted then done = true end
@@ -496,7 +496,7 @@ local function registerRaidAchievement(def)
         -- Store points (raids do not support solo doubling)
         StorePointsAtKill()
 
-        print("|cff008066[Hardcore Achievements]|r |cffffd100" .. HCA_GetRaidBossName(npcId) .. " killed as part of achievement: " .. title .. "|r")
+        print("|cff008066[Hardcore Achievements]|r |cffffd100" .. GetRaidBossName(npcId) .. " killed as part of achievement: " .. title .. "|r")
       end
     end
 
@@ -628,4 +628,7 @@ end
 
 RaidCommon.registerRaidAchievement = registerRaidAchievement
 
-if addon then addon.RaidCommon = RaidCommon end
+if addon then
+  addon.RaidCommon = RaidCommon
+  addon.GetRaidBossName = GetRaidBossName
+end

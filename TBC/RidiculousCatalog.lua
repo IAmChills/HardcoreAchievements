@@ -3,7 +3,6 @@
 ---------------------------------------
 -- These achievements are hidden by default and do not count towards total unless completed
 local addonName, addon = ...
-local _G = _G
 local UnitLevel = UnitLevel
 local table_insert = table.insert
 
@@ -73,9 +72,7 @@ if addon then
   end
   addon.RegistrationQueue = addon.RegistrationQueue or {}
   local queue = addon.RegistrationQueue
-  local CreateAchievementRow = addon.CreateAchievementRow
-  local AchievementPanel = addon.AchievementPanel
-  local RegisterAchievementDef = addon.RegisterAchievementDef or (HCA_SharedUtils and HCA_SharedUtils.RegisterAchievementDef)
+  local RegisterAchievementDef = addon.RegisterAchievementDef
 
   for _, def in ipairs(RidiculousAchievements) do
     def.isRidiculous = true
@@ -85,6 +82,8 @@ if addon then
       if RegisterAchievementDef then
         RegisterAchievementDef(def)
       end
+      local CreateAchievementRow = addon and addon.CreateAchievementRow
+      local AchievementPanel = addon and addon.AchievementPanel
       if CreateAchievementRow and AchievementPanel then
         CreateAchievementRow(
           AchievementPanel,

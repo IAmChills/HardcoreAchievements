@@ -21,7 +21,7 @@ local function GetAchievementsForNPC(npcId)
     
     local achievements = {}
     
-    -- Check HCA_AchievementDefs (all achievement types: quest, dungeon, raid)
+    -- Check AchievementDefs (all achievement types: quest, dungeon, raid)
     if addon and addon.AchievementDefs then
         for achId, achDef in pairs(addon.AchievementDefs) do
             -- Skip variations (Solo, Duo, Trio) - only show base achievements

@@ -97,7 +97,7 @@ local function ExtractAchievementData(data)
     return result
 end
 
--- Get achievement definition from HCA_AchievementDefs
+-- Get achievement definition from AchievementDefs
 local function GetAchievementDefinition(achId)
     if not achId or not (addon and addon.AchievementDefs) then
         return nil
@@ -221,7 +221,7 @@ local function ShowMetaAchievementRequirements(requiredAchievements, achievement
     local achievementsToShow = achievementOrder or requiredAchievements
     
     for _, reqAchId in ipairs(achievementsToShow) do
-        -- Get achievement title from HCA_AchievementDefs
+        -- Get achievement title from AchievementDefs
         local reqAchTitle = tostring(reqAchId) -- Fallback to ID
         if addon and addon.AchievementDefs then
             local reqAchDef = addon.AchievementDefs[tostring(reqAchId)]
@@ -340,7 +340,8 @@ local function ShowAchievementTooltip(frame, data)
     if isSoloMode and allowSoloDouble and not isSecretAchievement then
         -- Show title with "Solo bonus" on the right when SSF is enabled
         local soloText = "Solo bonus"
-        GameTooltip:AddDoubleLine(title, HCA_SharedUtils.GetClassColor() .. soloText .. "|r", 1, 1, 1, 0.5, 0.3, 0.9)
+        local ClassColor = (addon and addon.GetClassColor())
+        GameTooltip:AddDoubleLine(title, ClassColor .. soloText .. "|r", 1, 1, 1, 0.5, 0.3, 0.9)
     else
         GameTooltip:SetText(title, 1, 1, 1)
     end
@@ -419,7 +420,7 @@ local function ShowAchievementTooltip(frame, data)
                 requiredKills = achDef.requiredKills
             end
         end
-        -- Check for requiredItems in HCA_AchievementDefs (for dungeon sets)
+        -- Check for requiredItems in AchievementDefs (for dungeon sets)
         if achDef.requiredItems then
             requiredItems = achDef.requiredItems
         end

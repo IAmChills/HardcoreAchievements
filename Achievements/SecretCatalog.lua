@@ -2,7 +2,7 @@
 -- Secret Achievement Definitions
 ---------------------------------------
 local addonName, addon = ...
-local ClassColor = (addonName and addonName.GetClassColor)
+local ClassColor = (addon and addon.GetClassColor())
 local UnitGUID = UnitGUID
 local UnitClass = UnitClass
 local UnitFactionGroup = UnitFactionGroup
@@ -337,37 +337,8 @@ local function IsEligible(def)
 end
 
 ---------------------------------------
--- Registration Logic
+-- Registration Logic (deferred to queue so IsEligible is valid at PLAYER_LOGIN)
 ---------------------------------------
-
--- Register achievements and set up completion functions
-for _, def in ipairs(Secrets) do
-  if IsEligible(def) then
-    if def.customKill then
-      if addon and addon.RegisterCustomAchievement then
-        addon.RegisterCustomAchievement(def.achId, def.customKill, def.customIsCompleted or function() return false end)
-      end
-    elseif def.customIsCompleted then
-      if addon and addon.RegisterCustomAchievement then
-        addon.RegisterCustomAchievement(def.achId, nil, def.customIsCompleted)
-      end
-    else
-      if addon and addon.registerQuestAchievement then
-        addon.registerQuestAchievement{
-          achId           = def.achId,
-          requiredQuestId = def.requiredQuestId,
-          targetNpcId     = def.targetNpcId,
-          requiredKills   = def.requiredKills,
-          maxLevel        = def.level,
-          faction         = def.faction,
-          race            = def.race,
-          class           = def.class,
-          allowKillsBeforeQuest = def.allowKillsBeforeQuest,
-        }
-      end
-    end
-  end
-end
 
 if addon then
   addon.Secrets = Secrets
@@ -379,36 +350,59 @@ end
 if addon then
   addon.RegistrationQueue = addon.RegistrationQueue or {}
   local queue = addon.RegistrationQueue
-  local CreateAchievementRow = addon.CreateAchievementRow
-  local AchievementPanel = addon.AchievementPanel
-  local RegisterAchievementDef = addon.RegisterAchievementDef or (HCA_SharedUtils and HCA_SharedUtils.RegisterAchievementDef)
+  local RegisterAchievementDef = addon.RegisterAchievementDef
 
   for _, def in ipairs(Secrets) do
-    if IsEligible(def) then
-      def.isSecret = true
-      table_insert(queue, function()
-        local killFn = def.customKill or ((def.targetNpcId or def.requiredKills) and addon and addon.GetAchievementFunction and addon.GetAchievementFunction(def.achId, "Kill")) or nil
-        local questFn = (def.requiredQuestId and addon and addon.GetAchievementFunction and addon.GetAchievementFunction(def.achId, "Quest")) or nil
-        if RegisterAchievementDef then
-          RegisterAchievementDef(def)
+    def.isSecret = true
+    table_insert(queue, function()
+      if not IsEligible(def) then return end
+      -- Register completion logic when eligibility is known (same as former load-time block)
+      if def.customKill then
+        if addon and addon.RegisterCustomAchievement then
+          addon.RegisterCustomAchievement(def.achId, def.customKill, def.customIsCompleted or function() return false end)
         end
-        if CreateAchievementRow and AchievementPanel then
-          CreateAchievementRow(
-            AchievementPanel,
-            def.achId,
-            def.title,
-            def.tooltip,
-            def.icon,
-            def.level,
-            def.points or 0,
-            killFn,
-            questFn,
-            def.staticPoints,
-            def.zone,
-            def
-          )
+      elseif def.customIsCompleted then
+        if addon and addon.RegisterCustomAchievement then
+          addon.RegisterCustomAchievement(def.achId, nil, def.customIsCompleted)
         end
-      end)
-    end
+      else
+        if addon and addon.registerQuestAchievement then
+          addon.registerQuestAchievement{
+            achId           = def.achId,
+            requiredQuestId = def.requiredQuestId,
+            targetNpcId     = def.targetNpcId,
+            requiredKills   = def.requiredKills,
+            maxLevel        = def.level,
+            faction         = def.faction,
+            race            = def.race,
+            class           = def.class,
+            allowKillsBeforeQuest = def.allowKillsBeforeQuest,
+          }
+        end
+      end
+      local killFn = def.customKill or ((def.targetNpcId or def.requiredKills) and addon and addon.GetAchievementFunction and addon.GetAchievementFunction(def.achId, "Kill")) or nil
+      local questFn = (def.requiredQuestId and addon and addon.GetAchievementFunction and addon.GetAchievementFunction(def.achId, "Quest")) or nil
+      if RegisterAchievementDef then
+        RegisterAchievementDef(def)
+      end
+      local CreateAchievementRow = addon.CreateAchievementRow
+      local AchievementPanel = addon.AchievementPanel
+      if CreateAchievementRow and AchievementPanel then
+        CreateAchievementRow(
+          AchievementPanel,
+          def.achId,
+          def.title,
+          def.tooltip,
+          def.icon,
+          def.level,
+          def.points or 0,
+          killFn,
+          questFn,
+          def.staticPoints,
+          def.zone,
+          def
+        )
+      end
+    end)
   end
 end

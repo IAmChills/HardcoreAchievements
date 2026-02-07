@@ -10,7 +10,7 @@ local UnitRace = UnitRace
 local table_insert = table.insert
 local string_format = string.format
 
-local ClassColor = (addon and addon.GetClassColor)
+local ClassColor = (addon and addon.GetClassColor())
 
 local Achievements = {
 
@@ -820,40 +820,39 @@ end
 -- Deferred Registration Queue
 ---------------------------------------
 
--- Defer registration until PLAYER_LOGIN to prevent load timeouts
+-- Defer registration until PLAYER_LOGIN so IsEligible (UnitFactionGroup/UnitRace/UnitClass) is valid
 if addon then
   addon.RegistrationQueue = addon.RegistrationQueue or {}
   local queue = addon.RegistrationQueue
-  local CreateAchievementRow = addon.CreateAchievementRow
-  local AchievementPanel = addon.AchievementPanel
   local RegisterAchievementDef = addon.RegisterAchievementDef
 
   for _, def in ipairs(Achievements) do
-    if IsEligible(def) then
-      def.isQuest = true
-      table_insert(queue, function()
-        local killFn = GetKillTracker(def)
-        local questFn = GetQuestTracker(def)
-        if RegisterAchievementDef then
-          RegisterAchievementDef(def)
-        end
-        if CreateAchievementRow and AchievementPanel then
-          CreateAchievementRow(
-            AchievementPanel,
-            def.achId,
-            def.title,
-            def.tooltip,
-            def.icon,
-            def.level,
-            def.points or 0,
-            killFn,
-            questFn,
-            def.staticPoints,
-            def.zone,
-            def
-          )
-        end
-      end)
-    end
+    def.isQuest = true
+    table_insert(queue, function()
+      if not IsEligible(def) then return end
+      local killFn = GetKillTracker(def)
+      local questFn = GetQuestTracker(def)
+      if RegisterAchievementDef then
+        RegisterAchievementDef(def)
+      end
+      local CreateAchievementRow = addon.CreateAchievementRow
+      local AchievementPanel = addon.AchievementPanel
+      if CreateAchievementRow and AchievementPanel then
+        CreateAchievementRow(
+          AchievementPanel,
+          def.achId,
+          def.title,
+          def.tooltip,
+          def.icon,
+          def.level,
+          def.points or 0,
+          killFn,
+          questFn,
+          def.staticPoints,
+          def.zone,
+          def
+        )
+      end
+    end)
   end
 end

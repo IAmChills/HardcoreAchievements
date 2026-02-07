@@ -129,17 +129,14 @@ function M.registerQuestAchievement(cfg)
         return nil
     end
 
-    -- Find achievement row by ACH_ID
+    -- Find achievement row by ACH_ID (panel first, else model - so solo/points stored even when panel not opened)
     local function FindAchievementRow()
-        if not AchievementPanel or not AchievementPanel.achievements then
-            return nil
-        end
-        for _, row in ipairs(AchievementPanel.achievements) do
-            if row.id == ACH_ID then
-                return row
+        if AchievementPanel and AchievementPanel.achievements then
+            for _, row in ipairs(AchievementPanel.achievements) do
+                if row.id == ACH_ID then return row end
             end
         end
-        return nil
+        return (addon and addon.GetAchievementRow) and addon.GetAchievementRow(ACH_ID) or nil
     end
 
     -- Calculate base points from row (handles originalPoints, multipliers, solo mode preview)
@@ -722,24 +719,22 @@ function M.registerQuestAchievement(cfg)
             local questNotTurnedIn = not state.quest and not (p and p.quest)
             -- Only show "Pending Turn-in" if kills are satisfied, quest is not turned in, and no ineligible kill
             if killsOk and questNotTurnedIn and not (p and p.ineligibleKill) then
+                local updated = false
                 if AchievementPanel and AchievementPanel.achievements then
                     for _, row in ipairs(AchievementPanel.achievements) do
                         if row.id == ACH_ID and not row.completed then
-                            local progress = GetProgress()
-                            local hasSoloStatus = progress and (progress.soloKill or progress.soloQuest)
-                            if SetStatusTextOnRow then
-                                SetStatusTextOnRow(row, {
-                                    completed = false,
-                                    hasSoloStatus = hasSoloStatus,
-                                    requiresBoth = true,
-                                    killsSatisfied = true,
-                                    isSelfFound = IsSelfFound(),
-                                    maxLevel = row.maxLevel
-                                })
+                            local params = (addon and addon.GetStatusParamsForAchievement) and addon.GetStatusParamsForAchievement(ACH_ID, row)
+                            if params and SetStatusTextOnRow then
+                                SetStatusTextOnRow(row, params)
                             end
+                            updated = true
                             break
                         end
                     end
+                end
+                -- When no panel rows exist, trigger full refresh so dashboard/tracker get status
+                if not updated and RefreshAllAchievementPoints then
+                    RefreshAllAchievementPoints()
                 end
             end
         end
@@ -932,64 +927,29 @@ function M.registerQuestAchievement(cfg)
                     state.killed = true
                 end
                 
-                -- Always update points and solo status on kill (allows re-killing to upgrade from non-solo to solo)
-                if AchievementPanel and AchievementPanel.achievements then
-                    for _, row in ipairs(AchievementPanel.achievements) do
-                        if row.id == ACH_ID and row.points then
-                            -- Get the original base points (before preview doubling or self-found bonus)
-                            local currentPoints = tonumber(row.points) or 0
-                            local isSoloMode = (addon and addon.IsSoloModeEnabled and addon.IsSoloModeEnabled()) or false
-                            
-                            -- Calculate base points using helper function
-                            local basePoints = CalculateBasePoints(row)
-                            
-                            -- Check existing progress to preserve solo status and only upgrade points
-                            local progress = GetProgress()
-                            local existingSoloKill = progress and progress.soloKill or false
-                            local existingPointsAtKill = progress and progress.pointsAtKill
-                            
-                            local pointsToStore = basePoints
-                            if isSoloKill then
-                                pointsToStore = basePoints * 2
-                            end
-                            
-                            -- Never overwrite soloKill = true with false
-                            local shouldUpdateSoloKill = true
-                            local shouldUpdatePoints = true
-                            
-                            if existingSoloKill and not isSoloKill then
-                                -- Existing is solo, new is non-solo - preserve solo status and never update points
-                                shouldUpdateSoloKill = false
-                                shouldUpdatePoints = false
-                            elseif existingPointsAtKill then
-                                -- Calculate base points for comparison (always compare base to base)
-                                local existingBasePoints = existingSoloKill and math.floor(tonumber(existingPointsAtKill) / 2 + 0.5) or tonumber(existingPointsAtKill)
-                                local newBasePoints = basePoints
-                                
-                                -- Check if we're upgrading from non-solo to solo
-                                local isUpgradingToSolo = not existingSoloKill and isSoloKill
-                                
-                                -- Only update if new base points are higher, OR if upgrading to solo (even with same base points)
-                                -- Solo status rules:
-                                -- - false -> false: OK if points higher
-                                -- - false -> true: Always update (solo upgrade, even if base points same)
-                                -- - true -> true: OK if points higher
-                                -- - true -> false: Never (handled above)
-                                if not isUpgradingToSolo and newBasePoints <= existingBasePoints then
-                                    shouldUpdatePoints = false
-                                end
-                            end
-                            
-                            if shouldUpdatePoints then
-                                setProg("pointsAtKill", pointsToStore)
-                            end
-                            
-                            if shouldUpdateSoloKill then
-                                setProg("soloKill", isSoloKill)
-                            end
-                            break
+                -- Always update points and solo status on kill (use model row when panel not built)
+                local row = FindAchievementRow()
+                if row and (row.points or row.originalPoints) then
+                    local basePoints = CalculateBasePoints(row)
+                    local progress = GetProgress()
+                    local existingSoloKill = progress and progress.soloKill or false
+                    local existingPointsAtKill = progress and progress.pointsAtKill
+                    local pointsToStore = basePoints
+                    if isSoloKill then pointsToStore = basePoints * 2 end
+                    local shouldUpdateSoloKill = true
+                    local shouldUpdatePoints = true
+                    if existingSoloKill and not isSoloKill then
+                        shouldUpdateSoloKill = false
+                        shouldUpdatePoints = false
+                    elseif existingPointsAtKill then
+                        local existingBasePoints = existingSoloKill and math.floor(tonumber(existingPointsAtKill) / 2 + 0.5) or tonumber(existingPointsAtKill)
+                        local isUpgradingToSolo = not existingSoloKill and isSoloKill
+                        if not isUpgradingToSolo and basePoints <= existingBasePoints then
+                            shouldUpdatePoints = false
                         end
                     end
+                    if shouldUpdatePoints then setProg("pointsAtKill", pointsToStore) end
+                    if shouldUpdateSoloKill then setProg("soloKill", isSoloKill) end
                 end
                 
                 -- Check if all kills are satisfied
@@ -1007,153 +967,74 @@ function M.registerQuestAchievement(cfg)
                 local killLevel = UnitLevel("player") or 1
                 setProg("levelAtKill", killLevel)
                 
-                -- Store points at time of kill, doubled if solo, regular if not
-                -- Need to find the row and calculate points WITHOUT self-found bonus
-                -- Self-found bonus will be added at completion time
-                if AchievementPanel and AchievementPanel.achievements then
-                    for _, row in ipairs(AchievementPanel.achievements) do
-                        if row.id == ACH_ID and row.points then
-                            -- Get the original base points (before preview doubling or self-found bonus)
-                            -- Check if row.points has been doubled by preview toggle
-                            local currentPoints = tonumber(row.points) or 0
-                            local isSoloMode = (addon and addon.IsSoloModeEnabled and addon.IsSoloModeEnabled()) or false
-                            
-                            -- Calculate base points using helper function
-                            local basePoints = CalculateBasePoints(row)
-                            
-                            -- Check existing progress to preserve solo status and only upgrade points
-                            local progress = GetProgress()
-                            local existingSoloKill = progress and progress.soloKill or false
-                            local existingPointsAtKill = progress and progress.pointsAtKill
-                            
-                            local pointsToStore = basePoints
-                            -- If solo kill, store doubled points; otherwise store regular points
-                            if isSoloKill then
-                                pointsToStore = basePoints * 2
-                            end
-                            
-                            -- Never overwrite soloKill = true with false
-                            local shouldUpdateSoloKill = true
-                            local shouldUpdatePoints = true
-                            
-                            if existingSoloKill and not isSoloKill then
-                                -- Existing is solo, new is non-solo - preserve solo status and never update points
-                                shouldUpdateSoloKill = false
-                                shouldUpdatePoints = false
-                            elseif existingPointsAtKill then
-                                -- Calculate base points for comparison (always compare base to base)
-                                local existingBasePoints = existingSoloKill and math.floor(tonumber(existingPointsAtKill) / 2 + 0.5) or tonumber(existingPointsAtKill)
-                                local newBasePoints = basePoints
-                                
-                                -- Check if we're upgrading from non-solo to solo
-                                local isUpgradingToSolo = not existingSoloKill and isSoloKill
-                                
-                                -- Only update if new base points are higher, OR if upgrading to solo (even with same base points)
-                                -- Solo status rules:
-                                -- - false -> false: OK if points higher
-                                -- - false -> true: Always update (solo upgrade, even if base points same)
-                                -- - true -> true: OK if points higher
-                                -- - true -> false: Never (handled above)
-                                if not isUpgradingToSolo and newBasePoints <= existingBasePoints then
-                                    shouldUpdatePoints = false
-                                end
-                            end
-                            
-                            -- Use the preserved solo status for display and UI updates
-                            local effectiveSoloKill = shouldUpdateSoloKill and isSoloKill or existingSoloKill
-                            local effectivePoints = shouldUpdatePoints and pointsToStore or (existingPointsAtKill and tonumber(existingPointsAtKill) or pointsToStore)
-                            
-                            if shouldUpdatePoints then
-                                setProg("pointsAtKill", pointsToStore)
-                            end
-                            
-                            if shouldUpdateSoloKill then
-                                setProg("soloKill", isSoloKill)
-                            end
-                            
-                            -- Update UI display with effective values
-                            if effectiveSoloKill then
-                                -- Update points display to show doubled value (including self-found bonus for display)
-                                local displayPoints = effectivePoints
-                                if IsSelfFound() then
-                                    -- pointsAtKill is stored WITHOUT self-found bonus; display includes it.
-                                    -- 0-point achievements naturally add 0.
-                                    local getBonus = addon and addon.GetSelfFoundBonus
-                                    local baseForBonus = row.originalPoints or row.revealPointsBase or 0
-                                    local bonus = (type(getBonus) == "function") and getBonus(tonumber(baseForBonus) or 0) or 0
-                                    if bonus > 0 and displayPoints > 0 then
-                                        displayPoints = displayPoints + bonus
-                                    end
-                                end
-                                row.points = displayPoints
-                                if row.Points then
-                                    row.Points:SetText(tostring(displayPoints))
-                                end
-                                -- Check if kills are satisfied but quest is pending
-                                local killsSatisfied = false
-                                if REQUIRED_QUEST_ID and (TARGET_NPC_ID or REQUIRED_KILLS) then
-                                    local hasKill = false
-                                    if REQUIRED_KILLS then
-                                        hasKill = countsSatisfied()
-                                    else
-                                        hasKill = state.killed or false
-                                    end
-                                    local questNotTurnedIn = not state.quest
-                                    killsSatisfied = hasKill and questNotTurnedIn
-                                end
-                                
-                                -- Set "pending solo" indicator on the achievement row (not yet completed)
-                                if SetStatusTextOnRow then
-                                    SetStatusTextOnRow(row, {
-                                        completed = false,
-                                        hasSoloStatus = true,
-                                        requiresBoth = REQUIRED_QUEST_ID and (TARGET_NPC_ID or REQUIRED_KILLS),
-                                        killsSatisfied = killsSatisfied,
-                                        isSelfFound = IsSelfFound(),
-                                        maxLevel = row.maxLevel
-                                    })
-                                end
-                            end
-                            break
+                -- Store points and solo status (use model row when panel not built)
+                local row = FindAchievementRow()
+                if row and (row.points or row.originalPoints) then
+                    local basePoints = CalculateBasePoints(row)
+                    local progress = GetProgress()
+                    local existingSoloKill = progress and progress.soloKill or false
+                    local existingPointsAtKill = progress and progress.pointsAtKill
+                    local pointsToStore = basePoints
+                    if isSoloKill then pointsToStore = basePoints * 2 end
+                    local shouldUpdateSoloKill = true
+                    local shouldUpdatePoints = true
+                    if existingSoloKill and not isSoloKill then
+                        shouldUpdateSoloKill = false
+                        shouldUpdatePoints = false
+                    elseif existingPointsAtKill then
+                        local existingBasePoints = existingSoloKill and math.floor(tonumber(existingPointsAtKill) / 2 + 0.5) or tonumber(existingPointsAtKill)
+                        local isUpgradingToSolo = not existingSoloKill and isSoloKill
+                        if not isUpgradingToSolo and basePoints <= existingBasePoints then
+                            shouldUpdatePoints = false
+                        end
+                    end
+                    local effectiveSoloKill = shouldUpdateSoloKill and isSoloKill or existingSoloKill
+                    local effectivePoints = shouldUpdatePoints and pointsToStore or (existingPointsAtKill and tonumber(existingPointsAtKill) or pointsToStore)
+                    if shouldUpdatePoints then setProg("pointsAtKill", pointsToStore) end
+                    if shouldUpdateSoloKill then setProg("soloKill", isSoloKill) end
+                    -- Update UI only when row is a frame (has .Points)
+                    if row.Points and effectiveSoloKill then
+                        local displayPoints = effectivePoints
+                        if IsSelfFound() then
+                            local getBonus = addon and addon.GetSelfFoundBonus
+                            local baseForBonus = row.originalPoints or row.revealPointsBase or 0
+                            local bonus = (type(getBonus) == "function") and getBonus(tonumber(baseForBonus) or 0) or 0
+                            if bonus > 0 and displayPoints > 0 then displayPoints = displayPoints + bonus end
+                        end
+                        row.points = displayPoints
+                        row.Points:SetText(tostring(displayPoints))
+                        local killsSatisfied = REQUIRED_QUEST_ID and (TARGET_NPC_ID or REQUIRED_KILLS) and ((REQUIRED_KILLS and countsSatisfied()) or (state.killed or false)) and not state.quest
+                        if SetStatusTextOnRow then
+                            SetStatusTextOnRow(row, {
+                                completed = false,
+                                hasSoloStatus = true,
+                                requiresBoth = REQUIRED_QUEST_ID and (TARGET_NPC_ID or REQUIRED_KILLS),
+                                killsSatisfied = killsSatisfied,
+                                isSelfFound = IsSelfFound(),
+                                maxLevel = row.maxLevel
+                            })
                         end
                     end
                 end
-            end
             
             -- After kills are completed, check if quest is pending and update status
             if not state.completed and REQUIRED_QUEST_ID and (TARGET_NPC_ID or REQUIRED_KILLS) then
-                local killsOk = false
-                if REQUIRED_KILLS then
-                    killsOk = countsSatisfied()
-                else
-                    killsOk = state.killed or false
-                end
+                local killsOk = REQUIRED_KILLS and countsSatisfied() or (state.killed or false)
                 local questNotTurnedIn = not state.quest
                 if killsOk and questNotTurnedIn then
-                    -- Update UI to show "Pending Turn-in"
-                    if AchievementPanel and AchievementPanel.achievements then
-                        for _, row in ipairs(AchievementPanel.achievements) do
-                            if row.id == ACH_ID and not row.completed then
-                                local progress = GetProgress()
-                                local hasSoloStatus = progress and (progress.soloKill or progress.soloQuest)
-                                if SetStatusTextOnRow then
-                                    SetStatusTextOnRow(row, {
-                                        completed = false,
-                                        hasSoloStatus = hasSoloStatus,
-                                        requiresBoth = true,
-                                        killsSatisfied = true,
-                                        isSelfFound = IsSelfFound(),
-                                        maxLevel = row.maxLevel
-                                    })
-                                end
-                                break
-                            end
+                    local row = FindAchievementRow()
+                    if row and not row.completed then
+                        local params = (addon and addon.GetStatusParamsForAchievement) and addon.GetStatusParamsForAchievement(ACH_ID, row)
+                        if params and SetStatusTextOnRow and row.Sub then
+                            SetStatusTextOnRow(row, params)
                         end
                     end
+                    if RefreshAllAchievementPoints then RefreshAllAchievementPoints() end
                 end
             end
             
             return checkComplete()
+        end
         end
         
         -- Register Kill function immediately while killFunc is in scope

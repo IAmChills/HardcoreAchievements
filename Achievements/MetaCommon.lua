@@ -174,7 +174,7 @@ local function registerMetaAchievement(def)
   LoadProgress()
 
   -- Dynamic names first so functions capture these locals
-  local registerFuncName = "HCA_Register" .. achId
+  local registerFuncName = "Register" .. achId
   local rowVarName = achId .. "_Row"
 
   ---------------------------------------
