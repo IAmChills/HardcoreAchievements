@@ -72,6 +72,3 @@ Utils\AchievementLinks.lua
 Utils\OptionsPanel.lua
 Utils\InitialOptionsFrame.lua
 Utils\CharacterInspection.lua
-
-Admin\AdminPanel.lua
-Admin\AdminPanelTest.lua

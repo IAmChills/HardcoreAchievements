@@ -4,7 +4,7 @@ NOT USED BUT COULD HAVE USE (Already added to Icons)
 Achievement_Dungeon_Outland_Dungeon_Hero
 
 ## Active Tasks
-- Expand on comms to allow achievement related statistics where data is propogated for realm-first, % of players completed style info
+
 
 ## Bugs
  - empty
