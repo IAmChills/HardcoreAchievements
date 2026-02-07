@@ -2003,7 +2003,7 @@ end)
 
 -- Function to show welcome message popup on first login or when version changes
 function addon:ShowWelcomeMessage()
-    local WELCOME_MESSAGE_NUMBER = 3
+    local WELCOME_MESSAGE_NUMBER = 4
     local db = EnsureDB()
     db.settings = db.settings or {}
     
@@ -2022,7 +2022,7 @@ end
 
 -- Define the welcome message popup
 StaticPopupDialogs["Hardcore Achievements Vanilla"] = {
-    text = "|cff008066Hardcore Achievements|r\n\nDungeon related achievements have been redesigned and now require all party members to meet the level requirement at entry. Leveling up inside the dungeon is allowed, but leaving and re-entering if overleveled disqualifies the group.\n\nPlease report any issues you encounter.",
+    text = "|cff008066Hardcore Achievements|r\n\nThis addon has had a major code refactor to improve performance, stability, and load times.\n\nOf course, this means some things may be broken. Please report any issues you encounter.",
     button1 = "Okay",
     --button2 = "Show Me!",
     timeout = 0,
@@ -2038,7 +2038,7 @@ StaticPopupDialogs["Hardcore Achievements Vanilla"] = {
 }
 
 StaticPopupDialogs["Hardcore Achievements TBC"] = {
-    text = "|cff008066Hardcore Achievements|r\n\nDungeon related achievements have been redesigned and now require all party members to meet the level requirement at entry. Leveling up inside the dungeon is allowed, but leaving and re-entering if overleveled disqualifies the group.\n\nPlease report any issues you encounter.",
+    text = "|cff008066Hardcore Achievements|r\n\nThis addon has had a major code refactor to improve performance, stability, and load times.\n\nOf course, this means some things may be broken. Please report any issues you encounter.",
     button1 = "Okay",
     --button2 = "Show Me!",
     timeout = 0,
