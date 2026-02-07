@@ -1071,20 +1071,17 @@ function DASHBOARD:BuildClassicGrid(srcRows)
     self.icons[i]:Hide()
   end
   
-  local needed = 0
-
   local isDashboardView = DashboardFrame and DashboardFrame.SelectedTabKey == "summary"
   local recentSet = nil
   if isDashboardView then
     recentSet = GetMostRecentCompletedSet(srcRows, 4)
   end
 
+  -- Collect rows that should show in the grid (same filter as below)
+  local visibleForGrid = {}
   for _, srow in ipairs(srcRows) do
       local data = ReadRowData(srow)
-      
-      -- Apply filter logic based on status filter checkboxes
       local shouldShow = false
-      
       local isCompleted = data.completed == true
       local isFailed = false
       if IsRowOutleveled and type(IsRowOutleveled) == "function" then
@@ -1093,35 +1090,44 @@ function DASHBOARD:BuildClassicGrid(srcRows)
         isFailed = data.outleveled or false
       end
       local isAvailable = not isCompleted and not isFailed
-
-      -- Status filters (Completed/Available/Failed) were previously controlled by the dropdown.
-      -- Tabs replace the dropdown, so for now default to showing all statuses.
       local showCompleted, showAvailable, showFailed = true, true, true
-      
-      -- Show based on status filter checkboxes
       if (isCompleted and showCompleted) or (isAvailable and showAvailable) or (isFailed and showFailed) then
         shouldShow = true
       end
-      
-      if data.hiddenUntilComplete and not data.completed then
-        shouldShow = false
-      end
-      if data.hiddenByProfession then
-        shouldShow = false
-      end
-      
+      if data.hiddenUntilComplete and not data.completed then shouldShow = false end
+      if data.hiddenByProfession then shouldShow = false end
       if isDashboardView then
         local key = tostring(srow.achId or srow.id or "")
         shouldShow = shouldShow and (data.completed == true) and recentSet and recentSet[key] == true
       else
-        -- Category filter is now driven by the selected tab.
-        if srow._def and not ShouldShowBySelectedTab(srow._def) then
-          shouldShow = false
-        end
+        if srow._def and not ShouldShowBySelectedTab(srow._def) then shouldShow = false end
       end
-      
       if shouldShow then
-        needed = needed + 1
+        table_insert(visibleForGrid, srow)
+      end
+  end
+
+  -- Sort by level (ascending) to match list view and character frame ordering
+  table_sort(visibleForGrid, function(a, b)
+    local aFailed = IsRowOutleveled and type(IsRowOutleveled) == "function" and IsRowOutleveled(a)
+    local bFailed = IsRowOutleveled and type(IsRowOutleveled) == "function" and IsRowOutleveled(b)
+    if aFailed ~= bFailed then
+      return not aFailed
+    end
+    local la = (a.maxLevel ~= nil) and a.maxLevel or 9999
+    local lb = (b.maxLevel ~= nil) and b.maxLevel or 9999
+    if la ~= lb then return la < lb end
+    local at = (a.Title and a.Title.GetText and a.Title:GetText()) or (a.id or "")
+    local bt = (b.Title and b.Title.GetText and b.Title:GetText()) or (b.id or "")
+    return tostring(at) < tostring(bt)
+  end)
+
+  local needed = 0
+  for _, srow in ipairs(visibleForGrid) do
+      local data = ReadRowData(srow)
+      local shouldShow = true
+
+      needed = needed + 1
         local icon = self.icons[needed]
         if not icon then
           icon = CreateDashboardIcon(self.Content)
@@ -1196,7 +1202,6 @@ function DASHBOARD:BuildClassicGrid(srcRows)
 
         -- Show the icon
         icon:Show()
-      end
   end
 
   LayoutIcons(self.Content, self.icons)
@@ -1495,6 +1500,7 @@ local function UpdateDashboardModernRow(row, srow)
     row.maxLevel = level > 0 and level or nil
     row.sourceRow = srow
     row._def = def
+    row.requiredAchievements = srow.requiredAchievements
     row.requiredKills = srow.requiredKills
     row.tooltip = tooltip or srow.tooltip or srow._tooltip or ""
     row._tooltip = row.tooltip

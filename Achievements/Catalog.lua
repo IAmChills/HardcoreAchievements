@@ -498,7 +498,7 @@ local Achievements = {
 }, {
     achId = "OOX",
     title = "Oox I Did It Again",
-    level = 45,
+    level = 50,
     tooltip = "Complete " .. ClassColor .. "An OOX of Your Own|r before level 46",
     icon = 133883,
     points = 10,
@@ -506,18 +506,20 @@ local Achievements = {
     requiredQuestId = 3721,
     targetNpcId = nil,
     zone = "Stranglethorn Vale"
-}, {
-    achId = "CuergosGold",
-    title = "Cuergo’s Fortune",
-    level = 45,
-    tooltip = "Complete " .. ClassColor .. "Cuergo’s Gold|r before level 46",
-    icon = 237387,
-    points = 10,
-    allowSoloDouble = true,
-    requiredQuestId = 2882,
-    targetNpcId = nil,
-    zone = "Tanaris"
-}, {
+},
+-- {
+--     achId = "CuergosGold",
+--     title = "Cuergo’s Fortune",
+--     level = 45,
+--     tooltip = "Complete " .. ClassColor .. "Cuergo’s Gold|r before level 46",
+--     icon = 237387,
+--     points = 10,
+--     allowSoloDouble = true,
+--     requiredQuestId = 2882,
+--     targetNpcId = nil,
+--     zone = "Tanaris"
+-- },
+{
     achId = "Mokk",
     title = "This Isn't Worth It",
     level = 47,

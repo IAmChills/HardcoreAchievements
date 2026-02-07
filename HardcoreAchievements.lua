@@ -385,12 +385,13 @@ local function IsRowOutleveled(row)
     -- Check if this is a meta achievement that should be failed based on required achievements
     -- Meta achievements don't have maxLevel, so check database for failed flag
     if not row.maxLevel then
-      -- Check if this is a meta achievement (has isMetaAchievement flag or requiredAchievements)
-      local isMetaAchievement = (row._def and row._def.isMetaAchievement) or (row.requiredAchievements ~= nil)
+      -- Check if this is a meta achievement (isMetaAchievement, isMeta, or requiredAchievements)
+      local isMetaAchievement = (row._def and (row._def.isMetaAchievement or row._def.isMeta)) or (row.requiredAchievements ~= nil)
       if isMetaAchievement then
-        -- For meta achievements, check the database directly for failed flag
+        -- For meta achievements, check the database directly for failed flag (use tostring for key consistency)
         local _, cdb = GetCharDB()
-        if cdb and cdb.achievements and cdb.achievements[achId] and cdb.achievements[achId].failed then
+        local achKey = achId and tostring(achId)
+        if cdb and cdb.achievements and achKey and cdb.achievements[achKey] and cdb.achievements[achKey].failed then
           return true
         end
       end
@@ -3471,6 +3472,9 @@ local function CreateAchievementRowFromData(data, index)
     row.completed = data.completed or false
     row.points = data.points or row.points
     row.originalPoints = data.originalPoints or row.originalPoints
+    if data.requiredAchievements then
+        row.requiredAchievements = data.requiredAchievements
+    end
     data.frame = row
 
     -- Apply any deferred UI initializers registered on the model entry

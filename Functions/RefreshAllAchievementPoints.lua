@@ -171,6 +171,11 @@ local function RefreshAllAchievementPoints()
         AchievementPanel.SoloModeCheckbox:SetChecked(isSoloMode)
     end
 
+    -- Re-apply failed/completed styling to all rows (e.g. metas marked failed by checkers above)
+    if addon and addon.RefreshOutleveledAll then
+        addon.RefreshOutleveledAll()
+    end
+
     if addon then addon.RefreshingPoints = nil end
     if addon and addon.PointsRefreshPending then
         addon.PointsRefreshPending = nil

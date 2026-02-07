@@ -244,16 +244,17 @@ local function ShowMetaAchievementRequirements(requiredAchievements, achievement
             end
         end
         
-        -- Check if required achievement is completed
-        -- First check progress database
+        -- Check if required achievement is completed, failed (outleveled), or still available
         local reqProgress = addon and addon.GetProgress and addon.GetProgress(reqAchId)
         local reqCompleted = reqProgress and reqProgress.completed
-        
-        -- Also check the row's completed status directly (for profession achievements and others)
-        if not reqCompleted and (addon and addon.AchievementPanel) and (addon and addon.AchievementPanel).achievements then
+        local reqFailed = false
+        local reqRow = nil
+
+        if (addon and addon.AchievementPanel) and (addon and addon.AchievementPanel).achievements then
             for _, row in ipairs((addon and addon.AchievementPanel).achievements) do
                 local rowId = row.id or row.achId
                 if rowId and tostring(rowId) == tostring(reqAchId) then
+                    reqRow = row
                     if row.completed then
                         reqCompleted = true
                     end
@@ -261,13 +262,25 @@ local function ShowMetaAchievementRequirements(requiredAchievements, achievement
                 end
             end
         end
-        
-        local done = achievementCompleted or reqCompleted
-        
-        if done then
+
+        -- Failed = outleveled or DB has .failed (e.g. meta)
+        if not reqCompleted and addon and addon.IsRowOutleveled and reqRow and addon.IsRowOutleveled(reqRow) then
+            reqFailed = true
+        end
+        if not reqFailed and not reqCompleted and addon and addon.GetCharDB then
+            local _, cdb = addon.GetCharDB()
+            local rec = cdb and cdb.achievements and cdb.achievements[tostring(reqAchId)]
+            if rec and rec.failed then
+                reqFailed = true
+            end
+        end
+
+        if reqCompleted then
             GameTooltip:AddLine(reqAchTitle, 1, 1, 1) -- White for completed
+        elseif reqFailed then
+            GameTooltip:AddLine("|cffff4444" .. reqAchTitle .. "|r", 1, 1, 1) -- Red for failed (color in text for visibility)
         else
-            GameTooltip:AddLine(reqAchTitle, 0.5, 0.5, 0.5) -- Gray for not completed
+            GameTooltip:AddLine(reqAchTitle, 0.5, 0.5, 0.5) -- Gray for available
         end
     end
 end
