@@ -665,7 +665,7 @@ local function registerDungeonAchievement(def)
   end
 
   -- Dynamic names first so functions capture these locals
-  local registerFuncName = "HCA_Register" .. achId
+  local registerFuncName = "Register" .. achId
   local rowVarName       = achId .. "_Row"
 
   ---------------------------------------
@@ -1367,7 +1367,7 @@ local function refreshDungeonVariations()
   for _, baseId in ipairs(baseDungeonIds) do
     for _, variation in ipairs(VARIATIONS) do
       local variationId = baseId .. variation.suffix
-      local registerFuncName = "HCA_Register" .. variationId
+      local registerFuncName = "Register" .. variationId
       if addon[registerFuncName] and type(addon[registerFuncName]) == "function" then
         addon[registerFuncName]()
       end

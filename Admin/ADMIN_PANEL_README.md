@@ -39,7 +39,7 @@ The admin panel system allows you to manually complete achievements for players 
    - The key must be at least 16 characters long
    - Keep this key secret! Anyone with this key can send admin commands
    - Example: `/hca adminkey set MySuperSecretAdminKey12345`
-2. **Verify Key is Set**: Type `/hca adminkey check` to verify the key is set
+2. **Verify Key**: Type `/hca adminkey check` to verify the key is set
 
 #### Sending Commands
 1. **Open Admin Panel**: Type `/hcaadmin` or `/hcadmin` in chat

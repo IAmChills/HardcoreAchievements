@@ -1073,6 +1073,8 @@ local function ApplyOutleveledStyle(row)
     UpdatePointsDisplay(row)
 end
 
+if addon then addon.ApplyOutleveledStyle = ApplyOutleveledStyle end
+
 -- Helper function to check if an achievement is already completed (in row or database)
 local function IsAchievementAlreadyCompleted(row)
     if not row then return false end
@@ -1819,6 +1821,7 @@ if addon then
     addon.CreateAchToast = CreateAchToast
     addon.CheckPendingCompletions = CheckPendingCompletions
     addon.ResetTabPosition = ResetTabPosition
+    addon.RestoreCompletionsFromDB = RestoreCompletionsFromDB
 end
 
 -- =========================================================
@@ -3598,6 +3601,13 @@ local function BuildAchievementRowsFromModel()
     if RefreshOutleveledAll then RefreshOutleveledAll() end
     -- Apply status (Pending Turn-in, solo, etc.) from progress - rows just built, need full refresh
     if addon and addon.RefreshAllAchievementPoints then addon.RefreshAllAchievementPoints() end
+end
+
+if addon then
+    addon.EnsureAchievementRowsBuilt = function()
+        if EnsureAchievementPanelCreated then EnsureAchievementPanelCreated() end
+        if BuildAchievementRowsFromModel then BuildAchievementRowsFromModel() end
+    end
 end
 
 EvaluateCustomCompletions = function(newLevel)

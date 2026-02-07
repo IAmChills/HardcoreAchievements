@@ -4,7 +4,6 @@ local UnitGUID = UnitGUID
 local CreateFrame = CreateFrame
 local C_Timer = C_Timer
 local RefreshAllAchievementPoints = (addon and addon.RefreshAllAchievementPoints)
-local IsSelfFound = (addon and addon.IsSelfFound)
 local GetPlayerPresetFromSettings
 local table_insert = table.insert
 local table_concat = table.concat
@@ -143,8 +142,10 @@ local function UpdateMultiplierText(multiplierTextElement, textColor)
     
     -- Check if hardcore is active (for Self Found detection)
     -- In TBC, this will be false, so Self Found will never be active
+    -- Resolve IsSelfFound at call time (SharedUtils loads after GetUHCPreset, so addon.IsSelfFound is nil at load)
     local isHardcoreActive = C_GameRules and C_GameRules.IsHardcoreActive and C_GameRules.IsHardcoreActive() or false
-    if isHardcoreActive and IsSelfFound() then
+    local isSelfFoundFn = addon and addon.IsSelfFound
+    if isHardcoreActive and isSelfFoundFn and type(isSelfFoundFn) == "function" and isSelfFoundFn() then
         isSelfFound = true
     end
     

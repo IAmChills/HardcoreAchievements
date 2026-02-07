@@ -22,44 +22,44 @@ local table_insert = table.insert
 
 local achievements = {
     -- Example 1: Guild-first (default - no scope needed)
-    {
-        achId = "GuildFirstTest01",
-        title = "Guild First: Test Claim",
-        level = nil,
-        tooltip = "You were the first in your guild to claim this test achievement.",
-        icon = 236710,
-        points = 0,
-        secret = true,
-        secretTitle = "Guild First (Secret)",
-        secretTooltip = "Be the first in your guild to claim this secret.",
-        secretIcon = 134400,
-        secretPoints = 0,
-        staticPoints = true,
-        hiddenUntilComplete = true,
-        achievementScope = "server",
-        awardMode = "solo",
-    },
+    -- {
+    --     achId = "GuildFirstTest01",
+    --     title = "Guild First: Test Claim",
+    --     level = nil,
+    --     tooltip = "You were the first in your guild to claim this test achievement.",
+    --     icon = 236710,
+    --     points = 0,
+    --     secret = true,
+    --     secretTitle = "Guild First (Secret)",
+    --     secretTooltip = "Be the first in your guild to claim this secret.",
+    --     secretIcon = 134400,
+    --     secretPoints = 0,
+    --     staticPoints = true,
+    --     hiddenUntilComplete = true,
+    --     achievementScope = "server",
+    --     awardMode = "solo",
+    -- },
 
-    -- Real example: Raid-wide guild first for Molten Core (awarded to eligible raid members)
-    {
-        achId = "GuildFirst_MC",
-        title = "Guild First: Molten Core",
-        level = nil,
-        tooltip = "Your raid was the first in your guild to conquer " .. ClassColor .. "Molten Core|r.",
-        icon = 254652, -- Molten Core icon (matches RaidCatalog)
-        points = 0,
-        secret = true,
-        secretTitle = "Guild First (Secret)",
-        secretTooltip = "Be part of the first raid in your guild to conquer Molten Core.",
-        secretIcon = 254652,
-        secretPoints = 0,
-        staticPoints = true,
-        hiddenUntilComplete = true,
-        triggerAchievementId = "MC",
-        awardMode = "raid",
-        requireSameGuild = true,
-        -- achievementScope omitted -> defaults to guild-first
-    },
+    -- -- Real example: Raid-wide guild first for Molten Core (awarded to eligible raid members)
+    -- {
+    --     achId = "GuildFirst_MC",
+    --     title = "Guild First: Molten Core",
+    --     level = nil,
+    --     tooltip = "Your raid was the first in your guild to conquer " .. ClassColor .. "Molten Core|r.",
+    --     icon = 254652, -- Molten Core icon (matches RaidCatalog)
+    --     points = 0,
+    --     secret = true,
+    --     secretTitle = "Guild First (Secret)",
+    --     secretTooltip = "Be part of the first raid in your guild to conquer Molten Core.",
+    --     secretIcon = 254652,
+    --     secretPoints = 0,
+    --     staticPoints = true,
+    --     hiddenUntilComplete = true,
+    --     triggerAchievementId = "MC",
+    --     awardMode = "raid",
+    --     requireSameGuild = true,
+    --     -- achievementScope omitted -> defaults to guild-first
+    -- },
     
     -- Example 2: Server-first
     -- {

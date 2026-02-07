@@ -458,12 +458,57 @@ local function EnsureDBForScope(scopeKey)
                 if data and data.winnerGUID then
                     if RecordIncludesGUID(data, myGUID) then
                         Debug("Received claim update: Achievement '" .. tostring(key) .. "' claimed and I am an eligible winner")
-                        -- Mark row completed when we receive the claim (e.g. from sync or broadcast).
-                        -- Do NOT show toast here: onChange also fires on load/relog when we ImportDatabase,
-                        -- so we only show the toast in CanClaimAndAward when we actually just claimed.
-                        local row = (addon and addon["GuildFirst_" .. tostring(key) .. "_Row"]) or FindRowByAchId(tostring(key))
-                        if row and not row.completed and type(MarkRowCompleted) == "function" then
-                            MarkRowCompleted(row)
+                        -- Skip re-awarding if admin manually deleted this achievement from the player (tombstone)
+                        local _, cdb
+                        if addon and addon.GetCharDB then
+                            _, cdb = addon.GetCharDB()
+                        end
+                        if cdb and cdb.deletedByAdmin and cdb.deletedByAdmin[tostring(key)] then
+                            Debug("Skipping GuildFirst re-award: achievement was deleted by admin")
+                        else
+                            -- Mark row completed when we receive the claim (e.g. from sync or broadcast).
+                            -- Do NOT show toast here: onChange also fires on load/relog when we ImportDatabase,
+                            -- so we only show the toast in CanClaimAndAward when we actually just claimed.
+                            -- Ensure row frames exist (they may not be built yet if player hasn't opened achievement tab)
+                            if addon and addon.EnsureAchievementRowsBuilt then
+                                addon.EnsureAchievementRowsBuilt()
+                            end
+                            -- Prefer FindRowByAchId (panel frames) over addon row (may be model only)
+                            local row = FindRowByAchId(tostring(key))
+                            if not row and addon and addon.GetAchievementRow then
+                                row = addon.GetAchievementRow(tostring(key))
+                            end
+                            if not row then
+                                row = addon and addon["GuildFirst_" .. tostring(key) .. "_Row"]
+                            end
+                            -- Use frame if row has UI elements (Title FontString, Points)
+                            local frame = (row and row.Title and row.Points and row) or (row and row.frame)
+                            if frame and not frame.completed and type(MarkRowCompleted) == "function" then
+                                MarkRowCompleted(frame)
+                                local def = GetGuildFirstDef(tostring(key), row)
+                                local icon = (frame.Icon and frame.Icon.GetTexture and frame.Icon:GetTexture()) or (def and def.icon) or 136116
+                                local titleText = (frame.Title and frame.Title.GetText and frame.Title:GetText()) or (def and def.title) or tostring(key)
+                                local pts = frame.points or (def and def.points) or 0
+                                ShowGuildFirstToast(icon, titleText, pts)
+                            elseif not frame and addon and addon.GetCharDB then
+                                -- No frame yet (model not built) - persist to DB so RestoreCompletionsFromDB applies when panel opens
+                                local _, cdb = addon.GetCharDB()
+                                if cdb then
+                                    local achId = tostring(key)
+                                    local def = GetGuildFirstDef(achId, nil)
+                                    local pts = (def and def.points) or 0
+                                    cdb.achievements = cdb.achievements or {}
+                                    cdb.achievements[achId] = cdb.achievements[achId] or {}
+                                    local rec = cdb.achievements[achId]
+                                    rec.completed = true
+                                    rec.completedAt = rec.completedAt or time()
+                                    rec.points = rec.points or pts
+                                    rec.level = rec.level or (UnitLevel("player") or nil)
+                                    Debug("Persisted GuildFirst completion for " .. achId .. " (frame not yet built)")
+                                    if addon.UpdateTotalPoints then addon.UpdateTotalPoints() end
+                                    if addon.RestoreCompletionsFromDB then addon.RestoreCompletionsFromDB() end
+                                end
+                            end
                         end
                     else
                         Debug("Received claim update: Achievement '" .. tostring(key) .. "' claimed by " .. tostring(data.winnerName or "?") .. " - not eligible (silent fail)")
@@ -807,6 +852,23 @@ local function OnAchievementCompleted(achievementData)
         M:CanClaimAndAward(id, row, winnersGUIDs)
     end
 end
+
+-- Admin helpers: exposed for AdminPanel only. AdminPanel implements Override/Clear; LibP2PDB propagates to players.
+--- @return string? scopeKey
+function M.GetScopeKeyForAchievement(self, achievementId)
+    local row = FindRowByAchId(achievementId)
+    local scope = GetAchievementScope(row, achievementId)
+    return GetScopeKey(scope)
+end
+
+--- @return table? db, string? prefix
+function M.GetDBInfoForScope(self, scopeKey)
+    local db = EnsureDBForScope(scopeKey)
+    if not db or not databases[scopeKey] then return nil, nil end
+    return db, databases[scopeKey].prefix
+end
+
+M.CLAIMS_TABLE_NAME = TABLE_NAME
 
 -- Assign local functions to module (no globals)
 M.IsWinnerRecord = IsWinnerRecord

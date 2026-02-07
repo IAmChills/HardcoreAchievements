@@ -2,8 +2,10 @@
 -- Admin panel for manually completing achievements via secure payloads
 -- This file should only be included in your local version of the addon
 
+local addonName, addon = ...
 local AceComm = LibStub("AceComm-3.0")
 local AceSerialize = LibStub("AceSerializer-3.0")
+local LibP2PDB = LibStub("LibP2PDB", true)
 
 local AdminPanel = {}
 local COMM_PREFIX = "HCA_Admin_Cmd" -- AceComm prefix for admin commands
@@ -12,13 +14,81 @@ local RESPONSE_PREFIX = "HCA_Admin_Resp" -- AceComm prefix for responses (max 16
 -- Admin panel UI
 local adminFrame = nil
 
+-- GuildFirst admin ops: write to LibP2PDB on admin's client; LibP2PDB propagates to players automatically.
+local function DoAdminOverrideClaim(achievementId, winnerName, winnerGUID)
+    if not LibP2PDB or not addon or not addon.GuildFirst then
+        return false, "GuildFirst or LibP2PDB not loaded"
+    end
+    achievementId = tostring(achievementId or "")
+    winnerName = tostring(winnerName or ""):trim()
+    winnerGUID = tostring(winnerGUID or ""):trim()
+    if achievementId == "" or winnerName == "" or winnerGUID == "" then
+        return false, "achievementId, winnerName, and winnerGUID are required"
+    end
+    local scopeKey = addon.GuildFirst:GetScopeKeyForAchievement(achievementId)
+    if not scopeKey then
+        return false, "Invalid scope (admin must be in guild for guild-first)"
+    end
+    local db, prefix = addon.GuildFirst:GetDBInfoForScope(scopeKey)
+    if not db or not prefix then
+        return false, "Failed to initialize GuildFirst database"
+    end
+    local claimsTable = addon.GuildFirst.CLAIMS_TABLE_NAME or "Claims"
+    local claim = { winnerName = winnerName, winnerGUID = winnerGUID, claimedAt = time() }
+    pcall(function()
+        LibP2PDB:SetKey(db, claimsTable, achievementId, claim)
+        LibP2PDB:BroadcastKey(db, claimsTable, achievementId)
+        LibP2PDB:DiscoverPeers(db)
+        LibP2PDB:SyncDatabase(db)
+        local root = (addon and addon.HardcoreAchievementsDB) or {}
+        root.guildFirst = root.guildFirst or {}
+        local dbState = LibP2PDB:ExportDatabase(db)
+        if dbState then
+            root.guildFirst[scopeKey] = { version = 1, prefix = prefix, state = dbState, savedAt = time() }
+        end
+    end)
+    return true
+end
+
+local function DoAdminClearClaim(achievementId)
+    if not LibP2PDB or not addon or not addon.GuildFirst then
+        return false, "GuildFirst or LibP2PDB not loaded"
+    end
+    achievementId = tostring(achievementId or "")
+    if achievementId == "" then
+        return false, "achievementId is required"
+    end
+    local scopeKey = addon.GuildFirst:GetScopeKeyForAchievement(achievementId)
+    if not scopeKey then
+        return false, "Invalid scope (admin must be in guild for guild-first)"
+    end
+    local db, prefix = addon.GuildFirst:GetDBInfoForScope(scopeKey)
+    if not db or not prefix then
+        return false, "Failed to initialize GuildFirst database"
+    end
+    local claimsTable = addon.GuildFirst.CLAIMS_TABLE_NAME or "Claims"
+    LibP2PDB:DeleteKey(db, claimsTable, achievementId)
+    LibP2PDB:BroadcastKey(db, claimsTable, achievementId)
+    LibP2PDB:DiscoverPeers(db)
+    LibP2PDB:SyncDatabase(db)
+    local root = (addon and addon.HardcoreAchievementsDB) or {}
+    root.guildFirst = root.guildFirst or {}
+    local dbState = LibP2PDB:ExportDatabase(db)
+    if dbState then
+        root.guildFirst[scopeKey] = { version = 1, prefix = prefix, state = dbState, savedAt = time() }
+    end
+    return true
+end
+
 -- SECURITY: Get admin secret key from database (set by admin via slash command)
 -- This key is NOT in source code and must be set by the admin
 local function GetAdminSecretKey()
-    if not HardcoreAchievementsDB then
-        HardcoreAchievementsDB = {}
+    local db = (addon and addon.HardcoreAchievementsDB)
+    if not db then
+        db = {}
+        if addon then addon.HardcoreAchievementsDB = db end
     end
-    return HardcoreAchievementsDB.adminSecretKey
+    return db.adminSecretKey
 end
 
 -- SECURITY: HMAC-style hash function using secret key
@@ -28,10 +98,11 @@ local function CreateSecureHash(payload, secretKey)
         return nil
     end
     
-    -- Create message to sign: all critical fields in canonical order
-    local message = string.format("%d:%d:%s:%s:%s",
+    -- Create message to sign: all critical fields in canonical order (include commandType for command differentiation)
+    local message = string.format("%d:%d:%s:%s:%s:%s",
         payload.version or 0,
         payload.timestamp or 0,
+        payload.commandType or "",
         payload.achievementId or "",
         payload.targetCharacter or "",
         payload.nonce or ""
@@ -99,7 +170,7 @@ local function CreateSecurePayload(achievementId, targetCharacter, opts)
 end
 
 -- SECURITY: Create secure payload for delete achievement command
-local function CreateDeleteAchievementPayload(achievementId, targetCharacter)
+local function CreateDeleteAchievementPayload(achievementId, targetCharacter, permanent)
     -- Get secret key from database
     local secretKey = GetAdminSecretKey()
     if not secretKey or secretKey == "" then
@@ -113,6 +184,7 @@ local function CreateDeleteAchievementPayload(achievementId, targetCharacter)
         achievementId = achievementId,
         targetCharacter = targetCharacter,
         nonce = GenerateNonce(),
+        permanent = permanent and true or false,
     }
     
     -- Create secure hash using secret key
@@ -123,6 +195,53 @@ local function CreateDeleteAchievementPayload(achievementId, targetCharacter)
     end
     
     return payload
+end
+
+-- SECURITY: Create secure payload for clear deletedByAdmin (unban) command
+local function CreateClearDeletedByAdminPayload(achievementId, targetCharacter)
+    local secretKey = GetAdminSecretKey()
+    if not secretKey or secretKey == "" then
+        error("Admin secret key not set! Use /hca adminkey set <key> first")
+    end
+    local payload = {
+        version = 2,
+        timestamp = time(),
+        commandType = "clear_deleted_by_admin",
+        achievementId = achievementId,
+        targetCharacter = targetCharacter,
+        nonce = GenerateNonce(),
+    }
+    payload.validationHash = CreateSecureHash(payload, secretKey)
+    if not payload.validationHash then
+        error("Failed to create secure hash")
+    end
+    return payload
+end
+
+-- SECURITY: Send clear deletedByAdmin (unban) command to target player
+local function SendClearDeletedByAdminCommand(achievementId, targetCharacter)
+    if not achievementId or not targetCharacter then
+        print("|cffff0000[HardcoreAchievements Admin]|r Invalid achievement ID or character name")
+        return
+    end
+    local secretKey = GetAdminSecretKey()
+    if not secretKey or secretKey == "" then
+        print("|cffff0000[HardcoreAchievements Admin]|r Admin secret key not set!")
+        print("|cffffff00[HardcoreAchievements Admin]|r Use: /hca adminkey set <your-secret-key-here>")
+        return
+    end
+    local success, payload = pcall(CreateClearDeletedByAdminPayload, achievementId, targetCharacter)
+    if not success or not payload then
+        print("|cffff0000[HardcoreAchievements Admin]|r Failed to create unban payload: " .. tostring(payload))
+        return
+    end
+    local serializedPayload = AceSerialize:Serialize(payload)
+    if not serializedPayload then
+        print("|cffff0000[HardcoreAchievements Admin]|r Failed to serialize payload")
+        return
+    end
+    AceComm:SendCommMessage(COMM_PREFIX, serializedPayload, "WHISPER", targetCharacter)
+    print("|cff00ff00[HardcoreAchievements Admin]|r Sent unban command for '" .. achievementId .. "' to " .. targetCharacter)
 end
 
 -- SECURITY: Create secure payload for clear secret key command
@@ -203,10 +322,11 @@ local function SendAdminCommand(achievementId, targetCharacter, forceUpdate, ove
 	print("|cff00ff00[HardcoreAchievements Admin]|r Sent achievement command for '" .. achievementId .. "' to " .. targetCharacter .. suffix)
     
     -- Log the admin action
-    if not HardcoreAchievementsDB then HardcoreAchievementsDB = {} end
-    if not HardcoreAchievementsDB.adminLog then HardcoreAchievementsDB.adminLog = {} end
+    local db = (addon and addon.HardcoreAchievementsDB)
+    if not db.adminLog then db.adminLog = {} end
+    if addon then addon.HardcoreAchievementsDB = db end
     
-    table.insert(HardcoreAchievementsDB.adminLog, {
+    table.insert(db.adminLog, {
         timestamp = time(),
         achievementId = achievementId,
         targetCharacter = targetCharacter,
@@ -219,14 +339,14 @@ local function SendAdminCommand(achievementId, targetCharacter, forceUpdate, ove
         payloadHash = payload.validationHash
     })
     
-    -- Keep only last 100 log entries to prevent database bloat
-    if #HardcoreAchievementsDB.adminLog > 100 then
-        table.remove(HardcoreAchievementsDB.adminLog, 1)
+    -- Keep only last 50 log entries to prevent database bloat
+    if #db.adminLog > 50 then
+        table.remove(db.adminLog, 1)
     end
 end
 
 -- SECURITY: Send delete achievement command to target player
-local function SendDeleteAchievementCommand(achievementId, targetCharacter)
+local function SendDeleteAchievementCommand(achievementId, targetCharacter, permanent)
     if not achievementId or not targetCharacter then
         print("|cffff0000[HardcoreAchievements Admin]|r Invalid achievement ID or character name")
         return
@@ -242,7 +362,7 @@ local function SendDeleteAchievementCommand(achievementId, targetCharacter)
     end
     
     -- Create delete achievement payload
-    local success, payload = pcall(CreateDeleteAchievementPayload, achievementId, targetCharacter)
+    local success, payload = pcall(CreateDeleteAchievementPayload, achievementId, targetCharacter, permanent)
     
     if not success or not payload then
         print("|cffff0000[HardcoreAchievements Admin]|r Failed to create delete achievement payload: " .. tostring(payload))
@@ -259,25 +379,28 @@ local function SendDeleteAchievementCommand(achievementId, targetCharacter)
     -- Send the command via AceComm
     AceComm:SendCommMessage(COMM_PREFIX, serializedPayload, "WHISPER", targetCharacter)
     
-    print("|cff00ff00[HardcoreAchievements Admin]|r Sent delete achievement command for '" .. achievementId .. "' to " .. targetCharacter)
+    local permStr = permanent and " [Permanent - player cannot earn again]" or " [Temporary - player can earn again]"
+    print("|cff00ff00[HardcoreAchievements Admin]|r Sent delete achievement command for '" .. achievementId .. "' to " .. targetCharacter .. permStr)
     
     -- Log the admin action
-    if not HardcoreAchievementsDB then HardcoreAchievementsDB = {} end
-    if not HardcoreAchievementsDB.adminLog then HardcoreAchievementsDB.adminLog = {} end
+    local db = (addon and addon.HardcoreAchievementsDB)
+    if not db.adminLog then db.adminLog = {} end
+    if addon then addon.HardcoreAchievementsDB = db end
     
-    table.insert(HardcoreAchievementsDB.adminLog, {
+    table.insert(db.adminLog, {
         timestamp = time(),
         commandType = "delete_achievement",
         achievementId = achievementId,
         targetCharacter = targetCharacter,
         adminCharacter = UnitName("player"),
         nonce = payload.nonce,
-        payloadHash = payload.validationHash
+        payloadHash = payload.validationHash,
+        permanent = permanent and true or false,
     })
     
-    -- Keep only last 100 log entries to prevent database bloat
-    if #HardcoreAchievementsDB.adminLog > 100 then
-        table.remove(HardcoreAchievementsDB.adminLog, 1)
+    -- Keep only last 50 log entries to prevent database bloat
+    if #db.adminLog > 50 then
+        table.remove(db.adminLog, 1)
     end
 end
 
@@ -318,10 +441,11 @@ local function SendClearSecretKeyCommand(targetCharacter)
     print("|cff00ff00[HardcoreAchievements Admin]|r Sent clear secret key command to " .. targetCharacter)
     
     -- Log the admin action
-    if not HardcoreAchievementsDB then HardcoreAchievementsDB = {} end
-    if not HardcoreAchievementsDB.adminLog then HardcoreAchievementsDB.adminLog = {} end
+    local db = (addon and addon.HardcoreAchievementsDB)
+    if not db.adminLog then db.adminLog = {} end
+    if addon then addon.HardcoreAchievementsDB = db end
     
-    table.insert(HardcoreAchievementsDB.adminLog, {
+    table.insert(db.adminLog, {
         timestamp = time(),
         commandType = "clear_secret_key",
         targetCharacter = targetCharacter,
@@ -330,9 +454,9 @@ local function SendClearSecretKeyCommand(targetCharacter)
         payloadHash = payload.validationHash
     })
     
-    -- Keep only last 100 log entries to prevent database bloat
-    if #HardcoreAchievementsDB.adminLog > 100 then
-        table.remove(HardcoreAchievementsDB.adminLog, 1)
+    -- Keep only last 50 log entries to prevent database bloat
+    if #db.adminLog > 50 then
+        table.remove(db.adminLog, 1)
     end
 end
 
@@ -341,7 +465,7 @@ local function CreateAdminPanel()
     
 	-- Create main frame (use a unique name that doesn't collide with exported table)
 	adminFrame = CreateFrame("Frame", "HardcoreAchievementsAdminPanelFrame", UIParent, "BasicFrameTemplateWithInset")
-    adminFrame:SetSize(400, 400)  -- Increased height to accommodate key status indicator
+    adminFrame:SetSize(400, 550)
     adminFrame:SetPoint("CENTER")
     adminFrame:Hide()
 
@@ -378,6 +502,7 @@ local function CreateAdminPanel()
             keyStatusText:SetTextColor(1, 0, 0)
         end
     end
+    addon.UpdateKeyStatus = UpdateKeyStatus
     
     -- Update status when frame is shown
     adminFrame:SetScript("OnShow", function()
@@ -399,12 +524,12 @@ local function CreateAdminPanel()
 
 	local achievementSelectButton = CreateFrame("Button", nil, adminFrame, "UIPanelButtonTemplate")
 	achievementSelectButton:SetPoint("TOP", achievementLabel, "BOTTOM", 0, -5)
-	achievementSelectButton:SetSize(220, 22)
+	achievementSelectButton:SetSize(240, 22)
 	achievementSelectButton:SetText("Select Achievement...")
 
 	-- Dropdown-like scrollable frame
 	local achievementListFrame = CreateFrame("Frame", nil, adminFrame)
-	achievementListFrame:SetSize(260, 180)
+	achievementListFrame:SetSize(330, 400)
 	achievementListFrame:SetPoint("TOP", achievementSelectButton, "BOTTOM", 0, -2)
 	achievementListFrame:Hide()
 	achievementListFrame:SetFrameStrata("DIALOG")
@@ -412,7 +537,7 @@ local function CreateAdminPanel()
 	-- Simple background
 	local bg = achievementListFrame:CreateTexture(nil, "BACKGROUND")
 	bg:SetAllPoints()
-	bg:SetColorTexture(0, 0, 0, 0.8)
+	bg:SetColorTexture(0, 0, 0, 0.9)
 
 	local border = achievementListFrame:CreateTexture(nil, "BORDER")
 	border:SetAllPoints()
@@ -429,7 +554,7 @@ local function CreateAdminPanel()
     
     -- Character name input
     local characterLabel = adminFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    characterLabel:SetPoint("TOP", achievementSelectButton, "BOTTOM", 0, -30)
+    characterLabel:SetPoint("TOPRIGHT", adminFrame, "TOPRIGHT", -50, -90)
     characterLabel:SetText("Target Character")
     
     local characterInput = CreateFrame("EditBox", nil, adminFrame, "InputBoxTemplate")
@@ -440,27 +565,27 @@ local function CreateAdminPanel()
 
 	-- Force update checkbox
 	local forceCheck = CreateFrame("CheckButton", nil, adminFrame, "ChatConfigCheckButtonTemplate")
-	forceCheck:SetPoint("TOP", characterInput, "BOTTOM", -175, -15)
+	forceCheck:SetPoint("TOPLEFT", adminFrame, "TOPLEFT", 20, -110)
 	-- Prevent the template from expanding the clickable area far to the right
 	forceCheck:SetHitRectInsets(0, 0, 0, 0)
-	forceCheck.tooltip = "Override existing completion and update points"
+	forceCheck.tooltip = "Override existing completion and update points if completed"
 	local forceLabel = adminFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
 	forceLabel:SetPoint("LEFT", forceCheck, "RIGHT", 5, 0)
-	forceLabel:SetText("Force Update (override if completed)")
+	forceLabel:SetText("Force Update")
 
 	-- Solo checkbox
 	local soloCheck = CreateFrame("CheckButton", nil, adminFrame, "ChatConfigCheckButtonTemplate")
-	soloCheck:SetPoint("LEFT", characterInput, "RIGHT", 30, -2)
+	soloCheck:SetPoint("BOTTOM", forceCheck, "TOP", 0, -2)
 	-- Prevent the template from expanding the clickable area far to the right
 	soloCheck:SetHitRectInsets(0, 0, 0, 0)
 	soloCheck.tooltip = "Mark achievement as completed solo (doubles points if applicable)"
 	local soloLabel = adminFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-	soloLabel:SetPoint("BOTTOM", soloCheck, "TOP", 0, 2)
+	soloLabel:SetPoint("LEFT", soloCheck, "RIGHT", 5, 0)
 	soloLabel:SetText("Solo")
 
 	-- Override points input
 	local pointsLabel = adminFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-	pointsLabel:SetPoint("TOP", forceCheck, "BOTTOM", 80, -30)
+	pointsLabel:SetPoint("CENTER", adminFrame, "CENTER", -80, 100)
 	pointsLabel:SetText("Override Points (optional)")
 
 	local pointsInput = CreateFrame("EditBox", nil, adminFrame, "InputBoxTemplate")
@@ -472,7 +597,7 @@ local function CreateAdminPanel()
 
 	-- Override level input
 	local levelLabel = adminFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-	levelLabel:SetPoint("TOP", forceCheck, "BOTTOM", 275, -30)
+	levelLabel:SetPoint("LEFT", pointsLabel, "RIGHT", 20, 0)
 	levelLabel:SetText("Override Level (optional)")
 
 	local levelInput = CreateFrame("EditBox", nil, adminFrame, "InputBoxTemplate")
@@ -484,13 +609,22 @@ local function CreateAdminPanel()
     
     -- Send button
     local sendButton = CreateFrame("Button", nil, adminFrame, "UIPanelButtonTemplate")
-    sendButton:SetPoint("BOTTOM", adminFrame, "BOTTOM", -110, 75)
+    sendButton:SetPoint("CENTER", adminFrame, "CENTER", -110, 40)
     sendButton:SetSize(100, 32)
     sendButton:SetText("Send")
     
+    -- Permanent delete checkbox (unchecked by default = temporary delete, player can earn again)
+    local permanentCheck = CreateFrame("CheckButton", nil, adminFrame, "ChatConfigCheckButtonTemplate")
+    permanentCheck:SetPoint("TOP", forceCheck, "BOTTOM", 0, 2)
+    permanentCheck:SetHitRectInsets(0, 0, 0, 0)
+    permanentCheck.tooltip = "If checked, add to deletedByAdmin (player cannot earn this achievement again). If unchecked (default), player can earn it again."
+    local permanentLabel = adminFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    permanentLabel:SetPoint("LEFT", permanentCheck, "RIGHT", 5, 0)
+    permanentLabel:SetText("Permanent")
+
     -- Delete Achievement button
     local deleteButton = CreateFrame("Button", nil, adminFrame, "UIPanelButtonTemplate")
-    deleteButton:SetPoint("BOTTOM", adminFrame, "BOTTOM", 0, 75)
+    deleteButton:SetPoint("LEFT", sendButton, "RIGHT", 10, 0)
     deleteButton:SetSize(100, 32)
     deleteButton:SetText("Delete")
     --deleteButton:SetNormalFontObject("GameFontNormalSmall")
@@ -511,7 +645,7 @@ local function CreateAdminPanel()
     
     -- Clear Key button (security feature)
     local clearKeyButton = CreateFrame("Button", nil, adminFrame, "UIPanelButtonTemplate")
-    clearKeyButton:SetPoint("BOTTOM", adminFrame, "BOTTOM", 110, 75)
+    clearKeyButton:SetPoint("LEFT", deleteButton, "RIGHT", 10, 0)
     clearKeyButton:SetSize(100, 32)
     clearKeyButton:SetText("Clear Key")
     --clearKeyButton:SetNormalFontObject("GameFontNormalSmall")
@@ -528,14 +662,72 @@ local function CreateAdminPanel()
     clearKeyButton:SetScript("OnLeave", function(self)
         GameTooltip:Hide()
     end)
+
+    -- Unban button (remove from deletedByAdmin so player can earn achievement again)
+    local unbanButton = CreateFrame("Button", nil, adminFrame, "UIPanelButtonTemplate")
+    unbanButton:SetPoint("TOP", sendButton, "BOTTOM", 0, -10)
+    unbanButton:SetSize(100, 32)
+    unbanButton:SetText("Unban")
+    unbanButton:SetScript("OnEnter", function(self)
+        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+        GameTooltip:SetText("Unban Achievement", 0.5, 0.8, 1)
+        GameTooltip:AddLine("Remove achievement from deletedByAdmin so the player can earn it again.", 1, 1, 1, true)
+        GameTooltip:Show()
+    end)
+    unbanButton:SetScript("OnLeave", function(self)
+        GameTooltip:Hide()
+    end)
+    
+    -- GuildFirst section (fix false claims)
+    local gfLabel = adminFrame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    gfLabel:SetPoint("CENTER", adminFrame, "CENTER", 0, -35)
+    gfLabel:SetText("GuildFirst: Fix false claim (select achievement above)")
+    local gfWinnerName = CreateFrame("EditBox", nil, adminFrame, "InputBoxTemplate")
+    gfWinnerName:SetPoint("CENTER", adminFrame, "CENTER", 0, -80)
+    gfWinnerName:SetSize(100, 22)
+    gfWinnerName:SetAutoFocus(false)
+    gfWinnerName:SetText("")
+    local gfWinnerNameLbl = adminFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    gfWinnerNameLbl:SetPoint("BOTTOM", gfWinnerName, "TOP", 0, 2)
+    gfWinnerNameLbl:SetText("Correct Player Name")
+    local gfWinnerGUID = CreateFrame("EditBox", nil, adminFrame, "InputBoxTemplate")
+    gfWinnerGUID:SetPoint("TOP", gfWinnerNameLbl, "BOTTOM", 0, -50)
+    gfWinnerGUID:SetSize(180, 22)
+    gfWinnerGUID:SetAutoFocus(false)
+    gfWinnerGUID:SetText("")
+    local gfWinnerGUIDLbl = adminFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    gfWinnerGUIDLbl:SetPoint("BOTTOM", gfWinnerGUID, "TOP", 0, 2)
+    gfWinnerGUIDLbl:SetText("Correct GUID (/run print(UnitGUID(\"player\")))")
+    local fixClaimBtn = CreateFrame("Button", nil, adminFrame, "UIPanelButtonTemplate")
+    fixClaimBtn:SetPoint("TOP", gfWinnerGUIDLbl, "BOTTOM", -70, -30)
+    fixClaimBtn:SetSize(90, 24)
+    fixClaimBtn:SetText("Fix Claim")
+    fixClaimBtn:SetScript("OnEnter", function(self)
+        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+        GameTooltip:SetText("Override GuildFirst claim to correct player", 0.5, 0.8, 1)
+        GameTooltip:AddLine("Enter correct player name and GUID.", 1, 1, 1, true)
+        GameTooltip:Show()
+    end)
+    fixClaimBtn:SetScript("OnLeave", function() GameTooltip:Hide() end)
+    local clearClaimBtn = CreateFrame("Button", nil, adminFrame, "UIPanelButtonTemplate")
+    clearClaimBtn:SetPoint("TOP", gfWinnerGUIDLbl, "BOTTOM", 70, -30)
+    clearClaimBtn:SetSize(90, 24)
+    clearClaimBtn:SetText("Clear Claim")
+    clearClaimBtn:SetScript("OnEnter", function(self)
+        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+        GameTooltip:SetText("Remove GuildFirst claim entirely", 1, 0.5, 0.5)
+        GameTooltip:AddLine("Then use Send to award to correct player.", 1, 1, 1, true)
+        GameTooltip:Show()
+    end)
+    clearClaimBtn:SetScript("OnLeave", function() GameTooltip:Hide() end)
     
     -- Status text
     local statusText = adminFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    statusText:SetPoint("BOTTOM", adminFrame, "BOTTOM", 0, -50)
+    statusText:SetPoint("BOTTOM", adminFrame, "BOTTOM", 0, -20)
     statusText:SetSize(360, 100)
     statusText:SetJustifyH("LEFT")
     statusText:SetJustifyV("TOP")
-    statusText:SetText("Select an achievement and enter the target character name.\n|cff00ff00Send Command:|r Completes the achievement.\n|cffff0000Delete:|r Removes the achievement from player's database.\n|cffff0000Clear Key:|r Clears player's secret key if compromised.")
+    statusText:SetText("Select achievement, enter target character.\n|cff00ff00Send|r Complete | |cffff0000Delete|r Remove (check Permanent to ban from earning again) | |cff00aaffUnban|r Allow earning again | |cffff0000Clear Key|r Revoke key\n|cffaaaaaaGuildFirst:|r Fix Claim = correct winner | Clear Claim = remove, then Send to correct player.")
     
     -- Populate achievement dropdown
 	local function PopulateAchievementDropdown()
@@ -570,8 +762,9 @@ local function CreateAdminPanel()
             local entries = {}
             local seen = {}
 
-            if AchievementPanel and AchievementPanel.achievements then
-                for _, row in ipairs(AchievementPanel.achievements) do
+            local panel = (addon and addon.AchievementPanel)
+            if panel and panel.achievements then
+                for _, row in ipairs(panel.achievements) do
                     local rowAchId = row.achId or row.id
                     if rowAchId then
                         local def = row._def or {}
@@ -591,13 +784,26 @@ local function CreateAdminPanel()
                 end
             end
 
-            if _G.HCA_AchievementDefs then
-                for achId, achievement in pairs(_G.HCA_AchievementDefs) do
+            local defs = (addon and addon.AchievementDefs)
+            if defs then
+                for achId, achievement in pairs(defs) do
                     AddEntry(entries, seen, {
                         achId = achId,
                         title = achievement.title,
                         level = achievement.level or achievement.maxLevel,
                         points = achievement.points,
+                    })
+                end
+            end
+
+            local gfDefs = (addon and addon.GuildFirst_DefById)
+            if gfDefs then
+                for achId, def in pairs(gfDefs) do
+                    AddEntry(entries, seen, {
+                        achId = tostring(achId),
+                        title = def.title or def.secretTitle or tostring(achId),
+                        level = def.level,
+                        points = def.points or 0,
                     })
                 end
             end
@@ -725,12 +931,14 @@ local function CreateAdminPanel()
                 return
             end
             
-            -- Confirm before deleting (store achievement ID and character name in popup data)
+            -- Confirm before deleting (store achievement ID, character name, and permanent in popup data)
+            local permanent = permanentCheck:GetChecked()
             local popup = StaticPopup_Show("HCA_DELETE_ACHIEVEMENT_CONFIRM", selectedAchievement.achId, characterName)
             if popup then
                 popup.data = {
                     achievementId = selectedAchievement.achId,
-                    characterName = characterName
+                    characterName = characterName,
+                    permanent = permanent,
                 }
             end
         end)
@@ -748,6 +956,55 @@ local function CreateAdminPanel()
             if popup then
                 popup.data = characterName
             end
+        end)
+        
+        -- GuildFirst Fix Claim button handler
+        fixClaimBtn:SetScript("OnClick", function()
+            if not selectedAchievement then
+                print("|cffff0000[HardcoreAchievements Admin]|r Please select a GuildFirst achievement")
+                return
+            end
+            local winnerName = (gfWinnerName:GetText() or ""):trim()
+            local winnerGUID = (gfWinnerGUID:GetText() or ""):trim()
+            if winnerName == "" or winnerGUID == "" then
+                print("|cffff0000[HardcoreAchievements Admin]|r Enter correct player name and GUID")
+                print("|cffffff00Player gets GUID via: /run print(UnitGUID(\"player\"))|r")
+                return
+            end
+            local ok, err = DoAdminOverrideClaim(selectedAchievement.achId, winnerName, winnerGUID)
+            if ok then
+                print("|cff00ff00[HardcoreAchievements Admin]|r GuildFirst claim updated for '" .. selectedAchievement.achId .. "' -> " .. winnerName)
+            else
+                print("|cffff0000[HardcoreAchievements Admin]|r " .. (err or "Failed"))
+            end
+        end)
+        
+        -- GuildFirst Clear Claim button handler
+        clearClaimBtn:SetScript("OnClick", function()
+            if not selectedAchievement then
+                print("|cffff0000[HardcoreAchievements Admin]|r Please select a GuildFirst achievement")
+                return
+            end
+            local ok, err = DoAdminClearClaim(selectedAchievement.achId)
+            if ok then
+                print("|cff00ff00[HardcoreAchievements Admin]|r GuildFirst claim cleared for '" .. selectedAchievement.achId .. "'")
+            else
+                print("|cffff0000[HardcoreAchievements Admin]|r " .. (err or "Failed"))
+            end
+        end)
+
+        -- Unban button handler
+        unbanButton:SetScript("OnClick", function()
+            if not selectedAchievement then
+                print("|cffff0000[HardcoreAchievements Admin]|r Please select an achievement to unban")
+                return
+            end
+            local characterName = characterInput:GetText():trim()
+            if not characterName or characterName == "" then
+                print("|cffff0000[HardcoreAchievements Admin]|r Please enter target character name")
+                return
+            end
+            SendClearDeletedByAdminCommand(selectedAchievement.achId, characterName)
         end)
     end
     
@@ -797,12 +1054,12 @@ AceComm:RegisterComm(RESPONSE_PREFIX, OnResponseReceived)
 
 -- Create confirmation dialog for delete achievement command
 StaticPopupDialogs["HCA_DELETE_ACHIEVEMENT_CONFIRM"] = {
-    text = "Are you sure you want to delete achievement '%s' for %s?\n\nThis will remove the achievement from their database and reset it to its initial state.\n\n|cffff0000This action cannot be undone!|r",
+    text = "Are you sure you want to delete achievement '%s' for %s?\n\nThis will remove the achievement from their database and reset it to its initial state.\n\nCheck 'Permanent' to ban the player from earning again; leave unchecked to allow re-earning.",
     button1 = "Yes, Delete",
     button2 = "Cancel",
     OnAccept = function(self, data)
         if data and data.achievementId and data.characterName then
-            SendDeleteAchievementCommand(data.achievementId, data.characterName)
+            SendDeleteAchievementCommand(data.achievementId, data.characterName, data.permanent)
         end
     end,
     OnCancel = function(self, data)

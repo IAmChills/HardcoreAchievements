@@ -74,10 +74,11 @@ local function CreateSecureHash(payload, secretKey)
         return nil
     end
     
-    -- Create message to sign: all critical fields in canonical order
-    local message = string_format("%d:%d:%s:%s:%s",
+    -- Create message to sign: all critical fields in canonical order (include commandType for command differentiation)
+    local message = string_format("%d:%d:%s:%s:%s:%s",
         payload.version or 0,
         payload.timestamp or 0,
+        payload.commandType or "",
         payload.achievementId or "",
         payload.targetCharacter or "",
         payload.nonce or ""
@@ -170,13 +171,19 @@ local function ValidatePayload(payload, sender)
 end
 
 local function FindAchievementRow(achievementId)
+    if not achievementId then return nil end
+    local achStr = tostring(achievementId)
     local panel = addon and addon.AchievementPanel
-    if not panel or not panel.achievements then return nil end
-    
-    for _, row in ipairs(panel.achievements) do
-        if row.id == achievementId then
-            return row
+    if panel and panel.achievements then
+        for _, row in ipairs(panel.achievements) do
+            local rid = row.id or row.achId
+            if rid and (rid == achievementId or tostring(rid) == achStr) then
+                return row
+            end
         end
+    end
+    if addon and addon.GetAchievementRow then
+        return addon.GetAchievementRow(achievementId)
     end
     return nil
 end
@@ -219,7 +226,8 @@ local function ProcessDeleteAchievementCommand(payload, sender)
         return false
     end
     
-    local id = achievementRow.id
+    local id = achievementRow.id or achievementRow.achId
+    if not id then id = payload.achievementId end
     local hadAchievement = false
     
     -- Check if achievement exists in database
@@ -234,6 +242,12 @@ local function ProcessDeleteAchievementCommand(payload, sender)
     -- Clear progress for this achievement
     if cdb.progress then
         cdb.progress[id] = nil
+    end
+    
+    -- Tombstone (only when permanent): prevent GuildFirst onChange from re-awarding if claim syncs back
+    if payload.permanent then
+        cdb.deletedByAdmin = cdb.deletedByAdmin or {}
+        cdb.deletedByAdmin[id] = true
     end
     
     -- Reset UI row to initial state
@@ -266,13 +280,20 @@ local function ProcessDeleteAchievementCommand(payload, sender)
     end
     
     -- Reset icon/frame styling
-    if type(ApplyOutleveledStyle) == "function" then
+    if addon and type(addon.ApplyOutleveledStyle) == "function" then
+        addon.ApplyOutleveledStyle(achievementRow)
+    elseif type(ApplyOutleveledStyle) == "function" then
         ApplyOutleveledStyle(achievementRow)
     end
     
     -- Update total points
-    if type(HCA_UpdateTotalPoints) == "function" then
-        HCA_UpdateTotalPoints()
+    if addon and type(addon.UpdateTotalPoints) == "function" then
+        addon.UpdateTotalPoints()
+    end
+    
+    -- Reapply filter so hiddenUntilComplete rows get hidden, visibility recalculated, rows repositioned
+    if addon and type(addon.ApplyFilter) == "function" then
+        addon.ApplyFilter()
     end
     
     -- Clear progress (if function exists)
@@ -298,13 +319,41 @@ local function ProcessDeleteAchievementCommand(payload, sender)
         table_remove(addon.HardcoreAchievementsDB.adminCommands, 1)
     end
     
-    if hadAchievement then
-        SendResponseToAdmin(sender, "|cff00ff00[Hardcore Achievements]|r Achievement '" .. payload.achievementId .. "' deleted successfully for " .. currentCharacter)
-        print("|cffff0000[Hardcore Achievements]|r Achievement '" .. payload.achievementId .. "' has been deleted by admin")
-    else
-        SendResponseToAdmin(sender, "|CFFFFD100[Hardcore Achievements]|r Achievement '" .. payload.achievementId .. "' was not in database for " .. currentCharacter .. " (already deleted)")
+    SendResponseToAdmin(sender, "|cff00ff00[Hardcore Achievements]|r Achievement '" .. payload.achievementId .. "' deleted successfully")
+    return true
+end
+
+-- Handle clear deletedByAdmin (unban) - allows player to earn the achievement again
+local function ProcessClearDeletedByAdminCommand(payload, sender)
+    local currentCharacter = UnitName("player")
+    if payload.targetCharacter ~= currentCharacter then
+        SendResponseToAdmin(sender, "|cffff0000[Hardcore Achievements]|r Unban command rejected: Target character mismatch")
+        return false
     end
-    
+
+    local achievementId = payload.achievementId and tostring(payload.achievementId):trim()
+    if not achievementId or achievementId == "" then
+        SendResponseToAdmin(sender, "|cffff0000[Hardcore Achievements]|r Unban command rejected: Achievement ID required")
+        return false
+    end
+
+    local _, cdb = addon.GetCharDB()
+    if not cdb then
+        SendResponseToAdmin(sender, "|cffff0000[Hardcore Achievements]|r Failed to unban: Database not initialized")
+        return false
+    end
+
+    cdb.deletedByAdmin = cdb.deletedByAdmin or {}
+    local hadEntry = cdb.deletedByAdmin[achievementId]
+    cdb.deletedByAdmin[achievementId] = nil
+
+    if hadEntry then
+        SendResponseToAdmin(sender, "|cff00ff00[Hardcore Achievements]|r Achievement '" .. achievementId .. "' unbanned for " .. currentCharacter .. " - player can earn again")
+        --print("|cff00ff00[Hardcore Achievements]|r Achievement '" .. achievementId .. "' has been unbanned - you can earn it again")
+    else
+        SendResponseToAdmin(sender, "|CFFFFD100[Hardcore Achievements]|r Achievement '" .. achievementId .. "' was not banned for " .. currentCharacter)
+    end
+
     return true
 end
 
@@ -376,6 +425,16 @@ local function ProcessAdminCommand(payload, sender)
         return ProcessDeleteAchievementCommand(payload, sender)
     end
     
+    -- Check if this is a clear deletedByAdmin (unban) command
+    if payload.commandType == "clear_deleted_by_admin" then
+        local isValid, reason = ValidatePayload(payload, sender)
+        if not isValid then
+            SendResponseToAdmin(sender, "|cffff0000[Hardcore Achievements]|r Unban command rejected: " .. reason)
+            return false
+        end
+        return ProcessClearDeletedByAdminCommand(payload, sender)
+    end
+
     -- Check if this is a clear secret key command
     if payload.commandType == "clear_secret_key" then
         -- For clear key commands, we must validate the payload first
@@ -458,21 +517,28 @@ local function ProcessAdminCommand(payload, sender)
 					achievementRow.Points:SetTextColor(0.6, 0.9, 0.6)
 				end
 				if achievementRow.TS then
-					achievementRow.TS:SetText(FormatTimestamp(rec.completedAt))
+					local fmtTs = (addon and addon.FormatTimestamp) or FormatTimestamp
+					achievementRow.TS:SetText(fmtTs(rec.completedAt))
 				end
 				-- Update solo status in UI if applicable
 				if payload.solo and achievementRow.Sub then
 					local isHardcoreActive = C_GameRules and C_GameRules.IsHardcoreActive and C_GameRules.IsHardcoreActive() or false
 					local allowSoloBonus = IsSelfFound() or not isHardcoreActive
 					if allowSoloBonus then
-						achievementRow.Sub:SetText(AUCTION_TIME_LEFT0 .. "\n" .. HCA_SharedUtils.GetClassColor() .. "Solo|r")
+                        local ClassColor = (addon and addon.ClassColor())
+						achievementRow.Sub:SetText(AUCTION_TIME_LEFT0 .. "\n" .. ClassColor .. "Solo|r")
 					end
 				end
-				if type(HCA_UpdateTotalPoints) == "function" then
-					HCA_UpdateTotalPoints()
+				if addon and type(addon.UpdateTotalPoints) == "function" then
+					addon.UpdateTotalPoints()
 				end
 				-- Toast to indicate update
-				HCA_AchToast_Show(achievementRow.Icon:GetTexture(), achievementRow.Title:GetText(), newPoints)
+				local showToast = (addon and addon.CreateAchToast)
+				if type(showToast) == "function" then
+					local iconTex = (achievementRow.Icon and achievementRow.Icon.GetTexture) and achievementRow.Icon:GetTexture() or achievementRow.icon or 134400
+					local titleText = (achievementRow.Title and achievementRow.Title.GetText) and achievementRow.Title:GetText() or achievementRow.title or "Achievement"
+					showToast(iconTex, titleText, newPoints)
+				end
 				SendResponseToAdmin(sender, "|cff00ff00[Hardcore Achievements]|r Achievement '" .. payload.achievementId .. "' updated via admin command")
 				return true
 			end
@@ -538,7 +604,10 @@ local function ProcessAdminCommand(payload, sender)
 	end
 
 	-- Complete the achievement
-	HCA_MarkRowCompleted(achievementRow)
+	local markComplete = (addon and addon.MarkRowCompleted)
+	if type(markComplete) == "function" then
+		markComplete(achievementRow)
+	end
 	
 	-- Clear failed status when manually awarding achievement
 	local _, cdb = addon.GetCharDB()
@@ -570,7 +639,12 @@ local function ProcessAdminCommand(payload, sender)
 	end
 	
 	-- Show achievement toast
-	HCA_AchToast_Show(achievementRow.Icon:GetTexture(), achievementRow.Title:GetText(), achievementRow.points)
+	local showToast = (addon and addon.CreateAchToast)
+	if type(showToast) == "function" then
+		local iconTex = (achievementRow.Icon and achievementRow.Icon.GetTexture) and achievementRow.Icon:GetTexture() or achievementRow.icon or 134400
+		local titleText = (achievementRow.Title and achievementRow.Title.GetText) and achievementRow.Title:GetText() or achievementRow.title or "Achievement"
+		showToast(iconTex, titleText, achievementRow.points)
+	end
 	
 	SendResponseToAdmin(sender, "|cff00ff00[Hardcore Achievements]|r Achievement '" .. payload.achievementId .. "' completed via admin command")
     
@@ -666,8 +740,9 @@ local function HandleSlashCommand(msg)
         if tab and tab:GetText() and tab:GetText():find("Achievements") then
             tab:Show()
             tab:SetScript("OnClick", function(self)
-                if HCA_ShowAchievementTab then
-                    HCA_ShowAchievementTab()
+                local showTab = (addon and (addon.ShowAchievementTab or addon.ShowAchievementWindow))
+                if type(showTab) == "function" then
+                    showTab()
                 end
             end)
             print("|cff008066[Hardcore Achievements]|r Custom achievement tab enabled and shown")
@@ -684,7 +759,7 @@ local function HandleSlashCommand(msg)
                 if SetAdminSecretKey(key) then
                     print("|cff00ff00[Hardcore Achievements]|r Admin secret key set successfully")
                     print("|CFFFFD100[Hardcore Achievements]|r Keep this key secret! Anyone with this key can send admin commands.")
-                    if UpdateKeyStatus then
+                    if addon and addon.UpdateKeyStatus then
                         UpdateKeyStatus()
                     end
                 else
@@ -706,7 +781,7 @@ local function HandleSlashCommand(msg)
             if addon.HardcoreAchievementsDB then
                 addon.HardcoreAchievementsDB.adminSecretKey = nil
                 print("|cff00ff00[Hardcore Achievements]|r Admin secret key cleared")
-                if UpdateKeyStatus then
+                if addon and addon.UpdateKeyStatus then
                     UpdateKeyStatus()
                 end
             end
