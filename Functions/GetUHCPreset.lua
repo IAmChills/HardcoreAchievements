@@ -1,3 +1,14 @@
+local addonName, addon = ...
+local C_GameRules = C_GameRules
+local UnitGUID = UnitGUID
+local CreateFrame = CreateFrame
+local C_Timer = C_Timer
+local RefreshAllAchievementPoints = (addon and addon.RefreshAllAchievementPoints)
+local IsSelfFound = (addon and addon.IsSelfFound)
+local GetPlayerPresetFromSettings
+local table_insert = table.insert
+local table_concat = table.concat
+
 local settingsCheckboxOptions = {
     { id = 1, name = "UHC Player Frame", dbSettingsValueName = "hidePlayerFrame" },
     { id = 2, name = "Hide Minimap", dbSettingsValueName = "hideMinimap" },
@@ -96,7 +107,7 @@ local function hasAny(have, subset)
     return false
 end
 
-function GetPresetMultiplier(preset)
+local function GetPresetMultiplier(preset)
     local POINT_MULTIPLIER = {
       lite            = 1.20,
       liteplus        = 1.30,
@@ -123,7 +134,7 @@ end
 -- Centralized function to update multiplier text for any frame
 -- multiplierTextElement: FontString element to update (e.g., DashboardFrame.MultiplierText)
 -- textColor: Optional color table {r, g, b} or nil for default (0.8, 0.8, 0.8)
-function UpdateMultiplierText(multiplierTextElement, textColor)
+local function UpdateMultiplierText(multiplierTextElement, textColor)
     if not multiplierTextElement then
         return
     end
@@ -133,14 +144,13 @@ function UpdateMultiplierText(multiplierTextElement, textColor)
     -- Check if hardcore is active (for Self Found detection)
     -- In TBC, this will be false, so Self Found will never be active
     local isHardcoreActive = C_GameRules and C_GameRules.IsHardcoreActive and C_GameRules.IsHardcoreActive() or false
-    local isSelfFound = false
-    if isHardcoreActive and IsSelfFound and IsSelfFound() then
+    if isHardcoreActive and IsSelfFound() then
         isSelfFound = true
     end
     
     -- Check solo mode from character database (works in both Hardcore and TBC)
     -- This checks the soloAchievements setting from character database
-    local isSoloMode = _G.HardcoreAchievements_IsSoloModeEnabled and _G.HardcoreAchievements_IsSoloModeEnabled() or false
+    local isSoloMode = (addon and addon.IsSoloModeEnabled and addon.IsSoloModeEnabled()) or false
     
     local labelText = ""
     local modifiers = {}
@@ -148,20 +158,20 @@ function UpdateMultiplierText(multiplierTextElement, textColor)
     -- In TBC (non-hardcore), Self Found is never available, so we only check Solo
     -- Build array of modifiers (preset goes last)
     if isSoloMode and not isSelfFound then
-        table.insert(modifiers, "Solo")
+        table_insert(modifiers, "Solo")
     elseif isSelfFound and not isSoloMode then
-        table.insert(modifiers, "Self Found")
+        table_insert(modifiers, "Self Found")
     elseif isSoloMode and isSelfFound then
-        table.insert(modifiers, "Solo Self Found")
+        table_insert(modifiers, "Solo Self Found")
     end
     
     if preset then
-        table.insert(modifiers, preset)
+        table_insert(modifiers, preset)
     end
     
     -- Show text if there are any modifiers (preset or solo/self-found)
     if #modifiers > 0 then
-        labelText = "Point Multiplier (" .. table.concat(modifiers, ", ") .. ")"
+        labelText = "Point Multiplier (" .. table_concat(modifiers, ", ") .. ")"
     end
     
     multiplierTextElement:SetText(labelText)
@@ -177,9 +187,6 @@ function UpdateMultiplierText(multiplierTextElement, textColor)
         multiplierTextElement:SetTextColor(0.8, 0.8, 0.8)
     end
 end
-
--- Export UpdateMultiplierText globally for use by other files
-_G.UpdateMultiplierText = UpdateMultiplierText
 
 -- Event frame for ADDON_LOADED
 local eventFrame = CreateFrame("Frame")
@@ -208,10 +215,9 @@ eventFrame:SetScript("OnEvent", function(self, event, addonName)
                 UpdateMultiplierText(DashboardFrame.MultiplierText, {0.922, 0.871, 0.761})
             end
 
-            -- Update all achievement points with new multiplier and bonus
-            if RefreshAllAchievementPoints then
-                RefreshAllAchievementPoints()
-            end
+            -- Update all achievement points with new multiplier and bonus (resolve at call time; main addon loads after this file)
+            local RefreshAllAchievementPoints = addon and addon.RefreshAllAchievementPoints
+            if type(RefreshAllAchievementPoints) == "function" then RefreshAllAchievementPoints() end
         end)
     end
 end)
@@ -267,5 +273,8 @@ function GetPlayerPresetFromSettings()
     end
 end
 
-
-
+if addon then
+    addon.GetPresetMultiplier = GetPresetMultiplier
+    addon.UpdateMultiplierText = UpdateMultiplierText
+    addon.GetPlayerPresetFromSettings = GetPlayerPresetFromSettings
+end

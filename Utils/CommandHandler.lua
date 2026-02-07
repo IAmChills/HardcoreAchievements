@@ -5,11 +5,20 @@
 local AceComm = LibStub("AceComm-3.0")
 local AceSerialize = LibStub("AceSerializer-3.0")
 
--- Reference to AchievementTracker (loaded via TOC, get it lazily)
-local function GetAchievementTracker()
-    return _G.HardcoreAchievementsTracker
-end
-
+local addonName, addon = ...
+local C_GameRules = C_GameRules
+local UnitName = UnitName
+local UnitLevel = UnitLevel
+local CreateFrame = CreateFrame
+local time = time
+local GetPresetMultiplier = (addon and addon.GetPresetMultiplier)
+local AchievementTracker = (addon and addon.AchievementTracker)
+local IsSelfFound = (addon and addon.IsSelfFound)
+local table_insert = table.insert
+local table_remove = table.remove
+local string_format = string.format
+local string_byte = string.byte
+local string_gmatch = string.gmatch
 local AdminCommandHandler = {}
 local COMM_PREFIX = "HCA_Admin_Cmd" -- AceComm prefix for admin commands
 local RESPONSE_PREFIX = "HCA_Admin_Resp" -- AceComm prefix for responses (max 16 chars)
@@ -21,42 +30,38 @@ local preciousCompletionCallbacks = {}
 
 -- Debug system: Helper functions for debug messages
 local function GetDebugEnabled()
-    if not HardcoreAchievementsDB then
-        HardcoreAchievementsDB = {}
-    end
-    return HardcoreAchievementsDB.debugEnabled or false
+    if not addon then return false end
+    addon.HardcoreAchievementsDB = addon.HardcoreAchievementsDB or {}
+    return addon.HardcoreAchievementsDB.debugEnabled or false
 end
 
 local function SetDebugEnabled(enabled)
-    if not HardcoreAchievementsDB then
-        HardcoreAchievementsDB = {}
-    end
-    HardcoreAchievementsDB.debugEnabled = enabled and true or false
+    if not addon then return end
+    addon.HardcoreAchievementsDB = addon.HardcoreAchievementsDB or {}
+    addon.HardcoreAchievementsDB.debugEnabled = enabled and true or false
 end
 
--- Global debug print function (exported)
-function _G.HCA_DebugPrint(message)
+local function DebugPrint(message)
     if GetDebugEnabled() then
         print("|cff008066[HCA DEBUG]|r |cffffd100" .. tostring(message) .. "|r")
     end
 end
+if addon then addon.DebugPrint = DebugPrint end
 
 -- SECURITY: Get admin secret key from database (set by admin via slash command)
 -- This key is NOT in source code and must be set by the admin
 local function GetAdminSecretKey()
-    if not HardcoreAchievementsDB then
-        HardcoreAchievementsDB = {}
-    end
-    return HardcoreAchievementsDB.adminSecretKey
+    if not addon then return nil end
+    addon.HardcoreAchievementsDB = addon.HardcoreAchievementsDB or {}
+    return addon.HardcoreAchievementsDB.adminSecretKey
 end
 
 -- SECURITY: Set admin secret key (only accessible via slash command)
 local function SetAdminSecretKey(key)
-    if not HardcoreAchievementsDB then
-        HardcoreAchievementsDB = {}
-    end
+    if not addon then return false end
+    addon.HardcoreAchievementsDB = addon.HardcoreAchievementsDB or {}
     if key and #key >= 16 then
-        HardcoreAchievementsDB.adminSecretKey = key
+        addon.HardcoreAchievementsDB.adminSecretKey = key
         return true
     end
     return false
@@ -70,7 +75,7 @@ local function CreateSecureHash(payload, secretKey)
     end
     
     -- Create message to sign: all critical fields in canonical order
-    local message = string.format("%d:%d:%s:%s:%s",
+    local message = string_format("%d:%d:%s:%s:%s",
         payload.version or 0,
         payload.timestamp or 0,
         payload.achievementId or "",
@@ -87,7 +92,7 @@ local function CreateSecureHash(payload, secretKey)
     local prime2 = 17
     
     for i = 1, #combined do
-        local byte = string.byte(combined, i)
+        local byte = string_byte(combined, i)
         hash = ((hash * prime1) + byte * prime2) % 2147483647
         hash = (hash + (byte * i * prime1)) % 2147483647
     end
@@ -96,12 +101,12 @@ local function CreateSecureHash(payload, secretKey)
     hash = (hash * #secretKey) % 2147483647
     
     -- Return as hex string for better security
-    return string.format("%08x", hash)
+    return string_format("%08x", hash)
 end
 
 -- Generate a nonce for replay protection
 local function GenerateNonce()
-    return string.format("%d:%d", time(), math.random(1000000, 9999999))
+    return string_format("%d:%d", time(), math.random(1000000, 9999999))
 end
 
 local function ValidatePayload(payload, sender)
@@ -137,36 +142,38 @@ local function ValidatePayload(payload, sender)
     
     -- SECURITY: Check nonce to prevent replay attacks
     -- Store used nonces in database (with expiration)
-    if not HardcoreAchievementsDB.adminNonces then
-        HardcoreAchievementsDB.adminNonces = {}
+    if not addon or not addon.HardcoreAchievementsDB then return false, "Database not initialized" end
+    if not addon.HardcoreAchievementsDB.adminNonces then
+        addon.HardcoreAchievementsDB.adminNonces = {}
     end
     
     -- Clean old nonces (older than MAX_PAYLOAD_AGE)
     local noncesToRemove = {}
-    for nonce, nonceTime in pairs(HardcoreAchievementsDB.adminNonces) do
+    for nonce, nonceTime in pairs(addon.HardcoreAchievementsDB.adminNonces) do
         if currentTime - nonceTime > MAX_PAYLOAD_AGE then
-            table.insert(noncesToRemove, nonce)
+            table_insert(noncesToRemove, nonce)
         end
     end
     for _, nonce in ipairs(noncesToRemove) do
-        HardcoreAchievementsDB.adminNonces[nonce] = nil
+        addon.HardcoreAchievementsDB.adminNonces[nonce] = nil
     end
     
     -- Check if nonce was already used (replay attack)
-    if HardcoreAchievementsDB.adminNonces[payload.nonce] then
+    if addon.HardcoreAchievementsDB.adminNonces[payload.nonce] then
         return false, "Nonce already used (replay attack detected)"
     end
     
     -- Store nonce to prevent reuse
-    HardcoreAchievementsDB.adminNonces[payload.nonce] = currentTime
+    addon.HardcoreAchievementsDB.adminNonces[payload.nonce] = currentTime
     
     return true, "Valid"
 end
 
 local function FindAchievementRow(achievementId)
-    if not AchievementPanel or not AchievementPanel.achievements then return nil end
+    local panel = addon and addon.AchievementPanel
+    if not panel or not panel.achievements then return nil end
     
-    for _, row in ipairs(AchievementPanel.achievements) do
+    for _, row in ipairs(panel.achievements) do
         if row.id == achievementId then
             return row
         end
@@ -206,7 +213,7 @@ local function ProcessDeleteAchievementCommand(payload, sender)
         return false
     end
     
-    local _, cdb = HardcoreAchievements_GetCharDB()
+    local _, cdb = addon.GetCharDB()
     if not cdb then
         SendResponseToAdmin(sender, "|cffff0000[Hardcore Achievements]|r Failed to delete achievement: Database not initialized")
         return false
@@ -269,13 +276,13 @@ local function ProcessDeleteAchievementCommand(payload, sender)
     end
     
     -- Clear progress (if function exists)
-    if type(HardcoreAchievements_ClearProgress) == "function" then
-        HardcoreAchievements_ClearProgress(id)
+    if addon and type(addon.ClearProgress) == "function" then
+        addon.ClearProgress(id)
     end
     
     -- Log the action
-    if not HardcoreAchievementsDB.adminCommands then HardcoreAchievementsDB.adminCommands = {} end
-    table.insert(HardcoreAchievementsDB.adminCommands, {
+    if not addon.HardcoreAchievementsDB.adminCommands then addon.HardcoreAchievementsDB.adminCommands = {} end
+    table_insert(addon.HardcoreAchievementsDB.adminCommands, {
         timestamp = time(),
         commandType = "delete_achievement",
         achievementId = payload.achievementId,
@@ -287,8 +294,8 @@ local function ProcessDeleteAchievementCommand(payload, sender)
     })
     
     -- Keep only last 100 commands
-    if #HardcoreAchievementsDB.adminCommands > 100 then
-        table.remove(HardcoreAchievementsDB.adminCommands, 1)
+    if #addon.HardcoreAchievementsDB.adminCommands > 100 then
+        table_remove(addon.HardcoreAchievementsDB.adminCommands, 1)
     end
     
     if hadAchievement then
@@ -313,22 +320,22 @@ local function ProcessClearSecretKeyCommand(payload, sender)
     
     -- Check if key exists before clearing (for idempotency)
     local hadKey = false
-    if HardcoreAchievementsDB and HardcoreAchievementsDB.adminSecretKey and HardcoreAchievementsDB.adminSecretKey ~= "" then
+    if addon.HardcoreAchievementsDB and addon.HardcoreAchievementsDB.adminSecretKey and addon.HardcoreAchievementsDB.adminSecretKey ~= "" then
         hadKey = true
     end
     
     -- Clear the secret key
-    if HardcoreAchievementsDB then
-        HardcoreAchievementsDB.adminSecretKey = nil
+    if addon.HardcoreAchievementsDB then
+        addon.HardcoreAchievementsDB.adminSecretKey = nil
         
         -- Also clear admin nonces to prevent any issues
-        if HardcoreAchievementsDB.adminNonces then
-            HardcoreAchievementsDB.adminNonces = {}
+        if addon.HardcoreAchievementsDB.adminNonces then
+            addon.HardcoreAchievementsDB.adminNonces = {}
         end
         
         -- Log the action
-        if not HardcoreAchievementsDB.adminCommands then HardcoreAchievementsDB.adminCommands = {} end
-        table.insert(HardcoreAchievementsDB.adminCommands, {
+        if not addon.HardcoreAchievementsDB.adminCommands then addon.HardcoreAchievementsDB.adminCommands = {} end
+        table_insert(addon.HardcoreAchievementsDB.adminCommands, {
             timestamp = time(),
             commandType = "clear_secret_key",
             sender = sender,
@@ -338,8 +345,8 @@ local function ProcessClearSecretKeyCommand(payload, sender)
         })
         
         -- Keep only last 100 commands
-        if #HardcoreAchievementsDB.adminCommands > 100 then
-            table.remove(HardcoreAchievementsDB.adminCommands, 1)
+        if #addon.HardcoreAchievementsDB.adminCommands > 100 then
+            table_remove(addon.HardcoreAchievementsDB.adminCommands, 1)
         end
         
         if hadKey then
@@ -417,7 +424,7 @@ local function ProcessAdminCommand(payload, sender)
 	-- If already completed, allow forced update when flagged
 	if achievementRow.completed then
 		if payload.forceUpdate then
-			local _, cdb = HardcoreAchievements_GetCharDB()
+			local _, cdb = addon.GetCharDB()
 			if cdb then
 				cdb.achievements = cdb.achievements or {}
 				local id = achievementRow.id
@@ -455,9 +462,8 @@ local function ProcessAdminCommand(payload, sender)
 				end
 				-- Update solo status in UI if applicable
 				if payload.solo and achievementRow.Sub then
-					local isSelfFound = _G.IsSelfFound and _G.IsSelfFound() or false
 					local isHardcoreActive = C_GameRules and C_GameRules.IsHardcoreActive and C_GameRules.IsHardcoreActive() or false
-					local allowSoloBonus = isSelfFound or not isHardcoreActive
+					local allowSoloBonus = IsSelfFound() or not isHardcoreActive
 					if allowSoloBonus then
 						achievementRow.Sub:SetText(AUCTION_TIME_LEFT0 .. "\n" .. HCA_SharedUtils.GetClassColor() .. "Solo|r")
 					end
@@ -490,7 +496,7 @@ local function ProcessAdminCommand(payload, sender)
 	-- If solo flag is set, we need to set up progress data before completion
 	-- This ensures HCA_MarkRowCompleted recognizes it as solo and doubles points if applicable
 	if payload.solo then
-		local _, cdb = HardcoreAchievements_GetCharDB()
+		local _, cdb = addon.GetCharDB()
 		if cdb then
 			cdb.progress = cdb.progress or {}
 			local id = achievementRow.id
@@ -503,11 +509,10 @@ local function ProcessAdminCommand(payload, sender)
 			-- If override points provided, use those (don't double even if solo)
 			local overridePts = tonumber(payload.overridePoints)
 			if overridePts and overridePts > 0 then
-				local isSelfFound = _G.IsSelfFound and _G.IsSelfFound() or false
-				if isSelfFound then
+				if IsSelfFound() then
 					-- pointsAtKill is stored WITHOUT the self-found bonus, so strip it from the override.
 					-- 0-point achievements naturally strip 0.
-					local getBonus = _G.HCA_GetSelfFoundBonus
+					local getBonus = addon and addon.GetSelfFoundBonus
 					local baseForBonus = achievementRow.originalPoints or achievementRow.revealPointsBase or 0
 					local bonus = (type(getBonus) == "function") and getBonus(baseForBonus) or 0
 					if bonus > 0 and overridePts > 0 then
@@ -520,8 +525,8 @@ local function ProcessAdminCommand(payload, sender)
 				local basePoints = tonumber(achievementRow.originalPoints) or tonumber(achievementRow.points) or 0
 				-- Apply preset multiplier if not static
 				if not achievementRow.staticPoints then
-					local preset = _G.GetPlayerPresetFromSettings and _G.GetPlayerPresetFromSettings() or nil
-					local multiplier = _G.GetPresetMultiplier and _G.GetPresetMultiplier(preset) or 1.0
+					local preset = addon and addon.GetPlayerPresetFromSettings and addon.GetPlayerPresetFromSettings() or nil
+					local multiplier = GetPresetMultiplier(preset) or 1.0
 					basePoints = basePoints + math.floor((basePoints) * (multiplier - 1) + 0.5)
 				end
 				-- Double for solo (pointsAtKill stores without self-found bonus)
@@ -536,7 +541,7 @@ local function ProcessAdminCommand(payload, sender)
 	HCA_MarkRowCompleted(achievementRow)
 	
 	-- Clear failed status when manually awarding achievement
-	local _, cdb = HardcoreAchievements_GetCharDB()
+	local _, cdb = addon.GetCharDB()
 	if cdb then
 		cdb.achievements = cdb.achievements or {}
 		local id = achievementRow.id
@@ -551,7 +556,7 @@ local function ProcessAdminCommand(payload, sender)
 	if payload.overrideLevel then
 		local lvl = tonumber(payload.overrideLevel)
 		if lvl then
-			local _, cdb = HardcoreAchievements_GetCharDB()
+			local _, cdb = addon.GetCharDB()
 			if cdb then
 				cdb.achievements = cdb.achievements or {}
 				local id = achievementRow.id
@@ -570,9 +575,9 @@ local function ProcessAdminCommand(payload, sender)
 	SendResponseToAdmin(sender, "|cff00ff00[Hardcore Achievements]|r Achievement '" .. payload.achievementId .. "' completed via admin command")
     
     -- Log the admin command (for audit trail)
-    if not HardcoreAchievementsDB.adminCommands then HardcoreAchievementsDB.adminCommands = {} end
+    if not addon.HardcoreAchievementsDB.adminCommands then addon.HardcoreAchievementsDB.adminCommands = {} end
     
-    table.insert(HardcoreAchievementsDB.adminCommands, {
+    table_insert(addon.HardcoreAchievementsDB.adminCommands, {
         timestamp = time(),
         achievementId = payload.achievementId,
         sender = sender,
@@ -583,8 +588,8 @@ local function ProcessAdminCommand(payload, sender)
     })
     
     -- Keep only last 100 commands to prevent database bloat
-    if #HardcoreAchievementsDB.adminCommands > 100 then
-        table.remove(HardcoreAchievementsDB.adminCommands, 1)
+    if #addon.HardcoreAchievementsDB.adminCommands > 100 then
+        table_remove(addon.HardcoreAchievementsDB.adminCommands, 1)
     end
     
     return true
@@ -617,18 +622,18 @@ local function OnPreciousCompletedMessage(prefix, message, distribution, sender)
     -- Don't notify the player who completed Precious
     local playerName = UnitName("player")
     if payload.playerName == playerName or sender == playerName then
-        HCA_DebugPrint("Precious completion message ignored (from self)")
+        DebugPrint("Precious completion message ignored (from self)")
         return
     end
     
-    HCA_DebugPrint("Precious completion message received from " .. tostring(sender))
+    DebugPrint("Precious completion message received from " .. tostring(sender))
     
     -- Call all registered callbacks
     for _, callback in ipairs(preciousCompletionCallbacks) do
         if type(callback) == "function" then
             local ok, err = pcall(callback, payload, sender)
             if not ok then
-                HCA_DebugPrint("Error in Precious completion callback: " .. tostring(err))
+                DebugPrint("Error in Precious completion callback: " .. tostring(err))
             end
         end
     end
@@ -644,15 +649,15 @@ end
 -- Slash command handler
 local function HandleSlashCommand(msg)
     local args = {}
-    for arg in string.gmatch(msg or "", "%S+") do
-        table.insert(args, arg)
+    for arg in string_gmatch(msg or "", "%S+") do
+        table_insert(args, arg)
     end
     local command = args[1] and string.lower(args[1]) or ""
     
     if command == "show" then
         -- Set database flag to show custom tab
         do
-            local _, cdb = HardcoreAchievements_GetCharDB and HardcoreAchievements_GetCharDB() or nil
+            local _, cdb = (addon and addon.GetCharDB and addon.GetCharDB()) or nil
             if cdb then cdb.showCustomTab = true end
         end
         
@@ -668,8 +673,8 @@ local function HandleSlashCommand(msg)
             print("|cff008066[Hardcore Achievements]|r Custom achievement tab enabled and shown")
         end
     elseif command == "reset" and args[2] == "tab" then
-        if ResetTabPosition then
-            ResetTabPosition()
+        if addon and addon.ResetTabPosition then
+            addon.ResetTabPosition()
         end
     elseif command == "adminkey" then
         -- SECURITY: Set admin secret key for secure command authentication
@@ -698,8 +703,8 @@ local function HandleSlashCommand(msg)
                 print("|CFFFFD100[Hardcore Achievements]|r Key must be at least 16 characters long")
             end
         elseif args[2] == "clear" then
-            if HardcoreAchievementsDB then
-                HardcoreAchievementsDB.adminSecretKey = nil
+            if addon.HardcoreAchievementsDB then
+                addon.HardcoreAchievementsDB.adminSecretKey = nil
                 print("|cff00ff00[Hardcore Achievements]|r Admin secret key cleared")
                 if UpdateKeyStatus then
                     UpdateKeyStatus()
@@ -713,7 +718,6 @@ local function HandleSlashCommand(msg)
         end
     elseif command == "tracker" then
         -- Tracker commands
-        local AchievementTracker = GetAchievementTracker()
         local subcommand = args[2] and string.lower(args[2]) or ""
         
         if not AchievementTracker then
@@ -753,7 +757,7 @@ local function HandleSlashCommand(msg)
         if args[2] and string.lower(args[2]) == "on" then
             SetDebugEnabled(true)
             print("|cff008066[Hardcore Achievements]|r Debug mode enabled")
-            _G.HCA_DebugPrint("Debug mode is now ON - you will see debug messages")
+            if addon and addon.DebugPrint then addon.DebugPrint("Debug mode is now ON - you will see debug messages") end
         elseif args[2] and string.lower(args[2]) == "off" then
             SetDebugEnabled(false)
             print("|cff008066[Hardcore Achievements]|r Debug mode disabled")
@@ -763,7 +767,7 @@ local function HandleSlashCommand(msg)
             SetDebugEnabled(not currentState)
             if not currentState then
                 print("|cff008066[Hardcore Achievements]|r Debug mode enabled")
-                _G.HCA_DebugPrint("Debug mode is now ON - you will see debug messages")
+                if addon and addon.DebugPrint then addon.DebugPrint("Debug mode is now ON - you will see debug messages") end
             else
                 print("|cff008066[Hardcore Achievements]|r Debug mode disabled")
             end
@@ -798,9 +802,6 @@ AdminCommandHandler.CreateSecureHash = CreateSecureHash
 AdminCommandHandler.GetAdminSecretKey = GetAdminSecretKey
 AdminCommandHandler.GenerateNonce = GenerateNonce
 
--- Export globally for admin tools
-_G.HardcoreAchievementsAdminCommandHandler = AdminCommandHandler
-
 -- =========================================================
 -- Precious Completion Communication (Regular Feature)
 -- These functions are NOT admin-related and are available to all players
@@ -808,7 +809,7 @@ _G.HardcoreAchievementsAdminCommandHandler = AdminCommandHandler
 
 -- Helper function to send Precious completion notification via SAY channel
 -- This notifies nearby players (within chat range) so they can complete Fellowship
-function _G.HCA_SendPreciousCompletionMessage()
+local function SendPreciousCompletionMessage()
     local messagePayload = {
         type = "precious_completed",
         playerName = UnitName("player")
@@ -816,23 +817,22 @@ function _G.HCA_SendPreciousCompletionMessage()
     
     local serializedMessage = AceSerialize:Serialize(messagePayload)
     if serializedMessage then
-        -- Send via SAY channel (only players within chat range will receive)
         AceComm:SendCommMessage(PRECIOUS_COMPLETE_PREFIX, serializedMessage, "SAY")
-        HCA_DebugPrint("Precious completion message sent")
+        if DebugPrint then DebugPrint("Precious completion message sent") end
     end
 end
 
 -- Register a callback to be called when Precious completion message is received
 -- Callback signature: function(payload, sender) where payload contains {type, playerName}
-function _G.HCA_RegisterPreciousCompletionCallback(callback)
+local function RegisterPreciousCompletionCallback(callback)
     if type(callback) == "function" then
-        table.insert(preciousCompletionCallbacks, callback)
+        table_insert(preciousCompletionCallbacks, callback)
     end
 end
 
 -- Helper function to create a secure admin command payload
 -- This is what the admin panel should use to send commands
-function AdminCommandHandler.CreateAdminPayload(targetCharacter, achievementId, overridePoints, overrideLevel, forceUpdate)
+local function CreateAdminPayload(targetCharacter, achievementId, overridePoints, overrideLevel, forceUpdate)
     local secretKey = GetAdminSecretKey()
     if not secretKey or secretKey == "" then
         error("Admin secret key not set! Use /hca adminkey set <key> first")
@@ -857,4 +857,12 @@ function AdminCommandHandler.CreateAdminPayload(targetCharacter, achievementId, 
     end
     
     return payload
+end
+
+AdminCommandHandler.CreateAdminPayload = CreateAdminPayload
+
+if addon then
+    addon.AdminCommandHandler = AdminCommandHandler
+    addon.SendPreciousCompletionMessage = SendPreciousCompletionMessage
+    addon.RegisterPreciousCompletionCallback = RegisterPreciousCompletionCallback
 end

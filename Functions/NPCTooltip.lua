@@ -1,5 +1,13 @@
--- Functions/NPCTooltip.lua
--- Adds achievement requirement information to NPC tooltips
+local addonName, addon = ...
+local GameTooltip = GameTooltip
+local UnitGUID = UnitGUID
+local strsplit = strsplit
+local CreateFrame = CreateFrame
+local select = select
+local tonumber = tonumber
+local pairs = pairs
+local type = type
+local table_insert = table.insert
 
 local function GetNPCIdFromGUID(guid)
     if not guid then return nil end
@@ -13,9 +21,9 @@ local function GetAchievementsForNPC(npcId)
     
     local achievements = {}
     
-    -- Check HCA_AchievementDefs (all achievement types: quest, dungeon, raid)
-    if _G.HCA_AchievementDefs then
-        for achId, achDef in pairs(_G.HCA_AchievementDefs) do
+    -- Check AchievementDefs (all achievement types: quest, dungeon, raid)
+    if addon and addon.AchievementDefs then
+        for achId, achDef in pairs(addon.AchievementDefs) do
             -- Skip variations (Solo, Duo, Trio) - only show base achievements
             if not achDef.isVariation then
                 local found = false
@@ -58,7 +66,7 @@ local function GetAchievementsForNPC(npcId)
                 end
                 
                 if found then
-                    table.insert(achievements, {
+                    table_insert(achievements, {
                         achId = achId,
                         title = achDef.title or achDef.mapName or tostring(achId)
                     })
@@ -107,9 +115,7 @@ frame:RegisterEvent("ADDON_LOADED")
 frame:SetScript("OnEvent", function(self, event, addonName)
     if addonName == "HardcoreAchievements" then
         -- Hook after a short delay to ensure GameTooltip is ready
-        C_Timer.After(0.5, function()
             HookNPCTooltip()
-        end)
         self:UnregisterEvent("ADDON_LOADED")
     end
 end)

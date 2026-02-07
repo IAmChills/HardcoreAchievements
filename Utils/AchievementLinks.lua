@@ -3,21 +3,39 @@
 
 local HCA_LINK_PREFIX = "hcaach"
 
+local addonName, addon = ...
+local GetAchievementDisplayValues = (addon and addon.GetAchievementDisplayValues)
+local GuildFirst = (addon and addon.GuildFirst)
+local GuildFirst_DefById = addon and addon.GuildFirst_DefById
+local UnitGUID = UnitGUID
+local UnitName = UnitName
+local UnitLevel = UnitLevel
+local GetItemCount = GetItemCount
+local ShowUIPanel = ShowUIPanel
+local table_insert = table.insert
+local table_sort = table.sort
+local table_concat = table.concat
+local string_format = string.format
+
 local function GetAchievementById(achId)
-	if _G.Achievements then
-		for _, rec in ipairs(_G.Achievements) do
+	if addon and addon.CatalogAchievements then
+		for _, rec in ipairs(addon.CatalogAchievements) do
 			if tostring(rec.achId) == tostring(achId) then
 				return rec
 			end
 		end
 	end
 	-- Fallback to dungeon/other defs registry if present
-	if _G.HCA_AchievementDefs and _G.HCA_AchievementDefs[tostring(achId)] then
-		return _G.HCA_AchievementDefs[tostring(achId)]
+	if addon and addon.AchievementDefs and addon.AchievementDefs[tostring(achId)] then
+		return addon.AchievementDefs[tostring(achId)]
+	end
+	-- Guild-first achievements (from GuildFirstCatalog)
+	if GuildFirst_DefById and GuildFirst_DefById[tostring(achId)] then
+		return GuildFirst_DefById[tostring(achId)]
 	end
 	-- Check achievement panel rows for reputation and dungeon set achievements
-	if _G.AchievementPanel and _G.AchievementPanel.achievements then
-		for _, row in ipairs(_G.AchievementPanel.achievements) do
+	if (addon and addon.AchievementPanel) and (addon and addon.AchievementPanel).achievements then
+		for _, row in ipairs((addon and addon.AchievementPanel).achievements) do
 			local rowId = row.id or row.achId
 			if rowId and tostring(rowId) == tostring(achId) then
 				-- Return the definition from row._def if available, or construct from row data
@@ -39,17 +57,28 @@ local function GetAchievementById(achId)
 	return nil
 end
 
+--- Guild-first achievements use secret/hiddenUntilComplete in the UI but should never show secret placeholders when linked in chat.
+local function IsGuildFirstAchievement(achId)
+	return GuildFirst_DefById and GuildFirst_DefById[tostring(achId or "")]
+end
+
 local function ViewerHasCompletedAchievement(achId)
     local key = tostring(achId)
-    local getDB = _G.HardcoreAchievements_GetCharDB
+    -- Guild-first achievements: completion is "claimed by me" in the guild-first DB
+    if GuildFirst_DefById and GuildFirst_DefById[key] and GuildFirst and type(GuildFirst.IsClaimedByMe) == "function" then
+        if GuildFirst:IsClaimedByMe(key) then
+            return true
+        end
+    end
+    local getDB = addon and addon.GetCharDB
     if type(getDB) == "function" then
         local _, cdb = getDB()
         if cdb and cdb.achievements and cdb.achievements[key] and cdb.achievements[key].completed then
             return true
         end
     end
-    if _G.AchievementPanel and _G.AchievementPanel.achievements then
-        for _, row in ipairs(_G.AchievementPanel.achievements) do
+    if (addon and addon.AchievementPanel) and (addon and addon.AchievementPanel).achievements then
+        for _, row in ipairs((addon and addon.AchievementPanel).achievements) do
             if tostring(row.id) == key and row.completed then
                 return true
             end
@@ -58,20 +87,33 @@ local function ViewerHasCompletedAchievement(achId)
     return false
 end
 
--- Public: build a bracket format string for chat (used before chat filter converts to hyperlink)
+-- Build a bracket format string for chat (used before chat filter converts to hyperlink)
 -- Format: [HCA:(achId)] - icon, points, and other data are looked up locally on receiver's end
-function HCA_GetAchievementBracket(achId)
-    return string.format("[HCA:(%s)]", tostring(achId))
+local function GetAchievementBracket(achId)
+	-- For some achievements, the title is player-specific (e.g., includes the sender's name).
+	-- In those cases, send an expanded bracket form so receivers don't recompute a different title locally.
+	-- Pattern handled by ChatFilter_HCA below: [HCA: Title (achId)]
+	local rec = GetAchievementById(achId)
+	if rec and rec.linkUsesSenderTitle and rec.title then
+		return string_format("[HCA: %s (%s)]", tostring(rec.title), tostring(achId))
+	end
+	return string_format("[HCA:(%s)]", tostring(achId))
 end
 
 -- Public: build a hyperlink string for an achievement id and title
 -- Icon and other data are looked up locally on the receiver's end using the achId
-function HCA_GetAchievementHyperlink(achId, title)
-    local sender = UnitGUID("player") or ""
-    local display = string.format("[%s]", tostring(title or achId))
-    -- Format: |Hhcaach:achId:sender|h[Title]|h
-    -- Icon, points, and other data are always looked up locally on the receiver's end
-    return "|cffffd100" .. string.format("|H%s:%s:%s|h%s|h", HCA_LINK_PREFIX, tostring(achId), tostring(sender), display) .. "|r"
+local function GetAchievementHyperlink(achId, title, senderName, senderGuid)
+	-- We intentionally do NOT encode icon/points in the link; those are always looked up locally.
+	-- We do include sender identity metadata so certain achievements can render a sender-stable title
+	local guid = senderGuid
+	if guid == nil then
+		guid = UnitGUID("player") or ""
+	end
+	local name = senderName or ""
+	local display = string_format("[%s]", tostring(title or achId))
+	-- Format (v2): |Hhcaach:achId:senderGuid:senderName|h[Title]|h
+	-- Backwards compatible with v1: hcaach:achId:senderGuid
+	return "|cffffd100" .. string_format("|H%s:%s:%s:%s|h%s|h", HCA_LINK_PREFIX, tostring(achId), tostring(guid), tostring(name), display) .. "|r"
 end
 
 -- Tooltip rendering for our custom link
@@ -79,46 +121,88 @@ local Old_ItemRef_SetHyperlink = ItemRefTooltip and ItemRefTooltip.SetHyperlink
 if Old_ItemRef_SetHyperlink then
 	ItemRefTooltip.SetHyperlink = function(self, link, ...)
         local linkStr = tostring(link or "")
-        -- Extract hyperlink part (between |H and |h) or use the whole string if no |H wrapper
-        local hyperlinkPart = string.match(linkStr, "^%|H([^|]+)%|h") or linkStr
-        -- Parse link format: hcaach:achId:sender
+		-- Extract the visible title from the link text (between |h[ and ]|h) if present.
+		-- This is what was shown in chat, and is sender-stable when the sender provided it.
+		local displayTitleFromLink = string.match(linkStr, "%|h%[([^%]]-)%]%|h")
+        -- Extract hyperlink part (between |H and |h); link may start with |cAARRGGBB color code
+        local hyperlinkPart = string.match(linkStr, "%|H([^|]+)%|h") or linkStr
+        -- Parse link format:
+		-- v1: hcaach:achId:senderGuid
+		-- v2: hcaach:achId:senderGuid:senderName
         -- Icon, points, and other data are always looked up locally, never from the link
-        local prefix, achId, sender = string.match(hyperlinkPart, "^(%w+):([^:]+):?(.*)$")
+		local prefix, achId, rest = string.match(hyperlinkPart, "^(%w+):([^:]+):?(.*)$")
+		local senderGuid, senderName = "", ""
+		if rest and rest ~= "" then
+			-- Split rest into guid and optional name
+			senderGuid, senderName = string.match(rest, "^([^:]*):?(.*)$")
+			senderGuid = senderGuid or ""
+			senderName = senderName or ""
+		end
         if prefix == HCA_LINK_PREFIX and achId then
             ShowUIPanel(ItemRefTooltip)
 			ItemRefTooltip:SetOwner(UIParent, "ANCHOR_PRESERVE")
 			ItemRefTooltip:ClearLines()
 
             local rec = GetAchievementById(achId)
-            local title = rec and rec.title or ("Achievement " .. tostring(achId))
-            local tooltip = rec and rec.tooltip or ""
-            local icon = 136116  -- Default fallback icon
-            local points = 0
-
-            -- Per-viewer secrecy: if secret and viewer hasn't completed, show secret placeholders
-            local isSecret = rec and rec.secret
             local viewerCompleted = ViewerHasCompletedAchievement(achId)
-            local usingSecretPoints = false
-            if isSecret and not viewerCompleted then
-                title = (rec and rec.secretTitle) or "Secret"
-                tooltip = (rec and rec.secretTooltip) or "Hidden"
-                icon = (rec and rec.secretIcon) or icon
-                points = (rec and tonumber(rec.secretPoints)) or 0
-                usingSecretPoints = true
+            local skipSecrecy = IsGuildFirstAchievement(achId)
+            -- Use centralized display logic: client-side per-viewer secrecy
+            local icon, title, tooltip, points
+            if GetAchievementDisplayValues and rec then
+                icon, title, tooltip, points = GetAchievementDisplayValues(rec, {
+                    useSourceCompletion = false,
+                    viewerCompleted = viewerCompleted,
+                    skipSecrecy = skipSecrecy,
+                })
             else
-                -- Always use icon from local achievement data (client-side lookup)
-                if rec and rec.icon then
-                    icon = rec.icon
-                end
+                icon = rec and rec.icon or 136116
+                title = rec and rec.title or ("Achievement " .. tostring(achId))
+                tooltip = rec and rec.tooltip or ""
+                points = rec and tonumber(rec.points) or 0
             end
 
+			-- Sender-stable title override for player-specific titles:
+			-- if the achievement opts in, prefer the visible title from the link text itself.
+			-- This avoids recomputing titles locally (which can depend on the viewer).
+			if rec and rec.linkUsesSenderTitle and displayTitleFromLink and displayTitleFromLink ~= "" then
+				title = displayTitleFromLink
+			end
+			-- If we don't have the visible title text (some hyperlink call sites pass only "hcaach:..."),
+			-- allow an achievement to compute a sender-stable title from sender identity.
+			-- Define `def.linkTitle = function(senderName, senderGuid, displayTitleFromLink) return "..." end`.
+			if rec and rec.linkUsesSenderTitle and (not displayTitleFromLink or displayTitleFromLink == "") and type(rec.linkTitle) == "function" then
+				local ok, linkTitle = pcall(rec.linkTitle, senderName, senderGuid, displayTitleFromLink)
+				if ok and type(linkTitle) == "string" and linkTitle ~= "" then
+					title = linkTitle
+				end
+			end
+
+            local usingSecretPoints = (rec and (rec.secret or rec.secretTitle) and not skipSecrecy and not viewerCompleted)
+			-- Sender-stable tooltip override (only when the viewer is allowed to see the real tooltip).
+			-- Define `def.linkTooltip = function(senderName, senderGuid) return "..." end` on an achievement.
+			-- Prefer sender name from link payload; fallback: extract from displayTitleFromLink for "X the Keeper" style.
+			local tooltipSenderName = (senderName and senderName ~= "") and senderName or nil
+			if not tooltipSenderName and displayTitleFromLink and displayTitleFromLink ~= "" and rec and rec.linkUsesSenderTitle then
+				local extracted = displayTitleFromLink:match("^(.+) the Keeper$")
+				if extracted and extracted ~= "" then
+					tooltipSenderName = extracted
+				end
+			end
+			-- Always use linkTooltip when defined (it produces sender-stable tooltip; pass senderName or "" if unknown)
+			if (not usingSecretPoints) and rec and type(rec.linkTooltip) == "function" then
+				local ok, linkTip = pcall(rec.linkTooltip, tooltipSenderName or "", senderGuid or "")
+				if ok and type(linkTip) == "string" and linkTip ~= "" then
+					tooltip = linkTip
+				end
+			end
+
             -- Always use local points, ignore sender's points from the link
-            -- Only set points if we're not using secret points (which were already set above)
+            -- For non-secret: prefer row points (multiplier-calculated) over def base points
             if not usingSecretPoints then
                 -- First try to get points from the achievement row (calculated with multipliers)
                 local rowPoints = nil
-                if _G.AchievementPanel and _G.AchievementPanel.achievements then
-                    for _, row in ipairs(_G.AchievementPanel.achievements) do
+                if (addon and addon.AchievementPanel) and (addon and addon.AchievementPanel).achievements then
+                    for _, row in ipairs((addon and addon.AchievementPanel).achievements) do
                         if tostring(row.id) == tostring(achId) or tostring(row.achId) == tostring(achId) then
                             rowPoints = row.points
                             break
@@ -137,7 +221,7 @@ if Old_ItemRef_SetHyperlink then
             end
 
 			-- Title line with icon texture escape (valid in tooltips)
-			local iconTag = type(icon) == "number" and string.format("|T%d:24:24|t", icon) or string.format("|T%s:24:24|t", tostring(icon))
+			local iconTag = type(icon) == "number" and string_format("|T%d:24:24|t", icon) or string_format("|T%s:24:24|t", tostring(icon))
 			ItemRefTooltip:AddLine(iconTag .. "  " .. title, 1, 0.82, 0)
 			if tooltip and tooltip ~= "" then
 				ItemRefTooltip:AddLine(tooltip, 0.9, 0.9, 0.9, true)
@@ -150,27 +234,27 @@ if Old_ItemRef_SetHyperlink then
 				showedDungeonDetails = true
 				ItemRefTooltip:AddLine(" ")
 				ItemRefTooltip:AddLine("Required Bosses:", 0, 1, 0)
-				local progressFn = _G.HardcoreAchievements_GetProgress
+				local progressFn = addon and addon.GetProgress
 				local progress = progressFn and progressFn(rec.achId) or nil
 				local counts = (progress and progress.counts) or {}
 				
 				-- Determine which boss name function to use (raid vs dungeon)
 				local isRaid = rec.isRaid or false
-				local getBossNameFn = isRaid and _G.HCA_GetRaidBossName or _G.HCA_GetBossName
+				local getBossNameFn = isRaid and (addon and addon.GetRaidBossName) or (addon and addon.GetBossName)
 				
 				-- Use bossOrder if available (for raids), otherwise build sorted list
 				local keys = {}
 				if rec.bossOrder and next(rec.bossOrder) ~= nil then
 					-- Use provided boss order
 					for _, npcId in ipairs(rec.bossOrder) do
-						table.insert(keys, npcId)
+						table_insert(keys, npcId)
 					end
 				else
 					-- Build sorted list of boss IDs for stable order
 					for npcId, _ in pairs(rec.requiredKills) do 
-						table.insert(keys, npcId) 
+						table_insert(keys, npcId) 
 					end
-					table.sort(keys, function(a, b)
+					table_sort(keys, function(a, b)
 						local aa = tonumber(a) or 0
 						local bb = tonumber(b) or 0
 						return aa < bb
@@ -209,9 +293,9 @@ if Old_ItemRef_SetHyperlink then
 							local bossNames = {}
 							for _, id in ipairs(need) do
 								local name = (getBossNameFn and getBossNameFn(id)) or ("Boss " .. tostring(id))
-								table.insert(bossNames, name)
+								table_insert(bossNames, name)
 							end
-							bossName = table.concat(bossNames, " / ")
+							bossName = table_concat(bossNames, " / ")
 							-- Check if any has been killed
 							for _, id in ipairs(need) do
 								local idNumCheck = tonumber(id) or id
@@ -238,7 +322,7 @@ if Old_ItemRef_SetHyperlink then
 				showedDungeonSetDetails = true
 				ItemRefTooltip:AddLine(" ")
 				ItemRefTooltip:AddLine("Required Items:", 0, 1, 0)
-				local progressFn = _G.HardcoreAchievements_GetProgress
+				local progressFn = addon and addon.GetProgress
 				local progress = progressFn and progressFn(rec.achId) or nil
 				local itemOwned = (progress and progress.itemOwned) or {}
 				local isCompleted = ViewerHasCompletedAchievement(achId)
@@ -260,29 +344,27 @@ if Old_ItemRef_SetHyperlink then
 						owned = true
 					end
 					
-					local itemName = _G.HCA_GetItemName and _G.HCA_GetItemName(itemId) or ("Item " .. tostring(itemId))
+					local itemName = addon and addon.GetItemName and addon.GetItemName(itemId) or ("Item " .. tostring(itemId))
 					local lr, lg, lb = owned and 1 or 0.5, owned and 1 or 0.5, owned and 1 or 0.5
 					ItemRefTooltip:AddLine(itemName, lr, lg, lb)
 				end
 			end
 
             -- Non-dungeon: Zone only (points shown with completion status)
+            -- Do not use mapName/mapID here - they often fall back to title; avoid showing title in zone slot
             if not showedDungeonDetails and not showedDungeonSetDetails then
                 local zoneText
                 if rec then
-                    if type(rec.zone) == "string" then
+                    if type(rec.zone) == "string" and rec.zone ~= "" then
                         zoneText = rec.zone
-                    elseif type(rec.zoneName) == "string" then
+                    elseif type(rec.zoneName) == "string" and rec.zoneName ~= "" then
                         zoneText = rec.zoneName
-                    elseif type(rec.zoneText) == "string" then
+                    elseif type(rec.zoneText) == "string" and rec.zoneText ~= "" then
                         zoneText = rec.zoneText
-                    elseif rec.mapName then
-                        zoneText = tostring(rec.mapName)
-                    elseif rec.mapID then
-                        zoneText = tostring(rec.mapID)
                     end
                 end
-                if zoneText and zoneText ~= "" then
+                -- Skip if zoneText equals title (e.g. mapName fallback) - don't show title in zone slot
+                if zoneText and zoneText ~= "" and zoneText ~= title then
                     ItemRefTooltip:AddLine(zoneText, 0.412, 0.678, 0.788)
                 end
             end
@@ -294,8 +376,8 @@ if Old_ItemRef_SetHyperlink then
             if not isCompleted then
                 -- Look up the row from AchievementPanel to get maxLevel
                 local row = nil
-                if _G.AchievementPanel and _G.AchievementPanel.achievements then
-                    for _, r in ipairs(_G.AchievementPanel.achievements) do
+                if (addon and addon.AchievementPanel) and (addon and addon.AchievementPanel).achievements then
+                    for _, r in ipairs((addon and addon.AchievementPanel).achievements) do
                         if tostring(r.id) == tostring(achId) or tostring(r.achId) == tostring(achId) then
                             row = r
                             break
@@ -320,7 +402,7 @@ if Old_ItemRef_SetHyperlink then
                 statusR, statusG, statusB = 0.5, 0.5, 0.5  -- Gray
             end
             
-            local pointsText = (points and points > 0) and string.format("%d pts", points) or ""
+            local pointsText = (points and points > 0) and string_format("%d pts", points) or ""
             ItemRefTooltip:AddDoubleLine(statusText, pointsText, statusR, statusG, statusB, 0.7, 0.9, 0.7)
             
 			ItemRefTooltip:Show()
@@ -330,60 +412,77 @@ if Old_ItemRef_SetHyperlink then
 	end
 end
 
--- Optional: Convert bracketed fallback text to hyperlink for receivers without direct link
--- Pattern: [HCA: Title (achId)] -> |Hhcaach:achId:GUID|h[Title]|h
-local function EscapePattern(s)
-	return (s
-		:gsub("%%", "%%%%")
-		:gsub("^%^", "%%^")
-		:gsub("%$", "%%$")
-		:gsub("%(", "%%(")
-		:gsub("%)", "%%)")
-		:gsub("%.", "%%.")
-		:gsub("%[", "%%[")
-		:gsub("%]", "%%]")
-		:gsub("%*", "%%*")
-		:gsub("%+", "%%+")
-		:gsub("%-", "%%-")
-		:gsub("%?", "%%?")
-		:gsub("%|", "%%|")
-	)
-end
-
-local function ChatFilter_HCA(chatFrame, _, msg, ...)
+local function ChatFilter_HCA(chatFrame, event, msg, author, ...)
     if not msg or type(msg) ~= "string" then return end
     local changed = false
+	-- ChatFrame_AddMessageEventFilter passes (self, event, msg, author, ...)
+	local authorName = ""
+	if type(author) == "string" and author ~= "" then
+		-- Strip realm if present (Name-Realm)
+		authorName = (author:match("^([^-]+)")) or author
+	end
+	-- For *_INFORM events (your outgoing whispers), `author` is the recipient, not the sender.
+	-- For link metadata we want the *sender/completer* name so tooltips render correctly on both sides.
+	local senderNameForLink = authorName
+	if event == "CHAT_MSG_WHISPER_INFORM" or event == "CHAT_MSG_BN_WHISPER_INFORM" then
+		local me = UnitName("player")
+		if type(me) == "string" and me ~= "" then
+			senderNameForLink = (me:match("^([^-]+)")) or me
+		end
+	end
     local function ViewerHasCompleted(id)
         return ViewerHasCompletedAchievement(id)
     end
     -- Extended form with title: [HCA: Title (id)]
+    -- Title from message is sender-stable; prefer it for linkUsesSenderTitle
     msg = msg:gsub("%[HCA:%s*(.-)%s*%(([^%)]+)%)%]", function(title, id)
         local rec = GetAchievementById(id)
         local displayTitle
-        if rec and rec.secret and not ViewerHasCompleted(id) then
-            displayTitle = rec.secretTitle or "Secret"
+        if rec and rec.linkUsesSenderTitle and title and title ~= "" then
+            displayTitle = title
+        elseif rec and rec.linkUsesSenderTitle and senderNameForLink ~= "" and type(rec.linkTitle) == "function" then
+            local ok, linkTitle = pcall(rec.linkTitle, senderNameForLink, "", title)
+            displayTitle = (ok and type(linkTitle) == "string" and linkTitle ~= "") and linkTitle or (rec.title or tostring(id))
+        elseif GetAchievementDisplayValues and rec then
+            local _, linkTitle = GetAchievementDisplayValues(rec, {
+                useSourceCompletion = false,
+                viewerCompleted = ViewerHasCompleted(id),
+                skipSecrecy = IsGuildFirstAchievement(id),
+            })
+            displayTitle = linkTitle
         else
-            displayTitle = (rec and rec.title) or title
+            displayTitle = (rec and rec.title) or tostring(id)
         end
-        local link = HCA_GetAchievementHyperlink(id, displayTitle)
+        local link = GetAchievementHyperlink(id, displayTitle, senderNameForLink)
         changed = true
         return link
     end)
     -- Compact form without title: [HCA:(id)]
+    -- For linkUsesSenderTitle: use linkTitle(senderNameForLink) so all viewers see sender's name
     msg = msg:gsub("%[HCA:%s*%(([^%)]+)%)%]", function(id)
         local rec = GetAchievementById(id)
         local displayTitle
-        if rec and rec.secret and not ViewerHasCompleted(id) then
-            displayTitle = rec.secretTitle or "Secret"
+        if rec and rec.linkUsesSenderTitle and senderNameForLink ~= "" and type(rec.linkTitle) == "function" then
+            local ok, linkTitle = pcall(rec.linkTitle, senderNameForLink, "", nil)
+            displayTitle = (ok and type(linkTitle) == "string" and linkTitle ~= "") and linkTitle or (rec.title or tostring(id))
+        elseif GetAchievementDisplayValues and rec then
+            local _, linkTitle = GetAchievementDisplayValues(rec, {
+                useSourceCompletion = false,
+                viewerCompleted = ViewerHasCompleted(id),
+                skipSecrecy = IsGuildFirstAchievement(id),
+            })
+            displayTitle = linkTitle
         else
             displayTitle = (rec and rec.title) or tostring(id)
         end
-        local link = HCA_GetAchievementHyperlink(id, displayTitle)
+        local link = GetAchievementHyperlink(id, displayTitle, senderNameForLink)
         changed = true
         return link
     end)
     if changed then
-        return false, msg, ...
+        -- IMPORTANT: since we took `author` as a named parameter, we must return it explicitly,
+        -- otherwise WoW chat will mis-handle the message (can appear as if the link didn't send).
+        return false, msg, author, ...
     end
 end
 
@@ -404,4 +503,7 @@ if ChatFrame_AddMessageEventFilter then
 	ChatFrame_AddMessageEventFilter("CHAT_MSG_CHANNEL", ChatFilter_HCA)
 end
 
-
+if addon then
+	addon.GetAchievementBracket = GetAchievementBracket
+	addon.GetAchievementHyperlink = GetAchievementHyperlink
+end

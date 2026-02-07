@@ -1,16 +1,52 @@
-local ADDON_NAME, addon = ...
+local addonName, addon = ...
 local playerGUID
--- Legacy constant (historically a flat +5). Kept for backwards-compat, but no longer used in point math.
-HCA_SELF_FOUND_BONUS = HCA_SELF_FOUND_BONUS or 5
-
+local UnitLevel = UnitLevel
+local UnitClass = UnitClass
+local UnitGUID = UnitGUID
+local UnitName = UnitName
+local UnitExists = UnitExists
+local UnitFactionGroup = UnitFactionGroup
+local UnitAffectingCombat = UnitAffectingCombat
+local GetTime = GetTime
+local time = time
+local GetLocale = GetLocale
+local CreateFrame = CreateFrame
+local C_Timer = C_Timer
+local hooksecurefunc = hooksecurefunc
+local IsShiftKeyDown = IsShiftKeyDown
+local InCombatLockdown = InCombatLockdown
+local GetPresetMultiplier = (addon and addon.GetPresetMultiplier)
+local PlayerIsSolo_UpdateStatusForGUID = (addon and addon.PlayerIsSolo_UpdateStatusForGUID)
+local Profession = (addon and addon.Profession)
+local RefreshAllAchievementPoints = (addon and addon.RefreshAllAchievementPoints)
+local ShowAchievementTooltip = (addon and addon.ShowAchievementTooltip)
+local GetAchievementBracket = (addon and addon.GetAchievementBracket)
+local IsSelfFound = (addon and addon.IsSelfFound)
+local ShowAchievementTab = (addon and addon.ShowAchievementTab)
+local GetClassColor = (addon and addon.GetClassColor())
+local table_insert = table.insert
+local table_remove = table.remove
+local table_sort = table.sort
+local string_format = string.format
 local EvaluateCustomCompletions
 local RefreshOutleveledAll
-local ProfessionTracker = _G.HCA_ProfessionCommon
+local LoadTabPosition
 local QuestTrackedRows = {}
+
+-- True while we're doing the initial registration + post-login heavy operations.
+-- Used to suppress redundant UI recalculations (sorting/points/status) until the end of the initial load.
+if addon then
+    addon.Initializing = false
+    addon.AchievementRowModel = addon.AchievementRowModel or {}
+end
 
 -- Flag to track when achievement restorations from DB are complete
 -- Must be declared early so CheckPendingCompletions and EvaluateCustomCompletions can access it
 local restorationsComplete = false
+-- Forward declaration so CheckPendingCompletions can call it before the full definition
+local CreateAchToast
+-- When true, MarkRowCompleted skips emote/guild broadcast (first run after login = retroactive completions)
+local skipBroadcastForRetroactive = false
 
 -- Achievement function registry to reduce global pollution
 local AchievementFunctionRegistry = {}
@@ -28,9 +64,34 @@ local function GetAchievementFunction(achId, funcType)
     return achFuncs and achFuncs[funcType] or nil
 end
 
--- Export registry functions globally for use by catalog files
-_G.HardcoreAchievements_RegisterAchievementFunction = RegisterAchievementFunction
-_G.HardcoreAchievements_GetAchievementFunction = GetAchievementFunction
+-- Custom achievement handlers (Kill/IsCompleted) for catalogs that register without Common
+local CustomAchievementHandlers = {}
+
+local function RegisterCustomAchievement(achId, killFn, isCompletedFn)
+    if not achId then return end
+    CustomAchievementHandlers[achId] = CustomAchievementHandlers[achId] or {}
+    if killFn then CustomAchievementHandlers[achId].Kill = killFn end
+    if isCompletedFn then CustomAchievementHandlers[achId].IsCompleted = isCompletedFn end
+end
+
+local function GetCustomIsCompleted(achId)
+    local h = achId and CustomAchievementHandlers[achId]
+    return h and h.IsCompleted or nil
+end
+
+local function GetCustomKill(achId)
+    local h = achId and CustomAchievementHandlers[achId]
+    return h and h.Kill or nil
+end
+
+if addon then
+    addon.GetAchievementFunction = GetAchievementFunction
+    addon.RegisterAchievementFunction = RegisterAchievementFunction
+    addon.RegisterCustomAchievement = RegisterCustomAchievement
+    addon.GetCustomIsCompleted = GetCustomIsCompleted
+    addon.GetCustomKill = GetCustomKill
+    addon.RegistrationQueue = addon.RegistrationQueue or {}
+end
 
 -- =========================================================
 -- Hook System for Addon Integration
@@ -62,7 +123,7 @@ function HookSystem:HookScript(eventName, callback)
         return
     end
     self.hooks[eventName] = self.hooks[eventName] or {}
-    table.insert(self.hooks[eventName], callback)
+    table_insert(self.hooks[eventName], callback)
 end
 
 -- Fire event
@@ -74,13 +135,21 @@ function HookSystem:FireEvent(eventName, ...)
         local success, err = pcall(callback, ...)
         if not success then
             -- Log error
-            HCA_DebugPrint("Error in hook callback: " .. tostring(err))
+            if addon and addon.DebugPrint then addon.DebugPrint("Error in hook callback: " .. tostring(err)) end
         end
+    end
+
+    -- When called outside the initial load flow, refresh sorting/points/outleveled.
+    -- During initial load, these are handled once at the end to avoid extra work.
+    if not (addon and addon.Initializing) then
+        if SortAchievementRows then SortAchievementRows() end
+        if addon and addon.UpdateTotalPoints then addon.UpdateTotalPoints() end
+        if RefreshOutleveledAll then RefreshOutleveledAll() end
     end
 end
 
 -- Expose hook system
-_G.HardcoreAchievements_Hooks = HookSystem
+if addon then addon.Hooks = HookSystem end
 
 -- =========================================================
 -- Self-Found points bonus
@@ -92,18 +161,13 @@ local function GetSelfFoundBonus(basePoints)
     return math.floor((bp * 0.5) + 0.5)
 end
 
-_G.HCA_GetSelfFoundBonus = GetSelfFoundBonus
-
--- Load AchievementTracker module (loaded via TOC, accessed lazily)
-local function GetAchievementTracker()
-    return _G.HardcoreAchievementsTracker
-end
+if addon then addon.GetSelfFoundBonus = GetSelfFoundBonus end
 
 local function TrackRowForQuest(row, questID)
     local qid = tonumber(questID or row and row.requiredQuestId)
     if not qid or not row then return end
     QuestTrackedRows[qid] = QuestTrackedRows[qid] or {}
-    table.insert(QuestTrackedRows[qid], row)
+    table_insert(QuestTrackedRows[qid], row)
     row.requiredQuestId = qid
 end
 
@@ -114,7 +178,7 @@ local function UntrackRowForQuest(row)
     if not bucket then return end
     for i = #bucket, 1, -1 do
         if bucket[i] == row or not bucket[i] then
-            table.remove(bucket, i)
+            table_remove(bucket, i)
         end
     end
     if #bucket == 0 then
@@ -122,16 +186,14 @@ local function UntrackRowForQuest(row)
     end
 end
 
--- Create/initialize addon table and expose globally (similar to BugSack pattern)
-if not addon then
-    addon = {}
-end
-_G[ADDON_NAME] = addon
-
 local function EnsureDB()
-    HardcoreAchievementsDB = HardcoreAchievementsDB or {}
-    HardcoreAchievementsDB.chars = HardcoreAchievementsDB.chars or {}
-    return HardcoreAchievementsDB
+    if not addon then return nil end
+    if type(HardcoreAchievementsDB) ~= "table" then
+        HardcoreAchievementsDB = {}
+    end
+    addon.HardcoreAchievementsDB = HardcoreAchievementsDB
+    addon.HardcoreAchievementsDB.chars = addon.HardcoreAchievementsDB.chars or {}
+    return addon.HardcoreAchievementsDB
 end
 
 local function GetCharDB()
@@ -170,7 +232,7 @@ local function CleanupIncorrectLevelAchievements()
                 -- If the completion level doesn't match the required level, remove it
                 if completionLevel < requiredLevel then
                     -- Store for logging
-                    table.insert(cleanedAchievements, {
+                    table_insert(cleanedAchievements, {
                         achId = achId,
                         requiredLevel = requiredLevel,
                         completionLevel = completionLevel
@@ -189,7 +251,7 @@ local function CleanupIncorrectLevelAchievements()
         local message = "|cff008066[Hardcore Achievements]|r |cffffd100Cleaned up " .. cleanedCount .. " incorrectly completed achievement(s):|r"
         print(message)
         for _, cleaned in ipairs(cleanedAchievements) do
-            print(string.format("  |cffffd100- %s (completed at level %d, required level %d)|r", 
+            print(string_format("  |cffffd100- %s (completed at level %d, required level %d)|r", 
                 cleaned.achId, cleaned.completionLevel, cleaned.requiredLevel))
         end
         --print("|cffffd100I am chasing a weird bug, thank you for your patience. - |r|cff008066Chills|r")
@@ -198,296 +260,6 @@ local function CleanupIncorrectLevelAchievements()
     return cleanedCount
 end
 
--- DELETE ME AFTER SOME TIME IF YOU WANT
--- Cleanup function to fix incorrectly failed meta achievements
--- Fixes a bug where meta achievements were marked as failed when dungeon achievements
--- were incorrectly marked as failed due to leveling up inside dungeons
-local function CleanupIncorrectlyFailedMetaAchievements()
-    local _, cdb = GetCharDB()
-    if not cdb or not cdb.achievements then
-        return
-    end
-    
-    -- Need AchievementPanel to be loaded to check IsRowOutleveled
-    if not _G.AchievementPanel or not _G.AchievementPanel.achievements then
-        return
-    end
-    
-    if not _G.HCA_AchievementDefs then
-        return
-    end
-    
-    -- Step 1: Collect all failed meta achievements and build dependency graph
-    local failedMetaAchievements = {}
-    local metaDependencies = {} -- Maps achId -> array of meta achievement IDs it depends on
-    
-    for achId, achievementData in pairs(cdb.achievements) do
-        -- Only check meta achievements (marked as failed but not completed)
-        if achId and achievementData.failed and not achievementData.completed then
-            local achDef = _G.HCA_AchievementDefs[tostring(achId)]
-            if achDef and achDef.isMetaAchievement and achDef.requiredAchievements then
-                table.insert(failedMetaAchievements, {
-                    achId = tostring(achId),
-                    data = achievementData,
-                    def = achDef
-                })
-                
-                -- Build dependency list (only include meta achievements)
-                local metaDeps = {}
-                for _, reqAchId in ipairs(achDef.requiredAchievements) do
-                    local reqAchDef = _G.HCA_AchievementDefs[tostring(reqAchId)]
-                    if reqAchDef and reqAchDef.isMetaAchievement then
-                        table.insert(metaDeps, tostring(reqAchId))
-                    end
-                end
-                metaDependencies[tostring(achId)] = metaDeps
-            end
-        end
-    end
-    
-    if #failedMetaAchievements == 0 then
-        return 0
-    end
-    
-    -- Step 2: Topologically sort meta achievements (process dependencies first)
-    -- Use Kahn's algorithm: process achievements with no unmet dependencies
-    local sortedAchievements = {}
-    local processed = {}
-    local remaining = {}
-    for _, meta in ipairs(failedMetaAchievements) do
-        remaining[meta.achId] = meta
-    end
-    
-    local function hasUnmetDependencies(achId)
-        local deps = metaDependencies[achId] or {}
-        for _, depId in ipairs(deps) do
-            -- Check if dependency is in remaining (not yet processed)
-            if remaining[depId] then
-                return true
-            end
-        end
-        return false
-    end
-    
-    -- Process in dependency order
-    local changed = true
-    while changed and next(remaining) do
-        changed = false
-        for achId, meta in pairs(remaining) do
-            if not hasUnmetDependencies(achId) then
-                -- All dependencies are processed (or this has no meta dependencies)
-                table.insert(sortedAchievements, meta)
-                remaining[achId] = nil
-                changed = true
-            end
-        end
-    end
-    
-    -- Add any remaining (circular dependencies or orphaned) at the end
-    for _, meta in pairs(remaining) do
-        table.insert(sortedAchievements, meta)
-    end
-    
-    -- Step 3: Process achievements in sorted order
-    local fixedCount = 0
-    local fixedAchievements = {}
-    
-    for _, meta in ipairs(sortedAchievements) do
-        local achId = meta.achId
-        local achievementData = meta.data
-        local achDef = meta.def
-        
-        -- Check if all required achievements are actually available
-        local allRequiredAvailable = true
-        local anyRequiredFailed = false
-        
-        -- Check each required achievement
-        for _, reqAchId in ipairs(achDef.requiredAchievements) do
-            local reqAchDef = _G.HCA_AchievementDefs[tostring(reqAchId)]
-            if reqAchDef then
-                local reqData = cdb.achievements[tostring(reqAchId)]
-                
-                -- Check if required achievement is completed (if so, it's fine)
-                if reqData and reqData.completed then
-                    -- This required achievement is completed, so it's available for the meta
-                    -- Continue checking other requirements
-                else
-                    -- Required achievement is not completed - check if it's failed
-                    local isFailed = false
-                    
-                    -- If it's a meta achievement, check if we already fixed it in this pass
-                    if reqAchDef.isMetaAchievement then
-                        -- Check if it was in our fixed list
-                        local wasFixed = false
-                        for _, fixed in ipairs(fixedAchievements) do
-                            if fixed.achId == tostring(reqAchId) then
-                                wasFixed = true
-                                break
-                            end
-                        end
-                        if wasFixed then
-                            -- This meta dependency was just fixed, so it's not failed
-                            isFailed = false
-                        else
-                            -- Check current status
-                            local reqData = cdb.achievements[tostring(reqAchId)]
-                            if reqData and reqData.failed then
-                                isFailed = true
-                            end
-                        end
-                    else
-                        -- Non-meta achievement - check current status comprehensively
-                        -- Priority: database failed flag > IsRowOutleveled > level check
-                        -- Check database failed flag first (most reliable source of truth)
-                        if reqData and reqData.failed then
-                            isFailed = true
-                        end
-                        
-                        -- If not failed in database, check row status
-                        if not isFailed then
-                            local reqRow = nil
-                            for _, row in ipairs(_G.AchievementPanel.achievements) do
-                                local rowId = row.id or row.achId
-                                if rowId and tostring(rowId) == tostring(reqAchId) then
-                                    reqRow = row
-                                    break
-                                end
-                            end
-                            
-                            if reqRow and _G.IsRowOutleveled then
-                                -- Use IsRowOutleveled to check current status (most accurate)
-                                isFailed = _G.IsRowOutleveled(reqRow)
-                            end
-                        end
-                        
-                        -- If still not failed, check if player is over the achievement's max level
-                        if not isFailed then
-                            local maxLevel = nil
-                            -- Try to get maxLevel from multiple sources
-                            local reqRow = nil
-                            for _, row in ipairs(_G.AchievementPanel.achievements) do
-                                local rowId = row.id or row.achId
-                                if rowId and tostring(rowId) == tostring(reqAchId) then
-                                    reqRow = row
-                                    break
-                                end
-                            end
-                            
-                            if reqRow and reqRow.maxLevel then
-                                maxLevel = reqRow.maxLevel
-                            elseif reqAchDef and reqAchDef.maxLevel then
-                                maxLevel = reqAchDef.maxLevel
-                            end
-                            
-                            if maxLevel and maxLevel > 0 then
-                                local playerLevel = UnitLevel("player") or 1
-                                if playerLevel > maxLevel then
-                                    -- Only mark as failed if achievement is not completed
-                                    if not (reqData and reqData.completed) then
-                                        isFailed = true
-                                    end
-                                end
-                            end
-                        end
-                    end
-                    
-                    if isFailed then
-                        -- This required achievement is actually failed
-                        allRequiredAvailable = false
-                        anyRequiredFailed = true
-                        break
-                    end
-                end
-            end
-        end
-        
-        -- If all required achievements are available (not failed), clear the failed status
-        -- Double-check: make sure we didn't miss any failed requirements
-        if allRequiredAvailable and not anyRequiredFailed then
-            -- Final verification: check one more time that no required achievements are failed
-            -- This catches cases where IsRowOutleveled might have been called before rows were fully initialized
-            local finalCheckPassed = true
-            for _, reqAchId in ipairs(achDef.requiredAchievements) do
-                local reqData = cdb.achievements[tostring(reqAchId)]
-                if reqData and not reqData.completed then
-                    -- Check database failed flag one more time
-                    if reqData.failed then
-                        finalCheckPassed = false
-                        break
-                    end
-                    
-                    -- Check if player is over level for this achievement
-                    local reqAchDef = _G.HCA_AchievementDefs[tostring(reqAchId)]
-                    if reqAchDef and reqAchDef.maxLevel and reqAchDef.maxLevel > 0 then
-                        local playerLevel = UnitLevel("player") or 1
-                        if playerLevel > reqAchDef.maxLevel then
-                            finalCheckPassed = false
-                            break
-                        end
-                    end
-                end
-            end
-            
-            if not finalCheckPassed then
-                -- Found a failed requirement on final check, don't fix this meta achievement
-                allRequiredAvailable = false
-            end
-        end
-        
-        if allRequiredAvailable and not anyRequiredFailed then
-            -- Store for logging
-            table.insert(fixedAchievements, {
-                achId = achId,
-                title = achDef.title or achId
-            })
-            
-            -- Clear failed status
-            achievementData.failed = nil
-            achievementData.failedAt = nil
-            fixedCount = fixedCount + 1
-            
-            -- Update the UI row if it exists
-            local metaRow = nil
-            for _, row in ipairs(_G.AchievementPanel.achievements) do
-                local rowId = row.id or row.achId
-                if rowId and tostring(rowId) == achId then
-                    metaRow = row
-                    break
-                end
-            end
-            
-            if metaRow then
-                -- Refresh the row's styling to reflect the cleared failed status
-                if _G.ApplyOutleveledStyle then
-                    _G.ApplyOutleveledStyle(metaRow)
-                end
-                if _G.UpdatePointsDisplay then
-                    _G.UpdatePointsDisplay(metaRow)
-                end
-            end
-        end
-    end
-    
-    -- Log cleanup if any achievements were fixed
-    if fixedCount > 0 then
-        local message = "|cff008066[Hardcore Achievements]|r |cffffd100Fixed " .. fixedCount .. " incorrectly failed meta achievement(s):|r"
-        print(message)
-        for _, fixed in ipairs(fixedAchievements) do
-            print(string.format("  |cffffd100- %s|r", fixed.title or fixed.achId))
-        end
-        
-        -- Refresh UI to reflect the changes
-        if RefreshOutleveledAll then
-            RefreshOutleveledAll()
-        end
-        if SortAchievementRows then
-            SortAchievementRows()
-        end
-    end
-    
-    return fixedCount
-end
--- END OF META ACHIEVEMENT CLEANUP
 
 local function ClearProgress(achId)
     local _, cdb = GetCharDB()
@@ -605,7 +377,7 @@ local function IsRowOutleveled(row)
         
         -- Level milestone achievements (Level10, Level20, etc.) should never be marked as failed
         -- They're about "reaching" a level, not "completing by" a level
-        if IsLevelMilestone(achId) then
+        if addon and addon.IsLevelMilestone and addon.IsLevelMilestone(achId) then
             return false
         end
     end
@@ -640,8 +412,8 @@ local function IsRowOutleveled(row)
             isDungeonAchievement = true
             -- Get mapID from achievement definition
             local achId = row.achId or row.id
-            if achId and _G.HCA_AchievementDefs then
-                local achDef = _G.HCA_AchievementDefs[tostring(achId)]
+            if achId and addon and addon.AchievementDefs then
+                local achDef = addon.AchievementDefs[tostring(achId)]
                 if achDef and achDef.mapID then
                     dungeonMapId = achDef.mapID
                 end
@@ -651,8 +423,8 @@ local function IsRowOutleveled(row)
         -- Check if achievement definition has mapID (dungeon achievements have mapID)
         if not isDungeonAchievement then
             local achId = row.achId or row.id
-            if achId and _G.HCA_AchievementDefs then
-                local achDef = _G.HCA_AchievementDefs[tostring(achId)]
+            if achId and addon and addon.AchievementDefs then
+                local achDef = addon.AchievementDefs[tostring(achId)]
                 if achDef and achDef.mapID then
                     isDungeonAchievement = true
                     dungeonMapId = achDef.mapID
@@ -661,7 +433,7 @@ local function IsRowOutleveled(row)
         end
         
         -- If it's a dungeon achievement and player is in that specific dungeon, don't mark as failed
-        if isDungeonAchievement and dungeonMapId and _G.HCA_IsInDungeon and _G.HCA_IsInDungeon(dungeonMapId) then
+        if isDungeonAchievement and dungeonMapId and addon and addon.IsInDungeon and addon.IsInDungeon(dungeonMapId) then
             return false
         end
     end
@@ -670,7 +442,7 @@ local function IsRowOutleveled(row)
     -- If so, check if quest is still in quest log - if not, mark as failed
     if row.questTracker and (row.killTracker or row.requiredKills) then
         -- Achievement requires both kill and quest
-        local progress = HardcoreAchievements_GetProgress and HardcoreAchievements_GetProgress(row.id)
+        local progress = addon and addon.GetProgress and addon.GetProgress(row.id)
         if progress then
             local hasKill = false
             if row.requiredKills then
@@ -771,7 +543,7 @@ local function PositionRowBorder(row)
 end
 
 -- Format timestamp into readable date/time string (locale-aware format)
-function FormatTimestamp(timestamp)
+local function FormatTimestamp(timestamp)
     if not timestamp then return "" end
     
     local dateInfo = date("*t", timestamp)
@@ -780,13 +552,13 @@ function FormatTimestamp(timestamp)
     -- US locale uses mm/dd/yy, most others use dd/mm/yy
     if locale == "enUS" then
         -- US format: mm/dd/yy
-        return string.format("%02d/%02d/%02d", 
+        return string_format("%02d/%02d/%02d", 
             dateInfo.month, 
             dateInfo.day, 
             dateInfo.year % 100)
     else
         -- European/International format: dd/mm/yy
-        return string.format("%02d/%02d/%02d", 
+        return string_format("%02d/%02d/%02d", 
             dateInfo.day, 
             dateInfo.month, 
             dateInfo.year % 100)
@@ -826,31 +598,93 @@ local function GetFailureTimestamp(achId)
     return nil
 end
 
-_G.HCA_GetFailureTimestamp = GetFailureTimestamp
-_G.HCA_EnsureFailureTimestamp = EnsureFailureTimestamp
-_G.FormatTimestamp = FormatTimestamp
-_G.IsRowOutleveled = IsRowOutleveled
+if addon then
+    addon.GetFailureTimestamp = GetFailureTimestamp
+    addon.EnsureFailureTimestamp = EnsureFailureTimestamp
+    addon.FormatTimestamp = FormatTimestamp
+    addon.IsRowOutleveled = IsRowOutleveled
+end
+
+-- Returns the list of achievement rows. Prefer model (populated at load) so tracker/dashboard work
+-- before character panel is opened. Frames used only when model empty (e.g. dynamic adds).
+local function GetAchievementRows()
+    local model = (addon and addon.AchievementRowModel) or {}
+    if type(model) == "table" and #model > 0 then
+        return model
+    end
+    if AchievementPanel and AchievementPanel.achievements and #AchievementPanel.achievements > 0 then
+        return AchievementPanel.achievements
+    end
+    return model
+end
+
+-- Get achievement row by ID. Uses GetAchievementRows() (model or UI) as single source. Catalog/Defs fallback only if not found.
+local function GetAchievementRow(achId)
+    if not achId then return nil end
+    local achStr = tostring(achId)
+    for _, row in ipairs(GetAchievementRows()) do
+        local rid = row.id or row.achId
+        if rid and (rid == achId or tostring(rid) == achStr) then
+            return row
+        end
+    end
+    -- Fallback: catalog/defs for achievements not in model (edge cases)
+    if addon and addon.CatalogAchievements then
+        for _, def in ipairs(addon.CatalogAchievements) do
+            if def.achId and (def.achId == achId or tostring(def.achId) == achStr) then
+                local hasQuest = def.requiredQuestId ~= nil
+                local hasKill = def.targetNpcId ~= nil or (def.requiredKills and next(def.requiredKills) ~= nil)
+                if hasQuest and hasKill then
+                    local capNum = tonumber(def.level)
+                    return {
+                        achId = def.achId, id = def.achId,
+                        killTracker = (def.targetNpcId or def.requiredKills) and true or nil,
+                        questTracker = hasQuest and true or nil,
+                        requiredKills = def.requiredKills, requiredQuestId = def.requiredQuestId, _def = def,
+                        maxLevel = (capNum and capNum > 0) and capNum or nil,
+                        allowSoloDouble = (def.allowSoloDouble ~= nil) and def.allowSoloDouble or (def.targetNpcId ~= nil or (def.requiredKills and next(def.requiredKills) ~= nil)),
+                    }
+                end
+                break
+            end
+        end
+    end
+    if addon and addon.AchievementDefs and addon.AchievementDefs[achStr] then
+        local def = addon.AchievementDefs[achStr]
+        local hasQuest = def.requiredQuestId ~= nil
+        local hasKill = def.targetNpcId ~= nil or (def.requiredKills and next(def.requiredKills) ~= nil)
+        if hasQuest and hasKill then
+            local capNum = tonumber(def.level)
+            return {
+                achId = achId, id = achId,
+                killTracker = (def.targetNpcId or def.requiredKills) and true or nil,
+                questTracker = hasQuest and true or nil,
+                requiredKills = def.requiredKills, requiredQuestId = def.requiredQuestId, _def = def,
+                maxLevel = (capNum and capNum > 0) and capNum or nil,
+                allowSoloDouble = (def.allowSoloDouble ~= nil) and def.allowSoloDouble or true,
+            }
+        end
+    end
+    return nil
+end
 
 -- Export function for embedded UI to get total points
-function HCA_GetTotalPoints()
+local function GetTotalPoints()
     local total = 0
-    if AchievementPanel and AchievementPanel.achievements then
-        for _, row in ipairs(AchievementPanel.achievements) do
-            if row.completed and (row.points or 0) > 0 then
-                total = total + row.points
-            end
+    for _, row in ipairs(GetAchievementRows()) do
+        if row.completed and (row.points or 0) > 0 then
+            total = total + row.points
         end
     end
     return total
 end
 
 -- Export function to get achievement count data
-function HCA_AchievementCount()
+local function AchievementCount()
     local completed = 0
     local total = 0
-    
-    if AchievementPanel and AchievementPanel.achievements then
-        for _, row in ipairs(AchievementPanel.achievements) do
+    local rows = GetAchievementRows()
+    for _, row in ipairs(rows) do
             -- `hiddenByProfession` is used to "overwrite" profession milestone tiers (e.g. show 150, hide 75).
             -- Even when hidden, COMPLETED profession milestones should still count toward the totals.
             local hiddenByProfession = row.hiddenByProfession and not row.completed
@@ -877,20 +711,19 @@ function HCA_AchievementCount()
                     completed = completed + 1
                 end
             end
-        end
     end
     
     return completed, total
 end
 
-function HCA_UpdateTotalPoints()
-    local total = HCA_GetTotalPoints()
+local function UpdateTotalPoints()
+    local total = GetTotalPoints()
     if AchievementPanel and AchievementPanel.TotalPoints then
         AchievementPanel.TotalPoints:SetText(tostring(total))
         if AchievementPanel.CountsText then
-            local completed, totalCount = HCA_AchievementCount()
+            local completed, totalCount = AchievementCount()
             if completed and totalCount then
-                AchievementPanel.CountsText:SetText(string.format(" (%d/%d)", completed or 0, totalCount or 0))
+                AchievementPanel.CountsText:SetText(string_format(" (%d/%d)", completed or 0, totalCount or 0))
             else
                 AchievementPanel.CountsText:SetText("")
             end
@@ -911,12 +744,25 @@ local function SortAchievementRows()
             and type(row.id) == "string" and row.id:match("^Level%d+$") ~= nil
     end
 
-    table.sort(AchievementPanel.achievements, function(a, b)
+    -- Cache expensive computations used by the comparator.
+    -- `IsRowOutleveled` can be relatively heavy (db lookups, quest log checks, etc.),
+    -- and the sort comparator is called many times. Cache per-row results for this sort pass.
+    local failedCache = setmetatable({}, { __mode = "k" })
+    local function isFailed(row)
+        local v = failedCache[row]
+        if v == nil then
+            v = IsRowOutleveled(row) and true or false
+            failedCache[row] = v
+        end
+        return v
+    end
+
+    table_sort(AchievementPanel.achievements, function(a, b)
         -- First, separate into three groups: completed, available, failed
         local aCompleted = a.completed or false
         local bCompleted = b.completed or false
-        local aFailed = IsRowOutleveled(a)
-        local bFailed = IsRowOutleveled(b)
+        local aFailed = isFailed(a)
+        local bFailed = isFailed(b)
         
         -- Determine group priority: completed (1), available (2), failed (3)
         local aGroup = aCompleted and 1 or (aFailed and 3 or 2)
@@ -1166,7 +1012,7 @@ local function UpdatePointsDisplay(row)
 end
 
 -- Expose for other modules (e.g., RefreshAllAchievementPoints) to re-apply UI rules after recalculating points.
-_G.HCA_UpdatePointsDisplay = UpdatePointsDisplay
+if addon then addon.UpdatePointsDisplay = UpdatePointsDisplay end
 
 local function ApplyOutleveledStyle(row)
     if not row then return end
@@ -1255,7 +1101,7 @@ local function IsAchievementAlreadyCompleted(row)
 end
 
 -- Small utility: mark a UI row as completed visually + persist in DB
-function HCA_MarkRowCompleted(row, cdbParam)
+local function MarkRowCompleted(row, cdbParam)
     if IsAchievementAlreadyCompleted(row) then 
         return 
     end
@@ -1294,8 +1140,7 @@ function HCA_MarkRowCompleted(row, cdbParam)
 
             -- Add self-found bonus if applicable (pointsAtKill doesn't include it)
             -- Simplified rule: 0-point achievements remain 0 (bonus computes to 0).
-            local isSelfFound = _G.IsSelfFound and _G.IsSelfFound() or false
-            if isSelfFound then
+            if IsSelfFound() then
                 local baseForBonus = row.originalPoints or row.revealPointsBase or 0
                 local bonus = GetSelfFoundBonus(baseForBonus)
                 if bonus > 0 and finalPoints > 0 then
@@ -1311,15 +1156,14 @@ function HCA_MarkRowCompleted(row, cdbParam)
             local base = tonumber(row.revealPointsBase or row.originalPoints) or 0
             local computed = base
             if not (row.revealStaticPoints) then
-                local preset = GetPlayerPresetFromSettings and GetPlayerPresetFromSettings() or nil
-                local multiplier = GetPresetMultiplier and GetPresetMultiplier(preset) or 1.0
+                local preset = addon and addon.GetPlayerPresetFromSettings and addon.GetPlayerPresetFromSettings() or nil
+                local multiplier = GetPresetMultiplier(preset) or 1.0
                 computed = base + math.floor((base) * (multiplier - 1) + 0.5)
             end
             finalPoints = computed
 
             -- Apply self-found bonus for any point-bearing achievement (including secrets).
-            local isSelfFound = _G.IsSelfFound and _G.IsSelfFound() or false
-            if isSelfFound then
+            if IsSelfFound() then
                 local bonus = GetSelfFoundBonus(base)
                 if bonus > 0 and finalPoints > 0 then
                     finalPoints = finalPoints + bonus
@@ -1338,17 +1182,17 @@ function HCA_MarkRowCompleted(row, cdbParam)
         end
 
         ClearProgress(id)
-        HCA_UpdateTotalPoints()
+        addon.UpdateTotalPoints()
         
         -- Fire hook event for other addons
-        if _G.HardcoreAchievements_Hooks then
+        if addon and addon.Hooks then
             -- Get aggregate statistics (after completion, so counts are up-to-date)
-            local completedCount, totalCount = HCA_AchievementCount()
-            local totalPoints = HCA_GetTotalPoints()
+            local completedCount, totalCount = AchievementCount()
+            local totalPoints = GetTotalPoints()
             
             local achievementData = {
                 achievementId = id,
-                title = row.Title and row.Title:GetText() or nil,
+                title = (row.Title and row.Title.GetText and row.Title:GetText()) or row.title or nil,
                 points = finalPoints,
                 completedAt = rec.completedAt,
                 level = rec.level,
@@ -1358,7 +1202,7 @@ function HCA_MarkRowCompleted(row, cdbParam)
                 totalPoints = totalPoints,
                 playerGUID = UnitGUID("player")
             }
-            _G.HardcoreAchievements_Hooks:FireEvent("OnAchievement", achievementData)
+            addon.Hooks:FireEvent("OnAchievement", achievementData)
         end
     end
     
@@ -1367,13 +1211,12 @@ function HCA_MarkRowCompleted(row, cdbParam)
     --   If hardcore is active: requires self-found
     --   If hardcore is not active: solo achievements allowed without self-found
     -- Completed achievements always show "Solo", never "Solo bonus"
-    local isSelfFound = _G.IsSelfFound and _G.IsSelfFound() or false
     local isHardcoreActive = C_GameRules and C_GameRules.IsHardcoreActive and C_GameRules.IsHardcoreActive() or false
     if row.Sub then
-        local shouldShowSolo = wasSolo and (isHardcoreActive and isSelfFound or not isHardcoreActive)
+        local shouldShowSolo = wasSolo and (isHardcoreActive and IsSelfFound() or not isHardcoreActive)
         if shouldShowSolo then
             -- Completed achievements always show "Solo", not "Solo bonus"
-            row.Sub:SetText(AUCTION_TIME_LEFT0 .. "\n" .. HCA_SharedUtils.GetClassColor() .. "Solo|r")
+            row.Sub:SetText(AUCTION_TIME_LEFT0 .. "\n" .. GetClassColor .. "Solo|r")
         else
             row.Sub:SetText(AUCTION_TIME_LEFT0)
         end
@@ -1382,7 +1225,9 @@ function HCA_MarkRowCompleted(row, cdbParam)
     if row.TS then row.TS:SetText(FormatTimestamp(time())) end
     
     -- Update icon/frame styling to reflect completion
-    ApplyOutleveledStyle(row)
+    if row.Icon and ApplyOutleveledStyle then
+        ApplyOutleveledStyle(row)
+    end
     
     -- Reveal secret achievements before persisting/toast
     if row.isSecretAchievement then
@@ -1395,42 +1240,52 @@ function HCA_MarkRowCompleted(row, cdbParam)
         row.staticPoints = row.revealStaticPoints or false
     end
 
-    if ProfessionTracker and ProfessionTracker.NotifyRowCompleted then
-        ProfessionTracker.NotifyRowCompleted(row)
+    if Profession and Profession.NotifyRowCompleted then
+        Profession.NotifyRowCompleted(row)
     end
     
-	-- Broadcast achievement completion to emote channel
-	local playerName = UnitName("player")
-	local achievementTitle = row.Title and row.Title:GetText() or "Unknown Achievement"
-	local broadcastMessage = string.format(ACHIEVEMENT_BROADCAST, "", achievementTitle)
-	-- Remove leading whitespace so EMOTE doesn't show a double space before 'has'
-	broadcastMessage = broadcastMessage:gsub("^%s+", "")
-    SendChatMessage(broadcastMessage, "EMOTE")
+	-- Broadcast achievement completion (skip for retroactive completions on first load to avoid guild spam)
+	if not skipBroadcastForRetroactive then
+		local playerName = UnitName("player")
+		local achievementTitle = (row.Title and row.Title.GetText and row.Title:GetText()) or row.title or "Unknown Achievement"
+		local broadcastMessage = string_format(ACHIEVEMENT_BROADCAST, "", achievementTitle)
+		broadcastMessage = broadcastMessage:gsub("^%s+", "")
+		SendChatMessage(broadcastMessage, "EMOTE")
 
-	-- Announce in guild chat (with hyperlink) when enabled
-	if type(HardcoreAchievements_ShouldAnnounceInGuildChat) == "function" and HardcoreAchievements_ShouldAnnounceInGuildChat() and IsInGuild() then
-        local link = nil
-        local achIdForLink = row.achId or row.id
-        if achIdForLink and _G.HCA_GetAchievementHyperlink then
-            link = _G.HCA_GetAchievementBracket(achIdForLink)
-        end
-        local guildMessage = string.format(playerName .. ACHIEVEMENT_BROADCAST, "", link or achievementTitle)
-        guildMessage = guildMessage:gsub("^%s+", "")
-        SendChatMessage(guildMessage, "GUILD")
-    end
+		if (addon and addon.ShouldAnnounceInGuildChat) and addon.ShouldAnnounceInGuildChat() and IsInGuild() then
+			local link = nil
+			local achIdForLink = row.achId or row.id
+			local getBracket = addon and addon.GetAchievementBracket
+			if achIdForLink and type(getBracket) == "function" then
+				link = getBracket(achIdForLink)
+			end
+			local guildMessage = string_format(ACHIEVEMENT_BROADCAST, "", link or achievementTitle)
+			guildMessage = guildMessage:gsub("^%s+", "")
+			SendChatMessage(guildMessage, "GUILD")
+		end
+	end
     
     -- Ensure hidden-until-complete rows become visible now
     if row.hiddenUntilComplete then
-        row:Show()
+        if row.Show then
+            row:Show()
+        end
     end
     -- Re-apply filter after completion state changes
-    if ApplyFilter then
-        C_Timer.After(0, ApplyFilter)
+    local apply = addon and addon.ApplyFilter
+    if type(apply) == "function" then
+        C_Timer.After(0, apply)
+    end
+
+    -- Refresh achievement tracker so it shows updated status (completion, Solo, etc.)
+    local tracker = addon and addon.AchievementTracker
+    if tracker and type(tracker.Update) == "function" then
+        tracker:Update()
     end
 end
 
-function CheckPendingCompletions()
-    if not AchievementPanel or not AchievementPanel.achievements then return end
+local function CheckPendingCompletions()
+    local rows = (addon and addon.AchievementRowModel) or {}
     
     -- Don't check until restorations are complete (prevents re-awarding on login)
     if not restorationsComplete then
@@ -1440,16 +1295,18 @@ function CheckPendingCompletions()
     -- Get current player level for level milestone achievements
     local currentLevel = UnitLevel("player") or 1
 
-    for _, row in ipairs(AchievementPanel.achievements) do
+    for _, row in ipairs(rows) do
         -- Check both row.completed and database to prevent re-completion
         if not IsAchievementAlreadyCompleted(row) then
             -- Check row.customIsCompleted first (most common for milestone/profession achievements)
             local fn = row.customIsCompleted
             if type(fn) ~= "function" then
-                -- Fall back to global function
                 local id = row.id or row.achId
-                if id then
-                    fn = _G[id .. "_IsCompleted"]
+                if id and addon and addon.GetCustomIsCompleted then
+                    fn = addon.GetCustomIsCompleted(id)
+                end
+                if type(fn) ~= "function" and id and addon and addon.GetAchievementFunction then
+                    fn = addon.GetAchievementFunction(id, "IsCompleted")
                 end
             end
             
@@ -1457,8 +1314,10 @@ function CheckPendingCompletions()
                 -- Pass current level to support level milestone achievements that accept newLevel parameter
                 local ok, result = pcall(fn, currentLevel)
                 if ok and result == true then
-                    HCA_MarkRowCompleted(row)
-                    HCA_AchToast_Show(row.Icon and row.Icon:GetTexture() or 136116, row.Title and row.Title:GetText() or "Achievement", row.points or 0, row)
+                    MarkRowCompleted(row)
+                    local iconTex = (row.frame and row.frame.Icon and row.frame.Icon.GetTexture and row.frame.Icon:GetTexture()) or row.icon or 136116
+                    local titleText = (row.frame and row.frame.Title and row.frame.Title.GetText and row.frame.Title:GetText()) or row.title or "Achievement"
+                    CreateAchToast(iconTex, titleText, row.points or 0, row.frame or row)
                 end
             end
         end
@@ -1480,13 +1339,12 @@ local function RestoreCompletionsFromDB()
             --   If hardcore is active: requires self-found
             --   If hardcore is not active: solo achievements allowed without self-found
             -- Completed achievements always show "Solo", never "Solo bonus"
-            local isSelfFound = _G.IsSelfFound and _G.IsSelfFound() or false
             local isHardcoreActive = C_GameRules and C_GameRules.IsHardcoreActive and C_GameRules.IsHardcoreActive() or false
             if row.Sub then
-                local shouldShowSolo = rec.wasSolo and (isHardcoreActive and isSelfFound or not isHardcoreActive)
+                local shouldShowSolo = rec.wasSolo and (isHardcoreActive and IsSelfFound() or not isHardcoreActive)
                 if shouldShowSolo then
                     -- Completed achievements always show "Solo", not "Solo bonus"
-                    row.Sub:SetText(AUCTION_TIME_LEFT0 .. "\n" .. HCA_SharedUtils.GetClassColor() .. "Solo|r")
+                    row.Sub:SetText(AUCTION_TIME_LEFT0 .. "\n" .. GetClassColor .. "Solo|r")
                 else
                     row.Sub:SetText(AUCTION_TIME_LEFT0)
                 end
@@ -1516,30 +1374,26 @@ local function RestoreCompletionsFromDB()
             end
         end
     end
-
-    if SortAchievementRows then SortAchievementRows() end
-    if HCA_UpdateTotalPoints then HCA_UpdateTotalPoints() end
-    RefreshOutleveledAll()
 end
 
 local function ToggleAchievementCharacterFrameTab()
     local isShown = CharacterFrame and CharacterFrame:IsShown() and
                    (AchievementPanel and AchievementPanel:IsShown() or (Tab and Tab.squareFrame and Tab.squareFrame:IsShown()))
+    -- Resolve at call time: addon.ShowAchievementTab is set later in this file
+    local ShowAchievementTab = addon and addon.ShowAchievementTab
     if isShown then
         CharacterFrame:Hide()
     elseif not CharacterFrame:IsShown() then
         CharacterFrame:Show()
-        if HCA_ShowAchievementTab then
-            HCA_ShowAchievementTab()
-        end
+        if type(ShowAchievementTab) == "function" then ShowAchievementTab() end
     else
-        if CharacterFrame:IsShown() and HCA_ShowAchievementTab then
-            HCA_ShowAchievementTab()
+        if CharacterFrame:IsShown() and type(ShowAchievementTab) == "function" then
+            ShowAchievementTab()
         end
     end
 end
 
-function ShowHardcoreAchievementWindow()
+local function ShowHardcoreAchievementWindow()
     local _, cdb = GetCharDB()
     -- Check if user wants to use Character Panel instead of Dashboard (default is Character Panel)
     local useCharacterPanel = true
@@ -1551,8 +1405,8 @@ function ShowHardcoreAchievementWindow()
         ToggleAchievementCharacterFrameTab()
     else
         -- Default: Use Dashboard (standalone window)
-        if HardcoreAchievements_Dashboard and HardcoreAchievements_Dashboard.Toggle then
-            HardcoreAchievements_Dashboard:Toggle()
+        if addon and addon.Dashboard and addon.Dashboard.Toggle then
+            addon.Dashboard:Toggle()
         else
             -- Fallback to Character Panel if Dashboard not available
             ToggleAchievementCharacterFrameTab()
@@ -1564,15 +1418,31 @@ end
 -- Simple Achievement Toast
 -- =========================================================
 -- Usage:
--- HCA_AchToast_Show(iconTextureIdOrPath, "Achievement Title", 10)
--- HCA_AchToast_Show(row.icon or 134400, row.title or "Achievement", row.points or 10)
+-- CreateAchToast(iconTextureIdOrPath, "Achievement Title", 10)
+-- CreateAchToast(row.icon or 134400, row.title or "Achievement", row.points or 10)
 
-local function HCA_CreateAchToast()
-    if HCA_AchToast and HCA_AchToast:IsObjectType("Frame") then
-        return HCA_AchToast
+-- Single OnUpdate for toast fade; state on frame (fadeT, fadeDuration) avoids allocating per toast
+local function AchToastFadeOnUpdate(s, elapsed)
+    local t = (s.fadeT or 0) + elapsed
+    s.fadeT = t
+    local duration = s.fadeDuration or 1
+    local a = 1 - math.min(t / duration, 1)
+    s:SetAlpha(a)
+    if t >= duration then
+        s:SetScript("OnUpdate", nil)
+        s.fadeT = nil
+        s.fadeDuration = nil
+        s:Hide()
+        s:SetAlpha(1)
+    end
+end
+
+local function GetOrCreateAchToastFrame()
+    if AchToast and AchToast:IsObjectType("Frame") then
+        return AchToast
     end
 
-    local f = CreateFrame("Frame", "HCA_AchToast", UIParent)
+    local f = CreateFrame("Frame", "AchToast", UIParent)
     f:SetSize(320, 92)
     f:SetPoint("CENTER", 0, -280)
     f:Hide()
@@ -1644,17 +1514,9 @@ local function HCA_CreateAchToast()
 
     -- Simple fade-out (no UIParent fades)
     function f:PlayFade(duration)
-        local t = 0
-        self:SetScript("OnUpdate", function(s, elapsed)
-            t = t + elapsed
-            local a = 1 - math.min(t / duration, 1)
-            s:SetAlpha(a)
-            if t >= duration then
-                s:SetScript("OnUpdate", nil)
-                s:Hide()
-                s:SetAlpha(1)
-            end
-        end)
+        self.fadeT = 0
+        self.fadeDuration = duration
+        self:SetScript("OnUpdate", AchToastFadeOnUpdate)
     end
 
     local function AttachModelOverlayClipped(parentFrame, texture)
@@ -1710,8 +1572,8 @@ end
 -- Call Achievement Toast
 -- =========================================================
 
-function HCA_AchToast_Show(iconTex, title, pts, achIdOrRow)
-    local f = HCA_CreateAchToast()
+CreateAchToast = function(iconTex, title, pts, achIdOrRow)
+    local f = GetOrCreateAchToastFrame()
     f:Hide()
     f:SetAlpha(1)
 
@@ -1743,8 +1605,7 @@ function HCA_AchToast_Show(iconTex, title, pts, achIdOrRow)
             finalPoints = tonumber(cdb.progress[achId].pointsAtKill) or finalPoints
             -- Add self-found bonus if applicable (pointsAtKill doesn't include it)
             -- Simplified rule: 0-point achievements remain 0 (bonus computes to 0).
-            local isSelfFound = _G.IsSelfFound and _G.IsSelfFound() or false
-            if isSelfFound then
+            if IsSelfFound() then
                 -- Bonus is based on base points (originalPoints) even though it's applied after multipliers/solo.
                 local baseForBonus = 0
                 if row and row.originalPoints then
@@ -1797,13 +1658,15 @@ function HCA_AchToast_Show(iconTex, title, pts, achIdOrRow)
     f:Show()
 
     --print(ACHIEVEMENT_BROADCAST_SELF:format(title))
-    PlaySoundFile("Interface\\AddOns\\HardcoreAchievements\\Sounds\\AchievementSound1.ogg", "Effects")
+    if not skipBroadcastForRetroactive then
+        PlaySoundFile("Interface\\AddOns\\HardcoreAchievements\\Sounds\\AchievementSound1.ogg", "Effects")
+    end
 
     C_Timer.After(1, function()
         -- Check if screenshots are disabled before taking screenshot
         local shouldTakeScreenshot = true
-        if type(HardcoreAchievements_ShouldTakeScreenshot) == "function" then
-            shouldTakeScreenshot = HardcoreAchievements_ShouldTakeScreenshot()
+        if addon and addon.ShouldTakeScreenshot then
+            shouldTakeScreenshot = addon.ShouldTakeScreenshot()
         else
             -- Fallback: check setting directly if function doesn't exist yet
             local _, cdb = GetCharDB()
@@ -1824,48 +1687,36 @@ function HCA_AchToast_Show(iconTex, title, pts, achIdOrRow)
     end)
 end
 
--- =========================================================
--- Self Found
--- =========================================================
-
-function IsSelfFound()
-    -- Check for Hardcore Self-Found buff
-    for i = 1, 40 do
-        local name, _, _, _, _, _, _, _, _, spellId = UnitBuff("player", i)
-        if not name then break end
-        if spellId == 431567 or name == "Self-Found Adventurer" then
-            return true
-        end
-    end
-    return false
-end
-
--- Export IsSelfFound globally
-_G.IsSelfFound = IsSelfFound
 
 -- Check if an achievement ID is a level milestone achievement (Level10, Level20, etc.)
-function IsLevelMilestone(achId)
+local function IsLevelMilestone(achId)
     if not achId or type(achId) ~= "string" then return false end
     return string.match(achId, "^Level%d+$") ~= nil
 end
-_G.IsLevelMilestone = IsLevelMilestone
+if addon then addon.IsLevelMilestone = IsLevelMilestone end
 
 local function ApplySelfFoundBonus()
     if not IsSelfFound() then return end
-    if not HardcoreAchievementsDB or not HardcoreAchievementsDB.chars then return end
+    if not addon or not addon.HardcoreAchievementsDB or not addon.HardcoreAchievementsDB.chars then return end
     if not AchievementPanel or not AchievementPanel.achievements then return end
 
     local guid = UnitGUID("player")
-    local charData = HardcoreAchievementsDB.chars[guid]
+    local charData = addon.HardcoreAchievementsDB.chars[guid]
     if not charData or not charData.achievements then return end
 
-    local function getBasePointsForAch(achId)
-        for _, row in ipairs(AchievementPanel.achievements) do
-            if row and (row.id == achId or row.achId == achId) then
-                return tonumber(row.originalPoints) or tonumber(row.revealPointsBase) or tonumber(row.points) or 0
-            end
+    -- Build a fast lookup table instead of scanning all rows per achievement.
+    local basePointsById = {}
+    for _, row in ipairs(AchievementPanel.achievements) do
+        local id = row and (row.id or row.achId)
+        if id ~= nil then
+            local idStr = tostring(id)
+            basePointsById[idStr] = tonumber(row.originalPoints) or tonumber(row.revealPointsBase) or tonumber(row.points) or 0
         end
-        return 0
+    end
+
+    local function getBasePointsForAch(achId)
+        if achId == nil then return 0 end
+        return basePointsById[tostring(achId)] or 0
     end
 
     local updatedCount = 0
@@ -1898,7 +1749,7 @@ RefreshOutleveledAll = function()
     end
 end
 
-_G.HCA_RefreshOutleveledAll = RefreshOutleveledAll
+if addon then addon.RefreshOutleveledAll = RefreshOutleveledAll end
 
 -- =========================================================
 -- Progress Helpers
@@ -1930,42 +1781,44 @@ local function SetProgress(achId, key, value)
         -- Only check if restorations are complete (this is called during gameplay, not initial login)
         -- During initial login, the RunHeavyOperations flow will handle completion checks
         if restorationsComplete then
-            CheckPendingCompletions()
+            addon.CheckPendingCompletions()
             RefreshOutleveledAll()
+            -- Full refresh so character panel, dashboard, tracker all get correct status (Pending Turn-in, solo, etc.)
+            if addon.RefreshAllAchievementPoints then addon.RefreshAllAchievementPoints() end
         end
     end)
 end
 
--- Export tiny API so achievement modules can use it
-function HardcoreAchievements_GetProgress(achId) return GetProgress(achId) end
-function HardcoreAchievements_SetProgress(achId, key, value) SetProgress(achId, key, value) end
-function HardcoreAchievements_ClearProgress(achId) ClearProgress(achId) end
-function HardcoreAchievements_GetCharDB() return GetCharDB() end
-  
--- Exported: getter for Tab frame (used by SharedUtils)
-function HardcoreAchievements_GetTab()
-    return Tab
-end
-
--- Exported: hide custom vertical tab if present (used by embedded UI)
-function HardcoreAchievements_HideVerticalTab()
-    if Tab and Tab.squareFrame then
-        Tab.squareFrame:Hide()
-        Tab.squareFrame:EnableMouse(false)
-        return true
+-- Export API on addon for achievement modules and other addon files
+if addon then
+    addon.GetProgress = GetProgress
+    addon.SetProgress = SetProgress
+    addon.ClearProgress = ClearProgress
+    addon.GetCharDB = GetCharDB
+    addon.GetTab = function() return Tab end
+    addon.HideVerticalTab = function()
+        if Tab and Tab.squareFrame then
+            Tab.squareFrame:Hide()
+            Tab.squareFrame:EnableMouse(false)
+            return true
+        end
+        return false
     end
-    return false
-end
-
--- Exported: reload tab position (used by embedded UI)
-function HardcoreAchievements_LoadTabPosition()
-    LoadTabPosition()
-end
-
-function HardcoreAchievements_GetSettings()
-    local _, cdb = GetCharDB()
-    if not cdb then return {} end
-    return cdb.settings
+    addon.GetSettings = function()
+        local _, cdb = GetCharDB()
+        if not cdb then return {} end
+        return cdb.settings
+    end
+    addon.MarkRowCompleted = MarkRowCompleted
+    addon.ShowAchievementWindow = ShowHardcoreAchievementWindow
+    addon.GetTotalPoints = GetTotalPoints
+    addon.AchievementCount = AchievementCount
+    addon.UpdateTotalPoints = UpdateTotalPoints
+    addon.GetAchievementRows = GetAchievementRows
+    addon.GetAchievementRow = GetAchievementRow
+    addon.CreateAchToast = CreateAchToast
+    addon.CheckPendingCompletions = CheckPendingCompletions
+    addon.ResetTabPosition = ResetTabPosition
 end
 
 -- =========================================================
@@ -1975,7 +1828,7 @@ end
 -- Initialize minimap button libraries
 local function OpenOptionsPanel()
     if Settings and Settings.OpenToCategory then
-        local targetCategory = (addon and addon.settingsCategory) or _G._HardcoreAchievementsOptionsCategory
+        local targetCategory = addon and addon.settingsCategory
         if targetCategory and targetCategory.GetID then
             Settings.OpenToCategory(targetCategory:GetID())
             return
@@ -1986,53 +1839,13 @@ local function OpenOptionsPanel()
     end
 end
 
-_G.HardcoreAchievements_OpenOptionsPanel = OpenOptionsPanel
-
-local LDB = LibStub("LibDataBroker-1.1")
-local LDBIcon = LibStub("LibDBIcon-1.0")
+if addon then addon.OpenOptionsPanel = OpenOptionsPanel end
 
 BINDING_NAME_HCA_TOGGLE = "Toggle Achievements"
 
--- Create the data object for the minimap button
-local minimapDataObject = LDB:NewDataObject("HardcoreAchievements", {
-    type = "data source",
-    text = "HardcoreAchievements",
-    icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\HardcoreAchievementsButton.png",
-    OnClick = function(self, button)
-        if button == "LeftButton" and not IsShiftKeyDown() then
-            -- Always open Dashboard, regardless of useCharacterPanel setting
-            if HardcoreAchievements_Dashboard and HardcoreAchievements_Dashboard.Toggle then
-                HardcoreAchievements_Dashboard:Toggle()
-            elseif _G.HCA_ShowDashboard then
-                _G.HCA_ShowDashboard()
-            else
-                -- Fallback to Character Panel if Dashboard not available
-                ShowHardcoreAchievementWindow()
-            end
-        elseif button == "RightButton" then
-            -- Right-click to open options panel
-            OpenOptionsPanel()
-        elseif button == "LeftButton" and IsShiftKeyDown() then
-            -- Left-click with Shift to open admin panel
-            if HardcoreAchievementsAdminPanel and HardcoreAchievementsAdminPanel.Toggle then
-                HardcoreAchievementsAdminPanel:Toggle()
-            end
-        end
-    end,
-    OnTooltipShow = function(tooltip)
-        tooltip:AddLine("Hardcore Achievements", 1, 1, 1)
-        
-        -- Minimap icon always opens Dashboard
-        tooltip:AddLine("Left-click to open Dashboard", 0.5, 0.5, 0.5)
-        tooltip:AddLine("Right-click to open Options", 0.5, 0.5, 0.5)
-        
-        -- Show current achievement count
-        local completedCount, totalCount = HCA_AchievementCount()
-        tooltip:AddLine(" ")
-        local countStr = string.format("%d/%d", completedCount, totalCount)
-        tooltip:AddLine(string.format(ACHIEVEMENT_META_COMPLETED_DATE, countStr), 0.6, 0.9, 0.6)
-    end,
-})
+-- Lazily initialize minimap button resources on demand.
+local LDB, LDBIcon, minimapDataObject
+local minimapRegistered = false
 
 -- Register the minimap icon
 local function InitializeMinimapButton()
@@ -2040,13 +1853,64 @@ local function InitializeMinimapButton()
     if not db.minimap then
         db.minimap = { hide = false, position = 45 }
     end
-    
-    LDBIcon:Register("HardcoreAchievements", minimapDataObject, db)
-    
-    -- Show the button by default
-    if not db.minimap.hide then
-        LDBIcon:Show("HardcoreAchievements")
+
+    -- If the user has it hidden, don't create/register anything yet.
+    if db.minimap.hide then
+        return
     end
+
+    if not LDB then
+        LDB = LibStub("LibDataBroker-1.1")
+    end
+    if not LDBIcon then
+        LDBIcon = LibStub("LibDBIcon-1.0")
+    end
+    if not minimapDataObject then
+        minimapDataObject = LDB:NewDataObject("HardcoreAchievements", {
+            type = "data source",
+            text = "HardcoreAchievements",
+            icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\HardcoreAchievementsButton.png",
+            OnClick = function(self, button)
+                if button == "LeftButton" and not IsShiftKeyDown() then
+                    -- Always open Dashboard, regardless of useCharacterPanel setting
+                    if addon and addon.Dashboard and addon.Dashboard.Toggle then
+                        addon.Dashboard:Toggle()
+                    elseif addon and addon.ShowDashboard then
+                        addon.ShowDashboard()
+                    else
+                        -- Fallback to Character Panel if Dashboard not available
+                        ShowHardcoreAchievementWindow()
+                    end
+                elseif button == "RightButton" then
+                    -- Right-click to open options panel
+                    OpenOptionsPanel()
+                elseif button == "LeftButton" and IsShiftKeyDown() then
+                    -- Left-click with Shift to open admin panel
+                    if HardcoreAchievementsAdminPanel and HardcoreAchievementsAdminPanel.Toggle then
+                        HardcoreAchievementsAdminPanel:Toggle()
+                    end
+                end
+            end,
+            OnTooltipShow = function(tooltip)
+                tooltip:AddLine("Hardcore Achievements", 1, 1, 1)
+
+                tooltip:AddLine("Left-click to open Dashboard", 0.5, 0.5, 0.5)
+                tooltip:AddLine("Right-click to open Options", 0.5, 0.5, 0.5)
+
+                local completedCount, totalCount = AchievementCount()
+                tooltip:AddLine(" ")
+                local countStr = string_format("%d/%d", completedCount, totalCount)
+                tooltip:AddLine(string_format(ACHIEVEMENT_META_COMPLETED_DATE, countStr), 0.6, 0.9, 0.6)
+            end,
+        })
+    end
+
+    -- Register once; then show.
+    if not minimapRegistered then
+        LDBIcon:Register("HardcoreAchievements", minimapDataObject, db)
+        minimapRegistered = true
+    end
+    LDBIcon:Show("HardcoreAchievements")
 end
 
 -- =========================================================
@@ -2094,35 +1958,40 @@ initFrame:SetScript("OnEvent", function(self, event, ...)
         if UISpecialFrames then
             local frameName = AchievementPanel and AchievementPanel:GetName()
             if frameName and not tContains(UISpecialFrames, frameName) then
-                table.insert(UISpecialFrames, frameName)
+                table_insert(UISpecialFrames, frameName)
+            end
+            -- So Escape closes the Character Frame when open (e.g. on achievements tab)
+            if not tContains(UISpecialFrames, "CharacterFrame") then
+                table_insert(UISpecialFrames, "CharacterFrame")
             end
         end
         
         -- Refresh options panel to sync checkbox states (deferred)
-        -- Initialize AchievementTracker (after it loads)
+        -- Initialize AchievementTracker (after it loads; use addon at call time since AchievementTracker.lua loads after this file)
         C_Timer.After(0.5, function()
-            local AchievementTracker = GetAchievementTracker()
-            if AchievementTracker and AchievementTracker.Initialize then
+            local AchievementTracker = (addon and addon.AchievementTracker)
+            if AchievementTracker and type(AchievementTracker.Initialize) == "function" then
                 AchievementTracker:Initialize()
             end
             
             -- Refresh options panel after a short delay
-            if _HardcoreAchievementsOptionsPanel and _HardcoreAchievementsOptionsPanel.refresh then
-                _HardcoreAchievementsOptionsPanel:refresh()
+            local opts = addon and addon.OptionsPanel
+            if opts and opts.refresh then
+                opts:refresh()
             end
         end)
 
         -- One-time initial options frame for new characters (no initialSetupDone flag)
         C_Timer.After(1, function()
-            HardcoreAchievements_ShowInitialOptionsIfNeeded()
+            if addon and addon.ShowInitialOptionsIfNeeded then
+                addon.ShowInitialOptionsIfNeeded()
+            end
         end)
 
     elseif event == "ADDON_LOADED" then
-        local addonName = ...
-        if addonName == ADDON_NAME then
+        local loadedName = ...
+        if loadedName == "HardcoreAchievements" then
             C_Timer.After(3, function()
-                ApplySelfFoundBonus()
-                RestoreCompletionsFromDB()
                 addon:ShowWelcomeMessage()
             end)
         end
@@ -2197,7 +2066,7 @@ PanelTemplates_DeselectTab(Tab)
 
 -- Draggable "curl" behavior for Achievements tab (bottom + right edges only)
 -- Tab persistence functions
-function SaveTabPosition()
+local function SaveTabPosition()
     local db = EnsureDB()
     if not db.tabSettings then
         db.tabSettings = {}
@@ -2373,8 +2242,9 @@ function LoadTabPosition()
         end
     end
 end
+if addon then addon.LoadTabPosition = LoadTabPosition end
 
-function ResetTabPosition()
+local function ResetTabPosition()
     local db = EnsureDB()
     -- Clear saved drag position so LoadTabPosition uses its built-in defaults
     db.tabSettings = nil
@@ -2388,8 +2258,9 @@ function ResetTabPosition()
     end
 
     -- Sync Dashboard checkbox if the Dashboard frame is loaded
-    if _G.HardcoreAchievementsDashboard and _G.HardcoreAchievementsDashboard.UseCharacterPanelCheckbox then
-        _G.HardcoreAchievementsDashboard.UseCharacterPanelCheckbox:SetChecked(true)
+    local dash = addon and addon.DashboardFrame
+    if dash and dash.UseCharacterPanelCheckbox then
+        dash.UseCharacterPanelCheckbox:SetChecked(true)
     end
 
     -- Re-apply default positioning logic
@@ -2420,6 +2291,7 @@ function ResetTabPosition()
 
     print("|cff008066[Hardcore Achievements]|r Tab position reset to default")
 end
+if addon then addon.ResetTabPosition = ResetTabPosition end
 
 -- Keeps default anchoring until the user drags; then constrains motion to bottom or right edge.
 do
@@ -2479,9 +2351,8 @@ do
         squareFrame:EnableMouse(false)
         squareFrame:RegisterForClicks("LeftButtonUp")
         squareFrame:SetScript("OnClick", function()
-            if HCA_ShowAchievementTab then
-                HCA_ShowAchievementTab()
-            end
+            local ShowAchievementTab = addon and addon.ShowAchievementTab
+            if type(ShowAchievementTab) == "function" then ShowAchievementTab() end
         end)
 
         -- Hover highlight + tooltip (mirrors Tab hooks)
@@ -2495,7 +2366,7 @@ do
             GameTooltip:Show()
         end)
         squareFrame:HookScript("OnLeave", function(self)
-            if self.highlight and not AchievementPanel:IsShown() then
+            if self.highlight and not (AchievementPanel and AchievementPanel:IsShown()) then
                 self.highlight:Hide()
             end
             GameTooltip:Hide()
@@ -2738,7 +2609,14 @@ do
 end
 -- === end draggable curl behavior ===
  
-AchievementPanel = CreateFrame("Frame", "HardcoreAchievementsFrame", CharacterFrame)
+local function EnsureAchievementPanelCreated()
+    if AchievementPanel then
+        if addon then addon.AchievementPanel = AchievementPanel end
+        return AchievementPanel
+    end
+
+    AchievementPanel = CreateFrame("Frame", "HardcoreAchievementsFrame", CharacterFrame)
+    if addon then addon.AchievementPanel = AchievementPanel end
 AchievementPanel:Hide()
 AchievementPanel:EnableMouse(true)
 AchievementPanel:SetAllPoints(CharacterFrame)
@@ -2883,7 +2761,7 @@ end)
 -- Filter dropdown - using shared FilterDropdown module
 
 -- Use FilterDropdown for checkbox filtering logic
-local FilterDropdown = _G.FilterDropdown
+local FilterDropdown = (addon and addon.FilterDropdown)
 local function ShouldShowByCheckboxFilter(def, isCompleted, checkboxIndex, variationType)
     if FilterDropdown and FilterDropdown.ShouldShowByCheckboxFilter then
         return FilterDropdown.ShouldShowByCheckboxFilter(def, isCompleted, checkboxIndex, variationType)
@@ -2896,7 +2774,7 @@ local function ApplyFilter()
     if not AchievementPanel or not AchievementPanel.achievements then return end
     
     -- Get status filter states (completed, available, failed) - all default to true
-    local statusFilters = FilterDropdown:GetStatusFilterStatesFromDropdown(AchievementPanel.filterDropdown)
+    local statusFilters = (FilterDropdown and FilterDropdown.GetStatusFilterStatesFromDropdown) and FilterDropdown:GetStatusFilterStatesFromDropdown(AchievementPanel.filterDropdown) or (FilterDropdown and FilterDropdown.GetStatusFilterStates and FilterDropdown.GetStatusFilterStates()) or { true, true, true }
     local showCompleted = statusFilters[1] ~= false
     local showAvailable = statusFilters[2] ~= false
     local showFailed = statusFilters[3] ~= false
@@ -2919,6 +2797,30 @@ local function ApplyFilter()
         end
         if row.hiddenByProfession then
             shouldShow = false
+        end
+        -- Hide GuildFirst achievements that are already claimed by someone else.
+        -- IMPORTANT: only apply this to achievements explicitly marked as GuildFirst,
+        -- otherwise we'll do unnecessary checks (and spam debug) for the entire catalog.
+        if not row.completed and row._def and row._def.isGuildFirst then
+            local achId = row.id or row.achId
+            local GuildFirst = addon and addon.GuildFirst
+            if achId and GuildFirst then
+                local isClaimed, winner = GuildFirst:IsClaimed(tostring(achId), row)
+                if isClaimed and winner then
+                    local isWinner = false
+                    if type(GuildFirst.IsWinnerRecord) == "function" then
+                        isWinner = GuildFirst:IsWinnerRecord(winner) == true
+                    else
+                        local myGUID = UnitGUID("player") or ""
+                        isWinner = tostring(winner.winnerGUID or "") == myGUID
+                    end
+                    if not isWinner then
+                        -- Claimed by someone else - silently fail (hide)
+                        if addon and addon.DebugPrint then addon.DebugPrint("[Filter] Hiding achievement '" .. tostring(achId) .. "' - already claimed by " .. tostring(winner.winnerName or "?") .. " (silent fail)") end
+                        shouldShow = false
+                    end
+                end
+            end
         end
         
         -- Hide/show achievements based on checkbox filter
@@ -3004,10 +2906,10 @@ local function ApplyFilter()
     SortAchievementRows()
 end
 
-_G.HCA_ApplyFilter = ApplyFilter
+if addon then addon.ApplyFilter = ApplyFilter end
 
 -- Create and initialize the filter dropdown using centralized helper
-AchievementPanel.filterDropdown = FilterDropdown:CreateAndInitializeDropdown(
+AchievementPanel.filterDropdown = FilterDropdown and FilterDropdown:CreateAndInitializeDropdown(
     AchievementPanel,
     {
         anchorPoint = "TOPRIGHT",
@@ -3122,8 +3024,8 @@ AchievementPanel.DashboardButton.Icon = AchievementPanel.DashboardButton:CreateT
 AchievementPanel.DashboardButton.Icon:SetAllPoints(AchievementPanel.DashboardButton)
 AchievementPanel.DashboardButton.Icon:SetTexture("Interface\\AchievementFrame\\UI-Achievement-Progressive-Shield-NoPoints")
 AchievementPanel.DashboardButton:SetScript("OnClick", function()
-    if _G.HCA_ShowDashboard then
-        _G.HCA_ShowDashboard()
+    if addon and addon.ShowDashboard then
+        addon.ShowDashboard()
     end
 end)
 AchievementPanel.DashboardButton:SetScript("OnEnter", function(self)
@@ -3218,29 +3120,38 @@ BR:SetPoint("TOPLEFT", BL, "TOPRIGHT", 0, 0)
 BR:SetPoint("LEFT", TR, "LEFT", 0, 0)
 BR:SetPoint("BOTTOMRIGHT", AchievementPanel, "BOTTOMRIGHT", 2, -1)
 
+    -- Storage for UI row frames (built lazily from the model)
+    AchievementPanel.achievements = AchievementPanel.achievements or {}
+
+    -- Hook restore after panel is shown
+    if not AchievementPanel._hc_restoreCompletionsHooked and RestoreCompletionsFromDB then
+        AchievementPanel:HookScript("OnShow", RestoreCompletionsFromDB)
+        AchievementPanel._hc_restoreCompletionsHooked = true
+    end
+
+    return AchievementPanel
+end
+
 -- =========================================================
 -- Creating the functionality of achievements
 -- =========================================================
 
-AchievementPanel.achievements = AchievementPanel.achievements or {}
+-- AchievementPanel.achievements is initialized in EnsureAchievementPanelCreated()
 
-function CreateAchievementRow(parent, achId, title, tooltip, icon, level, points, killTracker, questTracker, staticPoints, zone, def)
-    local rowParent = AchievementPanel and AchievementPanel.Content or parent or AchievementPanel
-    AchievementPanel.achievements = AchievementPanel.achievements or {}
-
-    local index = (#AchievementPanel.achievements) + 1
+-- Builds one row frame from a model entry. Used when building UI from AchievementRowModel on first show.
+local function CreateAchievementRowFromData(data, index)
+    local achId, title, tooltip, icon, level, points, killTracker, questTracker, staticPoints, zone, def =
+        data.achId, data.title, data.tooltip, data.icon, data.level, data.points, data.killTracker, data.questTracker, data.staticPoints, data.zone, data.def
+    local rowParent = AchievementPanel and AchievementPanel.Content or AchievementPanel
     local row = CreateFrame("Frame", nil, rowParent)
     row:SetSize(310, 42)
-    row:SetClipsChildren(false) -- Allow IconFrame to extend beyond row bounds if needed
-
-    -- stack under title or previous row
+    row:SetClipsChildren(false)
     if index == 1 then
         row:SetPoint("TOPLEFT", rowParent, "TOPLEFT", 0, 0)
     else
-        row:SetPoint("TOPLEFT", AchievementPanel.achievements[index-1], "BOTTOMLEFT", 0, 0)
+        row:SetPoint("TOPLEFT", AchievementPanel.achievements[index - 1], "BOTTOMLEFT", 0, 0)
     end
 
-    -- icon (clipped so oversized textures can't bleed past the frame)
     local ICON_SIZE = 35
     row.IconClip = CreateFrame("Frame", nil, row)
     row.IconClip:SetSize(ICON_SIZE, ICON_SIZE)
@@ -3390,8 +3301,8 @@ function CreateAchievementRow(parent, achId, title, tooltip, icon, level, points
 
         if self.Title and self.Title.GetText then
             -- Use centralized tooltip function
-            if _G.HCA_ShowAchievementTooltip then
-                _G.HCA_ShowAchievementTooltip(row, self)
+            if ShowAchievementTooltip then
+                ShowAchievementTooltip(row, self)
             end
         end
     end)
@@ -3414,7 +3325,7 @@ function CreateAchievementRow(parent, achId, title, tooltip, icon, level, points
             -- Check if chat edit box is active/visible
             if editBox and editBox:IsVisible() then
                 -- Chat edit box is active: link achievement (original behavior)
-                local bracket = _G.HCA_GetAchievementBracket and _G.HCA_GetAchievementBracket(row.achId) or string.format("[HCA:(%s)]", tostring(row.achId))
+                local bracket = GetAchievementBracket and GetAchievementBracket(row.achId) or string_format("[HCA:(%s)]", tostring(row.achId))
                 local currentText = editBox:GetText() or ""
                 if currentText == "" then
                     editBox:SetText(bracket)
@@ -3423,9 +3334,9 @@ function CreateAchievementRow(parent, achId, title, tooltip, icon, level, points
                 end
                 editBox:SetFocus()
             else
-                -- Chat edit box is NOT active: track/untrack achievement
-                local AchievementTracker = GetAchievementTracker()
-                if not AchievementTracker then
+                -- Chat edit box is NOT active: track/untrack achievement (resolve at call time; addon.AchievementTracker set by Utils/AchievementTracker.lua)
+                local tracker = addon and addon.AchievementTracker
+                if not tracker or type(tracker.IsTracked) ~= "function" then
                     print("|cff008066[Hardcore Achievements]|r Achievement tracker not available. Please reload your UI (/reload).")
                     return
                 end
@@ -3438,13 +3349,13 @@ function CreateAchievementRow(parent, achId, title, tooltip, icon, level, points
                 local title = row.Title and row.Title:GetText() or tostring(achId)
                 -- Strip color codes from title if present
                 title = title and title:gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", "") or tostring(achId)
-                local isTracked = AchievementTracker:IsTracked(achId)
+                local isTracked = tracker:IsTracked(achId)
                 
                 if isTracked then
-                    AchievementTracker:UntrackAchievement(achId)
+                    tracker:UntrackAchievement(achId)
                     --print("|cff008066[Hardcore Achievements]|r Stopped tracking: " .. title)
                 else
-                    AchievementTracker:TrackAchievement(achId, title)
+                    tracker:TrackAchievement(achId, title)
                     --print("|cff008066[Hardcore Achievements]|r Now tracking: " .. title)
                 end
             end
@@ -3472,7 +3383,10 @@ function CreateAchievementRow(parent, achId, title, tooltip, icon, level, points
         row.zone = nil
     end
     -- Apply icon/frame styling for initial state
-    ApplyOutleveledStyle(row)
+    -- Defer expensive styling during initial load; heavy ops will refresh once at the end.
+    if not (addon and addon.Initializing) then
+        ApplyOutleveledStyle(row)
+    end
 
     -- store trackers
     row.killTracker  = killTracker
@@ -3517,8 +3431,8 @@ function CreateAchievementRow(parent, achId, title, tooltip, icon, level, points
             row._defaultSubText = ""
         end
     end
-    if ProfessionTracker and def and def.requireProfessionSkillID then
-        ProfessionTracker.RegisterRow(row, def)
+    if def and def.requireProfessionSkillID then
+        Profession.RegisterRow(row, def)
     end
 
     -- Secret/hidden achievement support (optional via def)
@@ -3550,15 +3464,144 @@ function CreateAchievementRow(parent, achId, title, tooltip, icon, level, points
         row.staticPoints = true
     end
 
-    AchievementPanel.achievements[index] = row
-    SortAchievementRows()
-    HCA_UpdateTotalPoints()
+    -- Sync state from model (in case it was updated before frame was built)
+    row.completed = data.completed or false
+    row.points = data.points or row.points
+    row.originalPoints = data.originalPoints or row.originalPoints
+    data.frame = row
 
+    -- Apply any deferred UI initializers registered on the model entry
+    if data._uiInit then
+        for _, fn in ipairs(data._uiInit) do
+            if type(fn) == "function" then
+                pcall(fn, row, data)
+            end
+        end
+    end
     return row
 end
 
+-- Public helper for other modules: register UI init that runs once the row frame exists.
+-- If the frame already exists, runs immediately.
+local function AddRowUIInit(rowModel, fn)
+    if type(rowModel) ~= "table" or type(fn) ~= "function" then return end
+    rowModel._uiInit = rowModel._uiInit or {}
+    table_insert(rowModel._uiInit, fn)
+    if rowModel.frame then
+        pcall(fn, rowModel.frame, rowModel)
+    end
+end
+if addon then addon.AddRowUIInit = AddRowUIInit end
+
+local function CreateAchievementRow(parent, achId, title, tooltip, icon, level, points, killTracker, questTracker, staticPoints, zone, def)
+    local capNum = tonumber(level)
+    local data = {
+        achId = achId, id = achId, title = title, tooltip = tooltip, icon = icon, level = level,
+        points = points or 0, killTracker = killTracker, questTracker = questTracker, staticPoints = staticPoints,
+        zone = zone, def = def, _def = def,
+        completed = false, originalPoints = points or 0,
+        maxLevel = (capNum and capNum > 0) and capNum or nil,
+        allowSoloDouble = (def and def.allowSoloDouble ~= nil) and def.allowSoloDouble or (killTracker ~= nil),
+        staticPoints = staticPoints or false,
+    }
+
+    -- Mirror important def-driven fields onto the model so trackers work without UI.
+    if def and def.requiredQuestId then
+        TrackRowForQuest(data, def.requiredQuestId)
+    end
+    if def and def.mapID then
+        data.zone = nil
+    end
+    if def and type(def.customSpell) == "function" then
+        data.spellTracker = def.customSpell
+    end
+    if def and type(def.customAura) == "function" then
+        data.auraTracker = def.customAura
+    end
+    if def and type(def.customChat) == "function" then
+        data.chatTracker = def.customChat
+    end
+    if def and type(def.customEmote) == "function" then
+        data.emoteTracker = def.customEmote
+    end
+    if def and type(def.customIsCompleted) == "function" then
+        data.customIsCompleted = def.customIsCompleted
+    end
+    if def and type(def.customItem) == "function" then
+        data.itemTracker = def.customItem
+    end
+    if def and def.hiddenUntilComplete == true then
+        data.hiddenUntilComplete = true
+    end
+    if def and def.requireProfessionSkillID then
+        data.hiddenByProfession = true
+        data._professionHiddenUntilComplete = data.hiddenUntilComplete
+        data._professionSkillID = def.requireProfessionSkillID
+    end
+    if def and def.requireProfessionSkillID then
+        -- NOTE: Profession must tolerate model-only rows (no frame yet).
+        Profession.RegisterRow(data, def)
+    end
+
+    -- Secret/hidden achievement support (model fields; UI reveal happens when a frame exists)
+    if def and (def.secret or def.secretTitle or def.secretTooltip or def.secretIcon or def.secretPoints) then
+        data.isSecretAchievement = true
+        data.revealTitle = title
+        data.revealTooltip = tooltip
+        data.revealIcon = icon or 136116
+        data.revealPointsBase = points or 0
+        data.revealStaticPoints = staticPoints or false
+        data.secretTitle = def.secretTitle or "Secret"
+        data.secretTooltip = def.secretTooltip or "Hidden"
+        data.secretIcon = def.secretIcon or 134400
+        data.secretPoints = tonumber(def.secretPoints) or 0
+    end
+    if addon and addon.AchievementRowModel then table_insert(addon.AchievementRowModel, data) end
+
+    -- Lazy mode: if row frames are not built yet, return the model entry.
+    -- UI will build frames from AchievementRowModel on first open.
+    if not (AchievementPanel and AchievementPanel.achievements and #AchievementPanel.achievements > 0) then
+        return data
+    end
+
+    -- If UI rows already exist (e.g. dynamic add after UI built), create the frame immediately.
+    local index = (#AchievementPanel.achievements) + 1
+    local row = CreateAchievementRowFromData(data, index)
+    table_insert(AchievementPanel.achievements, row)
+    data.frame = row
+    if not (addon and addon.Initializing) then
+        SortAchievementRows()
+        addon.UpdateTotalPoints()
+    end
+    return row
+end
+if addon then addon.CreateAchievementRow = CreateAchievementRow end
+
+-- Build all row frames from the data model. Called on first show of the achievement tab.
+local function BuildAchievementRowsFromModel()
+    if not addon or not addon.AchievementRowModel or #addon.AchievementRowModel == 0 then return end
+
+    if EnsureAchievementPanelCreated then
+        EnsureAchievementPanelCreated()
+    end
+    if not AchievementPanel then return end
+    if AchievementPanel.achievements and #AchievementPanel.achievements > 0 then return end
+    for i, data in ipairs(addon.AchievementRowModel) do
+        local row = CreateAchievementRowFromData(data, i)
+        table_insert(AchievementPanel.achievements, row)
+    end
+    SortAchievementRows()
+    local apply = addon and addon.ApplyFilter
+    if type(apply) == "function" then apply() end
+    if addon and addon.UpdateTotalPoints then addon.UpdateTotalPoints() end
+    if EvaluateCustomCompletions then EvaluateCustomCompletions() end
+    if RefreshOutleveledAll then RefreshOutleveledAll() end
+    -- Apply status (Pending Turn-in, solo, etc.) from progress - rows just built, need full refresh
+    if addon and addon.RefreshAllAchievementPoints then addon.RefreshAllAchievementPoints() end
+end
+
 EvaluateCustomCompletions = function(newLevel)
-    if not AchievementPanel or not AchievementPanel.achievements then return end
+    local rows = (addon and addon.AchievementRowModel) or {}
     
     -- Don't evaluate until restorations are complete (prevents re-awarding on login)
     if not restorationsComplete then
@@ -3568,22 +3611,27 @@ EvaluateCustomCompletions = function(newLevel)
     local level = newLevel or UnitLevel("player") or 1
     local anyCompleted = false
     
-    for _, row in ipairs(AchievementPanel.achievements) do
+    for _, row in ipairs(rows) do
         -- Check both row.completed and database to prevent re-completion
         if not IsAchievementAlreadyCompleted(row) then
             local fn = row.customIsCompleted
             if type(fn) ~= "function" then
                 local id = row.id or row.achId
-                if id then
-                    fn = _G[id .. "_IsCompleted"]
+                if id and addon and addon.GetCustomIsCompleted then
+                    fn = addon.GetCustomIsCompleted(id)
+                end
+                if type(fn) ~= "function" and id and addon and addon.GetAchievementFunction then
+                    fn = addon.GetAchievementFunction(id, "IsCompleted")
                 end
             end
 
             if type(fn) == "function" then
                 local ok, result = pcall(fn, level)
                 if ok and result == true then
-                    HCA_MarkRowCompleted(row)
-                    HCA_AchToast_Show(row.Icon:GetTexture(), row.Title:GetText(), row.points, row)
+                    MarkRowCompleted(row)
+                    local iconTex = (row.frame and row.frame.Icon and row.frame.Icon.GetTexture and row.frame.Icon:GetTexture()) or row.icon or 136116
+                    local titleText = (row.frame and row.frame.Title and row.frame.Title.GetText and row.frame.Title:GetText()) or row.title or "Achievement"
+                    CreateAchToast(iconTex, titleText, row.points, row.frame or row)
                     anyCompleted = true
                 end
             end
@@ -3596,15 +3644,16 @@ EvaluateCustomCompletions = function(newLevel)
 end
 
 -- Expose EvaluateCustomCompletions globally for use by other modules
-_G.EvaluateCustomCompletions = EvaluateCustomCompletions
+if addon then addon.EvaluateCustomCompletions = EvaluateCustomCompletions end
 
 -- =========================================================
 -- Event bridge: forward PARTY_KILL to any rows with a tracker
 -- =========================================================
 
 do
-    if not AchievementPanel._achEvt then
-        AchievementPanel._achEvt = CreateFrame("Frame")
+    if addon and not addon.AchEvt then
+        local achEvt = CreateFrame("Frame")
+        addon.AchEvt = achEvt
         -- Track recently processed kills to prevent duplicate processing
         local recentKills = {}
         local function clearRecentKill(destGUID)
@@ -3733,8 +3782,9 @@ do
                 return true
             end
             -- Check if any achievement has a killTracker (tracks NPCs)
-            if AchievementPanel and AchievementPanel.achievements then
-                for _, row in ipairs(AchievementPanel.achievements) do
+            local rows = addon.AchievementRowModel
+            if rows then
+                for _, row in ipairs(rows) do
                     if not row.completed and type(row.killTracker) == "function" then
                         return true
                     end
@@ -3803,24 +3853,57 @@ do
             end
         end
 
+        -- Order for dungeon kill print: base first, then Trio, Duo, Solo (so only first eligible variation prints)
+        local function dungeonKillPrintOrder(row)
+            local def = row._def
+            local mapID = def and (def.mapID or def.requiredMapId)
+            if not def or not mapID then return 2, 0, 0 end
+            local achId = row.achId or row.id or ""
+            local order = 0
+            if achId:match("_Trio$") then order = 1
+            elseif achId:match("_Duo$") then order = 2
+            elseif achId:match("_Solo$") then order = 3
+            end
+            return 1, mapID, order
+        end
+
         local function processKill(destGUID)
             if not destGUID or recentKills[destGUID] then
                 return
             end
 
-            recentKills[destGUID] = true
-            clearRecentKill(destGUID)
-
-            if not (AchievementPanel and AchievementPanel.achievements) then
-                return
+            -- Update solo status for this GUID before processing the kill so GetSoloStatusForKill has
+            -- current state (critical for one-shot kills where we had no prior damage event to set it)
+            if PlayerIsSolo_UpdateStatusForGUID then
+                PlayerIsSolo_UpdateStatusForGUID(destGUID)
             end
 
-            for _, row in ipairs(AchievementPanel.achievements) do
+            recentKills[destGUID] = true
+            clearRecentKill(destGUID)
+            addon.DungeonKillPrintedForGUID = nil
+            local rows = addon.AchievementRowModel
+            if not rows then return end
+
+            local rowsWithTracker = {}
+            for _, row in ipairs(rows) do
                 if not row.completed and type(row.killTracker) == "function" then
-                    if row.killTracker(destGUID) then
-                        HCA_MarkRowCompleted(row)
-                        HCA_AchToast_Show(row.Icon:GetTexture(), row.Title:GetText(), row.points, row)
-                    end
+                    table_insert(rowsWithTracker, row)
+                end
+            end
+            table_sort(rowsWithTracker, function(a, b)
+                local da, ma, oa = dungeonKillPrintOrder(a)
+                local db, mb, ob = dungeonKillPrintOrder(b)
+                if da ~= db then return da < db end
+                if ma ~= mb then return ma < mb end
+                return oa < ob
+            end)
+
+            for _, row in ipairs(rowsWithTracker) do
+                if row.killTracker(destGUID) then
+                    MarkRowCompleted(row)
+                    local iconTex = (row.frame and row.frame.Icon and row.frame.Icon.GetTexture and row.frame.Icon:GetTexture()) or row.icon or 136116
+                    local titleText = (row.frame and row.frame.Title and row.frame.Title.GetText and row.frame.Title:GetText()) or row.title or "Achievement"
+                    CreateAchToast(iconTex, titleText, row.points, row.frame or row)
                 end
             end
             
@@ -3828,43 +3911,40 @@ do
             externalPlayersByNPC[destGUID] = nil
         end
         
-        -- Expose function to get external players for an NPC (for use by IsGroupEligibleForAchievement)
-        _G.GetExternalPlayersForNPC = function(destGUID)
+        -- Define and expose for IsGroupEligibleForAchievement and other callers
+        local function GetExternalPlayersForNPC(destGUID)
             if not destGUID then
                 return {}
             end
             cleanupExternalPlayers()
-            
-            -- Try to update threat data one last time before returning (if NPC is still targetable)
             if UnitExists("target") and UnitGUID("target") == destGUID and UnitCanAttack("player", "target") then
                 updateExternalPlayerThreat(destGUID)
             end
-            
             return externalPlayersByNPC[destGUID] or {}
         end
         
-        AchievementPanel._achEvt:RegisterEvent("COMBAT_LOG_EVENT_UNFILTERED")
-        AchievementPanel._achEvt:RegisterEvent("BOSS_KILL")
-        AchievementPanel._achEvt:RegisterEvent("QUEST_ACCEPTED")
-        AchievementPanel._achEvt:RegisterEvent("QUEST_TURNED_IN")
-        AchievementPanel._achEvt:RegisterEvent("QUEST_REMOVED")
-        AchievementPanel._achEvt:RegisterEvent("UNIT_SPELLCAST_SENT")
-        AchievementPanel._achEvt:RegisterEvent("UNIT_INVENTORY_CHANGED")
-        AchievementPanel._achEvt:RegisterEvent("ITEM_LOCKED")
-        AchievementPanel._achEvt:RegisterEvent("DELETE_ITEM_CONFIRM")
-        AchievementPanel._achEvt:RegisterEvent("ITEM_UNLOCKED")
-        AchievementPanel._achEvt:RegisterEvent("BAG_UPDATE_DELAYED")
-        AchievementPanel._achEvt:RegisterEvent("CHAT_MSG_TEXT_EMOTE")
-        AchievementPanel._achEvt:RegisterEvent("GOSSIP_SHOW")
-        AchievementPanel._achEvt:RegisterEvent("PLAYER_LEVEL_CHANGED")
-        AchievementPanel._achEvt:RegisterEvent("CHAT_MSG_LOOT")
-        AchievementPanel._achEvt:RegisterEvent("PLAYER_DEAD")
-        AchievementPanel._achEvt:RegisterEvent("PLAYER_REGEN_ENABLED")
-        AchievementPanel._achEvt:RegisterEvent("PLAYER_ENTERING_WORLD")
-        AchievementPanel._achEvt:RegisterEvent("UPDATE_FACTION")
-        AchievementPanel._achEvt:RegisterEvent("UNIT_AURA")
-        AchievementPanel._achEvt:RegisterEvent("MAP_EXPLORATION_UPDATED")
-        AchievementPanel._achEvt:SetScript("OnEvent", function(_, event, ...)
+        achEvt:RegisterEvent("COMBAT_LOG_EVENT_UNFILTERED")
+        achEvt:RegisterEvent("BOSS_KILL")
+        achEvt:RegisterEvent("QUEST_ACCEPTED")
+        achEvt:RegisterEvent("QUEST_TURNED_IN")
+        achEvt:RegisterEvent("QUEST_REMOVED")
+        achEvt:RegisterEvent("UNIT_SPELLCAST_SENT")
+        achEvt:RegisterEvent("UNIT_INVENTORY_CHANGED")
+        achEvt:RegisterEvent("ITEM_LOCKED")
+        achEvt:RegisterEvent("DELETE_ITEM_CONFIRM")
+        achEvt:RegisterEvent("ITEM_UNLOCKED")
+        achEvt:RegisterEvent("BAG_UPDATE_DELAYED")
+        achEvt:RegisterEvent("CHAT_MSG_TEXT_EMOTE")
+        achEvt:RegisterEvent("GOSSIP_SHOW")
+        achEvt:RegisterEvent("PLAYER_LEVEL_CHANGED")
+        achEvt:RegisterEvent("CHAT_MSG_LOOT")
+        achEvt:RegisterEvent("PLAYER_DEAD")
+        achEvt:RegisterEvent("PLAYER_REGEN_ENABLED")
+        achEvt:RegisterEvent("PLAYER_ENTERING_WORLD")
+        achEvt:RegisterEvent("UPDATE_FACTION")
+        achEvt:RegisterEvent("UNIT_AURA")
+        achEvt:RegisterEvent("MAP_EXPLORATION_UPDATED")
+        achEvt:SetScript("OnEvent", function(_, event, ...)
             -- Clean up external player tracking on zone loads
             if event == "PLAYER_ENTERING_WORLD" then
                 externalPlayersByNPC = {}
@@ -3875,15 +3955,18 @@ do
             -- Handle BOSS_KILL event for raid achievements (fires regardless of who delivered final blow)
             if event == "BOSS_KILL" then
                 local encounterID, encounterName = ...
-                if encounterID and AchievementPanel and AchievementPanel.achievements then
+                local rows = addon.AchievementRowModel
+                if encounterID and rows then
                     -- Process boss kill for all raid achievements that have processBossKillByEncounterID function
-                    for _, row in ipairs(AchievementPanel.achievements) do
+                    for _, row in ipairs(rows) do
                         if not row.completed and type(row.processBossKillByEncounterID) == "function" then
                             local shouldComplete = row.processBossKillByEncounterID(encounterID)
                             -- If the function indicates completion, mark the achievement as complete
                             if shouldComplete then
-                                HCA_MarkRowCompleted(row)
-                                HCA_AchToast_Show(row.Icon:GetTexture(), row.Title:GetText(), row.points, row)
+                                MarkRowCompleted(row)
+                                local iconTex = (row.frame and row.frame.Icon and row.frame.Icon.GetTexture and row.frame.Icon:GetTexture()) or row.icon or 136116
+                                local titleText = (row.frame and row.frame.Title and row.frame.Title.GetText and row.frame.Title:GetText()) or row.title or "Achievement"
+                                CreateAchToast(iconTex, titleText, row.points, row.frame or row)
                             end
                         end
                     end
@@ -3917,7 +4000,6 @@ do
                     -- Use stored tap denial status (NPC is cleared from target when it dies, so we can't check at kill time)
                     local isTapDenied = npcTapDenied[destGUID]
                     if isTapDenied == true then
-                        print("|cff008066[Hardcore Achievements]|r |cffffd100Achievement cannot be fulfilled: Unit was not your tag.|r")
                         return
                     end
                     if npcsInCombat[destGUID] then
@@ -3985,8 +4067,9 @@ do
                         if npcId then
                             -- Check if any achievement tracks this NPC
                             local isTracked = false
-                            if AchievementPanel and AchievementPanel.achievements then
-                                for _, row in ipairs(AchievementPanel.achievements) do
+                            local rows = addon.AchievementRowModel
+                            if rows then
+                                for _, row in ipairs(rows) do
                                     if not row.completed and type(row.killTracker) == "function" then
                                         isTracked = true
                                         break
@@ -4044,8 +4127,9 @@ do
                             elseif npcId then
                                 -- Check if any achievement tracks this NPC
                                 local isTracked = false
-                                if AchievementPanel and AchievementPanel.achievements then
-                                    for _, row in ipairs(AchievementPanel.achievements) do
+                                local rows = addon.AchievementRowModel
+                                if rows then
+                                    for _, row in ipairs(rows) do
                                         if not row.completed and type(row.killTracker) == "function" then
                                             -- This achievement has a kill tracker, let processKill check if it matches
                                             isTracked = true
@@ -4142,9 +4226,7 @@ do
                                         updateExternalPlayerThreat(destGUID)
                                     end
                                     -- Update solo status
-                                    if _G.PlayerIsSolo_UpdateStatusForGUID then
-                                        _G.PlayerIsSolo_UpdateStatusForGUID(destGUID)
-                                    end
+                                    PlayerIsSolo_UpdateStatusForGUID(destGUID)
                                 end
                             end
                         end
@@ -4154,18 +4236,18 @@ do
                 -- arg2 is the QuestId
                 local questID = select(2, ...)
                 questID = questID and tonumber(questID) or nil
-                if questID and HardcoreAchievements_SetProgress then
+                if questID and addon and addon.SetProgress then
                     -- Store player's level when quest is accepted as a backup reference
                     -- This helps prevent achievements from failing if player levels up between accepting and turning in
                     local acceptLevel = UnitLevel("player") or 1
-                    for _, row in ipairs(AchievementPanel.achievements) do
+                    for _, row in ipairs(addon.AchievementRowModel or {}) do
                         if not row.completed then
                             -- Check if this achievement tracks this quest by comparing questID directly
                             -- Don't call questTracker as it processes the quest and can complete the achievement
                             local rowQuestId = row.requiredQuestId
                             if rowQuestId and tonumber(rowQuestId) == questID then
                                 -- Store levelAtAccept as a backup (will be overwritten by levelAtKill or levelAtTurnIn on fulfillment)
-                                HardcoreAchievements_SetProgress(row.id, "levelAtAccept", acceptLevel)
+                                addon.SetProgress(row.id, "levelAtAccept", acceptLevel)
                             end
                         end
                     end
@@ -4175,7 +4257,7 @@ do
                 questID = questID and tonumber(questID) or nil
                 local currentTime = GetTime()
                 
-                for _, row in ipairs(AchievementPanel.achievements) do
+                for _, row in ipairs(addon.AchievementRowModel or {}) do
                     if not row.completed and type(row.questTracker) == "function" then
                         -- First check if the quest matches this achievement
                         local questMatched = row.questTracker(questID)
@@ -4183,8 +4265,8 @@ do
                         -- Only set levelAtTurnIn if the quest actually matches this achievement
                         if questMatched then
                             -- Check if player just leveled up within the window - if so, use the previous level
-                            if HardcoreAchievements_SetProgress then
-                                local progressTable = HardcoreAchievements_GetProgress and HardcoreAchievements_GetProgress(row.id)
+                            if addon and addon.SetProgress then
+                                local progressTable = addon.GetProgress and addon.GetProgress(row.id)
                                 -- Only set levelAtTurnIn if we don't already have levelAtKill (for achievements without kill requirements)
                                 if not (progressTable and progressTable.levelAtKill) then
                                     local currentLevel = UnitLevel("player") or 1
@@ -4204,12 +4286,14 @@ do
                                         end
                                     end
                                     
-                                    HardcoreAchievements_SetProgress(row.id, "levelAtTurnIn", levelToStore)
+                                    addon.SetProgress(row.id, "levelAtTurnIn", levelToStore)
                                 end
                             end
                             
-                            HCA_MarkRowCompleted(row)
-                            HCA_AchToast_Show(row.Icon:GetTexture(), row.Title:GetText(), row.points, row)
+                            MarkRowCompleted(row)
+                            local iconTex = (row.frame and row.frame.Icon and row.frame.Icon.GetTexture and row.frame.Icon:GetTexture()) or row.icon or 136116
+                            local titleText = (row.frame and row.frame.Title and row.frame.Title.GetText and row.frame.Title:GetText()) or row.title or "Achievement"
+                            CreateAchToast(iconTex, titleText, row.points, row.frame or row)
                         end
                     end
                 end
@@ -4221,27 +4305,31 @@ do
                 local unit, targetName, castGUID, spellId = ...
                 if unit ~= "player" then return end
                 if spellId ~= 21343 and spellId ~= 16589 then return end
-                for _, row in ipairs(AchievementPanel.achievements) do
+                for _, row in ipairs(addon.AchievementRowModel or {}) do
                     -- Check both row.completed and database to prevent re-completion
                     if not IsAchievementAlreadyCompleted(row) and type(row.spellTracker) == "function" then
                         -- Evaluate tracker and require true return value
                         local ok, shouldComplete = pcall(row.spellTracker, tonumber(spellId), tostring(targetName or ""))
                         if ok and shouldComplete == true then
-                            HCA_MarkRowCompleted(row)
-                            HCA_AchToast_Show(row.Icon:GetTexture(), row.Title:GetText(), row.points, row)
+                            MarkRowCompleted(row)
+                            local iconTex = (row.frame and row.frame.Icon and row.frame.Icon.GetTexture and row.frame.Icon:GetTexture()) or row.icon or 136116
+                            local titleText = (row.frame and row.frame.Title and row.frame.Title.GetText and row.frame.Title:GetText()) or row.title or "Achievement"
+                            CreateAchToast(iconTex, titleText, row.points, row.frame or row)
                         end
                     end
                 end
             elseif event == "UNIT_AURA" then
                 local unit = select(1, ...)
                 if unit ~= "player" then return end
-                for _, row in ipairs(AchievementPanel.achievements) do
+                for _, row in ipairs(addon.AchievementRowModel or {}) do
                     -- Check both row.completed and database to prevent re-completion
                     if not IsAchievementAlreadyCompleted(row) and type(row.auraTracker) == "function" then
                         local ok, shouldComplete = pcall(row.auraTracker)
                         if ok and shouldComplete == true then
-                            HCA_MarkRowCompleted(row)
-                            HCA_AchToast_Show(row.Icon:GetTexture(), row.Title:GetText(), row.points, row)
+                            MarkRowCompleted(row)
+                            local iconTex = (row.frame and row.frame.Icon and row.frame.Icon.GetTexture and row.frame.Icon:GetTexture()) or row.icon or 136116
+                            local titleText = (row.frame and row.frame.Title and row.frame.Title.GetText and row.frame.Title:GetText()) or row.title or "Achievement"
+                            CreateAchToast(iconTex, titleText, row.points, row.frame or row)
                             break -- Achievement completed, no need to check others
                         end
                     end
@@ -4255,11 +4343,13 @@ do
                 if classFile == "ROGUE" then
                     local headSlotItemId = GetInventoryItemID("player", 1)
                     if headSlotItemId == 7997 then
-                        for _, row in ipairs(AchievementPanel.achievements) do
+                        for _, row in ipairs(addon.AchievementRowModel or {}) do
                             -- Check both row.completed and database to prevent re-completion
                             if not IsAchievementAlreadyCompleted(row) and (row.id == "DefiasMask" or row.achId == "DefiasMask") then
-                                HCA_MarkRowCompleted(row)
-                                HCA_AchToast_Show(row.Icon:GetTexture(), row.Title:GetText(), row.points, row)
+                                MarkRowCompleted(row)
+                                local iconTex = (row.frame and row.frame.Icon and row.frame.Icon.GetTexture and row.frame.Icon:GetTexture()) or row.icon or 136116
+                                local titleText = (row.frame and row.frame.Title and row.frame.Title.GetText and row.frame.Title:GetText()) or row.title or "Achievement"
+                                CreateAchToast(iconTex, titleText, row.points, row.frame or row)
                             end
                         end
                     end
@@ -4268,20 +4358,22 @@ do
                 -- Call item tracker functions for dungeon set achievements
                 -- The tracker checks if ALL required items are owned, so we call it for all incomplete sets
                 -- This is efficient because GetItemCount is fast and the tracker only completes when ALL items are owned
-                for _, row in ipairs(AchievementPanel.achievements) do
+                for _, row in ipairs(addon.AchievementRowModel or {}) do
                     -- Check both row.completed and database to prevent re-completion
                     if not IsAchievementAlreadyCompleted(row) and row._def and row._def.isDungeonSet then
                         local achId = row.achId or row.id
                         if achId then
                             -- Check if this achievement has an item tracker function (dungeon sets)
-                            local trackerFn = _G[achId]
+                            local trackerFn = (addon and addon.GetAchievementFunction and addon.GetAchievementFunction(achId, "IsCompleted")) or (addon and addon[achId])
                             if type(trackerFn) == "function" then
                                 -- The tracker function checks all required items and only returns true
                                 -- when ALL items are owned, so it's safe to call on every inventory change
                                 local ok, shouldComplete = pcall(trackerFn)
                                 if ok and shouldComplete == true then
-                                    HCA_MarkRowCompleted(row)
-                                    HCA_AchToast_Show(row.Icon:GetTexture(), row.Title:GetText(), row.points, row)
+                                    MarkRowCompleted(row)
+                                    local iconTex = (row.frame and row.frame.Icon and row.frame.Icon.GetTexture and row.frame.Icon:GetTexture()) or row.icon or 136116
+                                    local titleText = (row.frame and row.frame.Title and row.frame.Title.GetText and row.frame.Title:GetText()) or row.title or "Achievement"
+                                    CreateAchToast(iconTex, titleText, row.points, row.frame or row)
                                 end
                             end
                         end
@@ -4295,7 +4387,7 @@ do
                 if mapId == 1415 and cursorType == "item" and tonumber(itemId) == 8350 then
                     -- Store the current item count before deletion
                     local initialCount = GetItemCount and GetItemCount(8350, true) or 0
-                    _G.HCA_Precious_DeleteState = {
+                    addon.Precious_DeleteState = {
                         armed = true,
                         mapId = mapId,
                         itemId = 8350,
@@ -4306,7 +4398,7 @@ do
                 end
             elseif event == "DELETE_ITEM_CONFIRM" then
                 -- This fires when the delete confirmation dialog is shown/confirmed
-                local st = _G.HCA_Precious_DeleteState
+                local st = addon.Precious_DeleteState
                 if st and st.armed and st.itemId == 8350 and st.mapId == 1415 then
                     -- Require the player still be in Blackrock Mountain when the delete prompt occurs
                     local currentMapId = C_Map and C_Map.GetBestMapForUnit and C_Map.GetBestMapForUnit("player")
@@ -4315,16 +4407,16 @@ do
                     end
                 end
             elseif event == "ITEM_UNLOCKED" then
-                local st = _G.HCA_Precious_DeleteState
+                local st = addon.Precious_DeleteState
                 if st and st.armed and st.itemId == 8350 and st.mapId == 1415 then
                     if st.deleteConfirmed then
                         st.awaitingBagUpdate = true
                     else
-                        _G.HCA_Precious_DeleteState = nil
+                        addon.Precious_DeleteState = nil
                     end
                 end
             elseif event == "BAG_UPDATE_DELAYED" then
-                local st = _G.HCA_Precious_DeleteState
+                local st = addon.Precious_DeleteState
                 if st and st.armed and st.awaitingBagUpdate and st.deleteConfirmed and st.itemId == 8350 and st.mapId == 1415 then
                     local currentMapId = C_Map and C_Map.GetBestMapForUnit and C_Map.GetBestMapForUnit("player")
                     local itemCount = GetItemCount and GetItemCount(8350, true) or 0
@@ -4332,34 +4424,39 @@ do
                     local expectedCount = (st.initialItemCount or 0) - 1
                     if currentMapId == 1415 and newCount == expectedCount then
                         -- Keep the completion flag for the customIsCompleted function.
-                        _G.HCA_Precious_RingDeleted = true
+                        addon.Precious_RingDeleted = true
 
                         -- Manually complete the row immediately.
-                        for _, row in ipairs(AchievementPanel.achievements) do
+                        for _, row in ipairs(addon.AchievementRowModel or {}) do
                             local id = row and (row.id or row.achId)
                             -- Check both row.completed and database to prevent re-completion
                             if row and not IsAchievementAlreadyCompleted(row) and id == "Precious" then
-                                HCA_MarkRowCompleted(row)
-                                HCA_AchToast_Show(row.Icon:GetTexture(), row.Title:GetText(), row.points, row)
+                                MarkRowCompleted(row)
+                                local iconTex = (row.frame and row.frame.Icon and row.frame.Icon.GetTexture and row.frame.Icon:GetTexture()) or row.icon or 136116
+                                local titleText = (row.frame and row.frame.Title and row.frame.Title.GetText and row.frame.Title:GetText()) or row.title or "Achievement"
+                                CreateAchToast(iconTex, titleText, row.points, row.frame or row)
                                 
                                 -- Send SAY channel message to notify nearby players for Fellowship achievement
-                                if _G.HCA_SendPreciousCompletionMessage then
-                                    _G.HCA_SendPreciousCompletionMessage()
+                                local SendPreciousCompletionMessage = (addon and addon.SendPreciousCompletionMessage)
+                                if SendPreciousCompletionMessage then
+                                    SendPreciousCompletionMessage()
                                 end
                                 break
                             end
                         end
                     end
                     -- Clear state after the first bag update following unlock, regardless of outcome.
-                    _G.HCA_Precious_DeleteState = nil
+                    addon.Precious_DeleteState = nil
                 end
-                for _, row in ipairs(AchievementPanel.achievements) do
+                for _, row in ipairs(addon.AchievementRowModel or {}) do
                     -- Check both row.completed and database to prevent re-completion
                     if not IsAchievementAlreadyCompleted(row) and type(row.itemTracker) == "function" then
                         local ok, shouldComplete = pcall(row.itemTracker)
                         if ok and shouldComplete == true then
-                            HCA_MarkRowCompleted(row)
-                            HCA_AchToast_Show(row.Icon:GetTexture(), row.Title:GetText(), row.points, row)
+                            MarkRowCompleted(row)
+                            local iconTex = (row.frame and row.frame.Icon and row.frame.Icon.GetTexture and row.frame.Icon:GetTexture()) or row.icon or 136116
+                            local titleText = (row.frame and row.frame.Title and row.frame.Title.GetText and row.frame.Title:GetText()) or row.title or "Achievement"
+                            CreateAchToast(iconTex, titleText, row.points, row.frame or row)
                             break -- Achievement completed, no need to check others
                         end
                     end
@@ -4367,13 +4464,15 @@ do
             elseif event == "CHAT_MSG_TEXT_EMOTE" then
                 local msg, unit = ...
                 if unit ~= UnitName("player") then return end
-                for _, row in ipairs(AchievementPanel.achievements) do
+                for _, row in ipairs(addon.AchievementRowModel or {}) do
                     -- Check both row.completed and database to prevent re-completion
                     if not IsAchievementAlreadyCompleted(row) and type(row.chatTracker) == "function" then
                         local ok, shouldComplete = pcall(row.chatTracker, tostring(msg or ""))
                         if ok and shouldComplete == true then
-                            HCA_MarkRowCompleted(row)
-                            HCA_AchToast_Show(row.Icon:GetTexture(), row.Title:GetText(), row.points, row)
+                            MarkRowCompleted(row)
+                            local iconTex = (row.frame and row.frame.Icon and row.frame.Icon.GetTexture and row.frame.Icon:GetTexture()) or row.icon or 136116
+                            local titleText = (row.frame and row.frame.Title and row.frame.Title.GetText and row.frame.Title:GetText()) or row.title or "Achievement"
+                            CreateAchToast(iconTex, titleText, row.points, row.frame or row)
                         end
                     end
                 end
@@ -4382,13 +4481,15 @@ do
                 local npcName = UnitName("npc")
                 local playerLevel = UnitLevel("player")
                 if npcName == "Archmage Leryda" and playerLevel <= 60 then
-                    for _, row in ipairs(AchievementPanel.achievements) do
+                    for _, row in ipairs(addon.AchievementRowModel or {}) do
                         local id = row and (row.id or row.achId)
                         if row and (not row.completed) and id == "MessageToKarazhan" then
                             -- Check if the zone is fully discovered and speaking to the correct NPC
-                            if CheckZoneDiscovery and CheckZoneDiscovery(1430) then
-                                HCA_MarkRowCompleted(row)
-                                HCA_AchToast_Show(row.Icon:GetTexture(), row.Title:GetText(), row.points, row)
+                            if addon and addon.CheckZoneDiscovery and addon.CheckZoneDiscovery(1430) then
+                                MarkRowCompleted(row)
+                                local iconTex = (row.frame and row.frame.Icon and row.frame.Icon.GetTexture and row.frame.Icon:GetTexture()) or row.icon or 136116
+                                local titleText = (row.frame and row.frame.Title and row.frame.Title.GetText and row.frame.Title:GetText()) or row.title or "Achievement"
+                                CreateAchToast(iconTex, titleText, row.points, row.frame or row)
                                 break
                             end
                         end
@@ -4419,28 +4520,32 @@ do
 
                 local itemID = tonumber(itemLink:match("|Hitem:(%d+)"))
                 if itemID ~= 6382 then return end  -- Forest Leather Belt
-                    for _, row in ipairs(AchievementPanel.achievements) do
+                    for _, row in ipairs(addon.AchievementRowModel or {}) do
                         -- Check both row.completed and database to prevent re-completion
                         if not IsAchievementAlreadyCompleted(row) and row.id == "Secret99" then
-                            HCA_MarkRowCompleted(row)
-                            HCA_AchToast_Show(row.Icon:GetTexture(), row.Title:GetText(), row.points, row)
+                            MarkRowCompleted(row)
+                            local iconTex = (row.frame and row.frame.Icon and row.frame.Icon.GetTexture and row.frame.Icon:GetTexture()) or row.icon or 136116
+                            local titleText = (row.frame and row.frame.Title and row.frame.Title.GetText and row.frame.Title:GetText()) or row.title or "Achievement"
+                            CreateAchToast(iconTex, titleText, row.points, row.frame or row)
                         end
                     end
                 end
             elseif event == "UPDATE_FACTION" then
                 -- Handle reputation achievement completion
-                for _, row in ipairs(AchievementPanel.achievements) do
+                for _, row in ipairs(addon.AchievementRowModel or {}) do
                     if not row.completed and row._def and row._def.isReputation then
                         local achId = row.achId or row.id
                         if achId then
                             -- Check if this achievement has a reputation tracker function
-                            local trackerFn = _G[achId]
+                            local trackerFn = (addon and addon.GetAchievementFunction and addon.GetAchievementFunction(achId, "IsCompleted")) or (addon and addon[achId])
                             if type(trackerFn) == "function" then
                                 -- The tracker function checks if the player is exalted with the faction
                                 local ok, shouldComplete = pcall(trackerFn)
                                 if ok and shouldComplete == true then
-                                    HCA_MarkRowCompleted(row)
-                                    HCA_AchToast_Show(row.Icon:GetTexture(), row.Title:GetText(), row.points, row)
+                                    MarkRowCompleted(row)
+                                local iconTex = (row.frame and row.frame.Icon and row.frame.Icon.GetTexture and row.frame.Icon:GetTexture()) or row.icon or 136116
+                                local titleText = (row.frame and row.frame.Title and row.frame.Title.GetText and row.frame.Title:GetText()) or row.title or "Achievement"
+                                CreateAchToast(iconTex, titleText, row.points, row.frame or row)
                                 end
                             end
                         end
@@ -4456,7 +4561,7 @@ do
                     for i = #rows, 1, -1 do
                         local row = rows[i]
                         if not row or row.completed then
-                            table.remove(rows, i)
+                            table_remove(rows, i)
                         else
                             needsRefresh = true
                             local shouldClearProgress = false
@@ -4476,8 +4581,8 @@ do
                         QuestTrackedRows[removedQuestId] = nil
                     end
                     if needsRefresh then
-                        if clearedProgress and HCA_UpdateTotalPoints then
-                            HCA_UpdateTotalPoints()
+                        if clearedProgress and addon and addon.UpdateTotalPoints then
+                            addon.UpdateTotalPoints()
                         end
                         RefreshOutleveledAll()
                         if SortAchievementRows then
@@ -4487,25 +4592,31 @@ do
                 end
             elseif event == "MAP_EXPLORATION_UPDATED" then
                 local playerFaction = select(2, UnitFactionGroup("player"))
-                for _, row in ipairs(AchievementPanel.achievements) do
+                for _, row in ipairs(addon.AchievementRowModel or {}) do
                     if not row.completed and row.id == "OrgA" and playerFaction == FACTION_ALLIANCE then
-                        if CheckZoneDiscovery(1411) then
-                            HCA_MarkRowCompleted(row)
-                            HCA_AchToast_Show(row.Icon:GetTexture(), row.Title:GetText(), row.points, row)
+                        if addon and addon.CheckZoneDiscovery and addon.CheckZoneDiscovery(1411) then
+                            MarkRowCompleted(row)
+                            local iconTex = (row.frame and row.frame.Icon and row.frame.Icon.GetTexture and row.frame.Icon:GetTexture()) or row.icon or 136116
+                            local titleText = (row.frame and row.frame.Title and row.frame.Title.GetText and row.frame.Title:GetText()) or row.title or "Achievement"
+                            CreateAchToast(iconTex, titleText, row.points, row.frame or row)
                         end
                     elseif not row.completed and row.id == "StormH" and playerFaction == FACTION_HORDE then
-                        if CheckZoneDiscovery(1429) then
-                            HCA_MarkRowCompleted(row)
-                            HCA_AchToast_Show(row.Icon:GetTexture(), row.Title:GetText(), row.points, row)
+                        if addon and addon.CheckZoneDiscovery and addon.CheckZoneDiscovery(1429) then
+                            MarkRowCompleted(row)
+                            local iconTex = (row.frame and row.frame.Icon and row.frame.Icon.GetTexture and row.frame.Icon:GetTexture()) or row.icon or 136116
+                            local titleText = (row.frame and row.frame.Title and row.frame.Title.GetText and row.frame.Title:GetText()) or row.title or "Achievement"
+                            CreateAchToast(iconTex, titleText, row.points, row.frame or row)
                         end
                     end
                 end
             elseif event == "PLAYER_DEAD" then
-                for _, row in ipairs(AchievementPanel.achievements) do
+                for _, row in ipairs(addon.AchievementRowModel or {}) do
                     -- Check both row.completed and database to prevent re-completion
                     if not IsAchievementAlreadyCompleted(row) and (row.id == "Secret4" or row.id == "Secret004" or row.achId == "Secret4" or row.achId == "Secret004") then
-                        HCA_MarkRowCompleted(row)
-                        HCA_AchToast_Show(row.Icon:GetTexture(), row.Title:GetText(), row.points, row)
+                        MarkRowCompleted(row)
+                        local iconTex = (row.frame and row.frame.Icon and row.frame.Icon.GetTexture and row.frame.Icon:GetTexture()) or row.icon or 136116
+                        local titleText = (row.frame and row.frame.Title and row.frame.Title.GetText and row.frame.Title:GetText()) or row.title or "Achievement"
+                        CreateAchToast(iconTex, titleText, row.points, row.frame or row)
                         break
                     end
                 end
@@ -4518,8 +4629,8 @@ end
 -- Cross-locale Emote Hook (token-based via DoEmote)
 -- =========================================================
 do
-    if not _G.HCA_EmoteHooked then
-        _G.HCA_EmoteHooked = true
+    if not addon.EmoteHooked then
+        addon.EmoteHooked = true
         if type(hooksecurefunc) == "function" then
             hooksecurefunc("DoEmote", function(token, unit)
                 -- Resolve a reasonable target name
@@ -4530,14 +4641,15 @@ do
                     targetName = UnitName("target")
                 end
 
-                if not AchievementPanel or not AchievementPanel.achievements then return end
-                for _, row in ipairs(AchievementPanel.achievements) do
+                for _, row in ipairs(addon.AchievementRowModel or {}) do
                     -- Check both row.completed and database to prevent re-completion
                     if not IsAchievementAlreadyCompleted(row) and type(row.emoteTracker) == "function" then
                         local ok, shouldComplete = pcall(row.emoteTracker, tostring(token or ""), tostring(targetName or ""), tostring(unit or ""))
                         if ok and shouldComplete == true then
-                            HCA_MarkRowCompleted(row)
-                            HCA_AchToast_Show(row.Icon and row.Icon:GetTexture() or 136116, row.Title and row.Title:GetText() or "Achievement", row.points)
+                            MarkRowCompleted(row)
+                            local iconTex = (row.frame and row.frame.Icon and row.frame.Icon.GetTexture and row.frame.Icon:GetTexture()) or row.icon or 136116
+                            local titleText = (row.frame and row.frame.Title and row.frame.Title.GetText and row.frame.Title:GetText()) or row.title or "Achievement"
+                            CreateAchToast(iconTex, titleText, row.points, row.frame or row)
                         end
                     end
                 end
@@ -4551,7 +4663,16 @@ end
 -- =========================================================
  
 -- Reusable function for achievement tab click logic
-function HCA_ShowAchievementTab()
+local function ShowAchievementTab()
+    if EnsureAchievementPanelCreated then
+        EnsureAchievementPanelCreated()
+    end
+
+    -- Build row frames on-demand (first open)
+    if BuildAchievementRowsFromModel then
+        BuildAchievementRowsFromModel()
+    end
+
     -- tab sfx (Classic-compatible)
     if SOUNDKIT and SOUNDKIT.IG_CHARACTER_INFO_TAB then
         PlaySound(SOUNDKIT.IG_CHARACTER_INFO_TAB)
@@ -4601,8 +4722,7 @@ function HCA_ShowAchievementTab()
             AchievementPanel.SoloModeCheckbox.tooltip = "|cffffffffSolo|r \nToggling this option on will display the total points you will receive if you complete this achievement solo (no help from nearby players)."
         else
             -- In Hardcore mode, checkbox is only enabled if Self-Found is active
-            local isSelfFound = _G.IsSelfFound and _G.IsSelfFound() or false
-            if isSelfFound then
+            if IsSelfFound() then
                 AchievementPanel.SoloModeCheckbox:Enable()
                 AchievementPanel.SoloModeCheckbox.Text:SetTextColor(1, 1, 1, 1)
                 AchievementPanel.SoloModeCheckbox.Text:SetText("SSF")
@@ -4617,14 +4737,22 @@ function HCA_ShowAchievementTab()
     end
     
     -- Apply current filter when opening panel
-    if ApplyFilter then
-        ApplyFilter()
+    local apply = addon and addon.ApplyFilter
+    if type(apply) == "function" then
+        apply()
+    end
+
+    -- Apply status text after panel is shown and filtered (ensures "Pending Turn-in", etc. display on initial open)
+    if addon and addon.RefreshAllAchievementPoints then
+        addon.RefreshAllAchievementPoints()
     end
 
     -- AchievementPanel.PortraitCover:Show()
 end
+-- Export so ToggleAchievementCharacterFrameTab and square frame can call at click time
+if addon then addon.ShowAchievementTab = ShowAchievementTab end
 
-Tab:SetScript("OnClick", HCA_ShowAchievementTab)
+Tab:SetScript("OnClick", ShowAchievementTab)
 
 -- Add mouseover highlighting for square frame and tooltip
 Tab:HookScript("OnEnter", function(self)
@@ -4648,7 +4776,7 @@ end)
 Tab:HookScript("OnLeave", function(self)
     if Tab.squareFrame and Tab.squareFrame:IsShown() and Tab.squareFrame.highlight then
         -- Only hide highlight if tab is not selected (check if AchievementPanel is shown)
-        if not AchievementPanel:IsShown() then
+        if not (AchievementPanel and AchievementPanel:IsShown()) then
             Tab.squareFrame.highlight:Hide()
         end
     end
@@ -4688,10 +4816,6 @@ hooksecurefunc("CharacterFrame_ShowSubFrame", function(frameName)
         end
     end
 end)
-
-if AchievementPanel and AchievementPanel.HookScript then
-    AchievementPanel:HookScript("OnShow", RestoreCompletionsFromDB)
-end
 
 -- Hook CharacterFrame OnHide to hide square frame when character frame closes
 CharacterFrame:HookScript("OnHide", function()
@@ -4737,157 +4861,107 @@ hooksecurefunc("ToggleCharacter", function(tab, onlyShow)
 end)
 
 -- =========================================================
--- Deferred Achievement Registration System
--- Processes queued achievements on PLAYER_LOGIN with C_Timer chains
+-- Deferred Achievement Registration + Finalization
+--
+-- Phase 1 (ADDON_LOADED):
+--   - Run all queued registration functions. With the UI deferred, registration should be mostly
+--     table/model work (fast) and safe to do in a single pass.
+--
+-- Phase 2 (after PLAYER_LOGIN and registration complete):
+--   - Run "heavy ops" (derived state passes) once: restore completions, evaluate checkers,
+--     refresh points/outleveled state, profession visibility, etc.
 -- =========================================================
 -- restorationsComplete is declared at the top of the file for scope access
 do
-    local registrationFrame = CreateFrame("Frame")
-    local registrationIndex = 1
-    local REGISTRATION_BATCH_SIZE = 1  -- Process 1 achievements per batch (very small to avoid lag)
-    local REGISTRATION_BATCH_DELAY = 0.01  -- 10ms delay between batches (allows frame updates)
-    
+    local f = CreateFrame("Frame")
+
     local registrationComplete = false
     local playerLoggedIn = false
-    local heavyOpsScheduled = false
+    local finalized = false
 
-    -- Forward declaration
-    local RunHeavyOperations
-
-    -- Run heavy operations after both registration and login are complete
-    -- These operations are batched as well to avoid lag
-    RunHeavyOperations = function()
-        if heavyOpsScheduled then return end
+    local function Initialize()
+        if finalized then return end
         if not registrationComplete or not playerLoggedIn then return end
-        
-        heavyOpsScheduled = true
-        
-        -- Use small delays between operations to spread load
-        C_Timer.After(0.1, function()
-            if RestoreCompletionsFromDB then
-                RestoreCompletionsFromDB()
-            end
-            -- Mark that restorations are complete
-            restorationsComplete = true
-            
-            C_Timer.After(0.1, function()
-                -- First, check pending completions (including customIsCompleted achievements)
-                if CheckPendingCompletions then
-                    CheckPendingCompletions()
-                end
-                -- Also evaluate custom completions (handles both row.customIsCompleted and global functions)
-                -- This is especially important for level milestones which can be completed at any level
-                if EvaluateCustomCompletions then
-                    local currentLevel = UnitLevel("player") or 1
-                    EvaluateCustomCompletions(currentLevel)
-                end
-                
-                -- Refresh outleveled status AFTER checking completions
-                -- This ensures level milestones and profession achievements are marked complete before checking if they're "failed"
-                C_Timer.After(0.1, function()
-                    if RefreshOutleveledAll then
-                        RefreshOutleveledAll()
-                    end
-                    
-                    -- Fix incorrectly failed meta achievements after refreshing outleveled status
-                    -- This must run after RefreshOutleveledAll so IsRowOutleveled returns correct values
-                    C_Timer.After(0.1, function()
-                        CleanupIncorrectlyFailedMetaAchievements()
-                    end)
-                    
-                    C_Timer.After(0.1, function()
-                        if SortAchievementRows then
-                            SortAchievementRows()
-                        end
-                        
-                        C_Timer.After(0.1, function()
-                            if RefreshAllAchievementPoints then
-                                RefreshAllAchievementPoints()
-                            end
-                            
-                            C_Timer.After(0.1, function()
-                                if ProfessionTracker and ProfessionTracker.RefreshAll then
-                                    ProfessionTracker.RefreshAll()
-                                end
-                            end)
-                        end)
-                    end)
-                end)
-            end)
-            
-            -- Print "All achievements loaded!" after restorations are marked complete
-            -- but before scheduling the completion checks
-            print("|cff008066[Hardcore Achievements]|r |cffffd100All achievements loaded!|r")
-        end)
+
+        finalized = true
+        addon.Initializing = true
+
+        -- Derived-state passes (no timer chaining)
+        ApplySelfFoundBonus()
+        if RestoreCompletionsFromDB then RestoreCompletionsFromDB() end
+        restorationsComplete = true
+
+        -- Avoid guild/emote spam for retroactive completions during this first post-login pass
+        skipBroadcastForRetroactive = true
+        if addon and addon.CheckPendingCompletions then addon.CheckPendingCompletions() end
+        if EvaluateCustomCompletions then
+            EvaluateCustomCompletions(UnitLevel("player") or 1)
+        end
+        skipBroadcastForRetroactive = false
+
+        if RefreshOutleveledAll then RefreshOutleveledAll() end
+        if SortAchievementRows then SortAchievementRows() end
+        if RefreshAllAchievementPoints then RefreshAllAchievementPoints() end
+        if Profession then Profession.RefreshAll() end
+
+        addon.Initializing = false
+        print("|cff008066[Hardcore Achievements]|r |cffffd100All achievements loaded!|r")
+
+        -- Nothing else to do after finalization
+        f:UnregisterAllEvents()
     end
 
-    -- Process achievement registration in small batches to avoid blocking
-    local function ProcessRegistrationBatch()
-        if not _G.HCA_RegistrationQueue or #_G.HCA_RegistrationQueue == 0 then
-            registrationComplete = true
-            -- If player already logged in, trigger heavy operations
-            if playerLoggedIn then
-                RunHeavyOperations()
+    local function RegisterQueuedAchievements()
+        local queue = (addon and addon.RegistrationQueue) or addon.RegistrationQueue
+        if queue and #queue > 0 then
+            for i = 1, #queue do
+                local registerFunc = queue[i]
+                if type(registerFunc) == "function" then
+                    local ok, err = pcall(registerFunc)
+                    if not ok then
+                        print("|cff008066[Hardcore Achievements]|r |cffff0000Error registering achievement: " .. tostring(err) .. "|r")
+                    end
+                end
+            end
+        end
+        if addon then
+            addon.RegistrationQueue = nil
+        end
+        registrationComplete = true
+        Initialize()
+    end
+
+    f:RegisterEvent("ADDON_LOADED")
+    f:RegisterEvent("PLAYER_LOGIN")
+    f:SetScript("OnEvent", function(_, event, ...)
+        if event == "ADDON_LOADED" then
+            local loadedName = ...
+            if loadedName ~= addonName then return end
+
+            addon.Initializing = true
+            -- Ensure panel exists when CharacterFrame is available (queue runs at PLAYER_LOGIN when player eligibility is valid)
+            if CharacterFrame and EnsureAchievementPanelCreated then
+                EnsureAchievementPanelCreated()
             end
             return
         end
 
-        local processed = 0
-        while registrationIndex <= #_G.HCA_RegistrationQueue and processed < REGISTRATION_BATCH_SIZE do
-            local registerFunc = _G.HCA_RegistrationQueue[registrationIndex]
-            if type(registerFunc) == "function" then
-                local success, err = pcall(registerFunc)
-                if not success then
-                    print("|cff008066[Hardcore Achievements]|r |cffff0000Error registering achievement: " .. tostring(err) .. "|r")
-                end
-            end
-            --print("|cff008066[Hardcore Achievements]|r |cffffffffProcessing achievement: " .. tostring(registerFunc) .. "|r")
-            registrationIndex = registrationIndex + 1
-            processed = processed + 1
+        -- PLAYER_LOGIN: run registration queue here so UnitFactionGroup/UnitRace/UnitClass are valid for IsEligible
+        if CharacterFrame and EnsureAchievementPanelCreated then
+            EnsureAchievementPanelCreated()
         end
-
-        if registrationIndex > #_G.HCA_RegistrationQueue then
-            -- All registrations complete
-            _G.HCA_RegistrationQueue = nil  -- Clear queue to free memory
-            registrationComplete = true
-            
-            -- If player already logged in, trigger heavy operations
-            if playerLoggedIn then
-                RunHeavyOperations()
-            end
+        local queue = addon and addon.RegistrationQueue
+        if queue and #queue > 0 then
+            RegisterQueuedAchievements()
         else
-            -- Schedule next batch with delay to allow frame updates
-            C_Timer.After(REGISTRATION_BATCH_DELAY, ProcessRegistrationBatch)
+            registrationComplete = true
         end
-    end
-
-    registrationFrame:RegisterEvent("ADDON_LOADED")
-    registrationFrame:RegisterEvent("PLAYER_LOGIN")
-    registrationFrame:SetScript("OnEvent", function(self, event, ...)
-        if event == "ADDON_LOADED" then
-            local addonName = ...
-            if addonName == ADDON_NAME then
-                -- Start processing achievements in batches during addon load
-                -- This happens before PLAYER_LOGIN, spreading the work out earlier
-                if _G.HCA_RegistrationQueue and #_G.HCA_RegistrationQueue > 0 then
-                    registrationIndex = 1
-                    -- Small initial delay to let addon finish initializing
-                    C_Timer.After(0.05, ProcessRegistrationBatch)
-                else
-                    -- No achievements to register
-                    registrationComplete = true
-                    -- Will wait for PLAYER_LOGIN to run heavy operations
-                end
-            end
-        elseif event == "PLAYER_LOGIN" then
-            playerLoggedIn = true
-            print("|cff008066[Hardcore Achievements]|r |cffffd100Loading achievements...|r")
-            
-            -- If registration already complete, trigger heavy operations
-            if registrationComplete then
-                RunHeavyOperations()
-            end
-            -- Otherwise, heavy operations will be triggered when registration completes
-        end
+        playerLoggedIn = true
+        addon.Initializing = true
+        Initialize()
     end)
+end
+
+if addon then
+    addon.GetExternalPlayersForNPC = GetExternalPlayersForNPC
 end

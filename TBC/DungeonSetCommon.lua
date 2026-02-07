@@ -1,8 +1,22 @@
+---------------------------------------
+-- Dungeon Set Achievement Common Module
+---------------------------------------
 local DungeonSetCommon = {}
 
+local addonName, addon = ...
+local GetItemInfo = GetItemInfo
+local GetItemCount = GetItemCount
+local UnitClass = UnitClass
+local UnitFactionGroup = UnitFactionGroup
+local CreateFrame = CreateFrame
+local C_Timer = C_Timer
+
+---------------------------------------
+-- Item Name Lookup
+---------------------------------------
+
 -- Get item names from item IDs (you can expand this with a lookup table)
--- Export globally so tooltip function can use it
-function HCA_GetItemName(itemId)
+local function GetItemName(itemId)
   -- This is a basic mapping - you can expand this with more item names
   local itemNames = {
     -- Defias Set (Rogue)
@@ -276,7 +290,10 @@ function HCA_GetItemName(itemId)
   return "Item " .. tostring(itemId)
 end
 
--- Register a dungeon set achievement with the given definition
+---------------------------------------
+-- Registration Function
+---------------------------------------
+
 function DungeonSetCommon.registerDungeonSetAchievement(def)
   local achId = def.achId
   local title = def.title or ""
@@ -293,17 +310,24 @@ function DungeonSetCommon.registerDungeonSetAchievement(def)
   
   -- Create unique variable names
   local rowVarName = achId .. "_Row"
-  local registerFuncName = "HCA_Register" .. achId
+  local registerFuncName = "Register" .. achId
   
-  -- State management
+  ---------------------------------------
+  -- State Management
+  ---------------------------------------
+
   local state = {
     completed = false,
     itemOwned = {} -- Track which items are owned
   }
   
+  ---------------------------------------
+  -- Helper Functions
+  ---------------------------------------
+
   -- Load progress from database
   local function LoadProgress()
-    local progress = HardcoreAchievements_GetProgress and HardcoreAchievements_GetProgress(achId)
+    local progress = addon and addon.GetProgress and addon.GetProgress(achId)
     if progress then
       state.completed = progress.completed or false
       -- Load item ownership state if stored
@@ -315,10 +339,20 @@ function DungeonSetCommon.registerDungeonSetAchievement(def)
   
   -- Save progress to database
   local function SaveProgress()
-    if HardcoreAchievements_SetProgress then
-      HardcoreAchievements_SetProgress(achId, "completed", state.completed)
-      HardcoreAchievements_SetProgress(achId, "itemOwned", state.itemOwned)
+    if addon and addon.SetProgress then
+      addon.SetProgress(achId, "completed", state.completed)
+      addon.SetProgress(achId, "itemOwned", state.itemOwned)
     end
+  end
+  
+  -- Check if a specific item is owned (checks saved state first, then current inventory)
+  local function IsItemOwned(itemId)
+    -- Check saved state first (once owned, always owned)
+    if state.itemOwned and state.itemOwned[itemId] then
+      return true
+    end
+    -- Fall back to checking current inventory
+    return GetItemCount(itemId, true) > 0
   end
   
   -- Check if all required items are owned
@@ -326,7 +360,7 @@ function DungeonSetCommon.registerDungeonSetAchievement(def)
     if state.completed then return true end
     
     for _, itemId in ipairs(requiredItems) do
-      if GetItemCount(itemId, true) == 0 then
+      if not IsItemOwned(itemId) then
         return false
       end
     end
@@ -352,25 +386,40 @@ function DungeonSetCommon.registerDungeonSetAchievement(def)
     end
   end
   
-  -- Update tooltip when progress changes
+  ---------------------------------------
+  -- Tooltip Management
+  ---------------------------------------
+
   local function UpdateTooltip()
-    local row = _G[rowVarName]
+    local row = addon[rowVarName]
     if row then
       -- Store the base tooltip for the main tooltip
       local baseTooltip = tooltip or ""
       row.tooltip = baseTooltip
+
+      -- UI is created lazily; only touch frame methods when the row frame exists
+      local frame = row.frame
+      if not frame then
+        if addon and addon.AddRowUIInit then
+          addon.AddRowUIInit(row, function()
+            C_Timer.After(0, UpdateTooltip)
+          end)
+        end
+        return
+      end
+      frame.tooltip = baseTooltip
       
       -- Ensure mouse events are enabled and highlight texture exists
-      row:EnableMouse(true)
-      if not row.highlight then
-        row.highlight = row:CreateTexture(nil, "BACKGROUND")
-        row.highlight:SetAllPoints(row)
-        row.highlight:SetColorTexture(1, 1, 1, 0.10)
-        row.highlight:Hide()
+      frame:EnableMouse(true)
+      if not frame.highlight then
+        frame.highlight = frame:CreateTexture(nil, "BACKGROUND")
+        frame.highlight:SetAllPoints(frame)
+        frame.highlight:SetColorTexture(1, 1, 1, 0.10)
+        frame.highlight:Hide()
       end
       
       -- Override the OnEnter script to use proper GameTooltip API while preserving highlighting
-      row:SetScript("OnEnter", function(self)
+      frame:SetScript("OnEnter", function(self)
         -- Show highlight
         if self.highlight then
           self.highlight:Show()
@@ -405,21 +454,12 @@ function DungeonSetCommon.registerDungeonSetAchievement(def)
             
             -- Helper function to process a single item entry
             local function processItemEntry(itemId)
-              local owned = false
-              local itemName = ""
+              local owned = IsItemOwned(itemId)
               
-              -- Check saved state first (once owned, always owned)
-              if state.itemOwned and state.itemOwned[itemId] then
-                owned = true
-              else
-                -- Fall back to checking current inventory
-                local count = GetItemCount(itemId, true)
-                owned = count > 0
-                -- If currently owned, update and save the state
-                if owned then
-                  state.itemOwned[itemId] = true
-                  SaveProgress()
-                end
+              -- If currently owned but not saved, update and save the state
+              if owned and not state.itemOwned[itemId] then
+                state.itemOwned[itemId] = true
+                SaveProgress()
               end
               
               -- If achievement is complete, all items show as owned
@@ -427,7 +467,7 @@ function DungeonSetCommon.registerDungeonSetAchievement(def)
                 owned = true
               end
               
-              itemName = HCA_GetItemName(itemId)
+              local itemName = GetItemName(itemId)
               
               if owned then
                 GameTooltip:AddLine(itemName, 1, 1, 1) -- White for owned
@@ -456,7 +496,7 @@ function DungeonSetCommon.registerDungeonSetAchievement(def)
       end)
       
       -- Set up OnLeave script to hide highlight and tooltip
-      row:SetScript("OnLeave", function(self)
+      frame:SetScript("OnLeave", function(self)
         if self.highlight then
           self.highlight:Hide()
         end
@@ -478,7 +518,10 @@ function DungeonSetCommon.registerDungeonSetAchievement(def)
     return false
   end
   
-  -- Item ownership tracker (called on EQUIP_UNEQUIP events)
+  ---------------------------------------
+  -- Tracker Function
+  ---------------------------------------
+
   local function ItemTracker()
     if state.completed then return true end
     
@@ -488,9 +531,9 @@ function DungeonSetCommon.registerDungeonSetAchievement(def)
     -- Check if achievement should be completed
     if CheckCompletion() then
       -- Mark achievement as completed in the row if it exists
-      local row = _G[rowVarName]
-      if row and _G.HCA_MarkRowCompleted then
-        _G.HCA_MarkRowCompleted(row)
+      local row = addon[rowVarName]
+      if row and addon and addon.MarkRowCompleted then
+        addon.MarkRowCompleted(row)
       end
       UpdateTooltip()
       return true
@@ -505,11 +548,30 @@ function DungeonSetCommon.registerDungeonSetAchievement(def)
   -- Tracker function is passed directly to CreateAchievementRow and stored on row
   
   -- Register functions in local registry to reduce global pollution
-  if _G.HardcoreAchievements_RegisterAchievementFunction then
-    _G.HardcoreAchievements_RegisterAchievementFunction(achId, "IsCompleted", function() 
+  if addon and addon.RegisterAchievementFunction then
+    addon.RegisterAchievementFunction(achId, "IsCompleted", function() 
       UpdateItemOwnership()
       return CheckCompletion()
     end)
+  end
+  
+  -- Check if player's class matches the required class(es)
+  local function MatchesClassRequirement()
+    if not class then return true end
+    
+    local _, classFile = UnitClass("player")
+    if type(class) == "table" then
+      -- Array of classes - check if player's class is in the array
+      for _, allowedClass in ipairs(class) do
+        if classFile == allowedClass then
+          return true
+        end
+      end
+      return false
+    else
+      -- Single class string
+      return classFile == class
+    end
   end
   
   -- Check eligibility
@@ -520,36 +582,20 @@ function DungeonSetCommon.registerDungeonSetAchievement(def)
     end
     
     -- Class: use class file tokens ("MAGE","WARRIOR",...)
-    -- Support both single class (string) and multiple classes (array)
-    if class then
-      local _, classFile = UnitClass("player")
-      if type(class) == "table" then
-        -- Array of classes - check if player's class is in the array
-        local found = false
-        for _, allowedClass in ipairs(class) do
-          if classFile == allowedClass then
-            found = true
-            break
-          end
-        end
-        if not found then
-          return false
-        end
-      else
-        -- Single class string
-        if classFile ~= class then
-          return false
-        end
-      end
+    if not MatchesClassRequirement() then
+      return false
     end
     
     return true
   end
   
-  -- Create the registration function dynamically
-  _G[registerFuncName] = function()
-    if not _G.CreateAchievementRow or not _G.AchievementPanel then return end
-    if _G[rowVarName] then return end
+  ---------------------------------------
+  -- Registration Logic
+  ---------------------------------------
+
+  addon[registerFuncName] = function()
+    if not (addon and addon.CreateAchievementRow) then return end
+    if addon[rowVarName] then return end
     
     -- Check if player is eligible for this achievement
     if not IsEligible() then return end
@@ -561,8 +607,8 @@ function DungeonSetCommon.registerDungeonSetAchievement(def)
     -- Mark as dungeon set achievement (similar to isVariation for filtering)
     def.isDungeonSet = true
     
-    _G[rowVarName] = CreateAchievementRow(
-      AchievementPanel,
+    addon[rowVarName] = addon.CreateAchievementRow(
+      nil,
       achId,
       title,
       tooltip,
@@ -578,7 +624,7 @@ function DungeonSetCommon.registerDungeonSetAchievement(def)
     
     -- Store requiredItems on the row for easy access
     if requiredItems and next(requiredItems) then
-      _G[rowVarName].requiredItems = requiredItems
+      addon[rowVarName].requiredItems = requiredItems
     end
     
     -- Update tooltip after creation to ensure it shows current progress
@@ -586,8 +632,8 @@ function DungeonSetCommon.registerDungeonSetAchievement(def)
   end
   
   -- Auto-register the achievement immediately if the panel is ready
-  if _G.CreateAchievementRow and _G.AchievementPanel then
-    _G[registerFuncName]()
+  if addon and addon.CreateAchievementRow then
+    addon[registerFuncName]()
   end
   
   -- Create the event frame dynamically
@@ -597,18 +643,24 @@ function DungeonSetCommon.registerDungeonSetAchievement(def)
   eventFrame:SetScript("OnEvent", function()
     LoadProgress()
     UpdateItemOwnership()
-    _G[registerFuncName]()
+    addon[registerFuncName]()
   end)
   
   if _G.CharacterFrame and _G.CharacterFrame.HookScript then
     CharacterFrame:HookScript("OnShow", function()
       LoadProgress()
       UpdateItemOwnership()
-      _G[registerFuncName]()
+      addon[registerFuncName]()
     end)
   end
 end
 
--- Export to global scope
-_G.DungeonSetCommon = DungeonSetCommon
+---------------------------------------
+-- Module Export
+---------------------------------------
+
+if addon then
+  addon.GetItemName = GetItemName
+  addon.DungeonSetCommon = DungeonSetCommon
+end
 

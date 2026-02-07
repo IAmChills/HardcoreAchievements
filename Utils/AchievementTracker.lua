@@ -1,4 +1,24 @@
 ---@class AchievementTracker
+local addonName, addon = ...
+local CreateFrame = CreateFrame
+local C_Timer = C_Timer
+local InCombatLockdown = InCombatLockdown
+local IsControlKeyDown = IsControlKeyDown
+local IsShiftKeyDown = IsShiftKeyDown
+local ChatEdit_GetActiveWindow = ChatEdit_GetActiveWindow
+local UnitLevel = UnitLevel
+local GetMouseFoci = GetMouseFoci
+local GetAchievementInfo = GetAchievementInfo
+local GetQuestLogIndexByID = GetQuestLogIndexByID
+local GetNumQuestLogEntries = GetNumQuestLogEntries
+local GetQuestLogTitle = GetQuestLogTitle
+local GetItemCount = GetItemCount
+local GetAchievementBracket = (addon and addon.GetAchievementBracket)
+local table_insert = table.insert
+local table_sort = table.sort
+local table_concat = table.concat
+local string_format = string.format
+
 local AchievementTracker = {}
 AchievementTracker.__index = AchievementTracker
 
@@ -139,7 +159,7 @@ local function SaveTrackerPosition()
     if not trackerBaseFrame then return end
     
     -- Get character-specific database
-    local getCharDB = _G.HardcoreAchievements_GetCharDB
+    local getCharDB = addon and addon.GetCharDB
     if type(getCharDB) ~= "function" then return end
     
     local _, cdb = getCharDB()
@@ -160,7 +180,7 @@ end
 
 local function LoadTrackerPosition()
     -- Get character-specific database
-    local getCharDB = _G.HardcoreAchievements_GetCharDB
+    local getCharDB = addon and addon.GetCharDB
     if type(getCharDB) ~= "function" then
         return nil, nil
     end
@@ -182,7 +202,7 @@ local function SaveTrackerSize()
     if not trackerBaseFrame then return end
     
     -- Get character-specific database
-    local getCharDB = _G.HardcoreAchievements_GetCharDB
+    local getCharDB = addon and addon.GetCharDB
     if type(getCharDB) ~= "function" then return end
     
     local _, cdb = getCharDB()
@@ -211,7 +231,7 @@ end
 
 local function LoadTrackerSize()
     -- Get character-specific database
-    local getCharDB = _G.HardcoreAchievements_GetCharDB
+    local getCharDB = addon and addon.GetCharDB
     if type(getCharDB) ~= "function" then
         return nil, nil, false, false
     end
@@ -237,7 +257,7 @@ end
 -- Helper function to save tracked achievements to database
 local function SaveTrackedAchievements()
     -- Get character-specific database
-    local getCharDB = _G.HardcoreAchievements_GetCharDB
+    local getCharDB = addon and addon.GetCharDB
     if type(getCharDB) ~= "function" then return end
     
     local _, cdb = getCharDB()
@@ -265,7 +285,7 @@ end
 -- Helper function to load tracked achievements from database
 local function LoadTrackedAchievements()
     -- Get character-specific database
-    local getCharDB = _G.HardcoreAchievements_GetCharDB
+    local getCharDB = addon and addon.GetCharDB
     if type(getCharDB) ~= "function" then
         return {}
     end
@@ -329,7 +349,7 @@ local function RestoreTrackedAchievements()
 end
 
 -- Initialize the tracker
-function AchievementTracker:Initialize()
+local function Initialize()
     if isInitialized then
         return
     end
@@ -514,7 +534,7 @@ function AchievementTracker:Initialize()
 end
 
 -- Initialize header frame with expand/collapse
-function AchievementTracker:InitializeHeader(baseFrame)
+local function InitializeHeader(self, baseFrame)
     local headerFrame = CreateFrame("Button", "AchievementTracker_HeaderFrame", baseFrame)
     headerFrame:SetHeight(CONFIG.headerFontSize + 8)
     headerFrame:EnableMouse(true)
@@ -539,7 +559,7 @@ function AchievementTracker:InitializeHeader(baseFrame)
             return
         end
         isExpanded = not isExpanded
-        AchievementTracker:Update()
+        Update(AchievementTracker)
     end)
 
     headerFrame:SetScript("OnEnter", function(self)
@@ -576,8 +596,8 @@ function AchievementTracker:InitializeHeader(baseFrame)
     return headerFrame
 end
 
-    -- Initialize content frame for achievement list
-function AchievementTracker:InitializeContentFrame(baseFrame)
+-- Initialize content frame for achievement list
+local function InitializeContentFrame(self, baseFrame)
     local contentFrame = CreateFrame("Frame", "AchievementTracker_ContentFrame", baseFrame)
     contentFrame:SetWidth(initialWidth)
     contentFrame:SetHeight(100)
@@ -603,7 +623,7 @@ function AchievementTracker:InitializeContentFrame(baseFrame)
 end
 
 -- Initialize sizer (resize handle) in bottom right corner
-function AchievementTracker:InitializeSizer(baseFrame)
+local function InitializeSizer(self, baseFrame)
     local sizer = CreateFrame("Frame", "AchievementTracker_Sizer", baseFrame)
     sizer:SetPoint("BOTTOMRIGHT", 0, 0)
     sizer:SetWidth(35)  -- Increased size for easier grabbing
@@ -692,7 +712,7 @@ function AchievementTracker:InitializeSizer(baseFrame)
                         return
                     end
                     -- Update immediately to make word wrap responsive
-                    AchievementTracker:Update()
+                    Update(AchievementTracker)
                 end)
                 sizer.updateTimer = updateTimer
             end
@@ -731,7 +751,7 @@ function AchievementTracker:InitializeSizer(baseFrame)
             SaveTrackerSize()
             
             -- Update the tracker
-            AchievementTracker:Update()
+            Update(AchievementTracker)
             
             -- Restore fade behavior after resize (if mouse is still over tracker, fade in; otherwise fade out)
             -- Small delay to check mouse position after resize ends
@@ -753,26 +773,20 @@ end
 -- Helper function to get achievement level from definition
 local function GetAchievementLevel(achievementId)
     -- Try to get from global achievement definitions
-    if _G.Achievements then
-        for _, rec in ipairs(_G.Achievements) do
+    if addon and addon.CatalogAchievements then
+        for _, rec in ipairs(addon.CatalogAchievements) do
             if tostring(rec.achId) == tostring(achievementId) then
                 return rec.level
             end
         end
     end
-    -- Try HCA_AchievementDefs (for dungeon/other achievements)
-    if _G.HCA_AchievementDefs and _G.HCA_AchievementDefs[tostring(achievementId)] then
-        return _G.HCA_AchievementDefs[tostring(achievementId)].level
+    -- Try AchievementDefs (for dungeon/other achievements)
+    if addon and addon.AchievementDefs and addon.AchievementDefs[tostring(achievementId)] then
+        return addon.AchievementDefs[tostring(achievementId)].level
     end
-    -- Try to get from achievement row if available
-    if AchievementPanel and AchievementPanel.achievements then
-        for _, row in ipairs(AchievementPanel.achievements) do
-            if (row.id == achievementId or row.achId == achievementId) and row.maxLevel then
-                -- maxLevel represents the level requirement
-                return row.maxLevel
-            end
-        end
-    end
+    -- Try addon's single source (model or UI)
+    local row = addon and addon.GetAchievementRow and addon.GetAchievementRow(achievementId)
+    if row and row.maxLevel then return row.maxLevel end
     return nil
 end
 
@@ -788,7 +802,7 @@ local function GetAchievementDescription(achievementId)
     
     -- Check if achievement is completed first (needed for secret achievements)
     local achievementCompleted = false
-    local getCharDB = _G.HardcoreAchievements_GetCharDB
+    local getCharDB = addon and addon.GetCharDB
     if type(getCharDB) == "function" then
         local _, cdb = getCharDB()
         if cdb and cdb.achievements then
@@ -801,8 +815,8 @@ local function GetAchievementDescription(achievementId)
     
     -- Try to get from global achievement definitions
     local isSecretAchievement = false
-    if _G.Achievements then
-        for _, rec in ipairs(_G.Achievements) do
+    if addon and addon.CatalogAchievements then
+        for _, rec in ipairs(addon.CatalogAchievements) do
             if tostring(rec.achId) == tostring(achievementId) then
                 isSecretAchievement = rec.secret == true
                 -- For secret achievements that aren't completed, use secretTooltip
@@ -816,9 +830,9 @@ local function GetAchievementDescription(achievementId)
         end
     end
     
-    -- Try HCA_AchievementDefs (for dungeon/other achievements)
-    if _G.HCA_AchievementDefs and _G.HCA_AchievementDefs[tostring(achievementId)] then
-        achDef = _G.HCA_AchievementDefs[tostring(achievementId)]
+    -- Try AchievementDefs (for dungeon/other achievements)
+    if addon and addon.AchievementDefs and addon.AchievementDefs[tostring(achievementId)] then
+        achDef = addon.AchievementDefs[tostring(achievementId)]
         if not baseTooltip then
             -- Check if it's a secret achievement and not completed
             if achDef.secret and not achievementCompleted and achDef.secretTooltip then
@@ -844,38 +858,23 @@ local function GetAchievementDescription(achievementId)
         end
     end
     
-    -- Try to get from achievement row if available
-    if not baseTooltip and AchievementPanel and AchievementPanel.achievements then
-        for _, row in ipairs(AchievementPanel.achievements) do
-            if (row.id == achievementId or row.achId == achievementId) then
-                -- Check if this is a secret achievement and not completed
-                local rowIsSecret = row.isSecretAchievement or (row._def and row._def.secret)
-                local rowCompleted = row.completed or achievementCompleted
-                if rowIsSecret and not rowCompleted and row.secretTooltip then
-                    baseTooltip = row.secretTooltip
-                else
-                    baseTooltip = row.tooltip or row._tooltip
-                end
-                if not requiredKills and row.requiredKills then
-                    requiredKills = row.requiredKills
-                end
-                if not requiredItems and row.requiredItems then
-                    requiredItems = row.requiredItems
-                end
-                if not itemOrder and row.itemOrder then
-                    itemOrder = row.itemOrder
-                end
-                if row._def and row._def.isRaid then
-                    isRaid = true
-                end
-                if row._def and row._def.requiredKills and not requiredKills then
-                    requiredKills = row._def.requiredKills
-                end
-                if row._def and row._def.bossOrder and not bossOrder then
-                    bossOrder = row._def.bossOrder
-                end
-                break
+    -- Try addon's single source (model or UI)
+    if not baseTooltip and addon and addon.GetAchievementRow then
+        local row = addon.GetAchievementRow(achievementId)
+        if row then
+            local rowIsSecret = row.isSecretAchievement or (row._def and row._def.secret)
+            local rowCompleted = row.completed or achievementCompleted
+            if rowIsSecret and not rowCompleted and row.secretTooltip then
+                baseTooltip = row.secretTooltip
+            else
+                baseTooltip = row.tooltip or row._tooltip
             end
+            if not requiredKills and row.requiredKills then requiredKills = row.requiredKills end
+            if not requiredItems and row.requiredItems then requiredItems = row.requiredItems end
+            if not itemOrder and row.itemOrder then itemOrder = row.itemOrder end
+            if row._def and row._def.isRaid then isRaid = true end
+            if row._def and row._def.requiredKills and not requiredKills then requiredKills = row._def.requiredKills end
+            if row._def and row._def.bossOrder and not bossOrder then bossOrder = row._def.bossOrder end
         end
     end
     
@@ -888,14 +887,8 @@ local function GetAchievementDescription(achievementId)
     end
     
     -- Check row.completed flag as well (immediate status)
-    if AchievementPanel and AchievementPanel.achievements then
-        for _, row in ipairs(AchievementPanel.achievements) do
-            if (row.id == achievementId or row.achId == achievementId) and row.completed then
-                achievementCompleted = true
-                break
-            end
-        end
-    end
+    local row = addon and addon.GetAchievementRow and addon.GetAchievementRow(achievementId)
+    if row and row.completed then achievementCompleted = true end
     
     -- Build extended description
     -- For dungeon achievements (with requiredKills), skip the base tooltip and only show boss/item lists
@@ -917,11 +910,11 @@ local function GetAchievementDescription(achievementId)
         end
         
         -- Get progress from database
-        local progress = _G.HardcoreAchievements_GetProgress and _G.HardcoreAchievements_GetProgress(achievementId)
+        local progress = addon and addon.GetProgress and addon.GetProgress(achievementId)
         local counts = progress and progress.counts or {}
         
         -- Determine which boss name function to use (raid vs dungeon)
-        local getBossNameFn = isRaid and _G.HCA_GetRaidBossName or _G.HCA_GetBossName
+        local getBossNameFn = isRaid and (addon and addon.GetRaidBossName) or (addon and addon.GetBossName)
         
         -- Helper function to process a single boss entry
         local function processBossEntry(npcId, need)
@@ -935,7 +928,7 @@ local function GetAchievementDescription(achievementId)
                 for _, id in pairs(need) do
                     local current = (counts[id] or counts[tostring(id)] or 0)
                     local name = (getBossNameFn and getBossNameFn(id)) or ("Boss " .. tostring(id))
-                    table.insert(bossNames, name)
+                    table_insert(bossNames, name)
                     if not done and current >= 1 then
                         done = true
                     end
@@ -945,7 +938,7 @@ local function GetAchievementDescription(achievementId)
                     bossName = npcId
                 else
                     -- For numeric keys, show all names
-                    bossName = table.concat(bossNames, " / ")
+                    bossName = table_concat(bossNames, " / ")
                 end
             else
                 -- Single NPC ID
@@ -991,7 +984,7 @@ local function GetAchievementDescription(achievementId)
         end
         
         -- Get progress to check saved itemOwned state (once owned, always owned)
-        local progress = _G.HardcoreAchievements_GetProgress and _G.HardcoreAchievements_GetProgress(achievementId)
+        local progress = addon and addon.GetProgress and addon.GetProgress(achievementId)
         local itemOwned = progress and progress.itemOwned or {}
         
         -- Use itemOrder if available, otherwise use requiredItems order
@@ -1037,16 +1030,8 @@ local function GetAchievementStatus(achievementId)
         return nil, nil
     end
     
-    -- Get achievement row if available
-    local achievementRow = nil
-    if AchievementPanel and AchievementPanel.achievements then
-        for _, row in ipairs(AchievementPanel.achievements) do
-            if (row.id == achievementId or row.achId == achievementId) then
-                achievementRow = row
-                break
-            end
-        end
-    end
+    -- Use addon's single source: GetAchievementRows (model when UI not built, frames when built)
+    local achievementRow = (addon and addon.GetAchievementRow and addon.GetAchievementRow(achievementId)) or nil
     
     -- Check completion status - prioritize row.completed flag (set immediately) over database
     local achIdStr = tostring(achievementId)
@@ -1057,7 +1042,7 @@ local function GetAchievementStatus(achievementId)
         isCompleted = true
     else
         -- Fallback to database check
-        local getCharDB = _G.HardcoreAchievements_GetCharDB
+        local getCharDB = addon and addon.GetCharDB
         if type(getCharDB) == "function" then
             local _, cdb = getCharDB()
             if cdb and cdb.achievements and cdb.achievements[achIdStr] then
@@ -1068,8 +1053,8 @@ local function GetAchievementStatus(achievementId)
     
     -- Check failed/outleveled status using the exported function
     local isFailed = false
-    if not isCompleted and achievementRow and _G.IsRowOutleveled then
-        isFailed = _G.IsRowOutleveled(achievementRow)
+    if not isCompleted and achievementRow and addon and addon.IsRowOutleveled then
+        isFailed = addon.IsRowOutleveled(achievementRow)
     elseif not isCompleted and not achievementRow then
         -- Fallback: check if player is over level when row doesn't exist yet
         local maxLevel = GetAchievementLevel(achievementId)
@@ -1084,68 +1069,18 @@ local function GetAchievementStatus(achievementId)
     elseif isFailed then
         return " (Failed)", "|cFFFF0000"  -- Red
     else
-        -- Check for pending turn-in status
-        local isPendingTurnIn = false
-        if achievementRow and achievementRow.questTracker and (achievementRow.killTracker or achievementRow.requiredKills) then
-            -- Achievement requires both kill and quest
-            local progress = _G.HardcoreAchievements_GetProgress and _G.HardcoreAchievements_GetProgress(achievementId)
-            if progress then
-                local hasKill = false
-                
-                -- Check for required kills
-                if achievementRow.requiredKills then
-                    local countsSatisfied = true
-                    for npcId, need in pairs(achievementRow.requiredKills) do
-                        local idNum = tonumber(npcId) or npcId
-                        local current = progress.eligibleCounts and (progress.eligibleCounts[idNum] or progress.eligibleCounts[tostring(idNum)]) or (progress.counts and (progress.counts[idNum] or progress.counts[tostring(idNum)])) or 0
-                        local required = tonumber(need) or 1
-                        if current < required then
-                            countsSatisfied = false
-                            break
-                        end
-                    end
-                    hasKill = countsSatisfied
-                elseif achievementRow.killTracker then
-                    -- Single kill achievement
-                    hasKill = progress.killed or false
-                end
-                
-                local questNotTurnedIn = not progress.quest
-                
-                -- Get quest ID to check if quest is in log
-                local questID = achievementRow.requiredQuestId
-                if not questID and achievementRow._def then
-                    questID = achievementRow._def.requiredQuestId or achievementRow._def.REQUIRED_QUEST_ID
-                end
-                
-                -- Check if quest is still in quest log (not abandoned)
-                local questInLog = false
-                if questID then
-                    if GetQuestLogIndexByID then
-                        local logIndex = GetQuestLogIndexByID(questID)
-                        questInLog = (logIndex and logIndex > 0) or false
-                    elseif GetNumQuestLogEntries then
-                        local numEntries = GetNumQuestLogEntries()
-                        for i = 1, numEntries do
-                            local title, level, suggestGroup, isHeader, isCollapsed, isComplete, frequency, questIDFromLog = GetQuestLogTitle(i)
-                            if not isHeader and questIDFromLog == questID then
-                                questInLog = true
-                                break
-                            end
-                        end
-                    end
-                end
-                
-                -- Pending turn-in: kills satisfied, quest not turned in, and quest is still in quest log
-                isPendingTurnIn = hasKill and questNotTurnedIn and questInLog
+        -- Use centralized status params (same logic as character panel, dashboard)
+        local params = (addon and addon.GetStatusParamsForAchievement) and addon.GetStatusParamsForAchievement(achievementId, achievementRow)
+        if params and addon and addon.GetStatusText then
+            local statusStr = addon.GetStatusText(params)
+            if statusStr and statusStr ~= "" then
+                local plain = statusStr:gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", "")
+                local classColor = (addon and addon.GetClassColor and addon.GetClassColor())
+                return " (" .. plain .. ")", classColor
             end
         end
-        
-        if isPendingTurnIn then
-            return " (Pending Turn-In)", HCA_SharedUtils.GetClassColor()
-        end
     end
-    
+
     return nil, nil
 end
 
@@ -1171,7 +1106,7 @@ local function GetTitleColor(requiredLevel)
 end
 
 -- Create or get achievement line
-function AchievementTracker:GetAchievementLine(index)
+local function GetAchievementLine(self, index)
     if not achievementLines[index] then
         -- Create as Button to enable clicking on entire line (title + description)
         local line = CreateFrame("Button", "AchievementTracker_Line" .. index, trackerContentFrame)
@@ -1209,7 +1144,7 @@ function AchievementTracker:GetAchievementLine(index)
                     collapsedAchievements[achIdStr] = true
                 end
                 -- Update the display
-                AchievementTracker:Update()
+                Update(AchievementTracker)
             end
         end)
         -- Make sure button clicks don't trigger line clicks by registering for clicks separately
@@ -1322,7 +1257,7 @@ function AchievementTracker:GetAchievementLine(index)
                         -- Chat edit box is active: link achievement
                         local achId = line.achievementId
                         if achId then
-                            local bracket = _G.HCA_GetAchievementBracket and _G.HCA_GetAchievementBracket(achId) or string.format("[HCA:(%s)]", tostring(achId))
+                            local bracket = GetAchievementBracket and GetAchievementBracket(achId) or string_format("[HCA:(%s)]", tostring(achId))
                             local currentText = editBox:GetText() or ""
                             if currentText == "" then
                                 editBox:SetText(bracket)
@@ -1331,15 +1266,18 @@ function AchievementTracker:GetAchievementLine(index)
                             end
                         end
                     else
-                        -- No chat open: Untrack achievement
+                        -- No chat open: Untrack achievement (use method so closure sees table, not local fn)
                         local achId = line.achievementId
-                        if achId then
+                        if achId and AchievementTracker.UntrackAchievement then
                             AchievementTracker:UntrackAchievement(achId)
                         end
                     end
                 else
-                    -- Regular Click: Open HardcoreAchievementWindow
-                    ShowHardcoreAchievementWindow()
+                    -- Regular Click: Open HardcoreAchievementWindow (resolve at call time from addon)
+                    local ShowAchievementWindow = addon and addon.ShowAchievementWindow
+                    if type(ShowAchievementWindow) == "function" then
+                        ShowAchievementWindow()
+                    end
                 end
             end
             wasDragging = false  -- Reset flag
@@ -1424,12 +1362,8 @@ function AchievementTracker:GetAchievementLine(index)
 end
 
 -- Update the tracker display
-function AchievementTracker:Update()
+local function Update(self)
     if not isInitialized then
-        return
-    end
-
-    if InCombatLockdown() then
         return
     end
 
@@ -1524,7 +1458,7 @@ function AchievementTracker:Update()
         local sortedAchievements = {}
         for achievementId, data in pairs(trackedAchievements) do
             local level = GetAchievementLevel(achievementId) or 999  -- Put achievements without level at end
-            table.insert(sortedAchievements, {
+            table_insert(sortedAchievements, {
                 id = achievementId,
                 data = data,
                 level = level
@@ -1532,7 +1466,7 @@ function AchievementTracker:Update()
         end
         
         -- Sort by level (ascending - easiest first)
-        table.sort(sortedAchievements, function(a, b)
+        table_sort(sortedAchievements, function(a, b)
             return a.level < b.level
         end)
 
@@ -1554,25 +1488,18 @@ function AchievementTracker:Update()
                 if wowAchieveId and wowAchieveName then
                     achieveName = wowAchieveName
                 else
-                    -- Fallback: try to get from achievement row if available
-                    if AchievementPanel and AchievementPanel.achievements then
-                        for _, row in ipairs(AchievementPanel.achievements) do
-                            if (row.id == achievementId or row.achId == achievementId) and row.Title then
-                                achieveName = row.Title:GetText() or tostring(achievementId)
-                                break
-                            end
-                        end
+                    -- Fallback: addon's single source (model has .title, frame has .Title:GetText())
+                    local row = addon and addon.GetAchievementRow and addon.GetAchievementRow(achievementId)
+                    if row then
+                        achieveName = (row.Title and row.Title.GetText and row.Title:GetText()) or row.title or nil
                     end
-                    -- Last resort: use achievement ID as name
-                    if not achieveName then
-                        achieveName = tostring(achievementId)
-                    end
+                    if not achieveName then achieveName = tostring(achievementId) end
                 end
             end
 
             if achieveName then
                 lineIndex = lineIndex + 1
-                local line = AchievementTracker:GetAchievementLine(lineIndex)
+                local line = GetAchievementLine(self, lineIndex)
                 
                 -- Store achievement ID on the line for click handler
                 line.achievementId = achievementId
@@ -1875,7 +1802,7 @@ end
 -- Public API: Add achievement to tracker
 -- achievementId: string or number - the achievement ID
 -- title: optional string - the achievement title (for custom achievements)
-function AchievementTracker:TrackAchievement(achievementId, title)
+local function TrackAchievement(self, achievementId, title)
     if not achievementId or achievementId == 0 then
         return
     end
@@ -1901,87 +1828,84 @@ function AchievementTracker:TrackAchievement(achievementId, title)
     -- Save to database
     SaveTrackedAchievements()
     
-    AchievementTracker:Update()
+    Update(self)
 end
 
 -- Public API: Remove achievement from tracker
-function AchievementTracker:UntrackAchievement(achievementId)
+local function UntrackAchievement(self, achievementId)
     if trackedAchievements[achievementId] then
         trackedAchievements[achievementId] = nil
         -- Save to database
         SaveTrackedAchievements()
-        AchievementTracker:Update()
+        Update(self)
     end
 end
 
 -- Public API: Check if achievement is tracked
-function AchievementTracker:IsTracked(achievementId)
+local function IsTracked(self, achievementId)
     return trackedAchievements[achievementId] ~= nil
 end
 
 -- Public API: Get all tracked achievements
-function AchievementTracker:GetTrackedAchievements()
+local function GetTrackedAchievements(self)
     local result = {}
     for id, _ in pairs(trackedAchievements) do
-        table.insert(result, id)
+        table_insert(result, id)
     end
     return result
 end
 
 -- Public API: Show tracker
-function AchievementTracker:Show()
+local function Show(self)
     if trackerBaseFrame then
         trackerBaseFrame:Show()
-        AchievementTracker:Update()
+        Update(self)
     end
 end
 
 -- Public API: Hide tracker
-function AchievementTracker:Hide()
+local function Hide(self)
     if trackerBaseFrame then
         trackerBaseFrame:Hide()
     end
 end
 
 -- Public API: Toggle tracker
-function AchievementTracker:Toggle()
+local function Toggle(self)
     if trackerBaseFrame and trackerBaseFrame:IsShown() then
-        AchievementTracker:Hide()
+        Hide(self)
     else
-        AchievementTracker:Show()
+        Show(self)
     end
 end
 
 -- Public API: Expand tracker
-function AchievementTracker:Expand()
+local function Expand(self)
     isExpanded = true
-    AchievementTracker:Update()
+    Update(self)
 end
 
 -- Public API: Collapse tracker
-function AchievementTracker:Collapse()
+local function Collapse(self)
     isExpanded = false
-    AchievementTracker:Update()
+    Update(self)
 end
 
 -- Public API: Set locked state (prevents dragging)
-function AchievementTracker:SetLocked(locked)
+local function SetLocked(self, locked)
     if trackerBaseFrame then
         trackerBaseFrame.isLocked = locked
     end
 end
 
--- Export globally for use in main addon
-_G.HardcoreAchievementsTracker = AchievementTracker
-
 -- Hook into achievement refresh functions to update tracker status
 local function HookAchievementRefresh()
     -- Store original function
-    local originalMarkCompleted = _G.HCA_MarkRowCompleted
-    
-    -- Hook into HCA_MarkRowCompleted to update tracker when achievement is completed
-    if originalMarkCompleted then
-        _G.HCA_MarkRowCompleted = function(row, ...)
+    local originalMarkCompleted = addon and addon.MarkRowCompleted
+
+    -- Hook into MarkRowCompleted to update tracker when achievement is completed
+    if originalMarkCompleted and addon then
+        addon.MarkRowCompleted = function(row, ...)
             local result = originalMarkCompleted(row, ...)
             
             if row then
@@ -2005,20 +1929,21 @@ local function HookAchievementRefresh()
         end
     end
     
-    -- Hook into HardcoreAchievements_SetProgress to update tracker when progress changes
+    -- Hook into addon.SetProgress to update tracker when progress changes
     -- This will catch boss kills (counts updates) and item collection (itemOwned updates)
-    local originalSetProgress = _G.HardcoreAchievements_SetProgress
-    if originalSetProgress then
+    local originalSetProgress = addon and addon.SetProgress
+    if originalSetProgress and addon then
         -- Debounce tracker updates to avoid excessive updates during rapid progress changes
         local updateTimer = nil
         local pendingUpdates = {}
         
-        _G.HardcoreAchievements_SetProgress = function(achId, key, value)
+        addon.SetProgress = function(achId, key, value)
             -- Call original function first
             local result = originalSetProgress(achId, key, value)
             
             -- Check if this achievement is tracked and if the progress change affects display
-            if achId and (key == "counts" or key == "itemOwned") then
+            local progressAffectsDisplay = key == "counts" or key == "itemOwned" or key == "killed" or key == "quest" or key == "soloKill" or key == "soloQuest" or key == "eligibleCounts" or key == "ineligibleKill"
+            if achId and progressAffectsDisplay then
                 local achIdStr = tostring(achId)
                 local achIdNum = tonumber(achIdStr)
                 
@@ -2072,8 +1997,9 @@ C_Timer.After(1.0, HookAchievementRefresh)
 -- Restore tracked achievements on login/reload
 -- Wait for achievement registrations to complete before restoring
 local function RestoreOnLogin()
-    -- Check if registration is still in progress
-    if _G.HCA_RegistrationQueue and #_G.HCA_RegistrationQueue > 0 then
+    -- Check if registration is still in progress (addon queue or legacy global)
+    local queue = addon and addon.RegistrationQueue
+    if queue and #queue > 0 then
         -- Registration still in progress, wait a bit and retry
         C_Timer.After(0.5, RestoreOnLogin)
         return
@@ -2106,4 +2032,23 @@ restoreFrame:SetScript("OnEvent", function(self, event)
     end
 end)
 
-return AchievementTracker
+AchievementTracker.Initialize = Initialize
+AchievementTracker.InitializeHeader = InitializeHeader
+AchievementTracker.InitializeContentFrame = InitializeContentFrame
+AchievementTracker.InitializeSizer = InitializeSizer
+AchievementTracker.GetAchievementLine = GetAchievementLine
+AchievementTracker.Update = Update
+AchievementTracker.TrackAchievement = TrackAchievement
+AchievementTracker.UntrackAchievement = UntrackAchievement
+AchievementTracker.IsTracked = IsTracked
+AchievementTracker.GetTrackedAchievements = GetTrackedAchievements
+AchievementTracker.Show = Show
+AchievementTracker.Hide = Hide
+AchievementTracker.Toggle = Toggle
+AchievementTracker.Expand = Expand
+AchievementTracker.Collapse = Collapse
+AchievementTracker.SetLocked = SetLocked
+
+if addon then
+	addon.AchievementTracker = AchievementTracker
+end

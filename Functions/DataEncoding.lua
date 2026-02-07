@@ -1,9 +1,8 @@
--- DataEncoding.lua
--- Standalone Base64 encoding/decoding and data serialization functions
--- Can be used anywhere in the addon to encode/decode data structures
-
--- Load AceSerializer
 local AceSerialize = LibStub("AceSerializer-3.0")
+
+local addonName, addon = ...
+local string_byte = string.byte
+local table_concat = table.concat
 
 -- Simple Base64 encoding/decoding for compression and obfuscation
 -- Using bit library if available (Classic WoW should have it)
@@ -54,9 +53,9 @@ local function base64encode(data)
     end
     
     for i = 1, len, 3 do
-        local b1 = string.byte(data, i) or 0
-        local b2 = string.byte(data, i + 1)
-        local b3 = string.byte(data, i + 2)
+        local b1 = string_byte(data, i) or 0
+        local b2 = string_byte(data, i + 1)
+        local b3 = string_byte(data, i + 2)
         
         local bitmap = bor(bor(lshift(b1, 16), lshift(b2 or 0, 8)), b3 or 0)
         
@@ -87,7 +86,7 @@ local function base64encode(data)
             result[#result + 1] = '='
         end
     end
-    return table.concat(result)
+    return table_concat(result)
 end
 
 local function base64decode(data)
@@ -146,14 +145,14 @@ local function base64decode(data)
             end
         end
     end
-    return table.concat(result)
+    return table_concat(result)
 end
 
 -- Encode: Serialize -> Base64 (simple and reliable)
 -- Encodes any Lua data structure into a Base64 string
 -- @param data: Any Lua data structure (table, string, number, etc.)
 -- @return: Base64 encoded string
-function HCA_EncodeData(data)
+local function EncodeData(data)
     local serialized = AceSerialize:Serialize(data)
     -- Just encode to base64 - still makes it non-readable and slightly smaller
     return base64encode(serialized)
@@ -163,7 +162,7 @@ end
 -- Decodes a Base64 string back into a Lua data structure
 -- @param encoded: Base64 encoded string
 -- @return: success (boolean), data or error message
-function HCA_DecodeData(encoded)
+local function DecodeData(encoded)
     if not encoded or encoded == "" then
         return false, "Empty encoded data"
     end
@@ -190,3 +189,7 @@ function HCA_DecodeData(encoded)
     return deserializeSuccess, deserializeResult
 end
 
+if addon then
+    addon.EncodeData = EncodeData
+    addon.DecodeData = DecodeData
+end

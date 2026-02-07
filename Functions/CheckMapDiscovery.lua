@@ -30,6 +30,11 @@
 -- Tp find coordinates for a location using the mouse pointer on the world map, run:
 -- /dump WorldMapFrame.ScrollContainer:GetNormalizedCursorPosition()
 
+local addonName, addon = ...
+local C_MapExplorationInfo = C_MapExplorationInfo
+local table_insert = table.insert
+local string_format = string.format
+
 ---------------------------------------
 -- Zone to MapID mapping
 -- Add zones as needed (you can find mapIDs using /dump C_Map.GetBestMapForUnit("player"))
@@ -52,7 +57,7 @@ local ZoneMapIDs = {
 local LocationMap = {
     ["Deadwind Pass"] = {
         ["Deadman's Crossing"] = {x = 0.50, y = 0.45},
-        ["The Vice"] = {x = 0.59, y = 0.64},
+        --["The Vice"] = {x = 0.59, y = 0.64},
         ["Karazhan"] = {x = 0.46, y = 0.73},
     },
     ["Eastern Plaguelands"] = {
@@ -252,7 +257,7 @@ local function CheckZoneDiscovery(zone, threshold)
     
     -- Check all defined locations in the zone
     for locationName, coords in pairs(LocationMap[zoneName]) do
-        table.insert(locationsToCheck, {x = coords.x, y = coords.y, name = locationName})
+        table_insert(locationsToCheck, {x = coords.x, y = coords.y, name = locationName})
     end
     
     totalCount = #locationsToCheck
@@ -285,33 +290,11 @@ local function CheckZoneDiscovery(zone, threshold)
     
     local message = nil
     if not isDiscovered then
-        message = string.format("Zone %s: %d/%d locations discovered (%.1f%%, need %.1f%%)", 
+        message = string_format("Zone %s: %d/%d locations discovered (%.1f%%, need %.1f%%)", 
             tostring(zoneName or mapID), discoveredCount, totalCount, percentage * 100, threshold * 100)
     end
     
     return isDiscovered, message, discoveredCount, totalCount
 end
 
----------------------------------------
--- Export functions globally for use in achievements and other files
----------------------------------------
-_G.CheckMapDiscovery = CheckMapDiscovery
-_G.CheckMapDiscoveryByLocation = CheckMapDiscoveryByLocation
-_G.CheckMapDiscoveryByCoords = CheckMapDiscoveryByCoords
-_G.CheckZoneDiscovery = CheckZoneDiscovery
-
--- Export internal functions if needed for debugging
-_G.HCA_GetMapIDForZone = GetMapIDForZone
-_G.HCA_GetLocationCoords = GetLocationCoords
-
-return {
-    CheckMapDiscovery = CheckMapDiscovery,
-    CheckMapDiscoveryByLocation = CheckMapDiscoveryByLocation,
-    CheckMapDiscoveryByCoords = CheckMapDiscoveryByCoords,
-    CheckZoneDiscovery = CheckZoneDiscovery,
-    GetMapIDForZone = GetMapIDForZone,
-    GetLocationCoords = GetLocationCoords,
-    ZoneMapIDs = ZoneMapIDs,
-    LocationMap = LocationMap,
-}
-
+addon.CheckZoneDiscovery = CheckZoneDiscovery

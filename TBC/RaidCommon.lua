@@ -1,5 +1,15 @@
 local RaidCommon = {}
 
+local addonName, addon = ...
+local UnitLevel = UnitLevel
+local GetNumGroupMembers = GetNumGroupMembers
+local GetInstanceInfo = GetInstanceInfo
+local C_Timer = C_Timer
+local GetPresetMultiplier = (addon and addon.GetPresetMultiplier)
+local RefreshAllAchievementPoints = (addon and addon.RefreshAllAchievementPoints)
+local table_insert = table.insert
+local table_concat = table.concat
+
 -- Mapping from encounter IDs (as reported by BOSS_KILL event) to NPC IDs
 -- This allows us to track boss kills even when the kill is delivered by someone outside your party
 local ENCOUNTER_ID_TO_NPC_IDS = {
@@ -83,6 +93,10 @@ local ENCOUNTER_ID_TO_NPC_IDS = {
   [1121] = {16064, 16065, 16062, 16063},  -- The Four Horsemen (Thane Korth'azz, Lady Blaumeux, Highlord Mograine, Sir Zeliek)
 }
 
+---------------------------------------
+-- Registration Function
+---------------------------------------
+
 -- Register a raid achievement with the given definition
 function RaidCommon.registerRaidAchievement(def)
   local achId = def.achId
@@ -98,7 +112,7 @@ function RaidCommon.registerRaidAchievement(def)
   local faction = def.faction
 
   -- Expose this definition for external lookups (e.g., chat link tooltips)
-  HCA_SharedUtils.RegisterAchievementDef({
+  addon.RegisterAchievementDef({
     achId = achId,
     title = title,
     tooltip = tooltip,
@@ -113,15 +127,23 @@ function RaidCommon.registerRaidAchievement(def)
     isRaid = true,
   }, { level = nil })  -- Raids have no level requirement
 
+  ---------------------------------------
+  -- State Management
+  ---------------------------------------
+
   -- State for the current achievement session only
   local state = {
     counts = {},           -- npcId => kills this achievement
     completed = false,     -- set true once achievement conditions met in this achievement
   }
 
+  ---------------------------------------
+  -- Helper Functions
+  ---------------------------------------
+
   -- Load progress from database on initialization
   local function LoadProgress()
-    local progress = HardcoreAchievements_GetProgress(achId)
+    local progress = addon and addon.GetProgress and addon.GetProgress(achId)
     if progress and progress.counts then
       state.counts = progress.counts
     end
@@ -133,14 +155,14 @@ function RaidCommon.registerRaidAchievement(def)
 
   -- Save progress to database
   local function SaveProgress()
-    HardcoreAchievements_SetProgress(achId, "counts", state.counts)
+    if addon and addon.SetProgress then addon.SetProgress(achId, "counts", state.counts) end
     if state.completed then
-      HardcoreAchievements_SetProgress(achId, "completed", true)
+      if addon and addon.SetProgress then addon.SetProgress(achId, "completed", true) end
     end
   end
 
   -- Dynamic names first so functions capture these locals
-  local registerFuncName = "HCA_Register" .. achId
+  local registerFuncName = "Register" .. achId
   local rowVarName       = achId .. "_Row"
 
   -- Helper function to get NPC IDs from encounter ID
@@ -151,7 +173,7 @@ function RaidCommon.registerRaidAchievement(def)
 
   -- Get boss names from NPC IDs
   -- Export globally so tooltip function can use it
-  function HCA_GetRaidBossName(npcId)
+  local function GetRaidBossName(npcId)
     local bossNames = {
       -- Lower Blackrock Spire
       [9816] = "Pyroguard Emberseer",
@@ -308,13 +330,13 @@ function RaidCommon.registerRaidAchievement(def)
     return bossNames[npcId] or ("Boss " .. tostring(npcId))
   end
 
-  -- Helpers
   local function GetNpcIdFromGUID(guid)
     if not guid then return nil end
     local npcId = select(6, strsplit("-", guid))
     npcId = npcId and tonumber(npcId) or nil
     return npcId
   end
+  if addon then addon.GetRaidBossName = GetRaidBossName end
 
   local function IsOnRequiredMap()
     -- If no map restriction, allow anywhere
@@ -350,131 +372,158 @@ function RaidCommon.registerRaidAchievement(def)
     return true
   end
 
+  -- Check if an NPC ID is a required boss for this achievement
+  local function IsRequiredBoss(npcId)
+    if not npcId then return false end
+    -- Direct lookup
+    if requiredKills[npcId] then
+      return true
+    end
+    -- Check if this NPC ID is in any array
+    for key, value in pairs(requiredKills) do
+      if type(value) == "table" then
+        for _, id in pairs(value) do
+          if id == npcId then
+            return true
+          end
+        end
+      end
+    end
+    return false
+  end
+
+  -- Increment kill count for a boss
+  local function IncrementBossKill(npcId)
+    if not npcId then return end
+    state.counts[npcId] = (state.counts[npcId] or 0) + 1
+  end
+
+  -- Calculate and store points for this achievement
+  local function StorePointsAtKill()
+    local AchievementPanel = addon and addon.AchievementPanel
+    if not AchievementPanel or not AchievementPanel.achievements then return end
+    local row = addon[rowVarName]
+    if not row or not row.points then return end
+    
+    -- Store pointsAtKill WITHOUT the self-found bonus.
+    -- Recompute from base/original points so we don't rely on subtracting a (now dynamic) bonus.
+    local base = tonumber(row.originalPoints) or tonumber(row.points) or 0
+    local pointsToStore = base
+    if not row.staticPoints then
+      local preset = (addon and addon.GetPlayerPresetFromSettings and addon.GetPlayerPresetFromSettings()) or nil
+      local multiplier = GetPresetMultiplier(preset) or 1.0
+      pointsToStore = math.floor(base * multiplier + 0.5)
+    end
+    if addon and addon.SetProgress then addon.SetProgress(achId, "pointsAtKill", pointsToStore) end
+  end
+
+  ---------------------------------------
+  -- Tooltip Management
+  ---------------------------------------
+
   -- Update tooltip when progress changes (local; closes over the local generator)
   local function UpdateTooltip()
-    local row = _G[rowVarName]
+    local row = addon[rowVarName]
     if row then
       -- Store the base tooltip for the main tooltip
       local baseTooltip = tooltip or ""
       row.tooltip = baseTooltip
+
+      local frame = row.frame
+      if not frame then
+        if addon and addon.AddRowUIInit then
+          addon.AddRowUIInit(row, function()
+            C_Timer.After(0, UpdateTooltip)
+          end)
+        end
+        return
+      end
+      frame.tooltip = baseTooltip
       
       -- Ensure mouse events are enabled and highlight texture exists
-      row:EnableMouse(true)
-      if not row.highlight then
-        row.highlight = row:CreateTexture(nil, "BACKGROUND")
-        row.highlight:SetAllPoints(row)
-        row.highlight:SetColorTexture(1, 1, 1, 0.10)
-        row.highlight:Hide()
+      frame:EnableMouse(true)
+      if not frame.highlight then
+        frame.highlight = frame:CreateTexture(nil, "BACKGROUND")
+        frame.highlight:SetAllPoints(frame)
+        frame.highlight:SetColorTexture(1, 1, 1, 0.10)
+        frame.highlight:Hide()
       end
       
+      -- Process a single boss entry (defined once per UpdateTooltip run, not per hover)
+      local function processBossEntry(npcId, need, achievementCompleted)
+        local done = false
+        local bossName = ""
+        if type(need) == "table" then
+          local bossNames = {}
+          for _, id in pairs(need) do
+            local current = (state.counts[id] or state.counts[tostring(id)] or 0)
+            local name = (addon and addon.GetRaidBossName and addon.GetRaidBossName(id)) or tostring(id)
+            table_insert(bossNames, name)
+            if current >= 1 then done = true end
+          end
+          if type(npcId) == "string" then
+            bossName = npcId
+          else
+            bossName = table_concat(bossNames, " / ")
+          end
+        else
+          local idNum = tonumber(npcId) or npcId
+          local current = (state.counts[idNum] or state.counts[tostring(idNum)] or 0)
+          bossName = (addon and addon.GetRaidBossName and addon.GetRaidBossName(idNum)) or tostring(idNum)
+          done = current >= (tonumber(need) or 1)
+        end
+        if achievementCompleted then done = true end
+        if done then
+          GameTooltip:AddLine(bossName, 1, 1, 1)
+        else
+          GameTooltip:AddLine(bossName, 0.5, 0.5, 0.5)
+        end
+      end
+
       -- Override the OnEnter script to use proper GameTooltip API while preserving highlighting
-      row:SetScript("OnEnter", function(self)
-        -- Show highlight
+      frame:SetScript("OnEnter", function(self)
         if self.highlight then
           self.highlight:Show()
         end
-        
         if self.Title and self.Title.GetText then
-          -- Load fresh progress from database before showing tooltip
           LoadProgress()
-          
           local achievementCompleted = state.completed or (self.completed == true)
-          
           GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
           GameTooltip:ClearLines()
           GameTooltip:SetText(title or "", 1, 1, 1)
-          -- Points only (no level requirement for raids)
           local rightText = (self.points and tonumber(self.points) and tonumber(self.points) > 0) and (ACHIEVEMENT_POINTS .. ": " .. tostring(self.points)) or " "
           GameTooltip:AddDoubleLine(" ", rightText, 1, 1, 1, 0.7, 0.9, 0.7)
-          -- Description in default yellow
           GameTooltip:AddLine(baseTooltip, nil, nil, nil, true)
-          
           if next(requiredKills) ~= nil then
-            GameTooltip:AddLine("\nRequired Bosses:", 0, 1, 0) -- Green header
-            
-            -- Helper function to process a single boss entry
-            local function processBossEntry(npcId, need)
-              local done = false
-              local bossName = ""
-              
-              -- Support both single NPC IDs and arrays of NPC IDs
-              if type(need) == "table" then
-                -- Array of NPC IDs - check if any of them has been killed
-                local bossNames = {}
-                for _, id in pairs(need) do
-                  local current = (state.counts[id] or state.counts[tostring(id)] or 0)
-                  local name = HCA_GetRaidBossName(id)
-                  table.insert(bossNames, name)
-                  -- Mark as done if this boss has been killed (or if achievement is complete)
-                  if current >= 1 then
-                    done = true
-                  end
-                end
-                -- Use the key as display name for string keys
-                if type(npcId) == "string" then
-                  -- Use the key as display name for string keys (e.g., "Ring Of Law")
-                  bossName = npcId
-                else
-                  -- For numeric keys, show all names
-                  bossName = table.concat(bossNames, " / ")
-                end
-              else
-                -- Single NPC ID
-                local idNum = tonumber(npcId) or npcId
-                local current = (state.counts[idNum] or state.counts[tostring(idNum)] or 0)
-                bossName = HCA_GetRaidBossName(idNum)
-                -- Mark as done if this boss has been killed enough times (or if achievement is complete)
-                done = current >= (tonumber(need) or 1)
-              end
-              
-              -- If achievement is complete, all bosses show as done
-              if achievementCompleted then
-                done = true
-              end
-              
-              if done then
-                GameTooltip:AddLine(bossName, 1, 1, 1) -- White for completed
-              else
-                GameTooltip:AddLine(bossName, 0.5, 0.5, 0.5) -- Gray for not completed
-              end
-            end
-            
-            -- Use ordered display if provided, otherwise use pairs
+            GameTooltip:AddLine("\nRequired Bosses:", 0, 1, 0)
             if bossOrder then
               for _, npcId in ipairs(bossOrder) do
                 local need = requiredKills[npcId]
                 if need then
-                  processBossEntry(npcId, need)
+                  processBossEntry(npcId, need, achievementCompleted)
                 end
               end
-              
-              -- Also check for any bosses not in bossOrder (shouldn't happen, but just in case)
               for npcId, need in pairs(requiredKills) do
                 local found = false
                 for _, orderedId in ipairs(bossOrder) do
-                  if orderedId == npcId then
-                    found = true
-                    break
-                  end
+                  if orderedId == npcId then found = true break end
                 end
                 if not found then
-                  processBossEntry(npcId, need)
+                  processBossEntry(npcId, need, achievementCompleted)
                 end
               end
             else
-              -- No boss order - just iterate through pairs
               for npcId, need in pairs(requiredKills) do
-                processBossEntry(npcId, need)
+                processBossEntry(npcId, need, achievementCompleted)
               end
             end
           end
-          
           GameTooltip:Show()
         end
       end)
       
       -- Set up OnLeave script to hide highlight and tooltip
-      row:SetScript("OnLeave", function(self)
+      frame:SetScript("OnLeave", function(self)
         if self.highlight then
           self.highlight:Hide()
         end
@@ -503,55 +552,19 @@ function RaidCommon.registerRaidAchievement(def)
     -- Process each NPC ID that matches this encounter
     local anyKilled = false
     for _, npcId in ipairs(npcIds) do
-      -- Check if this NPC ID is in our requiredKills
-      local isRequiredBoss = false
-      if requiredKills[npcId] then
-        isRequiredBoss = true
-      else
-        -- Check if this NPC ID is in any array
-        for key, value in pairs(requiredKills) do
-          if type(value) == "table" then
-            for _, id in pairs(value) do
-              if id == npcId then
-                isRequiredBoss = true
-                break
-              end
-            end
-            if isRequiredBoss then
-              break
-            end
-          end
-        end
-      end
-
-      if isRequiredBoss then
+      if IsRequiredBoss(npcId) then
         -- Count this kill (always eligible for raids)
-        state.counts[npcId] = (state.counts[npcId] or 0) + 1
+        IncrementBossKill(npcId)
         anyKilled = true
 
         -- Store the level when this boss was killed (for tracking purposes)
         local killLevel = UnitLevel("player") or 1
-        HardcoreAchievements_SetProgress(achId, "levelAtKill", killLevel)
+        if addon and addon.SetProgress then addon.SetProgress(achId, "levelAtKill", killLevel) end
 
         -- Store points (raids do not support solo doubling)
-        if AchievementPanel and AchievementPanel.achievements then
-          local rowVarName = achId .. "_Row"
-          local row = _G[rowVarName]
-          if row and row.points then
-            -- Store pointsAtKill WITHOUT the self-found bonus.
-            -- Recompute from base/original points so we don't rely on subtracting a (now dynamic) bonus.
-            local base = tonumber(row.originalPoints) or tonumber(row.points) or 0
-            local pointsToStore = base
-            if not row.staticPoints then
-              local preset = _G.GetPlayerPresetFromSettings and _G.GetPlayerPresetFromSettings() or nil
-              local multiplier = _G.GetPresetMultiplier and _G.GetPresetMultiplier(preset) or 1.0
-              pointsToStore = math.floor(base * multiplier + 0.5)
-            end
-            HardcoreAchievements_SetProgress(achId, "pointsAtKill", pointsToStore)
-          end
-        end
+        StorePointsAtKill()
 
-        print("|cff008066[Hardcore Achievements]|r |cffffd100" .. HCA_GetRaidBossName(npcId) .. " killed as part of achievement: " .. title .. "|r")
+        print("|cff008066[Hardcore Achievements]|r |cffffd100" .. GetRaidBossName(npcId) .. " killed as part of achievement: " .. title .. "|r")
       end
     end
 
@@ -560,7 +573,7 @@ function RaidCommon.registerRaidAchievement(def)
       UpdateTooltip() -- Update tooltip to show progress
 
       -- Check if achievement should be completed
-      local progress = HardcoreAchievements_GetProgress(achId)
+      local progress = addon and addon.GetProgress and addon.GetProgress(achId)
       if progress and progress.completed then
         state.completed = true
         return true
@@ -569,7 +582,7 @@ function RaidCommon.registerRaidAchievement(def)
       -- Check if all bosses are killed
       if CountsSatisfied() then
         state.completed = true
-        HardcoreAchievements_SetProgress(achId, "completed", true)
+        if addon and addon.SetProgress then addon.SetProgress(achId, "completed", true) end
         return true
       end
     end
@@ -580,9 +593,13 @@ function RaidCommon.registerRaidAchievement(def)
   -- No global tracker function for raids - we use BOSS_KILL event with encounter IDs instead
   
   -- Register functions in local registry to reduce global pollution
-  if _G.HardcoreAchievements_RegisterAchievementFunction then
-    _G.HardcoreAchievements_RegisterAchievementFunction(achId, "IsCompleted", function() return state.completed end)
+  if addon and addon.RegisterAchievementFunction then
+    addon.RegisterAchievementFunction(achId, "IsCompleted", function() return state.completed end)
   end
+
+  ---------------------------------------
+  -- Registration Logic
+  ---------------------------------------
 
   -- Check faction eligibility
   local function IsEligible()
@@ -594,9 +611,9 @@ function RaidCommon.registerRaidAchievement(def)
   end
 
   -- Create the registration function dynamically
-  _G[registerFuncName] = function()
-    if not _G.CreateAchievementRow or not _G.AchievementPanel then return end
-    if _G[rowVarName] then return end
+  addon[registerFuncName] = function()
+    if not (addon and addon.CreateAchievementRow) then return end
+    if addon[rowVarName] then return end
     
     -- Check if player is eligible for this achievement
     if not IsEligible() then return end
@@ -610,7 +627,8 @@ function RaidCommon.registerRaidAchievement(def)
     raidDef.isRaid = true
     raidDef.level = nil  -- No level requirement for raids
     
-    _G[rowVarName] = CreateAchievementRow(
+    local AchievementPanel = addon and addon.AchievementPanel
+    addon[rowVarName] = addon.CreateAchievementRow(
       AchievementPanel,
       achId,
       title,
@@ -627,22 +645,22 @@ function RaidCommon.registerRaidAchievement(def)
     
     -- Store requiredKills on the row for the embed UI to access
     if requiredKills and next(requiredKills) then
-      _G[rowVarName].requiredKills = requiredKills
+      addon[rowVarName].requiredKills = requiredKills
     end
     
     -- Store the ProcessBossKillByEncounterID function on the row for BOSS_KILL event handler
-    _G[rowVarName].processBossKillByEncounterID = ProcessBossKillByEncounterID
+    addon[rowVarName].processBossKillByEncounterID = ProcessBossKillByEncounterID
     
     -- Load completion status from database on registration
     -- If the achievement was previously completed, mark the row as completed without showing toast
     if state.completed then
-      if _G.HCA_MarkRowCompleted then
-        _G.HCA_MarkRowCompleted(_G[rowVarName])
+      if addon and addon.MarkRowCompleted then
+        addon.MarkRowCompleted(addon[rowVarName])
       end
     end
     
     -- Refresh points with multipliers after creation
-    if RefreshAllAchievementPoints then
+    if not (addon and addon.Initializing) then
       RefreshAllAchievementPoints()
     end
     
@@ -651,13 +669,19 @@ function RaidCommon.registerRaidAchievement(def)
   end
 
   -- Auto-register the achievement immediately if the panel is ready
-  if _G.CreateAchievementRow and _G.AchievementPanel then
-    _G[registerFuncName]()
+  if addon and addon.CreateAchievementRow then
+    addon[registerFuncName]()
   end
 
   -- Note: Event handling is now centralized in HardcoreAchievements.lua
   -- Individual event frames removed for performance
 end
 
--- Export to global scope
-_G.RaidCommon = RaidCommon
+---------------------------------------
+-- Module Export
+---------------------------------------
+
+if addon then
+  addon.RaidCommon = RaidCommon
+  addon.GetRaidBossName = GetRaidBossName
+end

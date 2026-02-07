@@ -1,6 +1,20 @@
+---------------------------------------
+-- Achievement Definitions (Quest/Milestone catalog for Vanilla)
+---------------------------------------
+local addonName, addon = ...
+local UnitLevel = UnitLevel
+local UnitClass = UnitClass
+local UnitFactionGroup = UnitFactionGroup
+local GetItemCount = GetItemCount
+local UnitRace = UnitRace
+local table_insert = table.insert
+local string_format = string.format
+
+local ClassColor = (addon and addon.GetClassColor())
+
 local Achievements = {
 
---{ achId="Test",  title="Boar Test",  level=4, tooltip="Kill " .. HCA_SharedUtils.GetClassColor() .. "a boar", icon=134400, points=10, requiredQuestId=nil, targetNpcId=3098, faction="Horde", zone="Durotar" },
+--{ achId="Test",  title="Boar Test",  level=4, tooltip="Kill " .. ClassColor .. "a boar", icon=134400, points=10, requiredQuestId=nil, targetNpcId=3098, faction="Horde", zone="Durotar" },
 --{ achId="Test2", title="Easy Quest Test", level=2, tooltip="Orc starter quest", icon=134400, points=10, requiredQuestId=4641, targetNpcId=nil, faction="Horde", zone="Durotar" },
 --{ achId="Test3", title="Kill + Quest", level=2, tooltip="Kill a boar and complete the orc starter quest", icon=134400, points=10, requiredQuestId=4641, targetNpcId=3098, faction="Horde", zone="Durotar" },
 --{ achId="Test4", title="Kill 3 Boars", level=2, tooltip="Kill 3 boars", icon=134400, points=10, requiredQuestId=nil, requiredKills = { [3098] = 3, }, faction="Horde", zone="Durotar" },
@@ -10,7 +24,7 @@ local Achievements = {
     achId = "Rageclaw",
     title = "Claw of the Wilds",
     level = 9,
-    tooltip = "Complete " .. HCA_SharedUtils.GetClassColor() .. "Druid of the Claw|r before level 10",
+    tooltip = "Complete " .. ClassColor .. "Druid of the Claw|r before level 10",
     icon = 134297,
     points = 10,
     requiredQuestId = 2561,
@@ -21,7 +35,7 @@ local Achievements = {
     achId = "Vagash",
     title = "The Alpha's End",
     level = 10,
-    tooltip = "Complete " .. HCA_SharedUtils.GetClassColor() .. "Protecting the Herd|r before level 11",
+    tooltip = "Complete " .. ClassColor .. "Protecting the Herd|r before level 11",
     icon = 132189,
     points = 10,
     requiredQuestId = 314,
@@ -32,7 +46,7 @@ local Achievements = {
     achId = "Hogger",
     title = "Hogger? Never Heard of Her",
     level = 11,
-    tooltip = "Complete " .. HCA_SharedUtils.GetClassColor() .. "Wanted: 'Hogger'|r before level 12",
+    tooltip = "Complete " .. ClassColor .. "Wanted: 'Hogger'|r before level 12",
     icon = 134163,
     points = 10,
     requiredQuestId = 176,
@@ -43,7 +57,7 @@ local Achievements = {
     achId = "Grawmug",
     title = "Defender of Dun Algaz",
     level = 16,
-    tooltip = "Complete " .. HCA_SharedUtils.GetClassColor() .. "In Defense of the King's Land Pt. 4|r before level 17",
+    tooltip = "Complete " .. ClassColor .. "In Defense of the King's Land Pt. 4|r before level 17",
     icon = 236421,
     points = 10,
     requiredQuestId = 217,
@@ -54,7 +68,7 @@ local Achievements = {
     achId = "AbsentMindedProspector",
     title = "Absent-Minded Savior",
     level = 19,
-    tooltip = "Complete " .. HCA_SharedUtils.GetClassColor() .. "Absent Minded Prospector Pt. 1|r before level 20",
+    tooltip = "Complete " .. ClassColor .. "Absent Minded Prospector Pt. 1|r before level 20",
     icon = 236444,
     points = 10,
     allowSoloDouble = true,
@@ -66,7 +80,7 @@ local Achievements = {
     achId = "Fangore",
     title = "Lieutenant’s Downfall",
     level = 23,
-    tooltip = "Complete " .. HCA_SharedUtils.GetClassColor() .. "Wanted: Lieutenant Fangore|r before level 24",
+    tooltip = "Complete " .. ClassColor .. "Wanted: Lieutenant Fangore|r before level 24",
     icon = 134296,
     points = 10,
     requiredQuestId = 180,
@@ -77,7 +91,7 @@ local Achievements = {
     achId = "Foulborne",
     title = "Summoner’s Bane",
     level = 23,
-    tooltip = "Complete " .. HCA_SharedUtils.GetClassColor() .. "Mage Summoner|r before level 24",
+    tooltip = "Complete " .. ClassColor .. "Mage Summoner|r before level 24",
     icon = 134173,
     points = 10,
     requiredQuestId = 1017,
@@ -88,7 +102,7 @@ local Achievements = {
     achId = "Nekrosh",
     title = "Nek’rosh No More",
     level = 31,
-    tooltip = "Complete " .. HCA_SharedUtils.GetClassColor() .. "Defeat Nek'rosh|r before level 32",
+    tooltip = "Complete " .. ClassColor .. "Defeat Nek'rosh|r before level 32",
     icon = 134170,
     points = 10,
     requiredQuestId = 474,
@@ -99,7 +113,7 @@ local Achievements = {
     achId = "Morbent",
     title = "Morbent Has Fallen",
     level = 32,
-    tooltip = "Complete " .. HCA_SharedUtils.GetClassColor() .. "Morbent Fel|r before level 33",
+    tooltip = "Complete " .. ClassColor .. "Morbent Fel|r before level 33",
     icon = 236225,
     points = 10,
     requiredQuestId = 55,
@@ -110,7 +124,7 @@ local Achievements = {
     achId = "Eliza",
     title = "The Alchemist's Wife",
     level = 32,
-    tooltip = "Complete " .. HCA_SharedUtils.GetClassColor() .. "Bride of the Embalmer|r before level 33",
+    tooltip = "Complete " .. ClassColor .. "Bride of the Embalmer|r before level 33",
     icon = 236399,
     points = 10,
     requiredQuestId = 253,
@@ -121,7 +135,7 @@ local Achievements = {
     achId = "MorLadim",
     title = "Mor’Ladim’s Rest",
     level = 33,
-    tooltip = "Complete " .. HCA_SharedUtils.GetClassColor() .. "Mor'Ladim|r before level 34",
+    tooltip = "Complete " .. ClassColor .. "Mor'Ladim|r before level 34",
     icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_Dungeon_TheNecroticWake_StitchFlesh.png", -- ??
     points = 10,
     requiredQuestId = 228,
@@ -132,7 +146,7 @@ local Achievements = {
     achId = "ForsakenCourier",
     title = "Courier of Death",
     level = 34,
-    tooltip = "Complete " .. HCA_SharedUtils.GetClassColor() .. "Hints of a New Plague|r before level 35",
+    tooltip = "Complete " .. ClassColor .. "Hints of a New Plague|r before level 35",
     icon = 133470,
     points = 10,
     requiredQuestId = 658,
@@ -143,7 +157,7 @@ local Achievements = {
     achId = "StinkysEscapeA",
     title = "Stinky Situation",
     level = 34,
-    tooltip = "Complete " .. HCA_SharedUtils.GetClassColor() .. "Stinky’s Escape|r before level 35",
+    tooltip = "Complete " .. ClassColor .. "Stinky’s Escape|r before level 35",
     icon = 236758,
     points = 10,
     allowSoloDouble = true,
@@ -155,7 +169,7 @@ local Achievements = {
     achId = "ThogrunAlliance",
     title = "Tremors Beneath",
     level = 40,
-    tooltip = "Complete " .. HCA_SharedUtils.GetClassColor() .. "Tremors of the Earth Pt. 1|r before level 41",
+    tooltip = "Complete " .. ClassColor .. "Tremors of the Earth Pt. 1|r before level 41",
     icon = 254093,
     points = 10,
     requiredQuestId = 732,
@@ -166,7 +180,7 @@ local Achievements = {
     achId = "Kurzen",
     title = "Kurzen's Fall",
     level = 41,
-    tooltip = "Complete " .. HCA_SharedUtils.GetClassColor() .. "Colonel Kurzen|r before level 42",
+    tooltip = "Complete " .. ClassColor .. "Colonel Kurzen|r before level 42",
     icon = 236844,
     points = 10,
     requiredQuestId = 202,
@@ -177,7 +191,7 @@ local Achievements = {
     achId = "LordShalzaru",
     title = "Lord of the Depths",
     level = 43,
-    tooltip = "Complete " .. HCA_SharedUtils.GetClassColor() .. "Against Lord Shalzaru|r before level 44",
+    tooltip = "Complete " .. ClassColor .. "Against Lord Shalzaru|r before level 44",
     icon = 136098,
     points = 10,
     requiredQuestId = 2870,
@@ -188,7 +202,7 @@ local Achievements = {
     achId = "DragonkinMenace",
     title = "Wrath of the Dragonkin",
     level = 57,
-    tooltip = "Complete " .. HCA_SharedUtils.GetClassColor() .. "Dragonkin Menace|r before level 58",
+    tooltip = "Complete " .. ClassColor .. "Dragonkin Menace|r before level 58",
     icon = 236734,
     points = 10,
     requiredQuestId = 4182,
@@ -207,7 +221,7 @@ local Achievements = {
     achId = "Dargol",
     title = "Crypt Commander",
     level = 11,
-    tooltip = "Complete " .. HCA_SharedUtils.GetClassColor() .. "The Family Crypt|r before level 12",
+    tooltip = "Complete " .. ClassColor .. "The Family Crypt|r before level 12",
     icon = 236458,
     points = 10,
     requiredQuestId = 408,
@@ -218,7 +232,7 @@ local Achievements = {
     achId = "Arrachea",
     title = "Spirit of the Earthmother",
     level = 11,
-    tooltip = "Complete " .. HCA_SharedUtils.GetClassColor() .. "Rites of the Earthmother|r before level 12",
+    tooltip = "Complete " .. ClassColor .. "Rites of the Earthmother|r before level 12",
     icon = 132243,
     points = 10,
     requiredQuestId = 776,
@@ -229,7 +243,7 @@ local Achievements = {
     achId = "Gazzuz",
     title = "Slayer of Gazz’uz",
     level = 12,
-    tooltip = "Complete " .. HCA_SharedUtils.GetClassColor() .. "Burning Shadows (Gazz'uz)|r before level 13",
+    tooltip = "Complete " .. ClassColor .. "Burning Shadows (Gazz'uz)|r before level 13",
     icon = 134085,
     points = 10,
     requiredQuestId = 832,
@@ -241,7 +255,7 @@ local Achievements = {
     achId = "Fizzle",
     title = "Fo' Rizzle My Fizzle!",
     level = 12,
-    tooltip = "Complete " .. HCA_SharedUtils.GetClassColor() .. "Dark Storms|r before level 13",
+    tooltip = "Complete " .. ClassColor .. "Dark Storms|r before level 13",
     icon = 236290,
     points = 10,
     requiredQuestId = 806,
@@ -252,7 +266,7 @@ local Achievements = {
     achId = "Goggeroc",
     title = "Stone and Soil",
     level = 20,
-    tooltip = "Complete " .. HCA_SharedUtils.GetClassColor() .. "Earthen Arise|r before level 21",
+    tooltip = "Complete " .. ClassColor .. "Earthen Arise|r before level 21",
     icon = 236831,
     points = 10,
     requiredQuestId = 6481,
@@ -263,7 +277,7 @@ local Achievements = {
     achId = "Kromzar",
     title = "Counterattack!",
     level = 20,
-    tooltip = "Complete " .. HCA_SharedUtils.GetClassColor() .. "Counterattack!|r before level 21",
+    tooltip = "Complete " .. ClassColor .. "Counterattack!|r before level 21",
     icon = 132484,
     points = 10,
     requiredQuestId = 4021,
@@ -274,7 +288,7 @@ local Achievements = {
     achId = "Ataeric",
     title = "Thread of the Weaver",
     level = 20,
-    tooltip = "Complete " .. HCA_SharedUtils.GetClassColor() .. "The Weaver|r before level 21",
+    tooltip = "Complete " .. ClassColor .. "The Weaver|r before level 21",
     icon = 135144,
     points = 10,
     requiredQuestId = 480,
@@ -285,7 +299,7 @@ local Achievements = {
     achId = "TheHunt",
     title = "The Great Hunt",
     level = 26,
-    tooltip = "Complete " .. HCA_SharedUtils.GetClassColor() .. "The Hunt Completed|r by slaying " .. HCA_SharedUtils.GetClassColor() .. "Sharptalon|r, " .. HCA_SharedUtils.GetClassColor() .. "Shadumbra|r, and " .. HCA_SharedUtils.GetClassColor() .. "Ursangous|r before level 27",
+    tooltip = "Complete " .. ClassColor .. "The Hunt Completed|r by slaying " .. ClassColor .. "Sharptalon|r, " .. ClassColor .. "Shadumbra|r, and " .. ClassColor .. "Ursangous|r before level 27",
     icon = 236713,
     points = 10,
     requiredQuestId = 247,
@@ -296,7 +310,7 @@ local Achievements = {
     achId = "Gizmo",
     title = "Flux-Hypercapacitor",
     level = 28,
-    tooltip = "Complete " .. HCA_SharedUtils.GetClassColor() .. "Hypercapacitor Gizmo|r before level 29",
+    tooltip = "Complete " .. ClassColor .. "Hypercapacitor Gizmo|r before level 29",
     icon = 133236,
     points = 10,
     requiredQuestId = 5151,
@@ -307,7 +321,7 @@ local Achievements = {
     achId = "Grenka",
     title = "What's in the Box!?",
     level = 30,
-    tooltip = "Complete " .. HCA_SharedUtils.GetClassColor() .. "Test of Endurance|r before level 31",
+    tooltip = "Complete " .. ClassColor .. "Test of Endurance|r before level 31",
     icon = 236848,
     points = 10,
     requiredQuestId = 1150,
@@ -318,7 +332,7 @@ local Achievements = {
     achId = "Ironhill",
     title = "Hillsbrad Commander",
     level = 33,
-    tooltip = "Complete " .. HCA_SharedUtils.GetClassColor() .. "Battle of Hillsbrad|r before level 34",
+    tooltip = "Complete " .. ClassColor .. "Battle of Hillsbrad|r before level 34",
     icon = 236779,
     points = 10,
     requiredQuestId = 541,
@@ -329,7 +343,7 @@ local Achievements = {
     achId = "StinkysEscapeH",
     title = "Stinky Situation",
     level = 34,
-    tooltip = "Complete " .. HCA_SharedUtils.GetClassColor() .. "Stinky’s Escape|r before level 35",
+    tooltip = "Complete " .. ClassColor .. "Stinky’s Escape|r before level 35",
     icon = 236758,
     points = 10,
     allowSoloDouble = true,
@@ -341,7 +355,7 @@ local Achievements = {
     achId = "ThogrunHorde",
     title = "Sign of the Earth",
     level = 40,
-    tooltip = "Complete " .. HCA_SharedUtils.GetClassColor() .. "Broken Alliances Pt. 1|r before level 41",
+    tooltip = "Complete " .. ClassColor .. "Broken Alliances Pt. 1|r before level 41",
     icon = 254093,
     points = 10,
     requiredQuestId = 782,
@@ -352,7 +366,7 @@ local Achievements = {
     achId = "NothingButTruth",
     title = "Truth Seeker",
     level = 40,
-    tooltip = "Complete " .. HCA_SharedUtils.GetClassColor() .. "Nothing but the Truth Pt. 4|r before level 41",
+    tooltip = "Complete " .. ClassColor .. "Nothing but the Truth Pt. 4|r before level 41",
     icon = 132800,
     points = 10,
     requiredQuestId = 1383,
@@ -363,7 +377,7 @@ local Achievements = {
     achId = "Mugthol",
     title = "Crowned",
     level = 43,
-    tooltip = "Complete " .. HCA_SharedUtils.GetClassColor() .. "The Crown of Will Pt. 4|r before level 44",
+    tooltip = "Complete " .. ClassColor .. "The Crown of Will Pt. 4|r before level 44",
     icon = 132768,
     points = 10,
     requiredQuestId = 520,
@@ -374,7 +388,7 @@ local Achievements = {
     achId = "Hatetalon",
     title = "Dark Heart of the Wild",
     level = 48,
-    tooltip = "Complete " .. HCA_SharedUtils.GetClassColor() .. "Dark Heart|r before level 49",
+    tooltip = "Complete " .. ClassColor .. "Dark Heart|r before level 49",
     icon = 134131,
     points = 10,
     requiredQuestId = 3062,
@@ -385,7 +399,7 @@ local Achievements = {
     achId = "Kromgrul",
     title = "Crushing the Grul",
     level = 51,
-    tooltip = "Complete " .. HCA_SharedUtils.GetClassColor() .. "Krom'Grul|r before level 52",
+    tooltip = "Complete " .. ClassColor .. "Krom'Grul|r before level 52",
     icon = 236695,
     points = 10,
     requiredQuestId = 3822,
@@ -453,7 +467,7 @@ local Achievements = {
     achId = "GalensEscape",
     title = "Galen's Freedom",
     level = 38,
-    tooltip = "Complete " .. HCA_SharedUtils.GetClassColor() .. "Galen's Escape|r before level 39",
+    tooltip = "Complete " .. ClassColor .. "Galen's Escape|r before level 39",
     icon = 236845,
     points = 10,
     allowSoloDouble = true,
@@ -464,7 +478,7 @@ local Achievements = {
     achId = "GetMeOutOfHere",
     title = "Outta Here!",
     level = 41,
-    tooltip = "Complete " .. HCA_SharedUtils.GetClassColor() .. "Get Me Out of Here!|r before level 42",
+    tooltip = "Complete " .. ClassColor .. "Get Me Out of Here!|r before level 42",
     icon = 236742,
     points = 10,
     allowSoloDouble = true,
@@ -475,7 +489,7 @@ local Achievements = {
     achId = "KingBangalash",
     title = "King of the Jungle",
     level = 42,
-    tooltip = "Complete " .. HCA_SharedUtils.GetClassColor() .. "Big Game Hunter|r before level 43",
+    tooltip = "Complete " .. ClassColor .. "Big Game Hunter|r before level 43",
     icon = 134176,
     points = 10,
     requiredQuestId = 208,
@@ -485,7 +499,7 @@ local Achievements = {
     achId = "OOX",
     title = "Oox I Did It Again",
     level = 45,
-    tooltip = "Complete " .. HCA_SharedUtils.GetClassColor() .. "An OOX of Your Own|r before level 46",
+    tooltip = "Complete " .. ClassColor .. "An OOX of Your Own|r before level 46",
     icon = 133883,
     points = 10,
     allowSoloDouble = true,
@@ -496,7 +510,7 @@ local Achievements = {
     achId = "CuergosGold",
     title = "Cuergo’s Fortune",
     level = 45,
-    tooltip = "Complete " .. HCA_SharedUtils.GetClassColor() .. "Cuergo’s Gold|r before level 46",
+    tooltip = "Complete " .. ClassColor .. "Cuergo’s Gold|r before level 46",
     icon = 237387,
     points = 10,
     allowSoloDouble = true,
@@ -507,7 +521,7 @@ local Achievements = {
     achId = "Mokk",
     title = "This Isn't Worth It",
     level = 47,
-    tooltip = "Complete " .. HCA_SharedUtils.GetClassColor() .. "Stranglethorn Fever|r before level 48",
+    tooltip = "Complete " .. ClassColor .. "Stranglethorn Fever|r before level 48",
     icon = 134338,
     points = 10,
     allowSoloDouble = true,
@@ -516,11 +530,18 @@ local Achievements = {
     zone = "Stranglethorn Vale"
 }, {
     achId = "MalletZF",
-    title = string.format("%s the Keeper", GetUnitName("player")),
+    title = string_format("%s the Keeper", GetUnitName("player")),
     level = 49,
-    tooltip = "Obtain the " .. HCA_SharedUtils.GetClassColor() .. "Mallet of Zul'Farrak|r before level 50",
+    tooltip = "Obtain the " .. ClassColor .. "Mallet of Zul'Farrak|r before level 50",
     icon = 134559,
     points = 10,
+    -- Title is player-specific (includes the completing player's name). Opt-in so chat links
+    -- and tooltips can show the sender/completer name for all viewers.
+    linkUsesSenderTitle = true,
+    -- Tooltip title fallback when the visible link text isn't available in the hyperlink handler.
+    linkTitle = function(senderName)
+        return string_format("%s the Keeper", tostring(senderName or ""))
+    end,
     allowSoloDouble = true,
     customIsCompleted = function() return false end,
     customItem = function() return GetItemCount(9240, true) > 0 end,
@@ -529,7 +550,7 @@ local Achievements = {
     achId = "Mukla",
     title = "Kong of the Jungle",
     level = 50,
-    tooltip = "Complete " .. HCA_SharedUtils.GetClassColor() .. "Message in a Bottle|r before level 51",
+    tooltip = "Complete " .. ClassColor .. "Message in a Bottle|r before level 51",
     icon = 132159,
     points = 10,
     allowSoloDouble = true,
@@ -540,7 +561,7 @@ local Achievements = {
     achId = "KimJaelIndeed",
     title = "Booty Bay Genius",
     level = 51,
-    tooltip = "Complete " .. HCA_SharedUtils.GetClassColor() .. "Kim’Jael Indeed!|r before level 52",
+    tooltip = "Complete " .. ClassColor .. "Kim’Jael Indeed!|r before level 52",
     icon = 236714,
     points = 10,
     allowSoloDouble = true,
@@ -551,7 +572,7 @@ local Achievements = {
     achId = "StonesThatBindUs",
     title = "Stonebound Savior",
     level = 51,
-    tooltip = "Complete " .. HCA_SharedUtils.GetClassColor() .. "The Stones That Bind Us|r before level 52",
+    tooltip = "Complete " .. ClassColor .. "The Stones That Bind Us|r before level 52",
     icon = 236720,
     points = 10,
     allowSoloDouble = true,
@@ -562,7 +583,7 @@ local Achievements = {
     achId = "Hakkar",
     title = "Spirits, Tablets, and Eggs, Oh My!",
     level = 53,
-    tooltip = "Complete " .. HCA_SharedUtils.GetClassColor() .. "The God Hakkar|r before level 54",
+    tooltip = "Complete " .. ClassColor .. "The God Hakkar|r before level 54",
     icon = 132209,
     points = 10,
     requiredQuestId = 3528,
@@ -572,7 +593,7 @@ local Achievements = {
     achId = "ShadowLordFeldan",
     title = "Shadow’s End",
     level = 55,
-    tooltip = "Complete " .. HCA_SharedUtils.GetClassColor() .. "A Final Blow|r before level 56",
+    tooltip = "Complete " .. ClassColor .. "A Final Blow|r before level 56",
     icon = 236763,
     points = 10,
     requiredQuestId = 5242,
@@ -582,7 +603,7 @@ local Achievements = {
     achId = "SummoningThePrincess",
     title = "Shards of Myzrael",
     level = 55,
-    tooltip = "Complete " .. HCA_SharedUtils.GetClassColor() .. "Summoning the Princess|r before level 56",
+    tooltip = "Complete " .. ClassColor .. "Summoning the Princess|r before level 56",
     icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\INV_Enchanting_Shard.png", -- ??
     points = 10,
     requiredQuestId = 656,
@@ -592,7 +613,7 @@ local Achievements = {
     achId = "GorishiHiveQueen",
     title = "Queen’s Gambit",
     level = 56,
-    tooltip = "Complete " .. HCA_SharedUtils.GetClassColor() .. "Pawn Captures Queen|r before level 57",
+    tooltip = "Complete " .. ClassColor .. "Pawn Captures Queen|r before level 57",
     icon = 134340,
     points = 10,
     requiredQuestId = 4507,
@@ -602,7 +623,7 @@ local Achievements = {
     achId = "OverseerMaltorius",
     title = "Master of the Forge",
     level = 56,
-    tooltip = "Complete " .. HCA_SharedUtils.GetClassColor() .. "WANTED: Overseer Maltorius|r before level 57",
+    tooltip = "Complete " .. ClassColor .. "WANTED: Overseer Maltorius|r before level 57",
     icon = 134159,
     points = 10,
     requiredQuestId = 7701,
@@ -612,7 +633,7 @@ local Achievements = {
     achId = "MercutioFilthgorger",
     title = "Mercutio’s Memory",
     level = 57,
-    tooltip = "Complete " .. HCA_SharedUtils.GetClassColor() .. "Of Forgotten Memories|r before level 58",
+    tooltip = "Complete " .. ClassColor .. "Of Forgotten Memories|r before level 58",
     icon = 133038,
     points = 10,
     requiredQuestId = 5781,
@@ -622,7 +643,7 @@ local Achievements = {
     achId = "HighChiefWinterfall",
     title = "Winter is Coming",
     level = 59,
-    tooltip = "Complete " .. HCA_SharedUtils.GetClassColor() .. "High Chief Winterfall|r before level 60",
+    tooltip = "Complete " .. ClassColor .. "High Chief Winterfall|r before level 60",
     icon = 236696,
     points = 10,
     requiredQuestId = 5121,
@@ -632,7 +653,7 @@ local Achievements = {
     achId = "Deathclasp",
     title = "Deathclasp Down",
     level = 59,
-    tooltip = "Complete " .. HCA_SharedUtils.GetClassColor() .. "Wanted: Deathclasp, Terror of the Sands|r before level 60",
+    tooltip = "Complete " .. ClassColor .. "Wanted: Deathclasp, Terror of the Sands|r before level 60",
     icon = 133708,
     points = 10,
     requiredQuestId = 8283,
@@ -645,7 +666,7 @@ local Achievements = {
     achId = "Gallywix",
     title = "Get Gallywix or Die Tryin |cfffff468[Rogue]|r",
     level = 23,
-    tooltip = "Complete " .. HCA_SharedUtils.GetClassColor() .. "Mission: Possible But Not Probable|r before level 24",
+    tooltip = "Complete " .. ClassColor .. "Mission: Possible But Not Probable|r before level 24",
     icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Ability_Rogue_StayofExecution.PNG", -- 236281
     points = 10,
     requiredQuestId = 2478,
@@ -657,7 +678,7 @@ local Achievements = {
     achId = "DefiasMask",
     title = "One of Us! |cfffff468[Rogue]|r",
     level = nil,
-    tooltip = "Equip a " .. HCA_SharedUtils.GetClassColor() .. "Red Defias Mask|r and join the ranks of the Defias Brotherhood",
+    tooltip = "Equip a " .. ClassColor .. "Red Defias Mask|r and join the ranks of the Defias Brotherhood",
     icon = 133694,
     points = 0,
     customIsCompleted = function() return false end,
@@ -671,7 +692,7 @@ local Achievements = {
     achId = "AlchemistShopH",
     title = "Back to Brill! |cff3FC7EB[Mage]|r",
     level = 18,
-    tooltip = "Complete " .. HCA_SharedUtils.GetClassColor() .. "Investigate the Alchemist Shop|r before level 19",
+    tooltip = "Complete " .. ClassColor .. "Investigate the Alchemist Shop|r before level 19",
     icon = 135734,
     points = 10,
     allowSoloDouble = true,
@@ -684,7 +705,7 @@ local Achievements = {
     achId = "AlchemistShopA",
     title = "Back to Elwynn! |cff3FC7EB[Mage]|r",
     level = 18,
-    tooltip = "Complete " .. HCA_SharedUtils.GetClassColor() .. "Investigate the Blue Recluse|r before level 19",
+    tooltip = "Complete " .. ClassColor .. "Investigate the Blue Recluse|r before level 19",
     icon = 135734,
     points = 10,
     allowSoloDouble = true,
@@ -700,7 +721,7 @@ local Achievements = {
     achId = "Whirlwind",
     title = "Cyclonian's Collapse |cffc69b6d[Warrior]|r",
     level = 38,
-    tooltip = "Complete " .. HCA_SharedUtils.GetClassColor() .. "The Summoning|r before level 39",
+    tooltip = "Complete " .. ClassColor .. "The Summoning|r before level 39",
     icon = 134131,
     points = 10,
     requiredQuestId = 1713,
@@ -735,62 +756,103 @@ local function IsEligible(def)
   return true
 end
 
+---------------------------------------
+-- Registration Logic
+---------------------------------------
+
 for _, def in ipairs(Achievements) do
   if IsEligible(def) then
     if def.customKill then
-      _G[def.achId .. "_Kill"] = def.customKill
-      _G[def.achId .. "_IsCompleted"] = _G[def.achId .. "_IsCompleted"] or function() return false end
+      if addon and addon.RegisterCustomAchievement then
+        addon.RegisterCustomAchievement(def.achId, def.customKill, def.customIsCompleted or function() return false end)
+      end
     elseif def.customIsCompleted then
-      _G[def.achId .. "_IsCompleted"] = def.customIsCompleted
+      if addon and addon.RegisterCustomAchievement then
+        addon.RegisterCustomAchievement(def.achId, nil, def.customIsCompleted)
+      end
     else
-      _G.Achievements_Common.registerQuestAchievement{
-        achId           = def.achId,
-        requiredQuestId = def.requiredQuestId,
-        targetNpcId     = def.targetNpcId,
-        requiredKills   = def.requiredKills,
-        maxLevel        = def.level,
-        faction         = def.faction,
-        race            = def.race,
-        class           = def.class,
-        allowKillsBeforeQuest = def.allowKillsBeforeQuest,
-      }
+      if addon and addon.registerQuestAchievement then
+        addon.registerQuestAchievement{
+          achId           = def.achId,
+          requiredQuestId = def.requiredQuestId,
+          targetNpcId     = def.targetNpcId,
+          requiredKills   = def.requiredKills,
+          maxLevel        = def.level,
+          faction         = def.faction,
+          race            = def.race,
+          class           = def.class,
+          allowKillsBeforeQuest = def.allowKillsBeforeQuest,
+        }
+      end
     end
   end
 end
 
--- Export achievements to global scope for AdminPanel access
-_G.Achievements = Achievements
+-- Export to addon for internal use (e.g. RefreshAllAchievementPoints, AdminPanel)
+if addon then
+  addon.CatalogAchievements = Achievements
+end
 
--- Defer registration until PLAYER_LOGIN to prevent load timeouts
--- Create global registration queue if it doesn't exist
-_G.HCA_RegistrationQueue = _G.HCA_RegistrationQueue or {}
+---------------------------------------
+-- Helper Functions
+---------------------------------------
 
--- Queue all achievements for deferred registration
-for _, def in ipairs(Achievements) do
-  if IsEligible(def) then
-    -- Mark as quest achievement for filtering
+-- Get kill tracker function for an achievement definition
+local function GetKillTracker(def)
+    if def.customKill then
+        return def.customKill
+    end
+    if (def.targetNpcId or def.requiredKills) and addon and addon.GetAchievementFunction then
+        return addon.GetAchievementFunction(def.achId, "Kill")
+    end
+    return nil
+end
+
+-- Get quest tracker function for an achievement definition
+local function GetQuestTracker(def)
+    if def.requiredQuestId and addon.GetAchievementFunction then
+        return addon.GetAchievementFunction(def.achId, "Quest")
+    end
+    return nil
+end
+
+---------------------------------------
+-- Deferred Registration Queue
+---------------------------------------
+
+-- Defer registration until PLAYER_LOGIN so IsEligible (UnitFactionGroup/UnitRace/UnitClass) is valid
+if addon then
+  addon.RegistrationQueue = addon.RegistrationQueue or {}
+  local queue = addon.RegistrationQueue
+  local RegisterAchievementDef = addon.RegisterAchievementDef
+
+  for _, def in ipairs(Achievements) do
     def.isQuest = true
-    table.insert(_G.HCA_RegistrationQueue, function()
-      local killFn  = def.customKill or ((def.targetNpcId or def.requiredKills) and _G.HardcoreAchievements_GetAchievementFunction(def.achId, "Kill")) or nil
-      local questFn = (def.requiredQuestId and _G.HardcoreAchievements_GetAchievementFunction(def.achId, "Quest")) or nil
-
-      -- Expose this definition for external lookups (e.g., NPC tooltips, chat links)
-      HCA_SharedUtils.RegisterAchievementDef(def)
-
-      CreateAchievementRow(
-        AchievementPanel,
-        def.achId,
-        def.title,
-        def.tooltip,
-        def.icon,
-        def.level,
-        def.points or 0,
-        killFn,
-        questFn,
-        def.staticPoints,
-        def.zone,
-        def
-      )
+    table_insert(queue, function()
+      if not IsEligible(def) then return end
+      local killFn = GetKillTracker(def)
+      local questFn = GetQuestTracker(def)
+      if RegisterAchievementDef then
+        RegisterAchievementDef(def)
+      end
+      local CreateAchievementRow = addon.CreateAchievementRow
+      local AchievementPanel = addon.AchievementPanel
+      if CreateAchievementRow and AchievementPanel then
+        CreateAchievementRow(
+          AchievementPanel,
+          def.achId,
+          def.title,
+          def.tooltip,
+          def.icon,
+          def.level,
+          def.points or 0,
+          killFn,
+          questFn,
+          def.staticPoints,
+          def.zone,
+          def
+        )
+      end
     end)
   end
 end
