@@ -573,8 +573,8 @@ local Achievements = {
 }, {
     achId = "StonesThatBindUs",
     title = "Stonebound Savior",
-    level = 51,
-    tooltip = "Complete " .. ClassColor .. "The Stones That Bind Us|r before level 52",
+    level = 54,
+    tooltip = "Complete " .. ClassColor .. "The Stones That Bind Us|r before level 55",
     icon = 236720,
     points = 10,
     allowSoloDouble = true,

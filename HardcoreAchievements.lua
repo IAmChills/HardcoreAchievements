@@ -4248,7 +4248,8 @@ do
                 end
             elseif event == "QUEST_ACCEPTED" then
                 -- arg2 is the QuestId
-                local questID = select(2, ...)
+                local arg1, arg2 = ...
+                local questID = arg2 and tonumber(arg2) or nil
                 questID = questID and tonumber(questID) or nil
                 if questID and addon and addon.SetProgress then
                     -- Store player's level when quest is accepted as a backup reference
@@ -4267,7 +4268,8 @@ do
                     end
                 end
             elseif event == "QUEST_TURNED_IN" then
-                local questID = select(1, ...)
+                local arg1, arg2 = ...
+                local questID = arg2 and tonumber(arg2) or nil
                 questID = questID and tonumber(questID) or nil
                 local currentTime = GetTime()
                 
@@ -4333,7 +4335,7 @@ do
                     end
                 end
             elseif event == "UNIT_AURA" then
-                local unit = select(1, ...)
+                local unit = ...
                 if unit ~= "player" then return end
                 for _, row in ipairs(addon.AchievementRowModel or {}) do
                     -- Check both row.completed and database to prevent re-completion
@@ -4511,8 +4513,9 @@ do
                 end
             elseif event == "PLAYER_LEVEL_CHANGED" then
                 -- arg1 is previous level, arg2 is new level
-                local previousLevel = tonumber(select(1, ...))
-                local newLevel = tonumber(select(2, ...))
+                local prevArg, newArg = ...
+                local previousLevel = tonumber(tostring(prevArg))
+                local newLevel = tonumber(tostring(newArg))
                 
                 -- Cache the level-up info with timestamp for quest turn-in validation
                 if previousLevel and newLevel then
@@ -4566,7 +4569,8 @@ do
                     end
                 end
             elseif event == "QUEST_REMOVED" then
-                local removedQuestId = tonumber(...)
+                local questIdArg = ...
+                local removedQuestId = questIdArg and tonumber(tostring(questIdArg)) or nil
                 if removedQuestId and QuestTrackedRows[removedQuestId] then
                     local rows = QuestTrackedRows[removedQuestId]
                     local needsRefresh = false
