@@ -14,7 +14,7 @@
 --
 -- Propagation (handled by LibP2PDB):
 -- - BroadcastKey: Immediately broadcasts claim to all online peers via GUILD/RAID/PARTY/YELL channels
--- - DiscoverPeers: Periodically finds new peers (every 30s) and syncs when they come online
+-- - BroadcastPresence: Periodically announces presence (every 30s) so peers can see us; then SyncDatabase
 -- - SyncDatabase: Gossip-style sync with neighbors via WHISPER (exchanges digests, requests missing data)
 -- - Persistence: Saves state to SavedVariables on claim + every 60s, loads on login
 
@@ -25,7 +25,7 @@ local LibP2PDB = LibStub("LibP2PDB", true)
 if not LibP2PDB then return end
 
 local TABLE_NAME = "Claims"
-local databases = {}  -- [scopeKey] = { db = DBHandle, prefix = string, discoverTicker = ticker }
+local databases = {}  -- [scopeKey] = { db = DBHandle, prefix = string, presenceTicker = ticker }
 
 local addonName, addon = ...
 local MarkRowCompleted = addon and addon.MarkRowCompleted
@@ -431,12 +431,6 @@ local function EnsureDBForScope(scopeKey)
         db = LibP2PDB:NewDatabase({
             prefix = prefix,
             version = 1,
-            onDiscoveryComplete = function()
-                Debug("Peer discovery complete for scope: " .. tostring(scopeKey) .. " - starting sync")
-                if databases[scopeKey] and databases[scopeKey].db then
-                    LibP2PDB:SyncDatabase(databases[scopeKey].db)
-                end
-            end,
         })
     else
         Debug("Using existing database for scope: " .. tostring(scopeKey))
@@ -536,24 +530,26 @@ local function EnsureDBForScope(scopeKey)
         end)
     end
 
-    -- Periodic peer discovery and sync (only create one ticker per scope)
-    if not databases[scopeKey] or not databases[scopeKey].discoverTicker then
+    -- Periodic presence broadcast and sync (only create one ticker per scope)
+    if not databases[scopeKey] or not databases[scopeKey].presenceTicker then
         local ticker = C_Timer.NewTicker(30.0, function()
             if databases[scopeKey] and databases[scopeKey].db then
-                LibP2PDB:DiscoverPeers(databases[scopeKey].db)
+                LibP2PDB:BroadcastPresence(databases[scopeKey].db)
+                LibP2PDB:SyncDatabase(databases[scopeKey].db)
             end
         end)
         databases[scopeKey] = {
             db = db,
             prefix = prefix,
             scopeKey = scopeKey,
-            discoverTicker = ticker,
+            presenceTicker = ticker,
         }
     end
 
-    -- Initial discovery
-    Debug("Starting peer discovery for scope: " .. tostring(scopeKey))
-    LibP2PDB:DiscoverPeers(db)
+    -- Initial presence broadcast and sync
+    Debug("Broadcasting presence for scope: " .. tostring(scopeKey))
+    LibP2PDB:BroadcastPresence(db)
+    LibP2PDB:SyncDatabase(db)
 
     -- Save state periodically (only create one saver per scope)
     if not databases[scopeKey].saveTicker then
@@ -741,8 +737,8 @@ local function CanClaimAndAward(self, achievementId, row, winnersGUIDs)
         LibP2PDB:SetKey(db, TABLE_NAME, achievementId, claim)
         Debug("CanClaimAndAward(" .. achievementId .. "): Claim written locally, broadcasting to all peers...")
         LibP2PDB:BroadcastKey(db, TABLE_NAME, achievementId)
-        Debug("CanClaimAndAward(" .. achievementId .. "): Broadcast sent, discovering peers and syncing...")
-        LibP2PDB:DiscoverPeers(db)
+        Debug("CanClaimAndAward(" .. achievementId .. "): Broadcast sent, announcing presence and syncing...")
+        LibP2PDB:BroadcastPresence(db)
         LibP2PDB:SyncDatabase(db)
         
         -- Save immediately after claiming (don't wait for periodic save)

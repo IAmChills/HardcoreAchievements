@@ -260,6 +260,42 @@ local function CleanupIncorrectLevelAchievements()
     return cleanedCount
 end
 
+-- Cleanup function to unfail achievements that are now eligible after a catalog change
+-- (e.g. maxLevel increased from 10 to 15: a player who failed at 12 is now eligible)
+-- Run after registration so AchievementRowModel has current maxLevels.
+local function CleanupNowEligibleFailedAchievements()
+    local _, cdb = GetCharDB()
+    if not cdb or not cdb.achievements then return 0 end
+
+    local rows = addon and addon.AchievementRowModel
+    if not rows or #rows == 0 then return 0 end
+
+    local playerLevel = UnitLevel("player") or 0
+    local maxLevelByAchId = {}
+    for _, row in ipairs(rows) do
+        local id = row.id or row.achId
+        if id and row.maxLevel then
+            maxLevelByAchId[tostring(id)] = row.maxLevel
+        end
+    end
+
+    local cleanedCount = 0
+    for achId, rec in pairs(cdb.achievements) do
+        if not rec.completed and (rec.failed or rec.failedAt) then
+            local maxLevel = maxLevelByAchId[tostring(achId)]
+            if maxLevel and playerLevel <= maxLevel then
+                rec.failed = nil
+                rec.failedAt = nil
+                cleanedCount = cleanedCount + 1
+            end
+        end
+    end
+
+    if cleanedCount > 0 then
+        print(string_format("|cff008066[Hardcore Achievements]|r |cffffd100Unfailed %d achievement(s) that are now eligible (catalog/level change).|r", cleanedCount))
+    end
+    return cleanedCount
+end
 
 local function ClearProgress(achId)
     local _, cdb = GetCharDB()
@@ -3892,8 +3928,6 @@ do
                 PlayerIsSolo_UpdateStatusForGUID(destGUID)
             end
 
-            recentKills[destGUID] = true
-            clearRecentKill(destGUID)
             addon.DungeonKillPrintedForGUID = nil
             local rows = addon.AchievementRowModel
             if not rows then return end
@@ -3912,15 +3946,24 @@ do
                 return oa < ob
             end)
 
+            local anyAwarded = false
             for _, row in ipairs(rowsWithTracker) do
                 if row.killTracker(destGUID) then
                     MarkRowCompleted(row)
                     local iconTex = (row.frame and row.frame.Icon and row.frame.Icon.GetTexture and row.frame.Icon:GetTexture()) or row.icon or 136116
                     local titleText = (row.frame and row.frame.Title and row.frame.Title.GetText and row.frame.Title:GetText()) or row.title or "Achievement"
                     CreateAchToast(iconTex, titleText, row.points, row.frame or row)
+                    anyAwarded = true
                 end
             end
-            
+
+            -- Only mark as processed when we actually awarded; otherwise UNIT_DIED (or another event) can retry
+            -- (e.g. when PARTY_KILL/damage path ran first but no credit was given due to tap/eligibility)
+            if anyAwarded then
+                recentKills[destGUID] = true
+                clearRecentKill(destGUID)
+            end
+
             -- Clean up external player tracking for this NPC after kill
             externalPlayersByNPC[destGUID] = nil
         end
@@ -4008,37 +4051,44 @@ do
                 --     print("[CLEU Debug]", subevent, "| Threat:", UnitDetailedThreatSituation("player", "target"))
                 -- end
                 if subevent == "PARTY_KILL" then
-                    -- PARTY_KILL fires for player/party member kills
-                    -- Only process if we were fighting this NPC (prevents tracking kills we had no part in)
-                    -- Check if player tagged the enemy (prevents credit for killing untagged mobs when awardOnKill is enabled)
-                    -- Use stored tap denial status (NPC is cleared from target when it dies, so we can't check at kill time)
+                    -- PARTY_KILL fires when the player/party gets credit for a kill.
+                    -- In dungeon/raid: only the group is present, so we always process (interchangeable with UNIT_DIED).
+                    -- In open world: require npcsInCombat and check tap denial so we don't credit kills we didn't tag.
+                    local instanceName, instanceType = select(2, GetInstanceInfo())
+                    local inInstance = (instanceType == "party" or instanceType == "raid")
                     local isTapDenied = npcTapDenied[destGUID]
-                    if isTapDenied == true then
+                    if isTapDenied == true and not inInstance then
                         return
                     end
-                    if npcsInCombat[destGUID] then
+                    if inInstance and destGUID then
+                        -- Instance: process party kill if it's a tracked creature (same filter as UNIT_DIED)
+                        local guidType = select(1, strsplit("-", destGUID))
+                        if guidType == "Creature" then
+                            local npcId = getNpcIdFromGUID(destGUID)
+                            if npcId and isNpcTrackedForAchievement(npcId) then
+                                processKill(destGUID)
+                                npcsInCombat[destGUID] = nil
+                                npcTapDenied[destGUID] = nil
+                            end
+                        end
+                    elseif npcsInCombat[destGUID] then
+                        -- Open world: only if we were fighting this NPC
                         processKill(destGUID)
-                        -- Clean up combat tracking
                         npcsInCombat[destGUID] = nil
                         npcTapDenied[destGUID] = nil
                     end
                 elseif subevent == "UNIT_DIED" then
-                    -- UNIT_DIED is a fallback for dungeon/raid bosses when PARTY_KILL doesn't fire
-                    -- (e.g., when a NPC or mechanic delivers the killing blow)
-                    -- Only process in instanced zones (dungeons or raids) to avoid tracking world kills
+                    -- UNIT_DIED always fires when something dies. In dungeon/raid use it as primary/fallback
+                    -- when PARTY_KILL doesn't fire (e.g. environment/totem/pet/mechanic got the kill).
+                    -- Only process in instance so we don't credit world kills we had no part in.
                     local instanceName, instanceType = select(2, GetInstanceInfo())
                     if instanceType == "party" or instanceType == "raid" then
                         if destGUID then
-                            -- Verify this is an NPC, not a player
                             local guidType = select(1, strsplit("-", destGUID))
                             if guidType == "Creature" then
                                 local npcId = getNpcIdFromGUID(destGUID)
                                 if npcId and isNpcTrackedForAchievement(npcId) then
-                                    -- This is a tracked boss in an instance - process the kill
-                                    -- We don't need to check npcsInCombat since we're in an instance
-                                    -- and there's no risk of outside players contributing
                                     processKill(destGUID)
-                                    -- Clean up combat tracking
                                     npcsInCombat[destGUID] = nil
                                     npcTapDenied[destGUID] = nil
                                 end
@@ -4268,9 +4318,8 @@ do
                     end
                 end
             elseif event == "QUEST_TURNED_IN" then
-                local arg1, arg2 = ...
-                local questID = arg2 and tonumber(arg2) or nil
-                questID = questID and tonumber(questID) or nil
+                local arg1 = ...
+                local questID = arg1 and tonumber(arg1) or nil
                 local currentTime = GetTime()
                 
                 for _, row in ipairs(addon.AchievementRowModel or {}) do
@@ -4917,6 +4966,7 @@ do
         end
         skipBroadcastForRetroactive = false
 
+        if CleanupNowEligibleFailedAchievements then CleanupNowEligibleFailedAchievements() end
         if RefreshOutleveledAll then RefreshOutleveledAll() end
         if SortAchievementRows then SortAchievementRows() end
         if RefreshAllAchievementPoints then RefreshAllAchievementPoints() end
