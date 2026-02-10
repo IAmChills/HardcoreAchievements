@@ -235,7 +235,7 @@ local function ProcessDeleteAchievementCommand(payload, sender)
         hadAchievement = true
     end
     
-    -- Delete achievement from database
+    -- Full purge: remove achievement record (completion, failed state, timestamps) and all progress
     cdb.achievements = cdb.achievements or {}
     cdb.achievements[id] = nil
     
@@ -243,7 +243,7 @@ local function ProcessDeleteAchievementCommand(payload, sender)
     if cdb.progress then
         cdb.progress[id] = nil
     end
-    
+
     -- Tombstone (only when permanent): prevent GuildFirst onChange from re-awarding if claim syncs back
     if payload.permanent then
         cdb.deletedByAdmin = cdb.deletedByAdmin or {}
