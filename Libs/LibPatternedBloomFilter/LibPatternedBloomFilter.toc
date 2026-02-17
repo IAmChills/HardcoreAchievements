@@ -2,6 +2,6 @@
 ## Title: LibPatternedBloomFilter
 ## Author: Erunehtar
 ## Notes: Patterned Bloom Filter implementation for WoW Lua 5.1 environment.
-## Version: 3
+## Version: 4
 
 LibPatternedBloomFilter.lua

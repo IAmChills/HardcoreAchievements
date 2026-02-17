@@ -33,6 +33,58 @@ local instanceEntryLevels = {}
 local wasDeadOnExit = false
 local lastInstanceMapId = nil
 
+-- Persist dungeon entry state to SavedVariables so it survives /reload (e.g. enter at 14, level to 15, reload -> still eligible)
+local function SaveDungeonEntryState()
+    if not (addon and addon.HardcoreAchievementsDB) then return end
+    addon.HardcoreAchievementsDB.dungeonEntryLevels = addon.HardcoreAchievementsDB.dungeonEntryLevels or {}
+    local sv = addon.HardcoreAchievementsDB.dungeonEntryLevels
+    for mapId, entry in pairs(instanceEntryLevels) do
+        if entry and (entry.playerLevel or entry.partyLevels) then
+            sv[tostring(mapId)] = {
+                playerLevel = entry.playerLevel,
+                partyLevels = entry.partyLevels and {} or nil,
+                wasDeadOnExit = entry.wasDeadOnExit and true or nil,
+            }
+            if entry.partyLevels then
+                for guid, lvl in pairs(entry.partyLevels) do
+                    sv[tostring(mapId)].partyLevels[guid] = lvl
+                end
+            end
+        end
+    end
+    for mapIdStr in pairs(sv) do
+        local mapIdNum = tonumber(mapIdStr)
+        if not instanceEntryLevels[mapIdNum] and not instanceEntryLevels[mapIdStr] then
+            sv[mapIdStr] = nil
+        end
+    end
+    addon.HardcoreAchievementsDB.dungeonLastInstanceMapId = lastInstanceMapId and tostring(lastInstanceMapId) or nil
+end
+
+-- Restore from SavedVariables when re-entering world (e.g. after /reload) so we keep entry-level eligibility
+local function RestoreDungeonEntryState(mapId)
+    if not mapId or not (addon and addon.HardcoreAchievementsDB and addon.HardcoreAchievementsDB.dungeonEntryLevels) then return false end
+    local key = tostring(mapId)
+    local saved = addon.HardcoreAchievementsDB.dungeonEntryLevels[key]
+    if not saved or not saved.playerLevel then return false end
+    instanceEntryLevels[mapId] = {
+        playerLevel = saved.playerLevel,
+        partyLevels = saved.partyLevels and {} or {},
+        wasDeadOnExit = saved.wasDeadOnExit and true or nil,
+    }
+    if saved.partyLevels then
+        for guid, lvl in pairs(saved.partyLevels) do
+            instanceEntryLevels[mapId].partyLevels[guid] = lvl
+        end
+    end
+    lastInstanceMapId = mapId
+    wasDeadOnExit = false
+    if addon and addon.DebugPrint then
+        addon.DebugPrint("Dungeon entry levels restored from SavedVariables for map " .. tostring(mapId) .. " (playerLevel " .. tostring(saved.playerLevel) .. ")")
+    end
+    return true
+end
+
 -- Track if player is currently inside a dungeon or raid instance
 -- This prevents achievements from being marked as failed when leveling up inside
 local isInDungeonOrRaid = false
@@ -372,9 +424,13 @@ dungeonEventFrame:SetScript("OnEvent", function(self, event, unitIndex)
                 -- Entering or already in a dungeon instance
                 local mapId = select(8, GetInstanceInfo())
               if mapId then
-                  -- Check if we already have entry levels for this map (to detect re-entry)
+                  -- Restore from SavedVariables if we just reloaded (entry levels are in-memory only otherwise)
+                  if not instanceEntryLevels[mapId] then
+                      RestoreDungeonEntryState(mapId)
+                  end
+                  -- Check if we already have entry levels for this map (to detect re-entry or restored session)
                   local existingEntry = instanceEntryLevels[mapId]
-                  
+
                   if existingEntry then
                       -- Re-entry: verify player and party members didn't level up
                       -- Skip level check if player was dead when leaving (running back from graveyard)
@@ -451,6 +507,7 @@ dungeonEventFrame:SetScript("OnEvent", function(self, event, unitIndex)
                               end
                           end
                       end
+                      SaveDungeonEntryState()
                   else
                       -- First entry: store entry levels
                       local playerLevel = UnitLevel("player") or 1
@@ -487,6 +544,7 @@ dungeonEventFrame:SetScript("OnEvent", function(self, event, unitIndex)
                       
                       -- Check and print eligibility messages for visible achievements matching this mapId
                       CheckAndPrintEligibilityMessages(mapId, entryData)
+                      SaveDungeonEntryState()
                   end
               end
             end
@@ -502,13 +560,14 @@ dungeonEventFrame:SetScript("OnEvent", function(self, event, unitIndex)
                     if addon and addon.DebugPrint then
                         addon.DebugPrint("Left instance after death - entry levels preserved for re-entry")
                     end
+                    SaveDungeonEntryState()
                 else
                     -- Player left normally (not dead) - clear entry levels for this map
                     instanceEntryLevels[lastInstanceMapId] = nil
                     if addon and addon.DebugPrint then
                         addon.DebugPrint("Left instance normally - entry levels cleared")
                     end
-                    
+                    SaveDungeonEntryState()
                     -- Refresh outleveled status now that we're outside the dungeon
                     -- This will mark dungeon achievements as failed if player is over level
                     if addon.RefreshOutleveledAll then
@@ -518,7 +577,7 @@ dungeonEventFrame:SetScript("OnEvent", function(self, event, unitIndex)
             else
                 -- Not leaving from a tracked instance - clear all entry levels
                 wipe(instanceEntryLevels)
-                
+                SaveDungeonEntryState()
                 -- Refresh outleveled status if player left normally (not dead)
                 -- This handles cases where player wasn't in a tracked instance but was in a dungeon
                 if not wasDeadOnExit and addon.RefreshOutleveledAll then

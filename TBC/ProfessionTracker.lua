@@ -356,28 +356,6 @@ local function ScanSkills()
     UpdateAllProfessionRowVisibility()
 end
 
-local function HandleConsoleSkillMessage(message)
-    if type(message) ~= "string" then
-        return false
-    end
-
-    local skillID, oldRank, newRank = message:match("Skill%s+(%d+)%s+increased%s+from%s+(%d+)%s+to%s+(%d+)")
-    if not skillID then
-        return false
-    end
-
-    skillID = tonumber(skillID)
-    oldRank = tonumber(oldRank) or 0
-    newRank = tonumber(newRank) or oldRank
-
-    local state = EnsureState(skillID)
-    state.rank = newRank
-    state.known = true
-
-    NotifySkillChanged(skillID, newRank, oldRank)
-    return true
-end
-
 -- =========================================================
 -- Event handling
 -- =========================================================
@@ -386,18 +364,12 @@ local eventFrame = CreateFrame("Frame")
 eventFrame:RegisterEvent("PLAYER_LOGIN")
 eventFrame:RegisterEvent("SKILL_LINES_CHANGED")
 eventFrame:RegisterEvent("CHAT_MSG_SKILL")
-eventFrame:RegisterEvent("CONSOLE_MESSAGE")
 eventFrame:SetScript("OnEvent", function(_, event, ...)
     if event == "PLAYER_LOGIN" then
         -- Delay initial scan slightly to ensure skills are loaded
         C_Timer.After(1, ScanSkills)
     elseif event == "SKILL_LINES_CHANGED" or event == "CHAT_MSG_SKILL" then
         ScanSkills()
-    elseif event == "CONSOLE_MESSAGE" then
-        local message = ...
-        if not HandleConsoleSkillMessage(message) then
-            ScanSkills()
-        end
     end
 end)
 

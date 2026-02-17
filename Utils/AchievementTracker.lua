@@ -524,7 +524,7 @@ local function Initialize()
     if savedLeft and savedTop then
         trackerBaseFrame:SetPoint("TOPLEFT", UIParent, "BOTTOMLEFT", savedLeft, savedTop)
     else
-        trackerBaseFrame:SetPoint("CENTER", UIParent, "CENTER")
+        trackerBaseFrame:SetPoint("RIGHT", UIParent, "RIGHT", -200, 0)
     end
 
     trackerBaseFrame:Hide()

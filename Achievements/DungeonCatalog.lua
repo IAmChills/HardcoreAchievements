@@ -362,10 +362,10 @@ local Dungeons = {
       [5711] = 1,  -- Ogom the Wretched
       [5719] = 1,  -- Morphaz
       [5722] = 1,  -- Hazzas
-      [8443] = 1,  -- Avatar of Hakkar
+      --[8443] = 1,  -- Avatar of Hakkar
       [5709] = 1,  -- Shade of Eranikus
     },
-    bossOrder = {8580, 5721, 5720, 5710, 5711, 5719, 5722, 8443, 5709}
+    bossOrder = {8580, 5721, 5720, 5710, 5711, 5719, 5722, 5709}
   },
 
   -- Blackrock Depths (Both, Level 52-60)

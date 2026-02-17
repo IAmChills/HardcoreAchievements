@@ -3928,7 +3928,8 @@ do
                 PlayerIsSolo_UpdateStatusForGUID(destGUID)
             end
 
-            addon.DungeonKillPrintedForGUID = nil
+            -- Do not reset DungeonKillPrintedForGUID here; multiple events can fire for the same kill,
+            -- and we only want one print per kill. Next kill will have a different destGUID so the check will pass.
             local rows = addon.AchievementRowModel
             if not rows then return end
 
