@@ -234,7 +234,6 @@ end
 local function GetScopeKey(scope)
     local realm = GetRealmName()
     if realm == "" then
-        Debug("GetScopeKey: No realm name available")
         return nil
     end
 
@@ -242,26 +241,20 @@ local function GetScopeKey(scope)
     if scope == nil or scope == "guild" then
         local guildName = GetGuildName()
         if not guildName or guildName == "" then
-            Debug("GetScopeKey: Guild-first scope but player not in a guild")
             return nil  -- Not in a guild, can't participate in guild-first
         end
-        local key = "Guild@" .. tostring(guildName) .. "@" .. tostring(realm)
-        Debug("GetScopeKey: Guild-first scope -> " .. key)
-        return key
+        return "Guild@" .. tostring(guildName) .. "@" .. tostring(realm)
     end
 
     -- Server-wide
     if scope == "server" then
-        local key = "Server@" .. tostring(realm)
-        Debug("GetScopeKey: Server-first scope -> " .. key)
-        return key
+        return "Server@" .. tostring(realm)
     end
 
     -- Custom guild list: {"GuildA", "GuildB"}
     if type(scope) == "table" then
         local guildName = GetGuildName()
         if not guildName or guildName == "" then
-            Debug("GetScopeKey: Custom guild pool but player not in a guild")
             return nil  -- Not in a guild, can't participate
         end
         
@@ -276,18 +269,14 @@ local function GetScopeKey(scope)
                 end
                 table_sort(sortedGuilds)
                 local guildListStr = table_concat(sortedGuilds, ",")
-                local key = "Guilds@" .. guildListStr .. "@" .. tostring(realm)
-                Debug("GetScopeKey: Custom guild pool [" .. guildListStr .. "] -> " .. key .. " (player in allowed guild)")
-                return key
+                return "Guilds@" .. guildListStr .. "@" .. tostring(realm)
             end
         end
         
         -- Player's guild is not in the allowed list
-        Debug("GetScopeKey: Player's guild '" .. tostring(guildName) .. "' not in custom pool")
         return nil
     end
 
-    Debug("GetScopeKey: Invalid scope type: " .. type(scope))
     return nil  -- Invalid scope
 end
 
@@ -539,10 +528,8 @@ local function EnsureDBForScope(scopeKey)
     -- Load persisted state
     local root = addon and addon.HardcoreAchievementsDB
     if root and root.guildFirst and root.guildFirst[scopeKey] and root.guildFirst[scopeKey].state then
-        Debug("Loading persisted state for scope: " .. tostring(scopeKey))
         pcall(function()
             LibP2PDB:ImportDatabase(db, root.guildFirst[scopeKey].state)
-            Debug("Persisted state loaded for scope: " .. tostring(scopeKey))
         end)
     end
 
@@ -580,31 +567,18 @@ end
 --- @return string|table|nil scope
 local function GetAchievementScope(row, achievementId)
     if row and row._def and row._def.achievementScope ~= nil then
-        local scope = row._def.achievementScope
-        if type(scope) == "table" then
-            Debug("GetAchievementScope(" .. tostring(achievementId) .. "): Custom guild pool: " .. table_concat(scope, ", "))
-        else
-            Debug("GetAchievementScope(" .. tostring(achievementId) .. "): Scope from def: " .. tostring(scope))
-        end
-        return scope
+        return row._def.achievementScope
     end
     
     -- Try to find row by ID if not provided
     if not row and achievementId then
         row = FindRowByAchId(achievementId)
         if row and row._def and row._def.achievementScope ~= nil then
-            local scope = row._def.achievementScope
-            if type(scope) == "table" then
-                Debug("GetAchievementScope(" .. tostring(achievementId) .. "): Custom guild pool (from lookup): " .. table_concat(scope, ", "))
-            else
-                Debug("GetAchievementScope(" .. tostring(achievementId) .. "): Scope from def (from lookup): " .. tostring(scope))
-            end
-            return scope
+            return row._def.achievementScope
         end
     end
     
     -- Default to guild-first
-    Debug("GetAchievementScope(" .. tostring(achievementId) .. "): Using default scope: guild")
     return "guild"
 end
 
@@ -617,7 +591,6 @@ local function IsClaimed(self, achievementId, row)
     local scope = GetAchievementScope(row, achievementId)
     local scopeKey = GetScopeKey(scope)
     if not scopeKey then
-        Debug("IsClaimed(" .. achievementId .. "): No valid scope key (player can't participate)")
         return false, nil
     end
 
@@ -674,31 +647,20 @@ end
 local function CanClaimAndAward(self, achievementId, row, winnersPeerIDs)
     achievementId = tostring(achievementId or "")
     if achievementId == "" then
-        Debug("CanClaimAndAward: Empty achievement ID")
         return false
     end
-
-    Debug("CanClaimAndAward(" .. achievementId .. "): Starting claim attempt")
 
     -- Get row if not provided (catalog stores row on addon or legacy global)
     if not row then
         row = (addon and addon["GuildFirst_" .. achievementId .. "_Row"]) or FindRowByAchId(achievementId)
-        if row then
-            Debug("CanClaimAndAward(" .. achievementId .. "): Found achievement row")
-        else
-            Debug("CanClaimAndAward(" .. achievementId .. "): Achievement row not found")
-        end
     end
 
     -- Determine scope from achievement definition
     local scope = GetAchievementScope(row, achievementId)
     local scopeKey = GetScopeKey(scope)
     if not scopeKey then
-        Debug("CanClaimAndAward(" .. achievementId .. "): Player can't participate in this scope (e.g., not in guild for guild-first)")
         return false
     end
-
-    Debug("CanClaimAndAward(" .. achievementId .. "): Scope determined -> " .. tostring(scopeKey))
 
     local db = EnsureDBForScope(scopeKey)
     if not db then

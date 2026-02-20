@@ -50,9 +50,9 @@ local CACHE_DURATION = 300 -- 5 minutes
 local currentInspectionTarget = nil
 local inspectionFrame = nil
 local inspectionAchievementPanel = nil
+local inspectionAchievementTab = nil  -- tab button reference for ShowInspectionAchievementTab / hook
 local achievementDefinitionCache = {}
 local panelIndexed = false
-local inspectionTabID = nil
 local HANDSHAKE_TIMEOUT = 3
 local handshakeTimer = nil
 local handshakeTarget = nil
@@ -427,93 +427,6 @@ local function GetAchievementDefinition(achId)
     return nil
 end
 
--- Hook into the inspection frame to add our achievement tab
-local function HookInspectionFrame()
-    -- Wait for inspection frame to be available
-    local frame = CreateFrame("Frame")
-    frame:RegisterEvent("ADDON_LOADED")
-    frame:SetScript("OnEvent", function(self, event, addonName)
-        if addonName == "Blizzard_InspectUI" or InspectFrame then
-            SetupInspectionTab()
-            self:UnregisterAllEvents()
-        end
-    end)
-    
-    -- Also try to hook immediately if frame already exists
-    if InspectFrame then
-        SetupInspectionTab()
-    end
-end
-
--- Setup the achievement tab on the inspection frame
-local function SetupInspectionTab()
-    if not InspectFrame or inspectionAchievementPanel then return end
-    
-    -- Create achievement tab
-    local tabID = (InspectFrame.numTabs or 0) + 1
-    local achievementTab = CreateFrame("Button", "InspectFrameTab" .. tabID, InspectFrame, "CharacterFrameTabButtonTemplate")
-    achievementTab:SetID(tabID)
-    achievementTab:SetPoint("LEFT", _G["InspectFrameTab" .. (tabID - 1)], "RIGHT", -15, 0)
-    achievementTab:SetText(ACHIEVEMENTS)
-    PanelTemplates_DeselectTab(achievementTab)
-    inspectionTabID = tabID
-    InspectFrame.numTabs = tabID
-    PanelTemplates_SetNumTabs(InspectFrame, tabID)
-    
-    -- Create achievement panel for inspection
-    inspectionAchievementPanel = CreateFrame("Frame", "InspectAchievementPanel", InspectFrame)
-    inspectionAchievementPanel:Hide()
-    inspectionAchievementPanel:EnableMouse(true)
-    inspectionAchievementPanel:SetAllPoints(InspectFrame)
-    
-    -- Setup the achievement panel UI (similar to main achievement panel)
-    SetupInspectionAchievementPanel()
-    
-    -- Tab click handler
-    achievementTab.subFrame = "InspectAchievementPanel"
-    achievementTab:SetScript("OnClick", function(self)
-        PanelTemplates_SetTab(InspectFrame, self:GetID())
-        if InspectFrame_ShowSubFrame then
-            InspectFrame_ShowSubFrame(self.subFrame)
-        else
-            ShowInspectionAchievementTab()
-        end
-    end)
-    
-    -- Hook into inspection frame tab switching
-    if InspectFrame_ShowSubFrame then
-        hooksecurefunc("InspectFrame_ShowSubFrame", function(frameName)
-            if frameName == "InspectAchievementPanel" then
-                ShowInspectionAchievementTab()
-            elseif inspectionAchievementPanel and inspectionAchievementPanel:IsShown() then
-                inspectionAchievementPanel:Hide()
-            end
-        end)
-    elseif InspectFrameTab_OnClick then
-        hooksecurefunc("InspectFrameTab_OnClick", function(tabID)
-            if tabID == inspectionTabID then
-                ShowInspectionAchievementTab()
-            elseif inspectionAchievementPanel and inspectionAchievementPanel:IsShown() then
-                inspectionAchievementPanel:Hide()
-            end
-        end)
-    end
-
-    -- Ensure the default inspect framework knows about our new panel
-    if type(INSPECTFRAME_SUBFRAMES) == "table" then
-        local exists = false
-        for _, name in ipairs(INSPECTFRAME_SUBFRAMES) do
-            if name == "InspectAchievementPanel" then
-                exists = true
-                break
-            end
-        end
-        if not exists then
-            table_insert(INSPECTFRAME_SUBFRAMES, "InspectAchievementPanel")
-        end
-    end
-end
-
 -- Setup the inspection achievement panel UI
 local function SetupInspectionAchievementPanel()
     if not inspectionAchievementPanel then return end
@@ -615,58 +528,6 @@ local function SetupInspectionAchievementPanel()
     inspectionAchievementPanel.achievements = {}
 end
 
--- Show the inspection achievement tab
-local function ShowInspectionAchievementTab()
-    if not InspectFrame or not inspectionAchievementPanel then return end
-    
-    -- Play tab sound
-    if SOUNDKIT and SOUNDKIT.IG_CHARACTER_INFO_TAB then
-        PlaySound(SOUNDKIT.IG_CHARACTER_INFO_TAB)
-    else
-        PlaySound("igCharacterInfoTab")
-    end
-    
-    -- Deselect other tabs
-    for i = 1, InspectFrame.numTabs do
-        local tab = _G["InspectFrameTab" .. i]
-        if tab then
-            PanelTemplates_DeselectTab(tab)
-        end
-    end
-    
-    -- Select our tab
-    local tabID = inspectionTabID or InspectFrame.numTabs
-    local achievementTab = _G["InspectFrameTab" .. tabID]
-    if achievementTab then
-        PanelTemplates_SelectTab(achievementTab)
-    end
-    
-    -- Hide other subframes
-    if type(INSPECTFRAME_SUBFRAMES) == "table" then
-        for _, frameName in ipairs(INSPECTFRAME_SUBFRAMES) do
-            if frameName ~= "InspectAchievementPanel" then
-                local frame = _G[frameName]
-                if frame and frame.Hide then
-                    frame:Hide()
-                end
-            end
-        end
-    end
-    if InspectPaperDollFrame then InspectPaperDollFrame:Hide() end
-    if InspectHonorFrame then InspectHonorFrame:Hide() end
-    if InspectTalentFrame then InspectTalentFrame:Hide() end
-    if InspectPVPFrame then InspectPVPFrame:Hide() end
-    
-    -- Show our panel
-    inspectionAchievementPanel:Show()
-    
-    -- Request achievement data if we have a target
-    local targetName = UnitName("target")
-    if targetName and UnitIsPlayer("target") and not UnitIsUnit("target", "player") then
-        RequestAchievementData(targetName)
-    end
-end
-
 -- Request achievement data from target player
 local function RequestAchievementData(targetName)
     if not targetName then return end
@@ -698,6 +559,85 @@ local function RequestAchievementData(targetName)
         AceComm:SendCommMessage(INSPECTION_COMM_PREFIX, serializedRequest, "WHISPER", targetName)
     end
 end
+
+-- Called when our achievement panel is shown (request data for inspected player)
+local function OnInspectionAchievementPanelShow()
+    if not inspectionAchievementPanel then return end
+    local targetName = currentInspectionTarget
+    if not targetName and UnitIsPlayer("target") and not UnitIsUnit("target", "player") then
+        targetName = UnitName("target")
+    end
+    if targetName then
+        RequestAchievementData(targetName)
+    end
+end
+
+-- Same logic as HardcoreAchievements ShowAchievementTab: deselect all tabs, select ours, hide other subframes, show our panel
+local function ShowInspectionAchievementTab()
+    if not InspectFrame or not inspectionAchievementPanel or not inspectionAchievementTab then return end
+    if SOUNDKIT and SOUNDKIT.IG_CHARACTER_INFO_TAB then
+        PlaySound(SOUNDKIT.IG_CHARACTER_INFO_TAB)
+    else
+        PlaySound("igCharacterInfoTab")
+    end
+    for i = 1, InspectFrame.numTabs do
+        local t = _G["InspectFrameTab" .. i]
+        if t then
+            PanelTemplates_DeselectTab(t)
+        end
+    end
+    PanelTemplates_SelectTab(inspectionAchievementTab)
+    -- Hide Blizzard inspect subframes manually (same as Hardcore hiding PaperDollFrame, HonorFrame, etc.)
+    if InspectPaperDollFrame and InspectPaperDollFrame.Hide then InspectPaperDollFrame:Hide() end
+    if InspectPVPFrame       and InspectPVPFrame.Hide       then InspectPVPFrame:Hide()       end
+    if InspectTalentFrame    and InspectTalentFrame.Hide    then InspectTalentFrame:Hide()    end
+    if InspectGuildFrame     and InspectGuildFrame.Hide     then InspectGuildFrame:Hide()     end
+    if InspectHonorFrame     and InspectHonorFrame.Hide     then InspectHonorFrame:Hide()     end
+    inspectionAchievementPanel:Show()
+end
+
+-- Setup the achievement tab exactly like HardcoreAchievements.lua (bottom tab only, no vertical mode, no drag)
+local function SetupInspectionTab()
+    if not InspectFrame or inspectionAchievementPanel then return end
+
+    local tabID = InspectFrame.numTabs + 1
+    local tabName = (addonName or "HardcoreAchievements") .. "InspectAchievementTab"
+    inspectionAchievementTab = CreateFrame("Button", tabName, InspectFrame, "CharacterFrameTabButtonTemplate")
+    inspectionAchievementTab:SetText(ACHIEVEMENTS)
+    PanelTemplates_TabResize(inspectionAchievementTab, 0)
+    PanelTemplates_DeselectTab(inspectionAchievementTab)
+    local prevTab = _G["InspectFrameTab" .. (tabID - 1)]
+    if prevTab then
+        inspectionAchievementTab:SetPoint("LEFT", prevTab, "RIGHT", -16, 0)
+    end
+    InspectFrame.numTabs = tabID
+    PanelTemplates_SetNumTabs(InspectFrame, tabID)
+
+    inspectionAchievementTab:SetScript("OnClick", ShowInspectionAchievementTab)
+
+    -- Create achievement panel (hidden until tab is clicked)
+    inspectionAchievementPanel = CreateFrame("Frame", "InspectAchievementPanel", InspectFrame)
+    inspectionAchievementPanel:Hide()
+    inspectionAchievementPanel:EnableMouse(true)
+    inspectionAchievementPanel:SetAllPoints(InspectFrame)
+    inspectionAchievementPanel:SetScript("OnShow", OnInspectionAchievementPanelShow)
+    SetupInspectionAchievementPanel()
+
+    -- When another tab is clicked, hide our panel and deselect our tab (InspectSwitchTabs is only called for Blizzard tabs; our tab uses its own OnClick)
+    if InspectSwitchTabs then
+        hooksecurefunc("InspectSwitchTabs", function()
+            if inspectionAchievementPanel and inspectionAchievementPanel:IsShown() then
+                inspectionAchievementPanel:Hide()
+                PanelTemplates_DeselectTab(inspectionAchievementTab)
+            end
+        end)
+    end
+
+    -- Start with tab 1 selected and our panel hidden (no bleed)
+    PanelTemplates_SetTab(InspectFrame, 1)
+    inspectionAchievementPanel:Hide()
+end
+if addon then addon.SetupInspectionTab = SetupInspectionTab end
 
 -- Handle incoming inspection requests
 local function OnInspectionRequest(prefix, message, distribution, sender)
@@ -1199,6 +1139,23 @@ local function HookInspectionEvents()
     end)
 end
 
+-- Hook into the inspection frame to add our achievement tab
+local function HookInspectionFrame()
+    -- Wait for inspection frame to be available
+    local frame = CreateFrame("Frame")
+    frame:RegisterEvent("ADDON_LOADED")
+    frame:SetScript("OnEvent", function(self, event, addonName)
+        if addonName == "Blizzard_InspectUI" or InspectFrame then
+            SetupInspectionTab()
+            self:UnregisterAllEvents()
+        end
+    end)
+    
+    -- Also try to hook immediately if frame already exists
+    if InspectFrame then
+        SetupInspectionTab()
+    end
+end
 
 -- Initialize the inspection system (registers comm handlers and hooks frame)
 local function InitializeInspectionSystem()

@@ -2095,13 +2095,13 @@ StaticPopupDialogs["Hardcore Achievements TBC"] = {
 -- =========================================================
 
 -- Constants
-local Tabs = CharacterFrame.numTabs
-local TabID = CharacterFrame.numTabs + 1
+local TabName = (addonName or "HardcoreAchievements") .. "Tab"
 
 -- Create and configure the subframe
-local Tab = CreateFrame("Button" , "$parentTab"..TabID, CharacterFrame, "CharacterFrameTabButtonTemplate")
+local Tab = CreateFrame("Button" , TabName, CharacterFrame, "CharacterFrameTabButtonTemplate")
 -- Don't set position here - let LoadTabPosition handle it after CharacterFrame is fully initialized
 Tab:SetText(ACHIEVEMENTS)
+PanelTemplates_TabResize(Tab, 0)
 PanelTemplates_DeselectTab(Tab)
 
 -- Draggable "curl" behavior for Achievements tab (bottom + right edges only)
@@ -2714,7 +2714,7 @@ local function HideCharacterFrameContentsForCombat()
     if _G["HonorFrame"]        then _G["HonorFrame"]:Hide()        end
     if _G["SkillFrame"]        then _G["SkillFrame"]:Hide()        end
     if _G["ReputationFrame"]   then _G["ReputationFrame"]:Hide()   end
-    if _G["PvPFrame"]          then _G["PvPFrame"]:Hide()          end
+    if _G["PVPFrame"]          then _G["PVPFrame"]:Hide()          end
     if _G["TokenFrame"]        then _G["TokenFrame"]:Hide()        end
     if type(_G.CSC_HideStatsPanel) == "function" then
         _G.CSC_HideStatsPanel()
@@ -4763,7 +4763,7 @@ local function ShowAchievementTab()
     if _G["HonorFrame"]        then _G["HonorFrame"]:Hide()        end
     if _G["SkillFrame"]        then _G["SkillFrame"]:Hide()        end
     if _G["ReputationFrame"]   then _G["ReputationFrame"]:Hide()   end
-    if _G["PvPFrame"]          then _G["PvPFrame"]:Hide()          end
+    if _G["PVPFrame"]          then _G["PVPFrame"]:Hide()          end
     if _G["TokenFrame"]        then _G["TokenFrame"]:Hide()        end
 
     -- Hide CharacterStatsClassic panel
