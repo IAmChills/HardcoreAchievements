@@ -21,9 +21,9 @@ local HeroicDungeons = {
       [18436] = 1, -- Watchkeeper Gargolmar
       [18433] = 1, -- Omar the Unscarred
       [18432] = 1, -- Nazan
-      [18434] = 1, -- Vazruden
+      [18435] = 1, -- Vazruden
     },
-    bossOrder = {18436, 18433, 18432, 18434}
+    bossOrder = {18436, 18433, 18432, 18435}
   },
 
   -- Hellfire Ramparts (Both, Level 70)

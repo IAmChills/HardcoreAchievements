@@ -19,6 +19,7 @@ local RefreshAllAchievementPoints = (addon and addon.RefreshAllAchievementPoints
 local ClassColor = (addon and addon.GetClassColor()) or ""
 local table_insert = table.insert
 local table_concat = table.concat
+local table_sort = table.sort
 
 ---------------------------------------
 -- Module-Level State
@@ -129,26 +130,23 @@ local function CheckAchievementEligibility(mapId, achDef, entryData)
     return true
 end
 
--- Helper function to check and print eligibility messages for achievements matching a mapId
+-- Helper function to check and print eligibility messages for achievements matching a mapId.
+-- Prints only one message: for the lowest-level version (base then Trio, Duo, Solo, then Heroic).
 local function CheckAndPrintEligibilityMessages(mapId, entryData)
     if not mapId or not entryData then return end
     if not (addon and addon.AchievementDefs) then return end
-    
+
+    local mapIdNum = tonumber(mapId) or mapId
+    local candidates = {}  -- { { achId, achDef, isFailed }, ... }
+
     for achId, achDef in pairs(addon.AchievementDefs) do
-        if achDef.mapID == mapId then
-            -- Only show messages for visible achievements (checked in filter)
-            local isVisible = false
-            if addon.IsAchievementVisible then
-                isVisible = addon.IsAchievementVisible(achId)
-            end
-            
-            if isVisible then
-                -- Only show messages for available achievements (not completed, not failed)
-                local progress = addon and addon.GetProgress and addon.GetProgress(achId)
-                local isCompleted = progress and progress.completed
-                local isFailed = progress and progress.failed
-                
-                -- Also check if row exists and is outleveled
+        local defMapId = tonumber(achDef.mapID) or achDef.mapID
+        if defMapId and mapIdNum and defMapId == mapIdNum then
+            local progress = addon and addon.GetProgress and addon.GetProgress(achId)
+            local isCompleted = progress and progress.completed
+            local isFailed = progress and progress.failed
+
+            if not isCompleted then
                 if not isFailed and (addon and addon.AchievementPanel) and (addon and addon.AchievementPanel).achievements then
                     for _, row in ipairs((addon and addon.AchievementPanel).achievements) do
                         local rowId = row.id or row.achId
@@ -160,18 +158,49 @@ local function CheckAndPrintEligibilityMessages(mapId, entryData)
                         end
                     end
                 end
-                
-                -- Skip if completed or failed
-                if not isCompleted and not isFailed then
-                    local isEligible = CheckAchievementEligibility(mapId, achDef, entryData)
-                    if isEligible then
-                        print("|cff008066[Hardcore Achievements]|r |cff00ff00Group is eligible for achievement: " .. (achDef.title or achDef.mapName or "Unknown") .. "|r")
-                    else
-                        print("|cff008066[Hardcore Achievements]|r |cffff0000Group is not eligible for achievement: " .. (achDef.title or achDef.mapName or "Unknown") .. "|r")
-                    end
-                end
+                local level = (type(achDef.level) == "number") and achDef.level or tonumber(achDef.level) or 999
+                table_insert(candidates, { achId = achId, achDef = achDef, isFailed = isFailed, level = level })
             end
         end
+    end
+
+    if #candidates == 0 then return end
+
+    -- Sort by level ascending (lowest first); non-variations before variations, then Trio, Duo, Solo, then Heroic
+    table_sort(candidates, function(a, b)
+        if a.level ~= b.level then return a.level < b.level end
+        local orderA = 0
+        if a.achDef.isVariation then
+            if a.achDef.variationType == "Trio" then orderA = 1
+            elseif a.achDef.variationType == "Duo" then orderA = 2
+            elseif a.achDef.variationType == "Solo" then orderA = 3
+            else orderA = 4
+            end
+        elseif a.achDef.isHeroicDungeon then
+            orderA = 5
+        end
+        local orderB = 0
+        if b.achDef.isVariation then
+            if b.achDef.variationType == "Trio" then orderB = 1
+            elseif b.achDef.variationType == "Duo" then orderB = 2
+            elseif b.achDef.variationType == "Solo" then orderB = 3
+            else orderB = 4
+            end
+        elseif b.achDef.isHeroicDungeon then
+            orderB = 5
+        end
+        return orderA < orderB
+    end)
+
+    -- Print only for the lowest-level version (first candidate)
+    local c = candidates[1]
+    if c.isFailed then return end
+    local isEligible = CheckAchievementEligibility(mapId, c.achDef, entryData)
+    local title = c.achDef.title or c.achDef.mapName or "Unknown"
+    if isEligible then
+        print("|cff008066[Hardcore Achievements]|r |cff00ff00Group is eligible for achievement: " .. title .. "|r")
+    else
+        print("|cff008066[Hardcore Achievements]|r |cffff0000Group is not eligible for achievement: " .. title .. "|r")
     end
 end
 
@@ -399,88 +428,97 @@ dungeonEventFrame:SetScript("OnEvent", function(self, event, unitIndex)
             local mapId = select(8, GetInstanceInfo())
             if mapId then
                 -- Restore from SavedVariables if we just reloaded (entry levels are in-memory only otherwise)
+                local didRestore = false
                 if not instanceEntryLevels[mapId] then
-                    RestoreDungeonEntryState(mapId)
+                    didRestore = RestoreDungeonEntryState(mapId)
                 end
                 -- Check if we already have entry levels for this map (to detect re-entry or restored session)
                 local existingEntry = instanceEntryLevels[mapId]
 
                 if existingEntry then
-                    -- Re-entry: verify player and party members didn't level up
-                    -- Skip level check if player was dead when leaving (running back from graveyard)
+                    -- Re-entry or restored session
                     lastInstanceMapId = mapId  -- Update tracking for current instance
-                    
-                    if existingEntry.wasDeadOnExit then
-                        -- Player was dead when leaving, skip level check and clear the flag
-                        existingEntry.wasDeadOnExit = nil
-                        wasDeadOnExit = false
-                        if addon.DebugPrint then
-                            addon.DebugPrint("Re-entry after death - level check omitted")
-                        end
-                    else
-                        -- Normal re-entry: update stored level (allow leveling outside if they return)
-                        local playerLevel = UnitLevel("player") or 1
-                        local oldPlayerLevel = existingEntry.playerLevel
-                        if playerLevel > oldPlayerLevel then
-                            -- Player leveled up outside - update stored level
-                            existingEntry.playerLevel = playerLevel
+
+                    -- When we just restored from SavedVariables (reload in dungeon), keep stored levels - do not update to current.
+                    -- When we have existingEntry from same session (e.g. left and came back), update stored levels so we reflect leveling outside.
+                    if not didRestore then
+                        if existingEntry.wasDeadOnExit then
+                            -- Player was dead when leaving - preserve original stored level, clear flag
+                            existingEntry.wasDeadOnExit = nil
+                            wasDeadOnExit = false
                             if addon.DebugPrint then
-                                addon.DebugPrint("Player re-entered with increased level (was " .. oldPlayerLevel .. ", now " .. playerLevel .. ") - stored level updated")
+                                addon.DebugPrint("Re-entry after death - level check omitted")
                             end
                         else
-                            if addon.DebugPrint then
-                                addon.DebugPrint("Player re-entered - level unchanged (" .. playerLevel .. ")")
+                            -- Normal re-entry (same session): update stored level (allow leveling outside if they return)
+                            local playerLevel = UnitLevel("player") or 1
+                            local oldPlayerLevel = existingEntry.playerLevel
+                            if playerLevel > oldPlayerLevel then
+                                existingEntry.playerLevel = playerLevel
+                                if addon.DebugPrint then
+                                    addon.DebugPrint("Player re-entered with increased level (was " .. oldPlayerLevel .. ", now " .. playerLevel .. ") - stored level updated")
+                                end
+                            else
+                                if addon.DebugPrint then
+                                    addon.DebugPrint("Player re-entered - level unchanged (" .. playerLevel .. ")")
+                                end
                             end
                         end
-                    end
-                    
-                    -- Check and update party member levels on re-entry
-                    local members = GetNumGroupMembers()
-                    if members > 1 then
-                        for i = 1, 4 do
-                            local unit = "party" .. i
-                            if UnitExists(unit) then
-                                local guid = UnitGUID(unit)
-                                
-                                if guid then
-                                    local storedLevel = existingEntry.partyLevels and existingEntry.partyLevels[guid]
-                                    local currentLevel = UnitLevel(unit) or 1
-                                    local unitName = UnitName(unit) or ("Party" .. i)
-                                    
-                                    if storedLevel then
-                                        -- This party member was in the instance before - update stored level
-                                        if existingEntry.wasDeadOnExit then
-                                            -- Player was dead when leaving - preserve original stored level
-                                            if addon.DebugPrint then
-                                                addon.DebugPrint("Party member " .. unitName .. " re-entry after player death - level preserved (stored: " .. storedLevel .. ", current: " .. currentLevel .. ")")
-                                            end
-                                        else
-                                            -- Normal re-entry: update stored level to current level
-                                            existingEntry.partyLevels[guid] = currentLevel
-                                            if currentLevel > storedLevel then
+
+                        -- Check and update party member levels on re-entry (same session only)
+                        local members = GetNumGroupMembers()
+                        if members > 1 then
+                            for i = 1, 4 do
+                                local unit = "party" .. i
+                                if UnitExists(unit) then
+                                    local guid = UnitGUID(unit)
+                                    if guid then
+                                        local storedLevel = existingEntry.partyLevels and existingEntry.partyLevels[guid]
+                                        local currentLevel = UnitLevel(unit) or 1
+                                        local unitName = UnitName(unit) or ("Party" .. i)
+                                        if storedLevel then
+                                            if existingEntry.wasDeadOnExit then
                                                 if addon.DebugPrint then
-                                                    addon.DebugPrint("Party member " .. unitName .. " re-entered with increased level (was " .. storedLevel .. ", now " .. currentLevel .. ") - stored level updated")
+                                                    addon.DebugPrint("Party member " .. unitName .. " re-entry after player death - level preserved (stored: " .. storedLevel .. ", current: " .. currentLevel .. ")")
                                                 end
                                             else
-                                                if addon.DebugPrint then
-                                                    addon.DebugPrint("Party member " .. unitName .. " re-entered - level unchanged (" .. currentLevel .. ")")
+                                                existingEntry.partyLevels[guid] = currentLevel
+                                                if currentLevel > storedLevel then
+                                                    if addon.DebugPrint then
+                                                        addon.DebugPrint("Party member " .. unitName .. " re-entered with increased level (was " .. storedLevel .. ", now " .. currentLevel .. ") - stored level updated")
+                                                    end
+                                                else
+                                                    if addon.DebugPrint then
+                                                        addon.DebugPrint("Party member " .. unitName .. " re-entered - level unchanged (" .. currentLevel .. ")")
+                                                    end
                                                 end
                                             end
-                                        end
-                                    else
-                                        -- New party member joined - store their level
-                                        if not existingEntry.partyLevels then
-                                            existingEntry.partyLevels = {}
-                                        end
-                                        existingEntry.partyLevels[guid] = currentLevel
-                                        if addon.DebugPrint then
-                                            addon.DebugPrint("Party member " .. unitName .. " joined on re-entry - level stored: " .. currentLevel)
+                                        else
+                                            -- New party member joined - store their level
+                                            if not existingEntry.partyLevels then
+                                                existingEntry.partyLevels = {}
+                                            end
+                                            existingEntry.partyLevels[guid] = currentLevel
+                                            if addon.DebugPrint then
+                                                addon.DebugPrint("Party member " .. unitName .. " joined on re-entry - level stored: " .. currentLevel)
+                                            end
                                         end
                                     end
                                 end
                             end
                         end
+                    else
+                        -- Just restored from SavedVariables (reload in dungeon) - clear wasDeadOnExit if set, keep all stored levels
+                        if existingEntry.wasDeadOnExit then
+                            existingEntry.wasDeadOnExit = nil
+                            wasDeadOnExit = false
+                        end
+                        if addon.DebugPrint then
+                            addon.DebugPrint("Dungeon entry levels restored from session - keeping stored entry levels (not updating to current)")
+                        end
                     end
+                    -- Print eligibility when re-entering so user sees messages every time
+                    CheckAndPrintEligibilityMessages(mapId, existingEntry)
                     SaveDungeonEntryState()
                 else
                     -- First entry: store entry levels
@@ -968,7 +1006,7 @@ function DungeonCommon.registerDungeonAchievement(def)
       [17306] = "Watchkeeper Gargolmar",
       [17308] = "Omor the Unscarred",
       [17536] = "Nazan",
-      [17537] = "Vazruden",
+      [17307] = "Vazruden",
       [17381] = "The Maker",
       [17380] = "Broggok",
       [17377] = "Keli'dan the Breaker",
@@ -1022,7 +1060,7 @@ function DungeonCommon.registerDungeonAchievement(def)
       [18436] = "Watchkeeper Gargolmar",
       [18433] = "Omar the Unscarred",
       [18432] = "Nazan",
-      [18434] = "Vazruden",
+      [18435] = "Vazruden",
       [18621] = "The Maker",
       [18601] = "Broggok",
       [18607] = "Keli'dan the Breaker",
@@ -1288,11 +1326,11 @@ function DungeonCommon.registerDungeonAchievement(def)
     local isEligible = IsGroupEligible()
     if not isEligible then
       -- Group is ineligible - don't count this kill
-      -- Player can return later with an eligible group to kill this boss
-      -- Only print message if the achievement is still available (not completed or failed) and visible
+      -- Only print one message per kill (lowest-level variant); processKill sorts base then Trio/Duo/Solo
       local progress = addon and addon.GetProgress and addon.GetProgress(achId)
       local isStillAvailable = not state.completed and not (progress and progress.failed)
-      if isStillAvailable and addon.IsAchievementVisible and addon.IsAchievementVisible(achId) then
+      if isStillAvailable and addon and addon.DungeonKillPrintedForGUID ~= destGUID then
+        addon.DungeonKillPrintedForGUID = destGUID
         print("|cff008066[Hardcore Achievements]|r |cffffd100" .. GetBossName(npcId) .. " killed but group is ineligible - kill not counted for achievement: " .. title .. "|r")
       end
       return false

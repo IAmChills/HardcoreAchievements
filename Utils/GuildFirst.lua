@@ -611,7 +611,6 @@ local function IsClaimed(self, achievementId, row)
         return true, rec
     end
     
-    Debug("IsClaimed(" .. achievementId .. "): Not claimed yet (scope: " .. tostring(scopeKey) .. ")")
     return false, nil
 end
 

@@ -4055,7 +4055,7 @@ do
                     -- PARTY_KILL fires when the player/party gets credit for a kill.
                     -- In dungeon/raid: only the group is present, so we always process (interchangeable with UNIT_DIED).
                     -- In open world: require npcsInCombat and check tap denial so we don't credit kills we didn't tag.
-                    local instanceName, instanceType = select(2, GetInstanceInfo())
+                    local instanceName, instanceType = GetInstanceInfo()
                     local inInstance = (instanceType == "party" or instanceType == "raid")
                     local isTapDenied = npcTapDenied[destGUID]
                     if isTapDenied == true and not inInstance then
@@ -4082,7 +4082,7 @@ do
                     -- UNIT_DIED always fires when something dies. In dungeon/raid use it as primary/fallback
                     -- when PARTY_KILL doesn't fire (e.g. environment/totem/pet/mechanic got the kill).
                     -- Only process in instance so we don't credit world kills we had no part in.
-                    local instanceName, instanceType = select(2, GetInstanceInfo())
+                    local instanceName, instanceType = GetInstanceInfo()
                     if instanceType == "party" or instanceType == "raid" then
                         if destGUID then
                             local guidType = select(1, strsplit("-", destGUID))

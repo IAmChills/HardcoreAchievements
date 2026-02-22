@@ -538,9 +538,9 @@ local Dungeons = {
       [17306] = 1, -- Watchkeeper Gargolmar
       [17308] = 1, -- Omor the Unscarred
       [17536] = 1, -- Nazan
-      [17537] = 1, -- Vazruden
+      [17307] = 1, -- Vazruden
     },
-    bossOrder = {17306, 17308, 17536, 17537}
+    bossOrder = {17306, 17308, 17536, 17307}
   },
 
   -- Hellfire Ramparts (Both, Level 61-63)
