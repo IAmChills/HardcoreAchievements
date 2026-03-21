@@ -81,7 +81,7 @@ end
 
 -- Create Discord frame (will be created on first use)
 local discordFrame = nil
-local DISCORD_LINK = "https://discord.gg/3KChDhux2D"
+local DISCORD_LINK = "https://discord.gg/3KChDhux2D" --https://discord.gg/3KChDhux2D alternative link
 
 local function CreateDiscordFrame()
     if discordFrame then return discordFrame end

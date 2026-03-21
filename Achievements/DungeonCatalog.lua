@@ -310,13 +310,13 @@ local Dungeons = {
       [7272] = 1,  -- Theka the Martyr
       [7271] = 1,  -- Witch Doctor Zum'rah
       [7796] = 1,  -- Nekrum Gutchewer
-      [7275] = 1,  -- Shadowpriest Sezz'ziz
+      --[7275] = 1,  -- Shadowpriest Sezz'ziz
       [7604] = 1,  -- Sergeant Bly
       [7795] = 1,  -- Hydromancer Velratha
       [7267] = 1,  -- Chief Ukorz Sandscalp
       [7797] = 1,  -- Ruuzlu
     },
-    bossOrder = {8127, 7272, 7271, 7796, 7275, 7604, 7795, 7267, 7797}
+    bossOrder = {8127, 7272, 7271, 7796, 7604, 7795, 7267, 7797}
   },
 
   -- Maraudon (Both, Level 40-50)

@@ -21,14 +21,13 @@ local LibP2PDB = LibStub("LibP2PDB")
 
 ```lua
 -- Make a new database
-local db = LibP2PDB:New("MyDatabase", {
+local db = LibP2PDB:NewDatabase("MyDatabase", {
     prefix = "MyAddon",
     version = 1,
-    onDiscoveryComplete = OnDiscoveryCompleteCallback,
 })
 
 -- Make a table with a schema
-LibP2PDB:CreateTable(db, {
+LibP2PDB:NewTable(db, {
     name = "MyTableName",
     keyType = "string",
     schema = {

@@ -896,7 +896,7 @@ function DungeonCommon.registerDungeonAchievement(def)
       [7272] = "Theka the Martyr",
       [7271] = "Witch Doctor Zum'rah",
       [7796] = "Nekrum Gutchewer",
-      [7275] = "Shadowpriest Sezz'ziz",
+      --[7275] = "Shadowpriest Sezz'ziz",
       [7604] = "Sergeant Bly",
       [7795] = "Hydromancer Velratha",
       [7267] = "Chief Ukorz Sandscalp",

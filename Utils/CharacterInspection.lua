@@ -603,6 +603,8 @@ local function SetupInspectionTab()
     local tabID = InspectFrame.numTabs + 1
     local tabName = (addonName or "HardcoreAchievements") .. "InspectAchievementTab"
     inspectionAchievementTab = CreateFrame("Button", tabName, InspectFrame, "CharacterFrameTabButtonTemplate")
+    -- PanelTemplates_* looks up tabs as _G[InspectFrame:GetName().."Tab"..i] (e.g. InspectFrameTab3), not by our unique global name.
+    _G["InspectFrameTab" .. tabID] = inspectionAchievementTab
     inspectionAchievementTab:SetText(ACHIEVEMENTS)
     PanelTemplates_TabResize(inspectionAchievementTab, 0)
     PanelTemplates_DeselectTab(inspectionAchievementTab)
