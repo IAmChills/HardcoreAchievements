@@ -26,17 +26,17 @@ Measured on an AMD Ryzen 9 5900X with 10,000 values inserted with a for loop:
 for i = 1, 10000 do
     local value = "value" .. i * 13
     local startTime = debugprofilestop()
-    set:Toggle(value)
+    set:Update(value)
     local endTime = debugprofilestop()
     local duration = endTime - startTime
 end
 ```
 
-| Toggle | Median | Average | Min | Max | Total |
+| Update | Median | Average | Min | Max | Total |
 | - | - | - | - | - | - |
 | LibBucketedHashSet | 2.10µs | 2.19µs | 1.70µs | 37.60µs | 21.90ms |
 
-The performance of the `Toggle` operation will scale with the length of the value being toggled, as it needs to hash the value to determine the appropriate bucket.
+The performance of the `Update` operation will scale with the length of the value being updated, as it needs to hash the value to determine the appropriate bucket.
 
 ## Usage
 
@@ -46,25 +46,25 @@ local set = LibBucketedHashSet.New(32)
 
 -- Add any values to the set
 for i = 1, 1000 do
-    set:Toggle("value" .. i)
+    set:Update("value" .. i)
 end
 
 -- Remove existing values from the set
 for i = 500, 750 do
-    set:Toggle("value" .. i) -- Toggling the same value removes it
+    set:Update("value" .. i) -- Updating the same value removes it
 end
 
 -- Bucket index of a value must be stored when inserting it
 local valueBucketIndexMap = {}
-valueBucketIndexMap["someValue"] = set:Toggle("someValue")
+valueBucketIndexMap["someValue"] = set:Update("someValue")
 
 -- Comparing two bucketed hash sets
 local setA = LibBucketedHashSet.New(32)
 local setB = LibBucketedHashSet.New(32)
-setA:Toggle("foo")
-setB:Toggle("foo")
+setA:Update("foo")
+setB:Update("foo")
 assert(setA == setB, "Sets should be equal")
-setB:Toggle("bar")
+setB:Update("bar")
 assert(setA ~= setB, "Sets should not be equal")
 
 -- Check which buckets differ between two sets
@@ -91,11 +91,12 @@ Create a new Bucketed Hash Set instance.
 - `seed`: Optional seed for hash function (default: 0).
 - Returns: The new Bucketed Hash Set instance.
 
-### bucketedHashSet:Toggle(value)
+### bucketedHashSet:Update(value, ...)
 
-Toggle a value in the bucketed hash set. Toggling the same value twice removes it.
+Update a value in the bucketed hash set. Updating the same value twice removes it. Only the first value is used to determine the bucket index, but additional values can be included in the hash.
 
-- `value`: Value to toggle.
+- `value`: Value to update.
+- `...`: Additional values to include in the hash (optional).
 
 ### bucketedHashSet:Clear()
 

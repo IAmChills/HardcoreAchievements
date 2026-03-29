@@ -25,9 +25,9 @@ local QUEST_ALLIANCE_ORDERED = {
   "Fangore", "Foulborne", "GalensEscape", "Nekrosh", "Morbent", "Eliza",
   "MorLadim", "ForsakenCourier", "StinkysEscapeA", "GetMeOutOfHere",
   "ThogrunAlliance", "Kurzen", "KingBangalash", "LordShalzaru", "OOX",
-  "CuergosGold", "Mokk", "MalletZF", "Mukla", "KimJaelIndeed",
-  "StonesThatBindUs", "Hakkar", "ShadowLordFeldan", "SummoningThePrincess",
-  "GorishiHiveQueen", "OverseerMaltorius", "DragonkinMenace", "MercutioFilthgorger",
+  "Mokk", "MalletZF", "Mukla", "KimJaelIndeed", "StonesThatBindUs",
+  "Hakkar", "ShadowLordFeldan", "SummoningThePrincess", "GorishiHiveQueen",
+  "OverseerMaltorius", "DragonkinMenace", "MercutioFilthgorger",
   "HighChiefWinterfall", "Deathclasp"
 }
 
@@ -35,10 +35,10 @@ local QUEST_HORDE_ORDERED = {
   "Dargol", "Arrachea", "Gazzuz", "Fizzle", "Goggeroc", "Kromzar", "Ataeric",
   "TheHunt", "Gizmo", "Grenka", "Ironhill", "StinkysEscapeH", "GalensEscape",
   "GetMeOutOfHere", "ThogrunHorde", "NothingButTruth", "KingBangalash",
-  "Mugthol", "OOX", "CuergosGold", "Mokk", "Hatetalon", "MalletZF",
-  "Mukla", "Kromgrul", "KimJaelIndeed", "StonesThatBindUs", "Hakkar",
-  "ShadowLordFeldan", "SummoningThePrincess", "GorishiHiveQueen",
-  "OverseerMaltorius", "MercutioFilthgorger", "HighChiefWinterfall", "Deathclasp"
+  "Mugthol", "OOX", "Mokk", "Hatetalon", "MalletZF", "Mukla", "Kromgrul",
+  "KimJaelIndeed", "StonesThatBindUs", "Hakkar", "ShadowLordFeldan",
+  "SummoningThePrincess", "GorishiHiveQueen", "OverseerMaltorius",
+  "MercutioFilthgorger", "HighChiefWinterfall", "Deathclasp"
 }
 
 ---------------------------------------

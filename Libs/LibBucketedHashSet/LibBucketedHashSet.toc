@@ -2,6 +2,6 @@
 ## Title: LibBucketedHashSet
 ## Author: Erunehtar
 ## Notes: Bucketed Hash Set implementation for WoW Lua 5.1 environment.
-## Version: 1
+## Version: 4
 
 LibBucketedHashSet.lua

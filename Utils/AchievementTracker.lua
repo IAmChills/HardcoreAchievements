@@ -524,7 +524,7 @@ local function Initialize()
     if savedLeft and savedTop then
         trackerBaseFrame:SetPoint("TOPLEFT", UIParent, "BOTTOMLEFT", savedLeft, savedTop)
     else
-        trackerBaseFrame:SetPoint("CENTER", UIParent, "CENTER")
+        trackerBaseFrame:SetPoint("RIGHT", UIParent, "RIGHT", -200, 0)
     end
 
     trackerBaseFrame:Hide()
@@ -559,7 +559,7 @@ local function InitializeHeader(self, baseFrame)
             return
         end
         isExpanded = not isExpanded
-        Update(AchievementTracker)
+        addon.UpdateTracker(AchievementTracker)
     end)
 
     headerFrame:SetScript("OnEnter", function(self)
@@ -1799,7 +1799,8 @@ local function Update(self)
     end
 end
 
--- Public API: Add achievement to tracker
+if addon then addon.UpdateTracker = Update end
+
 -- achievementId: string or number - the achievement ID
 -- title: optional string - the achievement title (for custom achievements)
 local function TrackAchievement(self, achievementId, title)

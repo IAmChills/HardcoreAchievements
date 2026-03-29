@@ -34,11 +34,23 @@
 -- Compact bit array representation using 31-bit integers to avoid sign bit issues.
 -- Supports insertion, membership testing, export/import, and false positive rate estimation.
 
-local MAJOR, MINOR = "LibPatternedBloomFilter", 3
+local MAJOR, MINOR = "LibPatternedBloomFilter", 4
 assert(LibStub, MAJOR .. " requires LibStub")
 
+--- @class LibPatternedBloomFilter Patterned Bloom Filter data structure.
+--- @field seed integer Seed used for hashing function.
+--- @field numBits integer Total number of bits in the filter.
+--- @field numIntegers integer Number of 31-bit integers in the bit array.
+--- @field numPatterns integer Number of unique bit patterns.
+--- @field patterns integer[] Array of bit patterns (cached reference).
+--- @field bitsPerPattern integer Number of bits set per pattern.
+--- @field patternIndexBits integer Number of bits used for pattern index.
+--- @field patternIndexMask integer Bitmask for pattern index extraction.
+--- @field bits integer[] Bit array represented as array of 31-bit integers.
 local LibPatternedBloomFilter = LibStub:NewLibrary(MAJOR, MINOR)
 if not LibPatternedBloomFilter then return end -- no upgrade needed
+
+LibPatternedBloomFilter.__index = LibPatternedBloomFilter
 
 -- Local lua references
 local assert, type, setmetatable = assert, type, setmetatable
@@ -146,7 +158,7 @@ end
 local function FNV1a32(value, seed)
     local str = tostring(value)
     local len = #str
-    local hash = 2166136261 + (seed or 0) * 13
+    local hash = 2166136261 + seed * 13
     for i = 1, len do
         hash = bxor(hash, strbyte(str, i))
         hash = (hash * 16777619) % UINT32_MODULO
@@ -166,34 +178,6 @@ local function ConstructMask(self, hash)
     local pattern = self.patterns[patternIdx]
     return RotateLeft32(pattern, rotation)
 end
-
---- @class LibPatternedBloomFilter Patterned Bloom Filter data structure.
---- @field New fun(capacity: integer, seed: integer?, falsePositiveRate: number?, numPatterns: integer?, bitsPerPattern: integer?): LibPatternedBloomFilter Create a new Patterned Bloom Filter instance.
---- @field Insert fun(self: LibPatternedBloomFilter, value: any) Insert a value into the filter.
---- @field Contains fun(self: LibPatternedBloomFilter, value: any): boolean Determine if a value is possibly in the filter.
---- @field Export fun(self: LibPatternedBloomFilter): LibPatternedBloomFilterState Export the current state of the filter.
---- @field Import fun(data: LibPatternedBloomFilterState): LibPatternedBloomFilter Import a new Patterned Bloom Filter from a compact representation.
---- @field Clear fun(self: LibPatternedBloomFilter) Clear all values from the filter.
---- @field EstimateFalsePositiveRate fun(self: LibPatternedBloomFilter): number Estimate the current false positive rate (FPR) of the filter based on current load factor.
---- @field seed integer Seed used for hashing function.
---- @field numBits integer Total number of bits in the filter.
---- @field numIntegers integer Number of 31-bit integers in the bit array.
---- @field numPatterns integer Number of unique bit patterns.
---- @field patterns integer[] Array of bit patterns (cached reference).
---- @field bitsPerPattern integer Number of bits set per pattern.
---- @field patternIndexBits integer Number of bits used for pattern index.
---- @field patternIndexMask integer Bitmask for pattern index extraction.
---- @field bits integer[] Bit array represented as array of 31-bit integers.
-
---- @class LibPatternedBloomFilterState Compact representation of a Patterned Bloom Filter state.
---- @field [1] integer seed Seed used for hashing function.
---- @field [2] integer numBits Total number of bits in the filter.
---- @field [3] integer numIntegers Number of 31-bit integers in the bit array.
---- @field [4] integer numPatterns Number of unique bit patterns.
---- @field [5] integer bitsPerPattern Number of bits set per pattern.
---- @field [6] integer[] Bit array represented as array of 31-bit integers.
-
-LibPatternedBloomFilter.__index = LibPatternedBloomFilter
 
 --- Create a new Patterned Bloom Filter instance.
 --- @param capacity integer Capacity of the filter (expected number of values).
@@ -280,8 +264,16 @@ function LibPatternedBloomFilter:Contains(value)
     return band(self.bits[idx], mask) == mask
 end
 
+--- @class LibPatternedBloomFilter.State Compact representation of a Patterned Bloom Filter state.
+--- @field [1] integer Seed used for hashing function.
+--- @field [2] integer Total number of bits in the filter.
+--- @field [3] integer Number of 31-bit integers in the bit array.
+--- @field [4] integer Number of unique bit patterns.
+--- @field [5] integer Number of bits set per pattern.
+--- @field [6] integer[] Bit array represented as array of 31-bit integers.
+
 --- Export the current state of the filter.
---- @return LibPatternedBloomFilterState state Compact representation of the filter.
+--- @return LibPatternedBloomFilter.State state Compact representation of the filter.
 function LibPatternedBloomFilter:Export()
     return {
         self.seed,
@@ -294,7 +286,7 @@ function LibPatternedBloomFilter:Export()
 end
 
 --- Import a new Patterned Bloom Filter from a compact representation.
---- @param state LibPatternedBloomFilterState Compact representation of the filter.
+--- @param state LibPatternedBloomFilter.State Compact representation of the filter.
 --- @return LibPatternedBloomFilter instance The imported Patterned Bloom Filter instance.
 function LibPatternedBloomFilter.Import(state)
     assert(state and type(state) == "table", "state must be a table")
@@ -373,115 +365,168 @@ local function RunLibPatternedBloomFilterTests()
     print("=== LibPatternedBloomFilter Tests ===")
 
     -- Test 1: Basic insertion and membership
-    local pbf = LibPatternedBloomFilter.New(100)
-    assert(not pbf:Contains("item1"), "Test 1 Failed: Empty filter should not contain items")
+    do
+        local filter = LibPatternedBloomFilter.New(100)
+        assert(not filter:Contains("item1"), "Test 1 Failed: Empty filter should not contain items")
 
-    pbf:Insert("item1")
-    pbf:Insert("item2")
-    pbf:Insert("item3")
-    assert(pbf:Contains("item1"), "Test 1 Failed: Should contain inserted item1")
-    assert(pbf:Contains("item2"), "Test 1 Failed: Should contain inserted item2")
-    assert(pbf:Contains("item3"), "Test 1 Failed: Should contain inserted item3")
-    print("Test 1 PASSED: Basic insertion and membership")
+        filter:Insert("item1")
+        filter:Insert("item2")
+        filter:Insert("item3")
+        assert(filter:Contains("item1"), "Test 1 Failed: Should contain inserted item1")
+        assert(filter:Contains("item2"), "Test 1 Failed: Should contain inserted item2")
+        assert(filter:Contains("item3"), "Test 1 Failed: Should contain inserted item3")
+        print("Test 1 PASSED: Basic insertion and membership")
+    end
 
     -- Test 2: False positives vs true negatives
-    local testPbf = LibPatternedBloomFilter.New(100000)
-    for i = 1, 50000 do
-        local item = "test_" .. i
-        testPbf:Insert(item)
-    end
-
-    local falsePositives = 0
-    local testCount = 100000
-    for i = 50001, 50000 + testCount do
-        local item = "test_" .. i
-        if testPbf:Contains(item) then
-            falsePositives = falsePositives + 1
+    do
+        local filter = LibPatternedBloomFilter.New(100000)
+        for i = 1, 50000 do
+            local item = "test_" .. i
+            filter:Insert(item)
         end
-    end
 
-    local actualFPR = falsePositives / testCount
-    local estimatedFPR = testPbf:EstimateFalsePositiveRate()
-    print(format("Test 2 PASSED: FP Rate - Actual: %.4f, Estimated: %.4f", actualFPR, estimatedFPR))
-    assert(actualFPR < 0.1, "Test 2 Failed: False positive rate too high")
+        local falsePositives = 0
+        local testCount = 100000
+        for i = 50001, 50000 + testCount do
+            local item = "test_" .. i
+            if filter:Contains(item) then
+                falsePositives = falsePositives + 1
+            end
+        end
+
+        local actualFPR = falsePositives / testCount
+        local estimatedFPR = filter:EstimateFalsePositiveRate()
+        assert(actualFPR < 0.1, "Test 2 Failed: False positive rate too high")
+        print(format("Test 2 PASSED: FP Rate - Actual: %.4f, Estimated: %.4f", actualFPR, estimatedFPR))
+    end
 
     -- Test 3: Export and Import
-    local pbf3 = LibPatternedBloomFilter.New(100)
-    for i = 1, 100 do
-        pbf3:Insert("export_" .. i)
-    end
+    do
+        local filter = LibPatternedBloomFilter.New(100)
+        for i = 1, 100 do
+            filter:Insert("export_" .. i)
+        end
 
-    local exported = pbf3:Export()
-    local imported = LibPatternedBloomFilter.Import(exported)
-
-    for i = 1, 100 do
-        assert(imported:Contains("export_" .. i), "Test 3 Failed: Imported filter should contain export_" .. i)
+        local exported = filter:Export()
+        local imported = LibPatternedBloomFilter.Import(exported)
+        for i = 1, 100 do
+            assert(imported:Contains("export_" .. i), "Test 3 Failed: Imported filter should contain export_" .. i)
+        end
+        print("Test 3 PASSED: Export and Import")
     end
-    print("Test 3 PASSED: Export and Import")
 
     -- Test 4: Clear functionality
-    local pbf4 = LibPatternedBloomFilter.New(100)
-    pbf4:Insert("clear1")
-    pbf4:Insert("clear2")
-    assert(pbf4:Contains("clear1"), "Test 4 Failed: Should contain clear1 before clear")
+    do
+        local filter = LibPatternedBloomFilter.New(100)
+        filter:Insert("clear1")
+        filter:Insert("clear2")
+        assert(filter:Contains("clear1"), "Test 4 Failed: Should contain clear1 before clear")
 
-    pbf4:Clear()
-    assert(not pbf4:Contains("clear1"), "Test 4 Failed: Should not contain clear1 after clear")
-    assert(not pbf4:Contains("clear2"), "Test 4 Failed: Should not contain clear2 after clear")
-    print("Test 4 PASSED: Clear functionality")
+        filter:Clear()
+        assert(not filter:Contains("clear1"), "Test 4 Failed: Should not contain clear1 after clear")
+        assert(not filter:Contains("clear2"), "Test 4 Failed: Should not contain clear2 after clear")
+        print("Test 4 PASSED: Clear functionality")
+    end
 
     -- Test 5: No false negatives (critical property)
-    local pbf5 = LibPatternedBloomFilter.New(100000)
-    local items = {}
-    for i = 1, 100000 do
-        items[i] = "item_" .. i
-        pbf5:Insert(items[i])
-    end
+    do
+        local filter = LibPatternedBloomFilter.New(100000)
+        local items = {}
+        for i = 1, 100000 do
+            items[i] = "item_" .. i
+            filter:Insert(items[i])
+        end
 
-    for i = 1, 100000 do
-        assert(pbf5:Contains(items[i]), "Test 5 Failed: False negative detected for " .. items[i])
+        for i = 1, 100000 do
+            assert(filter:Contains(items[i]), "Test 5 Failed: False negative detected for " .. items[i])
+        end
+        print("Test 5 PASSED: No false negatives")
     end
-    print("Test 5 PASSED: No false negatives")
 
     -- Test 6: Deterministic pattern generation
-    local pbf6a = LibPatternedBloomFilter.New(100)
-    local pbf6b = LibPatternedBloomFilter.New(100)
+    do
+        local filterA = LibPatternedBloomFilter.New(100)
+        local filterB = LibPatternedBloomFilter.New(100)
 
-    pbf6a:Insert("pattern_test")
-    pbf6b:Insert("pattern_test")
+        filterA:Insert("pattern_test")
+        filterB:Insert("pattern_test")
 
-    -- Both should have identical bit patterns
-    local export6a = pbf6a:Export()
-    local export6b = pbf6b:Export()
+        -- Both should have identical bit patterns
+        local exportA = filterA:Export()
+        local exportB = filterB:Export()
 
-    assert(#export6a == #export6b, "Test 6 Failed: Export sizes should match")
-    local export6aBits = export6a[6]
-    local export6bBits = export6b[6]
-    assert(#export6aBits == #export6bBits, "Test 6 Failed: Bit array sizes should match")
-    for i = 1, #export6aBits do -- Compare bits
-        assert(export6aBits[i] == export6bBits[i], "Test 6 Failed: Bit arrays should be identical")
+        assert(#exportA == #exportB, "Test 6 Failed: Export sizes should match")
+        local exportBitsA = exportA[6]
+        local exportBitsB = exportB[6]
+        assert(#exportBitsA == #exportBitsB, "Test 6 Failed: Bit array sizes should match")
+        for i = 1, #exportBitsA do -- Compare bits
+            assert(exportBitsA[i] == exportBitsB[i], "Test 6 Failed: Bit arrays should be identical")
+        end
+        print("Test 6 PASSED: Deterministic pattern generation")
     end
-    print("Test 6 PASSED: Deterministic pattern generation")
 
     -- Test 7: Different seeds produce different filters
-    local pbf7a = LibPatternedBloomFilter.New(100, 123)
-    local pbf7b = LibPatternedBloomFilter.New(100, 456)
-    pbf7a:Insert("seed_test")
-    pbf7b:Insert("seed_test")
-    local export7a = pbf7a:Export()
-    local export7b = pbf7b:Export()
-    local export7aBits = export7a[6]
-    local export7bBits = export7b[6]
-    local different = false
-    for i = 1, #export7aBits do
-        if export7aBits[i] ~= export7bBits[i] then
-            different = true
-            break
+    do
+        local filterA = LibPatternedBloomFilter.New(100, 123)
+        local filterB = LibPatternedBloomFilter.New(100, 456)
+
+        filterA:Insert("seed_test")
+        filterB:Insert("seed_test")
+
+        local exportA = filterA:Export()
+        local exportB = filterB:Export()
+        local exportBitsA = exportA[6]
+        local exportBitsB = exportB[6]
+        local different = false
+        for i = 1, #exportBitsA do
+            if exportBitsA[i] ~= exportBitsB[i] then
+                different = true
+                break
+            end
         end
+        assert(different, "Test 7 Failed: Filters with different seeds should differ")
+        print("Test 7 PASSED: Different seeds produce different filters")
     end
 
-    assert(different, "Test 7 Failed: Filters with different seeds should differ")
-    print("Test 7 PASSED: Different seeds produce different filters")
+    -- Test 9: Performance
+    do
+        local numOperations = 10000
+        local filter = LibPatternedBloomFilter.New(numOperations)
+        local results = {}
+        for i = 1, numOperations do
+            local suffix = i * 13
+            local startTime = debugprofilestop()
+            filter:Insert("value" .. suffix)
+            local endTime = debugprofilestop()
+            results[i] = endTime - startTime
+        end
+        local totalTime = 0.0
+        local minTime = math.huge
+        local maxTime = 0.0
+        for i = 1, numOperations do
+            totalTime = totalTime + results[i]
+            if results[i] < minTime then
+                minTime = results[i]
+            end
+            if results[i] > maxTime then
+                maxTime = results[i]
+            end
+        end
+        local avgTime = totalTime / numOperations
+        table.sort(results)
+        local medianTime = results[math.floor(numOperations / 2)]
+        local FormatTime = function(milliseconds)
+            if milliseconds < 1.0 then
+                return format("%.2fus", milliseconds * 1000.0)
+            elseif milliseconds < 1000.0 then
+                return format("%.2fms", milliseconds)
+            else
+                return format("%.2fs", milliseconds / 1000.0)
+            end
+        end
+        print(format("Test 9: Performance over %d operations: median=%s, avg=%s, min=%s, max=%s, total=%s", numOperations, FormatTime(medianTime), FormatTime(avgTime), FormatTime(minTime), FormatTime(maxTime), FormatTime(totalTime)))
+    end
 
     print("=== All LibPatternedBloomFilter Tests PASSED ===\n")
 end

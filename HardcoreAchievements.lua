@@ -260,6 +260,42 @@ local function CleanupIncorrectLevelAchievements()
     return cleanedCount
 end
 
+-- Cleanup function to unfail achievements that are now eligible after a catalog change
+-- (e.g. maxLevel increased from 10 to 15: a player who failed at 12 is now eligible)
+-- Run after registration so AchievementRowModel has current maxLevels.
+local function CleanupNowEligibleFailedAchievements()
+    local _, cdb = GetCharDB()
+    if not cdb or not cdb.achievements then return 0 end
+
+    local rows = addon and addon.AchievementRowModel
+    if not rows or #rows == 0 then return 0 end
+
+    local playerLevel = UnitLevel("player") or 0
+    local maxLevelByAchId = {}
+    for _, row in ipairs(rows) do
+        local id = row.id or row.achId
+        if id and row.maxLevel then
+            maxLevelByAchId[tostring(id)] = row.maxLevel
+        end
+    end
+
+    local cleanedCount = 0
+    for achId, rec in pairs(cdb.achievements) do
+        if not rec.completed and (rec.failed or rec.failedAt) then
+            local maxLevel = maxLevelByAchId[tostring(achId)]
+            if maxLevel and playerLevel <= maxLevel then
+                rec.failed = nil
+                rec.failedAt = nil
+                cleanedCount = cleanedCount + 1
+            end
+        end
+    end
+
+    if cleanedCount > 0 then
+        print(string_format("|cff008066[Hardcore Achievements]|r |cffffd100Unfailed %d achievement(s) that are now eligible (catalog/level change).|r", cleanedCount))
+    end
+    return cleanedCount
+end
 
 local function ClearProgress(achId)
     local _, cdb = GetCharDB()
@@ -385,12 +421,13 @@ local function IsRowOutleveled(row)
     -- Check if this is a meta achievement that should be failed based on required achievements
     -- Meta achievements don't have maxLevel, so check database for failed flag
     if not row.maxLevel then
-      -- Check if this is a meta achievement (has isMetaAchievement flag or requiredAchievements)
-      local isMetaAchievement = (row._def and row._def.isMetaAchievement) or (row.requiredAchievements ~= nil)
+      -- Check if this is a meta achievement (isMetaAchievement, isMeta, or requiredAchievements)
+      local isMetaAchievement = (row._def and (row._def.isMetaAchievement or row._def.isMeta)) or (row.requiredAchievements ~= nil)
       if isMetaAchievement then
-        -- For meta achievements, check the database directly for failed flag
+        -- For meta achievements, check the database directly for failed flag (use tostring for key consistency)
         local _, cdb = GetCharDB()
-        if cdb and cdb.achievements and cdb.achievements[achId] and cdb.achievements[achId].failed then
+        local achKey = achId and tostring(achId)
+        if cdb and cdb.achievements and achKey and cdb.achievements[achKey] and cdb.achievements[achKey].failed then
           return true
         end
       end
@@ -2003,14 +2040,15 @@ end)
 
 -- Function to show welcome message popup on first login or when version changes
 function addon:ShowWelcomeMessage()
-    local WELCOME_MESSAGE_NUMBER = 3
+    local Disabled = true
+    local WELCOME_MESSAGE_NUMBER = 4
     local db = EnsureDB()
     db.settings = db.settings or {}
     
     local storedVersion = db.settings.welcomeMessageVersion or 0
     
     -- Show message if stored version is less than current version
-    if storedVersion < WELCOME_MESSAGE_NUMBER then
+    if storedVersion < WELCOME_MESSAGE_NUMBER and not Disabled then
         if GetExpansionLevel() > 0 then
             StaticPopup_Show("Hardcore Achievements TBC")
         else
@@ -2022,7 +2060,7 @@ end
 
 -- Define the welcome message popup
 StaticPopupDialogs["Hardcore Achievements Vanilla"] = {
-    text = "|cff008066Hardcore Achievements|r\n\nDungeon related achievements have been redesigned and now require all party members to meet the level requirement at entry. Leveling up inside the dungeon is allowed, but leaving and re-entering if overleveled disqualifies the group.\n\nPlease report any issues you encounter.",
+    text = "|cff008066Hardcore Achievements|r\n\nThis addon has had a major code refactor to improve performance, stability, and load times.\n\nOf course, this means some things may be broken. Please report any issues you encounter.",
     button1 = "Okay",
     --button2 = "Show Me!",
     timeout = 0,
@@ -2038,7 +2076,7 @@ StaticPopupDialogs["Hardcore Achievements Vanilla"] = {
 }
 
 StaticPopupDialogs["Hardcore Achievements TBC"] = {
-    text = "|cff008066Hardcore Achievements|r\n\nDungeon related achievements have been redesigned and now require all party members to meet the level requirement at entry. Leveling up inside the dungeon is allowed, but leaving and re-entering if overleveled disqualifies the group.\n\nPlease report any issues you encounter.",
+    text = "|cff008066Hardcore Achievements|r\n\nThis addon has had a major code refactor to improve performance, stability, and load times.\n\nOf course, this means some things may be broken. Please report any issues you encounter.",
     button1 = "Okay",
     --button2 = "Show Me!",
     timeout = 0,
@@ -2058,13 +2096,13 @@ StaticPopupDialogs["Hardcore Achievements TBC"] = {
 -- =========================================================
 
 -- Constants
-local Tabs = CharacterFrame.numTabs
-local TabID = CharacterFrame.numTabs + 1
+local TabName = (addonName or "HardcoreAchievements") .. "Tab"
 
 -- Create and configure the subframe
-local Tab = CreateFrame("Button" , "$parentTab"..TabID, CharacterFrame, "CharacterFrameTabButtonTemplate")
+local Tab = CreateFrame("Button" , TabName, CharacterFrame, "CharacterFrameTabButtonTemplate")
 -- Don't set position here - let LoadTabPosition handle it after CharacterFrame is fully initialized
 Tab:SetText(ACHIEVEMENTS)
+PanelTemplates_TabResize(Tab, 0)
 PanelTemplates_DeselectTab(Tab)
 
 -- Draggable "curl" behavior for Achievements tab (bottom + right edges only)
@@ -2677,7 +2715,7 @@ local function HideCharacterFrameContentsForCombat()
     if _G["HonorFrame"]        then _G["HonorFrame"]:Hide()        end
     if _G["SkillFrame"]        then _G["SkillFrame"]:Hide()        end
     if _G["ReputationFrame"]   then _G["ReputationFrame"]:Hide()   end
-    if _G["PvPFrame"]          then _G["PvPFrame"]:Hide()          end
+    if _G["PVPFrame"]          then _G["PVPFrame"]:Hide()          end
     if _G["TokenFrame"]        then _G["TokenFrame"]:Hide()        end
     if type(_G.CSC_HideStatsPanel) == "function" then
         _G.CSC_HideStatsPanel()
@@ -3471,6 +3509,9 @@ local function CreateAchievementRowFromData(data, index)
     row.completed = data.completed or false
     row.points = data.points or row.points
     row.originalPoints = data.originalPoints or row.originalPoints
+    if data.requiredAchievements then
+        row.requiredAchievements = data.requiredAchievements
+    end
     data.frame = row
 
     -- Apply any deferred UI initializers registered on the model entry
@@ -3888,9 +3929,8 @@ do
                 PlayerIsSolo_UpdateStatusForGUID(destGUID)
             end
 
-            recentKills[destGUID] = true
-            clearRecentKill(destGUID)
-            addon.DungeonKillPrintedForGUID = nil
+            -- Do not reset DungeonKillPrintedForGUID here; multiple events can fire for the same kill,
+            -- and we only want one print per kill. Next kill will have a different destGUID so the check will pass.
             local rows = addon.AchievementRowModel
             if not rows then return end
 
@@ -3908,15 +3948,24 @@ do
                 return oa < ob
             end)
 
+            local anyAwarded = false
             for _, row in ipairs(rowsWithTracker) do
                 if row.killTracker(destGUID) then
                     MarkRowCompleted(row)
                     local iconTex = (row.frame and row.frame.Icon and row.frame.Icon.GetTexture and row.frame.Icon:GetTexture()) or row.icon or 136116
                     local titleText = (row.frame and row.frame.Title and row.frame.Title.GetText and row.frame.Title:GetText()) or row.title or "Achievement"
                     CreateAchToast(iconTex, titleText, row.points, row.frame or row)
+                    anyAwarded = true
                 end
             end
-            
+
+            -- Only mark as processed when we actually awarded; otherwise UNIT_DIED (or another event) can retry
+            -- (e.g. when PARTY_KILL/damage path ran first but no credit was given due to tap/eligibility)
+            if anyAwarded then
+                recentKills[destGUID] = true
+                clearRecentKill(destGUID)
+            end
+
             -- Clean up external player tracking for this NPC after kill
             externalPlayersByNPC[destGUID] = nil
         end
@@ -4004,37 +4053,44 @@ do
                 --     print("[CLEU Debug]", subevent, "| Threat:", UnitDetailedThreatSituation("player", "target"))
                 -- end
                 if subevent == "PARTY_KILL" then
-                    -- PARTY_KILL fires for player/party member kills
-                    -- Only process if we were fighting this NPC (prevents tracking kills we had no part in)
-                    -- Check if player tagged the enemy (prevents credit for killing untagged mobs when awardOnKill is enabled)
-                    -- Use stored tap denial status (NPC is cleared from target when it dies, so we can't check at kill time)
+                    -- PARTY_KILL fires when the player/party gets credit for a kill.
+                    -- In dungeon/raid: only the group is present, so we always process (interchangeable with UNIT_DIED).
+                    -- In open world: require npcsInCombat and check tap denial so we don't credit kills we didn't tag.
+                    local instanceName, instanceType = GetInstanceInfo()
+                    local inInstance = (instanceType == "party" or instanceType == "raid")
                     local isTapDenied = npcTapDenied[destGUID]
-                    if isTapDenied == true then
+                    if isTapDenied == true and not inInstance then
                         return
                     end
-                    if npcsInCombat[destGUID] then
+                    if inInstance and destGUID then
+                        -- Instance: process party kill if it's a tracked creature (same filter as UNIT_DIED)
+                        local guidType = select(1, strsplit("-", destGUID))
+                        if guidType == "Creature" then
+                            local npcId = getNpcIdFromGUID(destGUID)
+                            if npcId and isNpcTrackedForAchievement(npcId) then
+                                processKill(destGUID)
+                                npcsInCombat[destGUID] = nil
+                                npcTapDenied[destGUID] = nil
+                            end
+                        end
+                    elseif npcsInCombat[destGUID] then
+                        -- Open world: only if we were fighting this NPC
                         processKill(destGUID)
-                        -- Clean up combat tracking
                         npcsInCombat[destGUID] = nil
                         npcTapDenied[destGUID] = nil
                     end
                 elseif subevent == "UNIT_DIED" then
-                    -- UNIT_DIED is a fallback for dungeon/raid bosses when PARTY_KILL doesn't fire
-                    -- (e.g., when a NPC or mechanic delivers the killing blow)
-                    -- Only process in instanced zones (dungeons or raids) to avoid tracking world kills
-                    local instanceName, instanceType = select(2, GetInstanceInfo())
+                    -- UNIT_DIED always fires when something dies. In dungeon/raid use it as primary/fallback
+                    -- when PARTY_KILL doesn't fire (e.g. environment/totem/pet/mechanic got the kill).
+                    -- Only process in instance so we don't credit world kills we had no part in.
+                    local instanceName, instanceType = GetInstanceInfo()
                     if instanceType == "party" or instanceType == "raid" then
                         if destGUID then
-                            -- Verify this is an NPC, not a player
                             local guidType = select(1, strsplit("-", destGUID))
                             if guidType == "Creature" then
                                 local npcId = getNpcIdFromGUID(destGUID)
                                 if npcId and isNpcTrackedForAchievement(npcId) then
-                                    -- This is a tracked boss in an instance - process the kill
-                                    -- We don't need to check npcsInCombat since we're in an instance
-                                    -- and there's no risk of outside players contributing
                                     processKill(destGUID)
-                                    -- Clean up combat tracking
                                     npcsInCombat[destGUID] = nil
                                     npcTapDenied[destGUID] = nil
                                 end
@@ -4244,7 +4300,8 @@ do
                 end
             elseif event == "QUEST_ACCEPTED" then
                 -- arg2 is the QuestId
-                local questID = select(2, ...)
+                local arg1, arg2 = ...
+                local questID = arg2 and tonumber(arg2) or nil
                 questID = questID and tonumber(questID) or nil
                 if questID and addon and addon.SetProgress then
                     -- Store player's level when quest is accepted as a backup reference
@@ -4263,8 +4320,8 @@ do
                     end
                 end
             elseif event == "QUEST_TURNED_IN" then
-                local questID = select(1, ...)
-                questID = questID and tonumber(questID) or nil
+                local arg1 = ...
+                local questID = arg1 and tonumber(arg1) or nil
                 local currentTime = GetTime()
                 
                 for _, row in ipairs(addon.AchievementRowModel or {}) do
@@ -4329,7 +4386,7 @@ do
                     end
                 end
             elseif event == "UNIT_AURA" then
-                local unit = select(1, ...)
+                local unit = ...
                 if unit ~= "player" then return end
                 for _, row in ipairs(addon.AchievementRowModel or {}) do
                     -- Check both row.completed and database to prevent re-completion
@@ -4507,8 +4564,9 @@ do
                 end
             elseif event == "PLAYER_LEVEL_CHANGED" then
                 -- arg1 is previous level, arg2 is new level
-                local previousLevel = tonumber(select(1, ...))
-                local newLevel = tonumber(select(2, ...))
+                local prevArg, newArg = ...
+                local previousLevel = tonumber(tostring(prevArg))
+                local newLevel = tonumber(tostring(newArg))
                 
                 -- Cache the level-up info with timestamp for quest turn-in validation
                 if previousLevel and newLevel then
@@ -4562,7 +4620,8 @@ do
                     end
                 end
             elseif event == "QUEST_REMOVED" then
-                local removedQuestId = tonumber(...)
+                local questIdArg = ...
+                local removedQuestId = questIdArg and tonumber(tostring(questIdArg)) or nil
                 if removedQuestId and QuestTrackedRows[removedQuestId] then
                     local rows = QuestTrackedRows[removedQuestId]
                     local needsRefresh = false
@@ -4705,7 +4764,7 @@ local function ShowAchievementTab()
     if _G["HonorFrame"]        then _G["HonorFrame"]:Hide()        end
     if _G["SkillFrame"]        then _G["SkillFrame"]:Hide()        end
     if _G["ReputationFrame"]   then _G["ReputationFrame"]:Hide()   end
-    if _G["PvPFrame"]          then _G["PvPFrame"]:Hide()          end
+    if _G["PVPFrame"]          then _G["PVPFrame"]:Hide()          end
     if _G["TokenFrame"]        then _G["TokenFrame"]:Hide()        end
 
     -- Hide CharacterStatsClassic panel
@@ -4909,6 +4968,7 @@ do
         end
         skipBroadcastForRetroactive = false
 
+        if CleanupNowEligibleFailedAchievements then CleanupNowEligibleFailedAchievements() end
         if RefreshOutleveledAll then RefreshOutleveledAll() end
         if SortAchievementRows then SortAchievementRows() end
         if RefreshAllAchievementPoints then RefreshAllAchievementPoints() end

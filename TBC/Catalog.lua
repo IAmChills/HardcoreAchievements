@@ -545,7 +545,7 @@ local Achievements = {
 }, {
     achId = "OOX",
     title = "Oox I Did It Again",
-    level = 45,
+    level = 50,
     tooltip = "Complete " .. ClassColor .. "An OOX of Your Own|r before level 46",
     icon = 133883,
     points = 10,

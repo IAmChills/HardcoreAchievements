@@ -209,9 +209,10 @@ local function registerMetaAchievement(def)
     -- Check completion before creating row
     CheckComplete()
 
-    -- Set meta flag on def
+    -- Set meta flags on def (isMetaAchievement used by IsRowOutleveled for failed styling in list/Character panel)
     local metaDef = def or {}
     metaDef.isMeta = true
+    metaDef.isMetaAchievement = true
 
     -- Create the achievement row (meta achievements don't need level or questTracker)
     addon.MetaRows[rowVarName] = addon.CreateAchievementRow(
@@ -254,8 +255,19 @@ local function registerMetaAchievement(def)
         end
 
         if AnyRequiredAchievementFailed() then
+          -- Only call UpdateUI when *newly* marking as failed. If we already had rec.failed,
+          -- calling UpdateUI every run would set PointsRefreshPending and cause RefreshAllAchievementPoints
+          -- to run every frame (infinite loop, FPS drop at level 10+ when opening achievement panel).
+          local wasAlreadyFailed = false
+          if addon and addon.GetCharDB then
+            local _, cdb = addon.GetCharDB()
+            local rec = cdb and cdb.achievements and cdb.achievements[achId]
+            wasAlreadyFailed = rec and rec.failed
+          end
           MarkAsFailed()
-          UpdateUI(r)
+          if not wasAlreadyFailed then
+            UpdateUI(r)
+          end
         elseif CheckComplete() then
           r.completed = true
           UpdateUI(r)

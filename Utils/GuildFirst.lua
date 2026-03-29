@@ -14,9 +14,9 @@
 --
 -- Propagation (handled by LibP2PDB):
 -- - BroadcastKey: Immediately broadcasts claim to all online peers via GUILD/RAID/PARTY/YELL channels
--- - DiscoverPeers: Periodically finds new peers (every 30s) and syncs when they come online
+-- - BroadcastPresence: Periodically announces presence (every 60s) so peers can see us; then SyncDatabase
 -- - SyncDatabase: Gossip-style sync with neighbors via WHISPER (exchanges digests, requests missing data)
--- - Persistence: Saves state to SavedVariables on claim + every 60s, loads on login
+-- - Persistence: Saves state to SavedVariables on claim and on PLAYER_LOGOUT, loads on login
 
 local LibStub = LibStub
 if not LibStub then return end
@@ -25,7 +25,21 @@ local LibP2PDB = LibStub("LibP2PDB", true)
 if not LibP2PDB then return end
 
 local TABLE_NAME = "Claims"
-local databases = {}  -- [scopeKey] = { db = DBHandle, prefix = string, discoverTicker = ticker }
+-- One P2P database per scope so guild-first claims are isolated (e.g. Guild A vs Guild B, or server-first).
+-- We create each DB and its table once at first use and store the handle here so we never call GetDatabase
+-- again for that scope; all later use reuses this handle.
+local databases = {}  -- [scopeKey] = { db = DBHandle, prefix = string, presenceTicker = ticker, ... }
+
+-- Cached local peer ID (smaller than full GUID for sync). Get with LibP2PDB:GetPeerId() at first use.
+-- Debug: format("%X", peerId) for hex; convert back to GUID with "Player-"..peerId or LibP2PDB:PeerIDToPlayerGUID if available.
+local localPeerId = nil
+
+local function GetLocalPeerId()
+    if localPeerId == nil then
+        localPeerId = LibP2PDB:GetPeerId()
+    end
+    return localPeerId
+end
 
 local addonName, addon = ...
 local MarkRowCompleted = addon and addon.MarkRowCompleted
@@ -220,7 +234,6 @@ end
 local function GetScopeKey(scope)
     local realm = GetRealmName()
     if realm == "" then
-        Debug("GetScopeKey: No realm name available")
         return nil
     end
 
@@ -228,26 +241,20 @@ local function GetScopeKey(scope)
     if scope == nil or scope == "guild" then
         local guildName = GetGuildName()
         if not guildName or guildName == "" then
-            Debug("GetScopeKey: Guild-first scope but player not in a guild")
             return nil  -- Not in a guild, can't participate in guild-first
         end
-        local key = "Guild@" .. tostring(guildName) .. "@" .. tostring(realm)
-        Debug("GetScopeKey: Guild-first scope -> " .. key)
-        return key
+        return "Guild@" .. tostring(guildName) .. "@" .. tostring(realm)
     end
 
     -- Server-wide
     if scope == "server" then
-        local key = "Server@" .. tostring(realm)
-        Debug("GetScopeKey: Server-first scope -> " .. key)
-        return key
+        return "Server@" .. tostring(realm)
     end
 
     -- Custom guild list: {"GuildA", "GuildB"}
     if type(scope) == "table" then
         local guildName = GetGuildName()
         if not guildName or guildName == "" then
-            Debug("GetScopeKey: Custom guild pool but player not in a guild")
             return nil  -- Not in a guild, can't participate
         end
         
@@ -262,18 +269,14 @@ local function GetScopeKey(scope)
                 end
                 table_sort(sortedGuilds)
                 local guildListStr = table_concat(sortedGuilds, ",")
-                local key = "Guilds@" .. guildListStr .. "@" .. tostring(realm)
-                Debug("GetScopeKey: Custom guild pool [" .. guildListStr .. "] -> " .. key .. " (player in allowed guild)")
-                return key
+                return "Guilds@" .. guildListStr .. "@" .. tostring(realm)
             end
         end
         
         -- Player's guild is not in the allowed list
-        Debug("GetScopeKey: Player's guild '" .. tostring(guildName) .. "' not in custom pool")
         return nil
     end
 
-    Debug("GetScopeKey: Invalid scope type: " .. type(scope))
     return nil  -- Invalid scope
 end
 
@@ -333,42 +336,45 @@ local function ParseDelimitedSet(s, delim)
     return set
 end
 
-local function RecordIncludesGUID(rec, guid)
-    guid = tostring(guid or "")
-    if guid == "" or not rec then
+--- Check if the claim record includes the given peer ID (or legacy GUID for backward compat).
+local function RecordIncludesPeerID(rec, peerId)
+    peerId = tostring(peerId or "")
+    if peerId == "" or not rec then
         return false
     end
-    -- Multi-winner claim (raid/party): encode the GUID list into winnerGUID as a ';' delimited string.
-    -- (This avoids LibP2PDB schema migration issues for existing installs.)
-    local s = tostring(rec.winnerGUID or "")
+    -- Prefer winnerPeerID (smaller, from LibP2PDB peer ID)
+    local s = tostring(rec.winnerPeerID or rec.winnerGUID or "")
+    if s == "" then return false end
     if s:find(";", 1, true) then
         local set = ParseDelimitedSet(s, ";")
-        return set[guid] == true
+        return set[peerId] == true
     end
-    -- Single-winner claim:
-    return s == guid
+    return s == peerId
 end
 
 --- True if the given claim record includes the current player as a winner.
 --- @param rec table?
 --- @return boolean
 local function IsWinnerRecord(self, rec)
-    local myGUID = UnitGUID("player") or ""
-    return RecordIncludesGUID(rec, myGUID)
+    local myPeerId = GetLocalPeerId()
+    return RecordIncludesPeerID(rec, myPeerId)
 end
 
-local function BuildWinnersGUIDList(awardMode, requireSameGuild)
+--- Build ';'-delimited list of winner peer IDs (smaller than GUIDs for sync).
+local function BuildWinnersPeerIDList(awardMode, requireSameGuild)
     awardMode = tostring(awardMode or "solo"):lower()
     requireSameGuild = requireSameGuild == true
 
     local myGuild = requireSameGuild and GetGuildName() or nil
-    local winnersGUID = {}
+    local winnersPeerID = {}
     local seen = {}
 
     local function AddUnit(unit)
         if not UnitExists(unit) then return end
         local guid = UnitGUID(unit)
-        if not guid or guid == "" or seen[guid] then return end
+        if not guid or guid == "" then return end
+        local peerId = LibP2PDB:GetPeerIdFromGUID(guid)
+        if not peerId or seen[peerId] then return end
 
         if myGuild and myGuild ~= "" then
             local gName = GetGuildInfo and GetGuildInfo(unit) or nil
@@ -377,8 +383,8 @@ local function BuildWinnersGUIDList(awardMode, requireSameGuild)
             end
         end
 
-        seen[guid] = true
-        table_insert(winnersGUID, guid)
+        seen[peerId] = true
+        table_insert(winnersPeerID, peerId)
     end
 
     if awardMode == "solo" then
@@ -389,10 +395,8 @@ local function BuildWinnersGUIDList(awardMode, requireSameGuild)
     elseif awardMode == "raid" then
         local n = GetNumGroupMembers and GetNumGroupMembers() or 0
         for i = 1, n do AddUnit("raid" .. i) end
-        -- Fallback if API returns 0 unexpectedly
         AddUnit("player")
     else
-        -- "group" (default): raid if in raid, else party if in group, else solo
         if IsInRaid and IsInRaid() then
             local n = GetNumGroupMembers and GetNumGroupMembers() or 0
             for i = 1, n do AddUnit("raid" .. i) end
@@ -405,7 +409,7 @@ local function BuildWinnersGUIDList(awardMode, requireSameGuild)
         end
     end
 
-    return table_concat(winnersGUID, ";")
+    return table_concat(winnersPeerID, ";")
 end
 
 -- ---------------------------------------------------------------------------------------------------------------------
@@ -424,39 +428,34 @@ local function EnsureDBForScope(scopeKey)
 
     local prefix = PrefixForKey(scopeKey)
 
-    -- Get or create database (uses LibP2PDB defaults: LibPatternedBloomFilter, LibSerialize, LibDeflate)
+    -- Get or create database once per scope; we store the handle in databases[scopeKey] so we never call
+    -- GetDatabase again for this scope (all callers reuse the stored handle).
     local db = LibP2PDB:GetDatabase(prefix)
+    local created = false
     if not db then
         Debug("Initializing database for scope: " .. tostring(scopeKey) .. " (prefix: " .. tostring(prefix) .. ")")
         db = LibP2PDB:NewDatabase({
             prefix = prefix,
             version = 1,
-            onDiscoveryComplete = function()
-                Debug("Peer discovery complete for scope: " .. tostring(scopeKey) .. " - starting sync")
-                if databases[scopeKey] and databases[scopeKey].db then
-                    LibP2PDB:SyncDatabase(databases[scopeKey].db)
-                end
-            end,
         })
-    else
-        Debug("Using existing database for scope: " .. tostring(scopeKey))
+        created = true
     end
 
-    -- Create claims table (ignore error if already exists)
-    pcall(function()
+    -- Create the claims table exactly once for this database (only when we just created the db).
+    if created then
         LibP2PDB:NewTable(db, {
-            name = TABLE_NAME,
-            keyType = "string",
-            schema = {
-                winnerName = "string",
-                winnerGUID = "string",
-                claimedAt = "number",
-            },
-            onChange = function(key, data)
+        name = TABLE_NAME,
+        keyType = "string",
+        schema = {
+            winnerName = "string",
+            winnerPeerID = "string",  -- peer ID (smaller than full GUID); legacy winnerGUID still read in RecordIncludesPeerID
+            claimedAt = "number",
+        },
+        onChange = function(key, data)
                 -- When a claim changes, refresh the achievement filter to hide/show rows
-                local myGUID = UnitGUID("player") or ""
-                if data and data.winnerGUID then
-                    if RecordIncludesGUID(data, myGUID) then
+                local myPeerId = GetLocalPeerId()
+                if data and (data.winnerPeerID or data.winnerGUID) then
+                    if RecordIncludesPeerID(data, myPeerId) then
                         Debug("Received claim update: Achievement '" .. tostring(key) .. "' claimed and I am an eligible winner")
                         -- Skip re-awarding if admin manually deleted this achievement from the player (tombstone)
                         local _, cdb
@@ -524,55 +523,36 @@ local function EnsureDBForScope(scopeKey)
                 end
             end,
         })
-    end)
+    end
 
     -- Load persisted state
     local root = addon and addon.HardcoreAchievementsDB
     if root and root.guildFirst and root.guildFirst[scopeKey] and root.guildFirst[scopeKey].state then
-        Debug("Loading persisted state for scope: " .. tostring(scopeKey))
         pcall(function()
             LibP2PDB:ImportDatabase(db, root.guildFirst[scopeKey].state)
-            Debug("Persisted state loaded for scope: " .. tostring(scopeKey))
         end)
     end
 
-    -- Periodic peer discovery and sync (only create one ticker per scope)
-    if not databases[scopeKey] or not databases[scopeKey].discoverTicker then
-        local ticker = C_Timer.NewTicker(30.0, function()
+    -- Periodic presence broadcast and sync (only create one ticker per scope).
+    -- Interval 60s so sync has time to complete before the next run.
+    if not databases[scopeKey] or not databases[scopeKey].presenceTicker then
+        local ticker = C_Timer.NewTicker(60.0, function()
             if databases[scopeKey] and databases[scopeKey].db then
-                LibP2PDB:DiscoverPeers(databases[scopeKey].db)
+                LibP2PDB:BroadcastPresence(databases[scopeKey].db)
+                LibP2PDB:SyncDatabase(databases[scopeKey].db)
             end
         end)
         databases[scopeKey] = {
             db = db,
             prefix = prefix,
             scopeKey = scopeKey,
-            discoverTicker = ticker,
+            presenceTicker = ticker,
         }
     end
 
-    -- Initial discovery
-    Debug("Starting peer discovery for scope: " .. tostring(scopeKey))
-    LibP2PDB:DiscoverPeers(db)
-
-    -- Save state periodically (only create one saver per scope)
-    if not databases[scopeKey].saveTicker then
-        databases[scopeKey].saveTicker = C_Timer.NewTicker(60.0, function()
-            if databases[scopeKey] and databases[scopeKey].db then
-                local root = (addon and addon.HardcoreAchievementsDB) or {}
-                root.guildFirst = root.guildFirst or {}
-                local dbState = LibP2PDB:ExportDatabase(databases[scopeKey].db)
-                if dbState then
-                    root.guildFirst[scopeKey] = {
-                        version = 1,
-                        prefix = databases[scopeKey].prefix,
-                        state = dbState,
-                        savedAt = time(),
-                    }
-                end
-            end
-        end)
-    end
+    -- Initial presence broadcast only (no peers yet, so SyncDatabase would be a no-op).
+    Debug("Broadcasting presence for scope: " .. tostring(scopeKey))
+    LibP2PDB:BroadcastPresence(db)
 
     return db
 end
@@ -587,31 +567,18 @@ end
 --- @return string|table|nil scope
 local function GetAchievementScope(row, achievementId)
     if row and row._def and row._def.achievementScope ~= nil then
-        local scope = row._def.achievementScope
-        if type(scope) == "table" then
-            Debug("GetAchievementScope(" .. tostring(achievementId) .. "): Custom guild pool: " .. table_concat(scope, ", "))
-        else
-            Debug("GetAchievementScope(" .. tostring(achievementId) .. "): Scope from def: " .. tostring(scope))
-        end
-        return scope
+        return row._def.achievementScope
     end
     
     -- Try to find row by ID if not provided
     if not row and achievementId then
         row = FindRowByAchId(achievementId)
         if row and row._def and row._def.achievementScope ~= nil then
-            local scope = row._def.achievementScope
-            if type(scope) == "table" then
-                Debug("GetAchievementScope(" .. tostring(achievementId) .. "): Custom guild pool (from lookup): " .. table_concat(scope, ", "))
-            else
-                Debug("GetAchievementScope(" .. tostring(achievementId) .. "): Scope from def (from lookup): " .. tostring(scope))
-            end
-            return scope
+            return row._def.achievementScope
         end
     end
     
     -- Default to guild-first
-    Debug("GetAchievementScope(" .. tostring(achievementId) .. "): Using default scope: guild")
     return "guild"
 end
 
@@ -624,7 +591,6 @@ local function IsClaimed(self, achievementId, row)
     local scope = GetAchievementScope(row, achievementId)
     local scopeKey = GetScopeKey(scope)
     if not scopeKey then
-        Debug("IsClaimed(" .. achievementId .. "): No valid scope key (player can't participate)")
         return false, nil
     end
 
@@ -637,7 +603,7 @@ local function IsClaimed(self, achievementId, row)
     local rec = LibP2PDB:GetKey(db, TABLE_NAME, achievementId)
     if rec then
         local myGUID = UnitGUID("player") or ""
-        if RecordIncludesGUID(rec, myGUID) then
+        if RecordIncludesPeerID(rec, GetLocalPeerId()) then
             Debug("IsClaimed(" .. achievementId .. "): Already claimed and I am an eligible winner (scope: " .. tostring(scopeKey) .. ")")
         else
             Debug("IsClaimed(" .. achievementId .. "): Already claimed by " .. tostring(rec.winnerName or "?") .. " (scope: " .. tostring(scopeKey) .. ")")
@@ -645,7 +611,6 @@ local function IsClaimed(self, achievementId, row)
         return true, rec
     end
     
-    Debug("IsClaimed(" .. achievementId .. "): Not claimed yet (scope: " .. tostring(scopeKey) .. ")")
     return false, nil
 end
 
@@ -667,7 +632,7 @@ local function IsClaimedByMe(self, achievementId, row)
 
     local rec = LibP2PDB:GetKey(db, TABLE_NAME, tostring(achievementId))
     if rec then
-        return RecordIncludesGUID(rec, UnitGUID("player") or "")
+        return RecordIncludesPeerID(rec, GetLocalPeerId())
     end
     return false
 end
@@ -676,36 +641,25 @@ end
 --- Returns true if awarded, false if already claimed (silent fail).
 --- @param achievementId string
 --- @param row table? Optional achievement row (will find if not provided, also used to determine scope)
---- @param winnersGUIDs string? Optional ';' delimited GUID list for multi-winner claims (e.g. a raid)
+--- @param winnersPeerIDs string? Optional ';' delimited peer ID list for multi-winner claims (from BuildWinnersPeerIDList)
 --- @return boolean awarded
-local function CanClaimAndAward(self, achievementId, row, winnersGUIDs)
+local function CanClaimAndAward(self, achievementId, row, winnersPeerIDs)
     achievementId = tostring(achievementId or "")
     if achievementId == "" then
-        Debug("CanClaimAndAward: Empty achievement ID")
         return false
     end
-
-    Debug("CanClaimAndAward(" .. achievementId .. "): Starting claim attempt")
 
     -- Get row if not provided (catalog stores row on addon or legacy global)
     if not row then
         row = (addon and addon["GuildFirst_" .. achievementId .. "_Row"]) or FindRowByAchId(achievementId)
-        if row then
-            Debug("CanClaimAndAward(" .. achievementId .. "): Found achievement row")
-        else
-            Debug("CanClaimAndAward(" .. achievementId .. "): Achievement row not found")
-        end
     end
 
     -- Determine scope from achievement definition
     local scope = GetAchievementScope(row, achievementId)
     local scopeKey = GetScopeKey(scope)
     if not scopeKey then
-        Debug("CanClaimAndAward(" .. achievementId .. "): Player can't participate in this scope (e.g., not in guild for guild-first)")
         return false
     end
-
-    Debug("CanClaimAndAward(" .. achievementId .. "): Scope determined -> " .. tostring(scopeKey))
 
     local db = EnsureDBForScope(scopeKey)
     if not db then
@@ -716,8 +670,7 @@ local function CanClaimAndAward(self, achievementId, row, winnersGUIDs)
     -- Check if already claimed
     local existing = LibP2PDB:GetKey(db, TABLE_NAME, achievementId)
     if existing then
-        local myGUID = UnitGUID("player") or ""
-        if RecordIncludesGUID(existing, myGUID) then
+        if RecordIncludesPeerID(existing, GetLocalPeerId()) then
             Debug("CanClaimAndAward(" .. achievementId .. "): Already claimed and I am a winner - skipping")
         else
             Debug("CanClaimAndAward(" .. achievementId .. "): Already claimed by " .. tostring(existing.winnerName or "?") .. " - silently failing")
@@ -725,13 +678,13 @@ local function CanClaimAndAward(self, achievementId, row, winnersGUIDs)
         return false
     end
 
-    -- Claim it
+    -- Claim it (use peer IDs for smaller sync payload)
     local myName = UnitName("player") or ""
-    local myGUID = UnitGUID("player") or ""
-    local encodedWinners = (type(winnersGUIDs) == "string" and winnersGUIDs ~= "") and winnersGUIDs or myGUID
+    local myPeerId = GetLocalPeerId()
+    local encodedWinners = (type(winnersPeerIDs) == "string" and winnersPeerIDs ~= "") and winnersPeerIDs or myPeerId
     local claim = {
         winnerName = myName,
-        winnerGUID = encodedWinners,
+        winnerPeerID = encodedWinners,
         claimedAt = time(),
     }
 
@@ -741,11 +694,9 @@ local function CanClaimAndAward(self, achievementId, row, winnersGUIDs)
         LibP2PDB:SetKey(db, TABLE_NAME, achievementId, claim)
         Debug("CanClaimAndAward(" .. achievementId .. "): Claim written locally, broadcasting to all peers...")
         LibP2PDB:BroadcastKey(db, TABLE_NAME, achievementId)
-        Debug("CanClaimAndAward(" .. achievementId .. "): Broadcast sent, discovering peers and syncing...")
-        LibP2PDB:DiscoverPeers(db)
-        LibP2PDB:SyncDatabase(db)
-        
-        -- Save immediately after claiming (don't wait for periodic save)
+        -- BroadcastKey already pushed this key to reachable peers; no need for BroadcastPresence/SyncDatabase here.
+
+        -- Save to SavedVariables so state is current when WoW persists on logout/exit
         if databases[scopeKey] then
             local root = (addon and addon.HardcoreAchievementsDB) or {}
             root.guildFirst = root.guildFirst or {}
@@ -763,7 +714,7 @@ local function CanClaimAndAward(self, achievementId, row, winnersGUIDs)
     end)
 
     -- Award the achievement (row may be a UI frame or the model/data if panel wasn't built yet)
-    if RecordIncludesGUID(claim, myGUID) then
+    if RecordIncludesPeerID(claim, GetLocalPeerId()) then
         if row and type(MarkRowCompleted) == "function" and not row.completed then
             Debug("CanClaimAndAward(" .. achievementId .. "): Awarding achievement to player")
             MarkRowCompleted(row)
@@ -785,7 +736,7 @@ end
 
 --- Data-driven trigger: claim + award using the catalog definition (or overrides).
 --- @param guildFirstAchId string
---- @param opts table? { winnersGUIDs?: string, awardMode?: string, requireSameGuild?: boolean }
+--- @param opts table? { winnersPeerIDs?: string, awardMode?: string, requireSameGuild?: boolean }
 local function Trigger(self, guildFirstAchId, opts)
     guildFirstAchId = tostring(guildFirstAchId or "")
     if guildFirstAchId == "" then return false end
@@ -800,25 +751,45 @@ local function Trigger(self, guildFirstAchId, opts)
         requireSameGuild = DefaultRequireSameGuild(def)
     end
 
-    local winnersGUIDs = opts.winnersGUIDs
-    if type(winnersGUIDs) ~= "string" or winnersGUIDs == "" then
-        winnersGUIDs = BuildWinnersGUIDList(awardMode, requireSameGuild)
+    local winnersPeerIDs = opts.winnersPeerIDs
+    if type(winnersPeerIDs) ~= "string" or winnersPeerIDs == "" then
+        winnersPeerIDs = BuildWinnersPeerIDList(awardMode, requireSameGuild)
     end
 
-    return self:CanClaimAndAward(guildFirstAchId, row, winnersGUIDs)
+    return self:CanClaimAndAward(guildFirstAchId, row, winnersPeerIDs)
 end
 
 -- Initialize databases on login/guild events (lazy initialization per scope)
 local initFrame = CreateFrame("Frame")
 initFrame:RegisterEvent("PLAYER_LOGIN")
 initFrame:RegisterEvent("GUILD_ROSTER_UPDATE")
-initFrame:SetScript("OnEvent", function()
+initFrame:RegisterEvent("PLAYER_LEAVING_WORLD")
+initFrame:SetScript("OnEvent", function(_, event)
+    if event == "PLAYER_LEAVING_WORLD" then
+        -- Export all guild-first DBs so SavedVariables persist current state on logout/exit
+        local root = (addon and addon.HardcoreAchievementsDB) or {}
+        root.guildFirst = root.guildFirst or {}
+        for scopeKey, info in pairs(databases) do
+            if info.db then
+                local dbState = LibP2PDB:ExportDatabase(info.db)
+                if dbState then
+                    root.guildFirst[scopeKey] = {
+                        version = 1,
+                        prefix = info.prefix,
+                        state = dbState,
+                        savedAt = time(),
+                    }
+                end
+            end
+        end
+        return
+    end
     -- Pre-initialize common scopes (guild-first and server-first)
     local realm = GetRealmName()
     if realm ~= "" then
         -- Pre-init server-first (always available)
         EnsureDBForScope("Server@" .. realm)
-        
+
         -- Pre-init guild-first if in a guild
         local guildName = GetGuildName()
         if guildName and guildName ~= "" then
@@ -848,8 +819,8 @@ local function OnAchievementCompleted(achievementData)
         local def = GetGuildFirstDef(gfAchId, row)
         local awardMode = (def and def.awardMode) or "solo"
         local requireSameGuild = DefaultRequireSameGuild(def)
-        local winnersGUIDs = BuildWinnersGUIDList(awardMode, requireSameGuild)
-        M:CanClaimAndAward(id, row, winnersGUIDs)
+        local winnersPeerIDs = BuildWinnersPeerIDList(awardMode, requireSameGuild)
+        M:CanClaimAndAward(id, row, winnersPeerIDs)
     end
 end
 

@@ -310,13 +310,13 @@ local Dungeons = {
       [7272] = 1,  -- Theka the Martyr
       [7271] = 1,  -- Witch Doctor Zum'rah
       [7796] = 1,  -- Nekrum Gutchewer
-      [7275] = 1,  -- Shadowpriest Sezz'ziz
+      --[7275] = 1,  -- Shadowpriest Sezz'ziz
       [7604] = 1,  -- Sergeant Bly
       [7795] = 1,  -- Hydromancer Velratha
       [7267] = 1,  -- Chief Ukorz Sandscalp
       [7797] = 1,  -- Ruuzlu
     },
-    bossOrder = {8127, 7272, 7271, 7796, 7275, 7604, 7795, 7267, 7797}
+    bossOrder = {8127, 7272, 7271, 7796, 7604, 7795, 7267, 7797}
   },
 
   -- Maraudon (Both, Level 40-50)
@@ -362,10 +362,10 @@ local Dungeons = {
       [5711] = 1,  -- Ogom the Wretched
       [5719] = 1,  -- Morphaz
       [5722] = 1,  -- Hazzas
-      [8443] = 1,  -- Avatar of Hakkar
+      --[8443] = 1,  -- Avatar of Hakkar
       [5709] = 1,  -- Shade of Eranikus
     },
-    bossOrder = {8580, 5721, 5720, 5710, 5711, 5719, 5722, 8443, 5709}
+    bossOrder = {8580, 5721, 5720, 5710, 5711, 5719, 5722, 5709}
   },
 
   -- Blackrock Depths (Both, Level 52-60)

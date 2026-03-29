@@ -34,8 +34,8 @@ local QUEST_ALLIANCE_ORDERED = {
 }
 
 local QUEST_HORDE_ORDERED = {
-  "Arrachea", "Dargol", "Fizzle", "Gazzuz", "Goggeroc", "Kromzar",
-  "Drathir", "Ataeric", "LuzKnuck", "Gizmo", "TheHunt", "Grenka",
+  "Arrachea", "Fizzle", "Dargol", "Gazzuz", "Goggeroc", "Kromzar",
+  "Ataeric", "Drathir", "LuzKnuck", "TheHunt", "Gizmo", "Grenka",
   "Ironhill", "StinkysEscapeH", "GalensEscape", "NothingButTruth",
   "GetMeOutOfHere", "Mugthol", "KingBangalash", "Mokk", "SummoningThePrincess",
   "OOX", "Hatetalon", "MalletZF", "OverseerMaltorius", "Hakkar",
