@@ -35,11 +35,37 @@ local ProfessionList = {
 
 local ProfessionByID = {}
 local ProfessionNameToID = {}
-for _, entry in ipairs(ProfessionList) do
-    entry.shortKey = entry.key or (entry.name:gsub("%s+", ""))
-    ProfessionByID[entry.skillID] = entry
-    ProfessionNameToID[entry.name] = entry.skillID
+
+-- GetSkillLineInfo (Classic) returns localized skillName.
+-- Localized labels: Data/Localizations.lua (addon.ProfessionNames).
+local function BuildProfessionNameLookup()
+    local names = (addon and addon.ProfessionNames) or {}
+    local locale = (GetLocale and GetLocale()) or "enUS"
+    local forLocale = names[locale]
+    local enUS = names.enUS or {}
+
+    local function nameForSkill(skillID)
+        if forLocale and forLocale[skillID] then
+            return forLocale[skillID]
+        end
+        if enUS[skillID] then
+            return enUS[skillID]
+        end
+        return nil
+    end
+
+    for _, entry in ipairs(ProfessionList) do
+        entry.shortKey = entry.key or (entry.name:gsub("%s+", ""))
+        ProfessionByID[entry.skillID] = entry
+        ProfessionNameToID[entry.name] = entry.skillID
+        local locName = nameForSkill(entry.skillID) or entry.name
+        if type(locName) == "string" and locName ~= "" then
+            ProfessionNameToID[locName] = entry.skillID
+        end
+    end
 end
+
+BuildProfessionNameLookup()
 
 -- =========================================================
 -- Internal state

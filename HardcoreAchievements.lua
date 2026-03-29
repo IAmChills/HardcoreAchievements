@@ -2040,6 +2040,7 @@ end)
 
 -- Function to show welcome message popup on first login or when version changes
 function addon:ShowWelcomeMessage()
+    local Disabled = true
     local WELCOME_MESSAGE_NUMBER = 4
     local db = EnsureDB()
     db.settings = db.settings or {}
@@ -2047,7 +2048,7 @@ function addon:ShowWelcomeMessage()
     local storedVersion = db.settings.welcomeMessageVersion or 0
     
     -- Show message if stored version is less than current version
-    if storedVersion < WELCOME_MESSAGE_NUMBER then
+    if storedVersion < WELCOME_MESSAGE_NUMBER and not Disabled then
         if GetExpansionLevel() > 0 then
             StaticPopup_Show("Hardcore Achievements TBC")
         else
