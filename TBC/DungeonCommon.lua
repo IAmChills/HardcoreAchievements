@@ -89,6 +89,28 @@ end
 -- Shared no-op; used as early-exit return from CreateTooltipHandler to avoid allocating a new function each time
 local function noop() end
 
+-- GetInstanceInfo() 3rd return is difficultyID: 1 = normal 5-player, 2 = heroic 5-player (TBC-era norm/heroic split).
+function DungeonCommon.GetInstanceDifficultyID()
+    return select(3, GetInstanceInfo())
+end
+
+function DungeonCommon.IsNormalDungeonDifficulty()
+    return DungeonCommon.GetInstanceDifficultyID() == 1
+end
+
+function DungeonCommon.IsHeroicDungeonDifficulty()
+    return DungeonCommon.GetInstanceDifficultyID() == 2
+end
+
+--- Normal and heroic dungeon defs often share requiredMapId and boss NPC ids; gate by instance difficulty.
+function DungeonCommon.DefMatchesInstanceDifficulty(achDef)
+    if not achDef then return false end
+    if achDef.isHeroicDungeon then
+        return DungeonCommon.IsHeroicDungeonDifficulty()
+    end
+    return DungeonCommon.IsNormalDungeonDifficulty()
+end
+
 -- Helper function to check if a group is eligible for a dungeon achievement
 local function CheckAchievementEligibility(mapId, achDef, entryData)
     if not mapId or not achDef or not entryData then return false end
@@ -141,7 +163,7 @@ local function CheckAndPrintEligibilityMessages(mapId, entryData)
 
     for achId, achDef in pairs(addon.AchievementDefs) do
         local defMapId = tonumber(achDef.mapID) or achDef.mapID
-        if defMapId and mapIdNum and defMapId == mapIdNum then
+        if defMapId and mapIdNum and defMapId == mapIdNum and DungeonCommon.DefMatchesInstanceDifficulty(achDef) then
             local progress = addon and addon.GetProgress and addon.GetProgress(achId)
             local isCompleted = progress and progress.completed
             local isFailed = progress and progress.failed
@@ -1256,6 +1278,10 @@ function DungeonCommon.registerDungeonAchievement(def)
   local function KillTracker(destGUID)
     if not IsOnRequiredMap() then 
       return false 
+    end
+
+    if not DungeonCommon.DefMatchesInstanceDifficulty(def) then
+      return false
     end
 
     if state.completed then 
