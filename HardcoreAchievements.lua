@@ -1365,13 +1365,23 @@ end
 
 local function RestoreCompletionsFromDB()
     local _, cdb = GetCharDB()
-    if not cdb or not AchievementPanel or not AchievementPanel.achievements then return end
+    if not cdb or not cdb.achievements then return end
 
-    for _, row in ipairs(AchievementPanel.achievements) do
+    local rows = (addon and addon.AchievementRowModel) or {}
+    if type(rows) ~= "table" or #rows == 0 then
+        rows = (AchievementPanel and AchievementPanel.achievements) or {}
+    end
+
+    for _, row in ipairs(rows) do
         local id = row.id or row.achId or (row.Title and row.Title:GetText())
         local rec = id and cdb.achievements and cdb.achievements[id]
         if rec and rec.completed then
             row.completed = true
+            if rec.points ~= nil then
+                row.points = rec.points
+            end
+
+            local frame = row.frame or row
             -- Title color will be set by UpdatePointsDisplay
             -- Check if achievement was completed solo and show indicator
             -- Solo indicators show based on hardcore status:
@@ -1379,37 +1389,43 @@ local function RestoreCompletionsFromDB()
             --   If hardcore is not active: solo achievements allowed without self-found
             -- Completed achievements always show "Solo", never "Solo bonus"
             local isHardcoreActive = C_GameRules and C_GameRules.IsHardcoreActive and C_GameRules.IsHardcoreActive() or false
-            if row.Sub then
+            if frame ~= row then
+                frame.completed = true
+                frame.points = row.points
+            end
+            if frame.Sub then
                 local shouldShowSolo = rec.wasSolo and (isHardcoreActive and IsSelfFound() or not isHardcoreActive)
                 if shouldShowSolo then
                     -- Completed achievements always show "Solo", not "Solo bonus"
-                    row.Sub:SetText(AUCTION_TIME_LEFT0 .. "\n" .. GetClassColor .. "Solo|r")
+                    frame.Sub:SetText(AUCTION_TIME_LEFT0 .. "\n" .. GetClassColor .. "Solo|r")
                 else
-                    row.Sub:SetText(AUCTION_TIME_LEFT0)
+                    frame.Sub:SetText(AUCTION_TIME_LEFT0)
                 end
             end
-            if row.TS then row.TS:SetText(FormatTimestamp(rec.completedAt)) end
-            if row.Points then row.Points:SetTextColor(1, 1, 1) end
-            
-            -- Update icon/frame styling when loaded as completed
-            ApplyOutleveledStyle(row)
+            if frame.TS then frame.TS:SetText(FormatTimestamp(rec.completedAt)) end
+            if frame.Points then
+                frame.Points:SetTextColor(1, 1, 1)
+                if rec.points ~= nil then
+                    frame.Points:SetText(tostring(rec.points))
+                end
+            end
 
-            if rec.points then
-                row.points = rec.points
-                if row.Points then
-                    row.Points:SetText(tostring(rec.points))
-                end
-            end
+            -- Update icon/frame styling when loaded as completed
+            ApplyOutleveledStyle(frame)
 
             -- Apply secret reveal visuals on load
-            if row.isSecretAchievement then
-                if row.revealTitle and row.Title then 
-                    row.Title:SetText(row.revealTitle)
-                    if row.TitleShadow then row.TitleShadow:SetText(row.revealTitle) end
-                end
-                if row.revealIcon and row.Icon then row.Icon:SetTexture(row.revealIcon) end
+            if row.isSecretAchievement or frame.isSecretAchievement then
                 if row.revealTooltip then row.tooltip = row.revealTooltip end
-                row.staticPoints = row.revealStaticPoints or false
+                row.staticPoints = row.revealStaticPoints or row.staticPoints
+                if frame ~= row then
+                    frame.tooltip = row.revealTooltip or frame.tooltip
+                    frame.staticPoints = row.revealStaticPoints or frame.staticPoints
+                end
+                if row.revealTitle and frame.Title then
+                    frame.Title:SetText(row.revealTitle)
+                    if frame.TitleShadow then frame.TitleShadow:SetText(row.revealTitle) end
+                end
+                if row.revealIcon and frame.Icon then frame.Icon:SetTexture(row.revealIcon) end
             end
         end
     end
