@@ -221,8 +221,14 @@ local function CheckAndPrintEligibilityMessages(mapId, entryData)
     local title = c.achDef.title or c.achDef.mapName or "Unknown"
     if isEligible then
         print("|cff008066[Hardcore Achievements]|r |cff00ff00Group is eligible for achievement: " .. title .. "|r")
+        if addon.EventLogAdd then
+            addon.EventLogAdd("Dungeon entered: group is |cff00ff00eligible|r for achievement: " .. title .. " (" .. tostring(c.achId) .. ")")
+        end
     else
         print("|cff008066[Hardcore Achievements]|r |cffff0000Group is not eligible for achievement: " .. title .. "|r")
+        if addon.EventLogAdd then
+            addon.EventLogAdd("Dungeon entered: group is |cffff0000not eligible|r for achievement: " .. title .. " (" .. tostring(c.achId) .. ")")
+        end
     end
 end
 
@@ -1305,6 +1311,9 @@ function DungeonCommon.registerDungeonAchievement(def)
       if isStillAvailable and addon and addon.DungeonKillPrintedForGUID ~= destGUID then
         addon.DungeonKillPrintedForGUID = destGUID
         print("|cff008066[Hardcore Achievements]|r |cffffd100" .. GetBossName(npcId) .. " killed but group is ineligible - kill not counted for achievement: " .. title .. "|r")
+        if addon.EventLogAdd then
+          addon.EventLogAdd("Boss kill not counted (group ineligible): " .. GetBossName(npcId) .. " (npc " .. tostring(npcId) .. ") — " .. title .. " [" .. tostring(achId) .. "]")
+        end
       end
       return false
     end
@@ -1318,12 +1327,18 @@ function DungeonCommon.registerDungeonAchievement(def)
     if addon and addon.DungeonKillPrintedForGUID ~= destGUID then
         addon.DungeonKillPrintedForGUID = destGUID
         print("|cff008066[Hardcore Achievements]|r |cffffd100" .. GetBossName(npcId) .. " killed as part of achievement: " .. title .. "|r")
+        if addon.EventLogAdd then
+          addon.EventLogAdd("Boss kill counted toward dungeon achievement: " .. GetBossName(npcId) .. " (npc " .. tostring(npcId) .. ") — " .. title .. " [" .. tostring(achId) .. "]")
+        end
     end
 
     -- Check if achievement should be completed
     local progress = addon and addon.GetProgress and addon.GetProgress(achId)
     if progress and progress.completed then
       state.completed = true
+      if addon.EventLogAdd then
+        addon.EventLogAdd("Dungeon achievement completed: " .. title .. " [" .. tostring(achId) .. "]")
+      end
       return true
     end
     
@@ -1333,6 +1348,9 @@ function DungeonCommon.registerDungeonAchievement(def)
       -- if CountsSatisfied() is true, all bosses were killed while eligible
       state.completed = true
       if addon and addon.SetProgress then addon.SetProgress(achId, "completed", true) end
+      if addon.EventLogAdd then
+        addon.EventLogAdd("Dungeon achievement completed: " .. title .. " [" .. tostring(achId) .. "]")
+      end
       return true
     end
 

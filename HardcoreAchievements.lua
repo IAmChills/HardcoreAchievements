@@ -204,6 +204,7 @@ local function GetCharDB()
 		achievements = {},    -- [id] = { completed=true, completedAt=time(), level=nn, mapID=123 }
 		progress = {},
         settings = {},
+        eventLogLines = {},   -- troubleshooting log (Dashboard → Log); per character
     }
     return db, db.chars[playerGUID]
 end
@@ -1277,6 +1278,13 @@ local function MarkRowCompleted(row, cdbParam)
         if row.revealIcon and row.Icon then row.Icon:SetTexture(row.revealIcon) end
         if row.revealTooltip then row.tooltip = row.revealTooltip end
         row.staticPoints = row.revealStaticPoints or false
+    end
+
+    if addon and addon.EventLogAdd then
+        local achKey = row.achId or row.id or ""
+        local titleLog = (row.Title and row.Title.GetText and row.Title:GetText()) or row.title or tostring(achKey)
+        local ptsLog = tonumber(row.points) or 0
+        addon.EventLogAdd("Achievement completed: " .. tostring(titleLog) .. " [" .. tostring(achKey) .. "] +" .. tostring(ptsLog) .. " pts")
     end
 
     if Profession and Profession.NotifyRowCompleted then
@@ -4193,6 +4201,9 @@ do
                             local isTapDenied = npcTapDenied[destGUID]
                             if isTapDenied == true then
                                 print("|cff008066[Hardcore Achievements]|r |cffffd100Achievement cannot be fulfilled: Unit was not your tag.|r")
+                                if addon.EventLogAdd then
+                                    addon.EventLogAdd("Kill processing skipped (tap denied / not your tag) for GUID " .. tostring(destGUID))
+                                end
                                 -- Clean up combat tracking
                                 npcsInCombat[destGUID] = nil
                                 npcTapDenied[destGUID] = nil

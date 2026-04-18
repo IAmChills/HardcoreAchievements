@@ -712,6 +712,19 @@ local function CreateOptionsPanel()
     end)
     AddTooltipToCheckbox(discordButton, "Click to open Discord support")
 
+    -- Logs button
+    local logsButton = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
+    logsButton:SetPoint("TOPLEFT", discordButton, "TOPRIGHT", 12, 0)
+    logsButton:SetText("Logs")
+    logsButton:SetWidth(120)
+    logsButton:SetHeight(25)
+    logsButton:SetScript("OnClick", function()
+        if addon and addon.EventLogShow then
+            addon.EventLogShow()
+        end
+    end)
+    AddTooltipToCheckbox(logsButton, "Click to open Logs")
+
     -- =========================================================
     -- Credits
     -- =========================================================

@@ -30,6 +30,7 @@ Utils\SharedUtils.lua
 Utils\FilterDropdown.lua
 Utils\AchievementTracker.lua
 HardcoreAchievements.lua
+Functions\AchievementEventLog.lua
 Utils\GuildFirst.lua
 
 Achievements\Common.lua
