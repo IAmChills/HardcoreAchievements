@@ -47,7 +47,7 @@ local function registerReputationAchievement(def)
   -- Get faction standing ID (8 = Exalted)
   local function GetFactionStanding()
     if GetFactionInfoByID then
-      local standing = select(4, GetFactionInfoByID(factionId))
+      local _, _, standing = GetFactionInfoByID(factionId)
       if standing then
         return standing
       end

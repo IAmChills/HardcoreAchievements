@@ -827,6 +827,24 @@ local function HandleSlashCommand(msg)
             print("  |CFFFFD100/hca tracker hide|r - Hide the achievement tracker")
             print("  |CFFFFD100/hca tracker toggle|r - Toggle the achievement tracker")
         end
+    elseif command == "log" then
+        local sub = args[2] and string.lower(args[2]) or "show"
+        -- Event log /hca log clear disabled for now (retain history for debugging).
+        -- if sub == "clear" then
+        --     if addon.EventLogClear then
+        --         addon.EventLogClear()
+        --         print("|cff008066[Hardcore Achievements]|r Event log cleared (saved log wiped).")
+        --     end
+        -- elseif sub == "show" or sub == "" then
+        if sub == "show" or sub == "" then
+            if addon.EventLogShow then
+                addon.EventLogShow()
+            else
+                print("|cffff0000[Hardcore Achievements]|r Event log is not available.")
+            end
+        else
+            print("|cff008066[Hardcore Achievements]|r Event log: |CFFFFD100/hca log|r or |CFFFFD100/hca log show|r")
+        end
     elseif command == "debug" then
         -- Debug toggle command
         if args[2] and string.lower(args[2]) == "on" then
@@ -853,6 +871,8 @@ local function HandleSlashCommand(msg)
         print("  |CFFFFD100/hca reset tab|r - Reset the tab position to default")
         print("  |CFFFFD100/hca tracker|r - Manage the achievement tracker")
         print("  |CFFFFD100/hca debug|r - Toggle debug mode (on/off)")
+        print("  |CFFFFD100/hca log|r - Open troubleshooting event log")
+        --print("  |CFFFFD100/hca log clear|r - Clear the event log")
         --print("  |CFFFFD100/hca adminkey|r - Manage admin secret key for secure commands")
     end
 end

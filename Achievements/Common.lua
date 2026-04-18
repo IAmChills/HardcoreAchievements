@@ -747,6 +747,19 @@ function M.registerQuestAchievement(cfg)
 
     -- Handle kills: support both TARGET_NPC_ID (single kill) and REQUIRED_KILLS (kill counts)
     if TARGET_NPC_ID or REQUIRED_KILLS then
+        -- One log line per kill GUID per achievement (CLEU can deliver multiple events for the same death)
+        local lastKillLogGUID, lastKillLogTime = nil, 0
+        local function maybeLogKillProgress(guid, msg)
+            if not (addon and addon.EventLogAdd) or not guid then
+                return
+            end
+            local now = GetTime()
+            if lastKillLogGUID == guid and (now - lastKillLogTime) < 1.5 then
+                return
+            end
+            lastKillLogGUID, lastKillLogTime = guid, now
+            addon.EventLogAdd(msg)
+        end
         local killFunc = function(destGUID)
             if state.completed or not belowMax() then
                 return false
@@ -798,6 +811,9 @@ function M.registerQuestAchievement(cfg)
                 local canTrackKill = awardOnKillEnabled or isPlayerOnQuest() or ALLOW_KILLS_BEFORE_QUEST or hasQuestProgress
                 
                 if not canTrackKill then
+                    if addon.EventLogAdd then
+                        addon.EventLogAdd("NPC kill not counted (quest): achievement " .. tostring(ACH_ID) .. ", npcId " .. tostring(destId) .. " — not on required quest (or award-on-kill / allowKillsBeforeQuest off, no quest progress)")
+                    end
                     return false -- Player is not on quest, award on kill is disabled, allowKillsBeforeQuest is disabled, and no quest progress - don't track kill
                 end
             end
@@ -825,6 +841,9 @@ function M.registerQuestAchievement(cfg)
                 -- Only print message if the achievement is visible (not filtered out)
                 if isAchievementVisible(ACH_ID) then
                     print("|cff008066[Hardcore Achievements]|r |cffffd100Achievement " .. (ACH_ID or "Unknown") .. " cannot be fulfilled: An ineligible player contributed.|r")
+                end
+                if addon.EventLogAdd then
+                    addon.EventLogAdd("NPC kill not counted (ineligible group / external help): achievement " .. tostring(ACH_ID) .. ", npcId " .. tostring(destId))
                 end
                 
                 -- Track the kill progress, but mark as ineligible (don't increment eligible counts)
@@ -904,6 +923,7 @@ function M.registerQuestAchievement(cfg)
                 -- Save progress after each kill
                 setProg("counts", state.counts)
                 setProg("eligibleCounts", state.eligibleCounts)
+                maybeLogKillProgress(destGUID, "NPC kill counted toward achievement " .. tostring(ACH_ID) .. ": npcId " .. tostring(idNum) .. " (kill requirements satisfied=" .. tostring(countsSatisfied()) .. ")")
                 
                 -- Store player's level at time of THIS kill
                 -- Always update levelAtKill while kills are not all satisfied (tracks current level, even if player levels up)
@@ -966,6 +986,7 @@ function M.registerQuestAchievement(cfg)
                 -- Store player's level at time of kill (primary source for validation)
                 local killLevel = UnitLevel("player") or 1
                 setProg("levelAtKill", killLevel)
+                maybeLogKillProgress(destGUID, "NPC kill counted toward achievement " .. tostring(ACH_ID) .. ": npcId " .. tostring(destId) .. " (target kill registered)")
                 
                 -- Store points and solo status (use model row when panel not built)
                 local row = FindAchievementRow()

@@ -89,6 +89,28 @@ end
 -- Shared no-op; used as early-exit return from CreateTooltipHandler to avoid allocating a new function each time
 local function noop() end
 
+-- GetInstanceInfo() 3rd return is difficultyID: 1 = normal 5-player, 2 = heroic 5-player (TBC-era norm/heroic split).
+function DungeonCommon.GetInstanceDifficultyID()
+    return select(3, GetInstanceInfo())
+end
+
+function DungeonCommon.IsNormalDungeonDifficulty()
+    return DungeonCommon.GetInstanceDifficultyID() == 1
+end
+
+function DungeonCommon.IsHeroicDungeonDifficulty()
+    return DungeonCommon.GetInstanceDifficultyID() == 2
+end
+
+--- Normal and heroic dungeon defs often share requiredMapId and boss NPC ids; gate by instance difficulty.
+function DungeonCommon.DefMatchesInstanceDifficulty(achDef)
+    if not achDef then return false end
+    if achDef.isHeroicDungeon then
+        return DungeonCommon.IsHeroicDungeonDifficulty()
+    end
+    return DungeonCommon.IsNormalDungeonDifficulty()
+end
+
 -- Helper function to check if a group is eligible for a dungeon achievement
 local function CheckAchievementEligibility(mapId, achDef, entryData)
     if not mapId or not achDef or not entryData then return false end
@@ -141,7 +163,7 @@ local function CheckAndPrintEligibilityMessages(mapId, entryData)
 
     for achId, achDef in pairs(addon.AchievementDefs) do
         local defMapId = tonumber(achDef.mapID) or achDef.mapID
-        if defMapId and mapIdNum and defMapId == mapIdNum then
+        if defMapId and mapIdNum and defMapId == mapIdNum and DungeonCommon.DefMatchesInstanceDifficulty(achDef) then
             local progress = addon and addon.GetProgress and addon.GetProgress(achId)
             local isCompleted = progress and progress.completed
             local isFailed = progress and progress.failed
@@ -192,16 +214,51 @@ local function CheckAndPrintEligibilityMessages(mapId, entryData)
         return orderA < orderB
     end)
 
-    -- Print only for the lowest-level version (first candidate)
+    -- Prefer the first sorted achievement that is not failed/outleveled so entry messages still show.
     local c = candidates[1]
-    if c.isFailed then return end
+    for i = 1, #candidates do
+        if not candidates[i].isFailed then
+            c = candidates[i]
+            break
+        end
+    end
     local isEligible = CheckAchievementEligibility(mapId, c.achDef, entryData)
     local title = c.achDef.title or c.achDef.mapName or "Unknown"
     if isEligible then
         print("|cff008066[Hardcore Achievements]|r |cff00ff00Group is eligible for achievement: " .. title .. "|r")
+        if addon.EventLogAdd then
+            addon.EventLogAdd("Dungeon entered: group is |cff00ff00eligible|r for achievement: " .. title .. " (" .. tostring(c.achId) .. ")")
+        end
     else
         print("|cff008066[Hardcore Achievements]|r |cffff0000Group is not eligible for achievement: " .. title .. "|r")
+        if addon.EventLogAdd then
+            addon.EventLogAdd("Dungeon entered: group is |cffff0000not eligible|r for achievement: " .. title .. " (" .. tostring(c.achId) .. ")")
+        end
     end
+end
+
+-- GetInstanceInfo() return 3 is often 0 on PLAYER_ENTERING_WORLD; UPDATE_INSTANCE_INFO follows with valid difficulty.
+local function QueueEligibilityMessageOnInstanceInfo(mapId, entryData)
+    if not mapId or not entryData then return end
+    local diff = select(3, GetInstanceInfo())
+    if diff == 1 or diff == 2 then
+        CheckAndPrintEligibilityMessages(mapId, entryData)
+        return
+    end
+    entryData.awaitingEligibilityInstanceInfo = true
+end
+
+local function TryPrintPendingEligibilityOnInstanceInfo()
+    local inInstance, instanceType = IsInInstance()
+    if not (inInstance and instanceType == "party") then return end
+    local mapId = select(8, GetInstanceInfo())
+    if not mapId then return end
+    local entryData = instanceEntryLevels[mapId]
+    if not entryData or not entryData.awaitingEligibilityInstanceInfo then return end
+    local diff = select(3, GetInstanceInfo())
+    if diff ~= 1 and diff ~= 2 then return end
+    entryData.awaitingEligibilityInstanceInfo = nil
+    CheckAndPrintEligibilityMessages(mapId, entryData)
 end
 
 -- Helper function to update party member levels when they join the dungeon
@@ -237,12 +294,15 @@ end
 -- Initialize event frame for PLAYER_ENTERING_WORLD, PLAYER_DEAD, and party member events
 local dungeonEventFrame = CreateFrame("Frame")
 dungeonEventFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
+dungeonEventFrame:RegisterEvent("UPDATE_INSTANCE_INFO")
 dungeonEventFrame:RegisterEvent("PLAYER_DEAD")
 dungeonEventFrame:RegisterEvent("PARTY_MEMBER_ENABLE")
 dungeonEventFrame:RegisterEvent("PARTY_MEMBER_DISABLE")
 dungeonEventFrame:RegisterEvent("GROUP_ROSTER_UPDATE")
 dungeonEventFrame:SetScript("OnEvent", function(self, event, unitIndex)
-    if event == "PLAYER_DEAD" then
+    if event == "UPDATE_INSTANCE_INFO" then
+        TryPrintPendingEligibilityOnInstanceInfo()
+    elseif event == "PLAYER_DEAD" then
         -- Track that player died while in an instance (will be used when leaving instance)
         local inInstance, instanceType = IsInInstance()
         if inInstance and instanceType == "party" then
@@ -518,7 +578,7 @@ dungeonEventFrame:SetScript("OnEvent", function(self, event, unitIndex)
                         end
                     end
                     -- Print eligibility when re-entering so user sees messages every time
-                    CheckAndPrintEligibilityMessages(mapId, existingEntry)
+                    QueueEligibilityMessageOnInstanceInfo(mapId, existingEntry)
                     SaveDungeonEntryState()
                 else
                     -- First entry: store entry levels
@@ -555,7 +615,7 @@ dungeonEventFrame:SetScript("OnEvent", function(self, event, unitIndex)
                     UpdatePartyMemberLevels(mapId, entryData)
                     
                     -- Check and print eligibility messages for visible achievements matching this mapId
-                    CheckAndPrintEligibilityMessages(mapId, entryData)
+                    QueueEligibilityMessageOnInstanceInfo(mapId, entryData)
                     SaveDungeonEntryState()
                 end
             end
@@ -1057,61 +1117,8 @@ function DungeonCommon.registerDungeonAchievement(def)
       [20886] = "Wrath-Scryer Soccothrates",
       [20912] = "Harbinger Skyriss",
       -- TBC Heroic Dungeons
-      [18436] = "Watchkeeper Gargolmar",
-      [18433] = "Omar the Unscarred",
-      [18432] = "Nazan",
-      [18435] = "Vazruden",
-      [18621] = "The Maker",
-      [18601] = "Broggok",
-      [18607] = "Keli'dan the Breaker",
-      [19893] = "Mennu the Betrayer",
-      [19895] = "Rokmar the Crackler",
-      [19894] = "Quagmirran",
-      [20169] = "Hungarfen",
-      [20168] = "Ghaz'an",
-      [20183] = "Swamplord Musel'ek",
-      [20184] = "The Black Stalker",
-      [20267] = "Pandemonius",
-      [20268] = "Tavarok",
-      [20266] = "Nexus-Prince Shaffar",
-      [20318] = "Shirrak the Dead Watcher",
-      [20306] = "Exarch Maladaar",
-      [20535] = "Lieutenant Drake",
-      [20521] = "Captain Skarloc",
-      [20531] = "Epoch Hunter",
-      [20690] = "Darkweaver Syth",
-      [20706] = "Talon King Ikiss",
       [23035] = "Anzu",
-      [20738] = "Chrono Lord Deja",
-      [20745] = "Temporus",
-      [20737] = "Aeonus",
-      [21533] = "Mechano-Lord Capacitus",
-      [21536] = "Nethermancer Sepethrea",
-      [21537] = "Pathaleon the Calculator",
-      [20568] = "Grand Warlock Nethekurse",
       [20923] = "Blood Guard Porung",
-      [20596] = "Warbringer O'mrogg",
-      [20597] = "Warchief Kargath Bladefist",
-      [20636] = "Ambassador Hellmaw",
-      [20637] = "Blackheart the Inciter",
-      [20653] = "Grandmaster Vorpil",
-      [20657] = "Murmur",
-      [20629] = "Hydromancer Thespia",
-      [20630] = "Mekgineer Steamrigger",
-      [20633] = "Warlord Kalithresh",
-      [21551] = "Commander Sarannis",
-      [21558] = "High Botanist Freywinn",
-      [21581] = "Thorngrin the Tender",
-      [21559] = "Laj",
-      [21582] = "Warp Splinter",
-      [25562] = "Selin Fireheart",
-      [25573] = "Vexallus",
-      [25560] = "Priestess Delrissa",
-      [24857] = "Kael'thas Sunstrider",
-      [21626] = "Zereketh the Unbound",
-      [21590] = "Dalliah the Doomsayer",
-      [21624] = "Wrath-Scryer Soccothrates",
-      [21599] = "Harbinger Skyriss",
     }
     return bossNames[npcId] or ("Boss " .. npcId)
   end
@@ -1311,6 +1318,10 @@ function DungeonCommon.registerDungeonAchievement(def)
       return false 
     end
 
+    if not DungeonCommon.DefMatchesInstanceDifficulty(def) then
+      return false
+    end
+
     if state.completed then 
 
       return false 
@@ -1332,6 +1343,9 @@ function DungeonCommon.registerDungeonAchievement(def)
       if isStillAvailable and addon and addon.DungeonKillPrintedForGUID ~= destGUID then
         addon.DungeonKillPrintedForGUID = destGUID
         print("|cff008066[Hardcore Achievements]|r |cffffd100" .. GetBossName(npcId) .. " killed but group is ineligible - kill not counted for achievement: " .. title .. "|r")
+        if addon.EventLogAdd then
+          addon.EventLogAdd("Boss kill not counted (group ineligible): " .. GetBossName(npcId) .. " (npc " .. tostring(npcId) .. ") — " .. title .. " [" .. tostring(achId) .. "]")
+        end
       end
       return false
     end
@@ -1345,12 +1359,18 @@ function DungeonCommon.registerDungeonAchievement(def)
     if addon and addon.DungeonKillPrintedForGUID ~= destGUID then
         addon.DungeonKillPrintedForGUID = destGUID
         print("|cff008066[Hardcore Achievements]|r |cffffd100" .. GetBossName(npcId) .. " killed as part of achievement: " .. title .. "|r")
+        if addon.EventLogAdd then
+          addon.EventLogAdd("Boss kill counted toward dungeon achievement: " .. GetBossName(npcId) .. " (npc " .. tostring(npcId) .. ") — " .. title .. " [" .. tostring(achId) .. "]")
+        end
     end
 
     -- Check if achievement should be completed
     local progress = addon and addon.GetProgress and addon.GetProgress(achId)
     if progress and progress.completed then
       state.completed = true
+      if addon.EventLogAdd then
+        addon.EventLogAdd("Dungeon achievement completed: " .. title .. " [" .. tostring(achId) .. "]")
+      end
       return true
     end
     
@@ -1360,6 +1380,9 @@ function DungeonCommon.registerDungeonAchievement(def)
       -- if CountsSatisfied() is true, all bosses were killed while eligible
       state.completed = true
       if addon and addon.SetProgress then addon.SetProgress(achId, "completed", true) end
+      if addon.EventLogAdd then
+        addon.EventLogAdd("Dungeon achievement completed: " .. title .. " [" .. tostring(achId) .. "]")
+      end
       return true
     end
 

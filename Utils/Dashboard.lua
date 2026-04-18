@@ -321,6 +321,7 @@ local function ShouldShowBySelectedTab(def)
   if key == "dungeon_trio" then return def.isVariation == true and def.variationType == "Trio" end
   if key == "ridiculous" then return def.isRidiculous == true end
   if key == "secret" then return def.isSecret == true end
+  if key == "log" then return false end
 
   return true
 end
@@ -343,6 +344,7 @@ local function DefMatchesTabKey(def, key)
   if key == "dungeon_trio" then return def.isVariation == true and def.variationType == "Trio" end
   if key == "ridiculous" then return def.isRidiculous == true end
   if key == "secret" then return def.isSecret == true end
+  if key == "log" then return false end
   return false
 end
 
@@ -2380,12 +2382,131 @@ local function UpdateTotalPointsText()
 
 end
 
+-- Embedded troubleshooting log (main scroll area; same read-only pattern as Options backup panel).
+-- Declared before DASHBOARD:Rebuild so Rebuild sees these locals (not as globals).
+local function CreateDashboardLogPanel()
+  if not DashboardFrame or not DashboardFrame.Scroll then return end
+  if DashboardFrame.LogPanel then return end
+
+  local panel = CreateFrame("Frame", nil, DashboardFrame)
+  panel:SetPoint("TOPLEFT", DashboardFrame.Scroll, "TOPLEFT", 0, 0)
+  panel:SetPoint("BOTTOMRIGHT", DashboardFrame.Scroll, "BOTTOMRIGHT", 0, 0)
+  panel:SetFrameStrata(DashboardFrame.Scroll:GetFrameStrata())
+  panel:SetFrameLevel((DashboardFrame.Scroll:GetFrameLevel() or 0) + 10)
+  panel:EnableMouse(true)
+  panel:Hide()
+
+  local header = panel:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+  header:SetPoint("TOPLEFT", panel, "TOPLEFT", 10, -10)
+  header:SetPoint("TOPRIGHT", panel, "TOPRIGHT", -28, -10)
+  header:SetJustifyH("LEFT")
+  header:SetJustifyV("TOP")
+  header:SetWordWrap(true)
+  header:SetText("") --placeholder
+
+  local scroll = CreateFrame("ScrollFrame", nil, panel, "UIPanelScrollFrameTemplate")
+  scroll:SetPoint("TOPLEFT", panel, "TOPLEFT", 10, -10)
+  scroll:SetPoint("BOTTOMRIGHT", panel, "BOTTOMRIGHT", -6, 8)
+
+  local eb = CreateFrame("EditBox", nil, scroll)
+  eb:SetMultiLine(true)
+  eb:SetFontObject("GameFontHighlightSmall")
+  eb:SetWidth(520)
+  eb:SetHeight(1200)
+  eb:SetAutoFocus(false)
+  eb:SetScript("OnEscapePressed", function(self)
+    self:ClearFocus()
+  end)
+  eb:SetScript("OnEditFocusGained", function(self)
+    self:HighlightText()
+  end)
+  eb:SetScript("OnChar", function(self)
+    if self.originalText then
+      self:SetText(self.originalText)
+    end
+  end)
+
+  scroll:SetScrollChild(eb)
+  ApplyClassLineScrollbar(scroll, 2)
+
+  function panel:Refresh()
+    local text = (addon and addon.EventLogGetText) and addon.EventLogGetText() or ""
+    eb:SetText(text)
+    eb.originalText = text
+    local w = (scroll.GetWidth and scroll:GetWidth()) or 520
+    eb:SetWidth(math.max(200, w - 28))
+    scroll:UpdateScrollChildRect()
+  end
+
+  DashboardFrame.LogPanel = panel
+end
+
+local function EnsureDashboardLogPanel()
+  if DashboardFrame and not DashboardFrame.LogPanel then
+    CreateDashboardLogPanel()
+  end
+end
+
 -- ---------- Rebuild ----------
 function DASHBOARD:Rebuild()
   if not DashboardFrame or not DashboardFrame.Content then return end
   if not self.Content then self.Content = DashboardFrame.Content end
 
   SyncContentWidth()
+
+  local isLogTab = DashboardFrame and DashboardFrame.SelectedTabKey == "log"
+  if isLogTab then
+    EnsureDashboardLogPanel()
+    if self.icons then for _, icon in ipairs(self.icons) do icon:Hide() end end
+    if self.rows then
+      for i = 1, #self.rows do
+        local row = self.rows[i]
+        row:Hide()
+        if row.Border then row.Border:Hide() end
+        if row.Background then row.Background:Hide() end
+      end
+    end
+    if DashboardFrame.SummaryRecentHeaderText then
+      DashboardFrame.SummaryRecentHeaderText:Hide()
+    end
+    if DashboardFrame.ProgressContainer then
+      DashboardFrame.ProgressContainer:Hide()
+    end
+    if DashboardFrame.ProgressHeaderText then
+      DashboardFrame.ProgressHeaderText:Hide()
+    end
+    if DashboardFrame.Scroll then
+      if DashboardFrame.Scroll.ScrollBar then
+        DashboardFrame.Scroll.ScrollBar:Show()
+      end
+      if DashboardFrame.Scroll.EnableMouseWheel then
+        DashboardFrame.Scroll:EnableMouseWheel(true)
+      end
+    end
+    if DashboardFrame.ScrollBackground then
+      DashboardFrame.ScrollBackground:Show()
+    end
+    if DashboardFrame.Content then
+      DashboardFrame.Content:SetHeight(1)
+      if DashboardFrame.Scroll then
+        DashboardFrame.Scroll:SetVerticalScroll(0)
+        DashboardFrame.Scroll:UpdateScrollChildRect()
+      end
+    end
+    if DashboardFrame.LogPanel then
+      DashboardFrame.LogPanel:Show()
+      if DashboardFrame.LogPanel.Refresh then
+        DashboardFrame.LogPanel:Refresh()
+      end
+    end
+    UpdateDashboardMultiplierText()
+    UpdateTotalPointsText()
+    return
+  end
+
+  if DashboardFrame and DashboardFrame.LogPanel then
+    DashboardFrame.LogPanel:Hide()
+  end
 
   local srcRows = GetSourceRows()
   if not srcRows then
@@ -2754,6 +2875,7 @@ local function BuildDashboardFrame()
       { key = "dungeon_trio", label = "Dungeon Trio" },
       { key = "ridiculous", label = "Ridiculous" },
       { key = "secret", label = "Secret" },
+      { key = "log", label = "Logs" },
     }
     for _, t in ipairs(more) do table_insert(tabDefs, t) end
 
@@ -2894,6 +3016,8 @@ local function BuildDashboardFrame()
     DashboardFrame.Content:SetSize(1, 1)
     DashboardFrame.Scroll:SetScrollChild(DashboardFrame.Content)
   end
+
+  CreateDashboardLogPanel()
 
   if not DashboardFrame.ScrollBackground then
     local backdropTemplate = BackdropTemplateMixin and "BackdropTemplate" or nil
@@ -3259,16 +3383,53 @@ local function HookSourceSignals()
   DASHBOARD._hooked = true
 end
 
+-- Apply tab selection + scroll after dashboard Show/Rebuild (used for /hca log and any deferred open).
+local function FinishDashboardOpenToTab(tabKey)
+  if not tabKey or not (DashboardFrame and DashboardFrame:IsShown()) then
+    return
+  end
+  if DashboardFrame.SetSelectedTab then
+    DashboardFrame.SetSelectedTab(tabKey)
+  end
+  if tabKey == "log" and DashboardFrame.TabScroll then
+    local ts = DashboardFrame.TabScroll
+    local maxS = (ts.GetVerticalScrollRange and ts:GetVerticalScrollRange()) or 0
+    if maxS > 0 and ts.SetVerticalScroll then
+      ts:SetVerticalScroll(maxS)
+    end
+  end
+  if tabKey == "log" and addon and addon.RefreshDashboardEventLog then
+    addon.RefreshDashboardEventLog()
+  end
+end
+
 -- Show/Hide Dashboard functions
 function DASHBOARD:Show()
   if not DashboardFrame then
     BuildDashboardFrame()
+  end
+  local openToTab = nil
+  if addon and addon._hcaOpenDashboardTabKey then
+    openToTab = addon._hcaOpenDashboardTabKey
+    addon._hcaOpenDashboardTabKey = nil
+  end
+  if openToTab and DashboardFrame then
+    DashboardFrame.SelectedTabKey = openToTab
   end
   if DashboardFrame then
     DashboardFrame:Show()
     HookSourceSignals()
     if self.Rebuild then
       self:Rebuild()
+    end
+    if openToTab then
+      FinishDashboardOpenToTab(openToTab)
+      if C_Timer and C_Timer.After then
+        local k = openToTab
+        C_Timer.After(0, function()
+          FinishDashboardOpenToTab(k)
+        end)
+      end
     end
     -- If Summary is selected, ensure we refresh after DB/defs restoration finishes.
     if DashboardFrame.SelectedTabKey == "summary" then
@@ -3311,4 +3472,10 @@ end)
 if addon then
   addon.Dashboard = DASHBOARD
   addon.ShowDashboard = ShowDashboard
+  function addon.RefreshDashboardEventLog()
+    local p = DashboardFrame and DashboardFrame.LogPanel
+    if p and p.Refresh then
+      p:Refresh()
+    end
+  end
 end

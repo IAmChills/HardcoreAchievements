@@ -18,12 +18,12 @@ local HeroicDungeons = {
     staticPoints = false,
     requiredMapId = 543,
     requiredKills = {
-      [18436] = 1, -- Watchkeeper Gargolmar
-      [18433] = 1, -- Omar the Unscarred
-      [18432] = 1, -- Nazan
-      [18435] = 1, -- Vazruden
+      [17306] = 1, -- Watchkeeper Gargolmar
+      [17308] = 1, -- Omor the Unscarred
+      [17536] = 1, -- Nazan
+      [17307] = 1, -- Vazruden
     },
-    bossOrder = {18436, 18433, 18432, 18435}
+    bossOrder = {17306, 17308, 17536, 17307}
   },
 
   -- Hellfire Ramparts (Both, Level 70)
@@ -38,11 +38,11 @@ local HeroicDungeons = {
     staticPoints = false,
     requiredMapId = 542,
     requiredKills = {
-      [18621] = 1, -- The Maker
-      [18601] = 1, -- Broggok
-      [18607] = 1, -- Keli'dan the Breaker
+      [17381] = 1, -- The Maker
+      [17380] = 1, -- Broggok
+      [17377] = 1, -- Keli'dan the Breaker
     },
-    bossOrder = {18621, 18601, 18607}
+    bossOrder = {17381, 17380, 17377}
   },
 
   -- The Slave Pens (Both, Level 70)
@@ -57,11 +57,11 @@ local HeroicDungeons = {
     staticPoints = false,
     requiredMapId = 547,
     requiredKills = {
-      [19893] = 1, -- Mennu the Betrayer
-      [19895] = 1, -- Rokmar the Crackler
-      [19894] = 1, -- Quagmirran
+      [17941] = 1, -- Mennu the Betrayer
+      [17991] = 1, -- Rokmar the Crackler
+      [17942] = 1, -- Quagmirran
     },
-    bossOrder = {19893, 19895, 19894}
+    bossOrder = {17941, 17991, 17942}
   },
 
   -- The Underbog (Both, Level 70)
@@ -76,12 +76,12 @@ local HeroicDungeons = {
     staticPoints = false,
     requiredMapId = 546,
     requiredKills = {
-      [20169] = 1, -- Hungarfen
-      [20168] = 1, -- Ghaz'an
-      [20183] = 1, -- Swamplord Musel'ek
-      [20184] = 1, -- The Black Stalker
+      [17770] = 1, -- Hungarfen
+      [18105] = 1, -- Ghaz'an
+      [17826] = 1, -- Swamplord Musel'ek
+      [17882] = 1, -- The Black Stalker
     },
-    bossOrder = {20169, 20168, 20183, 20184}
+    bossOrder = {17770, 18105, 17826, 17882}
   },
 
   -- Mana-Tombs (Both, Level 70)
@@ -96,11 +96,11 @@ local HeroicDungeons = {
     staticPoints = false,
     requiredMapId = 557,
     requiredKills = {
-      [20267] = 1, -- Pandemonius
-      [20268] = 1, -- Tavarok
-      [20266] = 1, -- Nexus-Prince Shaffar
+      [18341] = 1, -- Pandemonius
+      [18343] = 1, -- Tavarok
+      [18344] = 1, -- Nexus-Prince Shaffar
     },
-    bossOrder = {20267, 20268, 20266}
+    bossOrder = {18341, 18343, 18344}
   },
 
   -- Auchenai Crypts (Both, Level 70)
@@ -115,10 +115,10 @@ local HeroicDungeons = {
     staticPoints = false,
     requiredMapId = 558,
     requiredKills = {
-      [20318] = 1, -- Shirrak the Dead Watcher
-      [20306] = 1, -- Exarch Maladaar
+      [18371] = 1, -- Shirrak the Dead Watcher
+      [18373] = 1, -- Exarch Maladaar
     },
-    bossOrder = {20318, 20306}
+    bossOrder = {18371, 18373}
   },
 
   -- Old Hillsbrad Foothills (Both, Level 70)
@@ -133,11 +133,11 @@ local HeroicDungeons = {
     staticPoints = false,
     requiredMapId = 560,
     requiredKills = {
-      [20535] = 1, -- Lieutenant Drake
-      [20521] = 1, -- Captain Skarloc
-      [20531] = 1, -- Epoch Hunter
+      [17848] = 1, -- Lieutenant Drake
+      [17862] = 1, -- Captain Skarloc
+      [18096] = 1, -- Epoch Hunter
     },
-    bossOrder = {20535, 20521, 20531}
+    bossOrder = {17848, 17862, 18096}
   },
 
   -- Sethekk Halls (Both, Level 70)
@@ -152,11 +152,11 @@ local HeroicDungeons = {
     staticPoints = false,
     requiredMapId = 556,
     requiredKills = {
-      [20690] = 1, -- Darkweaver Syth
-      [20706] = 1, -- Talon King Ikiss
-      [23035] = 1, -- Anzu
+      [18472] = 1, -- Darkweaver Syth
+      [18473] = 1, -- Talon King Ikiss
+      [23035] = 1, -- Anzu (heroic only)
     },
-    bossOrder = {20690, 20706, 23035}
+    bossOrder = {18472, 18473, 23035}
   },
 
   -- The Black Morass (Both, Level 70)
@@ -171,11 +171,11 @@ local HeroicDungeons = {
     staticPoints = false,
     requiredMapId = 269,
     requiredKills = {
-      [20738] = 1, -- Chrono Lord Deja
-      [20745] = 1, -- Temporus
-      [20737] = 1, -- Aeonus
+      [17879] = 1, -- Chrono Lord Deja
+      [17880] = 1, -- Temporus
+      [17881] = 1, -- Aeonus
     },
-    bossOrder = {20738, 20745, 20737}
+    bossOrder = {17879, 17880, 17881}
   },
 
   -- The Mechanar (Both, Level 70)
@@ -190,11 +190,11 @@ local HeroicDungeons = {
     staticPoints = false,
     requiredMapId = 554,
     requiredKills = {
-      [21533] = 1, -- Mechano-Lord Capacitus
-      [21536] = 1, -- Nethermancer Sepethrea
-      [21537] = 1, -- Pathaleon the Calculator
+      [19219] = 1, -- Mechano-Lord Capacitus
+      [19221] = 1, -- Nethermancer Sepethrea
+      [19220] = 1, -- Pathaleon the Calculator
     },
-    bossOrder = {21533, 21536, 21537}
+    bossOrder = {19219, 19221, 19220}
   },
 
   -- The Shattered Halls (Both, Level 70)
@@ -209,12 +209,12 @@ local HeroicDungeons = {
     staticPoints = false,
     requiredMapId = 540,
     requiredKills = {
-      [20568] = 1, -- Grand Warlock Nethekurse
-      [20923] = 1, -- Blood Guard Porung
-      [20596] = 1, -- Warbringer O'mrogg
-      [20597] = 1, -- Warchief Kargath Bladefist
+      [16807] = 1, -- Grand Warlock Nethekurse
+      [20923] = 1, -- Blood Guard Porung (heroic only)
+      [16809] = 1, -- Warbringer O'mrogg
+      [16808] = 1, -- Warchief Kargath Bladefist
     },
-    bossOrder = {20568, 20923, 20596, 20597}
+    bossOrder = {16807, 20923, 16809, 16808}
   },
 
   -- Shadow Labyrinth (Both, Level 70)
@@ -229,12 +229,12 @@ local HeroicDungeons = {
     staticPoints = false,
     requiredMapId = 555,
     requiredKills = {
-      [20636] = 1, -- Ambassador Hellmaw
-      [20637] = 1, -- Blackheart the Inciter
-      [20653] = 1, -- Grandmaster Vorpil
-      [20657] = 1, -- Murmur
+      [18731] = 1, -- Ambassador Hellmaw
+      [18667] = 1, -- Blackheart the Inciter
+      [18732] = 1, -- Grandmaster Vorpil
+      [18708] = 1, -- Murmur
     },
-    bossOrder = {20636, 20637, 20653, 20657}
+    bossOrder = {18731, 18667, 18732, 18708}
   },
 
   -- The Steamvault (Both, Level 70)
@@ -249,11 +249,11 @@ local HeroicDungeons = {
     staticPoints = false,
     requiredMapId = 545,
     requiredKills = {
-      [20629] = 1, -- Hydromancer Thespia
-      [20630] = 1, -- Mekgineer Steamrigger
-      [20633] = 1, -- Warlord Kalithresh
+      [17797] = 1, -- Hydromancer Thespia
+      [17796] = 1, -- Mekgineer Steamrigger
+      [17798] = 1, -- Warlord Kalithresh
     },
-    bossOrder = {20629, 20630, 20633}
+    bossOrder = {17797, 17796, 17798}
   },
 
   -- The Botanica (Both, Level 70)
@@ -268,13 +268,13 @@ local HeroicDungeons = {
     staticPoints = false,
     requiredMapId = 553,
     requiredKills = {
-      [21551] = 1, -- Commander Sarannis
-      [21558] = 1, -- High Botanist Freywinn
-      [21581] = 1, -- Thorngrin the Tender
-      [21559] = 1, -- Laj
-      [21582] = 1, -- Warp Splinter
+      [17976] = 1, -- Commander Sarannis
+      [17975] = 1, -- High Botanist Freywinn
+      [17978] = 1, -- Thorngrin the Tender
+      [17980] = 1, -- Laj
+      [17977] = 1, -- Warp Splinter
     },
-    bossOrder = {21551, 21558, 21581, 21559, 21582}
+    bossOrder = {17976, 17975, 17978, 17980, 17977}
   },
 
   -- Magisters' Terrace (Both, Level 70)
@@ -289,12 +289,12 @@ local HeroicDungeons = {
     staticPoints = false,
     requiredMapId = 585,
     requiredKills = {
-      [25562] = 1, -- Selin Fireheart
-      [25573] = 1, -- Vexallus
-      [25560] = 1, -- Priestess Delrissa
-      [24857] = 1, -- Kael'thas Sunstrider
+      [24723] = 1, -- Selin Fireheart
+      [24744] = 1, -- Vexallus
+      [24560] = 1, -- Priestess Delrissa
+      [24664] = 1, -- Kael'thas Sunstrider
     },
-    bossOrder = {25562, 25573, 25560, 24857}
+    bossOrder = {24723, 24744, 24560, 24664}
   },
 
   -- The Arcatraz (Both, Level 70)
@@ -309,12 +309,12 @@ local HeroicDungeons = {
     staticPoints = false,
     requiredMapId = 552,
     requiredKills = {
-      [21626] = 1, -- Zereketh the Unbound
-      [21590] = 1, -- Dalliah the Doomsayer
-      [21624] = 1, -- Wrath-Scryer Soccothrates
-      [21599] = 1, -- Harbinger Skyriss
+      [20870] = 1, -- Zereketh the Unbound
+      [20885] = 1, -- Dalliah the Doomsayer
+      [20886] = 1, -- Wrath-Scryer Soccothrates
+      [20912] = 1, -- Harbinger Skyriss
     },
-    bossOrder = {21626, 21590, 21624, 21599}
+    bossOrder = {20870, 20885, 20886, 20912}
   },
 }
 
