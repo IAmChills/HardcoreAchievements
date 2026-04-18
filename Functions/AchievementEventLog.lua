@@ -16,21 +16,12 @@ local MAX_LINES = 50
 -- Session lines: login (SavedVariables activity + persistence check), logout/reload (UI unload).
 -- Use PLAYER_LOGOUT (fires on /reload and real logout), not PLAYER_LEAVING_WORLD (can fire when zoning).
 local loginFrame = CreateFrame("Frame")
-loginFrame:RegisterEvent("PLAYER_LOGIN")
+loginFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
 loginFrame:RegisterEvent("PLAYER_LOGOUT")
 loginFrame:SetScript("OnEvent", function(_, event)
-    if event == "PLAYER_LOGIN" then
-        local ver
-        if C_AddOns and C_AddOns.GetAddOnMetadata then
-            ver = C_AddOns.GetAddOnMetadata(addonName, "Version")
-        elseif GetAddOnMetadata then
-            ver = GetAddOnMetadata(addonName, "Version")
-        end
-        if not ver or ver == "" then
-            ver = "?"
-        end
+    if event == "PLAYER_ENTERING_WORLD" then
         if addon.EventLogAdd then
-            addon.EventLogAdd("Session started: " .. (UnitName("player") or "?") .. " (v" .. tostring(ver) .. ")")
+            addon.EventLogAdd("Session started: " .. (UnitName("player") or "?"))
         end
     elseif event == "PLAYER_LOGOUT" then
         if addon.EventLogAdd then
@@ -84,7 +75,16 @@ local function getEventLogLines()
 end
 
 local function formatLine(msg)
-    return date("[%Y-%m-%d %H:%M:%S] ") .. tostring(msg)
+    local ver
+    if C_AddOns and C_AddOns.GetAddOnMetadata then
+        ver = C_AddOns.GetAddOnMetadata(addonName, "Version")
+    elseif GetAddOnMetadata then
+        ver = GetAddOnMetadata(addonName, "Version")
+    end
+    if not ver or ver == "" then
+        ver = "?"
+    end
+    return date("[%Y-%m-%d %H:%M:%S][v" .. ver .. "] ") .. tostring(msg)
 end
 
 function addon.EventLogAdd(msg)

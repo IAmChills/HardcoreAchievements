@@ -214,9 +214,14 @@ local function CheckAndPrintEligibilityMessages(mapId, entryData)
         return orderA < orderB
     end)
 
-    -- Print only for the lowest-level version (first candidate)
+    -- Prefer the first sorted achievement that is not failed/outleveled so entry messages still show.
     local c = candidates[1]
-    if c.isFailed then return end
+    for i = 1, #candidates do
+        if not candidates[i].isFailed then
+            c = candidates[i]
+            break
+        end
+    end
     local isEligible = CheckAchievementEligibility(mapId, c.achDef, entryData)
     local title = c.achDef.title or c.achDef.mapName or "Unknown"
     if isEligible then
@@ -230,6 +235,30 @@ local function CheckAndPrintEligibilityMessages(mapId, entryData)
             addon.EventLogAdd("Dungeon entered: group is |cffff0000not eligible|r for achievement: " .. title .. " (" .. tostring(c.achId) .. ")")
         end
     end
+end
+
+-- GetInstanceInfo() return 3 is often 0 on PLAYER_ENTERING_WORLD; UPDATE_INSTANCE_INFO follows with valid difficulty.
+local function QueueEligibilityMessageOnInstanceInfo(mapId, entryData)
+    if not mapId or not entryData then return end
+    local diff = select(3, GetInstanceInfo())
+    if diff == 1 or diff == 2 then
+        CheckAndPrintEligibilityMessages(mapId, entryData)
+        return
+    end
+    entryData.awaitingEligibilityInstanceInfo = true
+end
+
+local function TryPrintPendingEligibilityOnInstanceInfo()
+    local inInstance, instanceType = IsInInstance()
+    if not (inInstance and instanceType == "party") then return end
+    local mapId = select(8, GetInstanceInfo())
+    if not mapId then return end
+    local entryData = instanceEntryLevels[mapId]
+    if not entryData or not entryData.awaitingEligibilityInstanceInfo then return end
+    local diff = select(3, GetInstanceInfo())
+    if diff ~= 1 and diff ~= 2 then return end
+    entryData.awaitingEligibilityInstanceInfo = nil
+    CheckAndPrintEligibilityMessages(mapId, entryData)
 end
 
 -- Helper function to update party member levels when they join the dungeon
@@ -265,12 +294,15 @@ end
 -- Initialize event frame for PLAYER_ENTERING_WORLD, PLAYER_DEAD, and party member events
 local dungeonEventFrame = CreateFrame("Frame")
 dungeonEventFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
+dungeonEventFrame:RegisterEvent("UPDATE_INSTANCE_INFO")
 dungeonEventFrame:RegisterEvent("PLAYER_DEAD")
 dungeonEventFrame:RegisterEvent("PARTY_MEMBER_ENABLE")
 dungeonEventFrame:RegisterEvent("PARTY_MEMBER_DISABLE")
 dungeonEventFrame:RegisterEvent("GROUP_ROSTER_UPDATE")
 dungeonEventFrame:SetScript("OnEvent", function(self, event, unitIndex)
-    if event == "PLAYER_DEAD" then
+    if event == "UPDATE_INSTANCE_INFO" then
+        TryPrintPendingEligibilityOnInstanceInfo()
+    elseif event == "PLAYER_DEAD" then
         -- Track that player died while in an instance (will be used when leaving instance)
         local inInstance, instanceType = IsInInstance()
         if inInstance and instanceType == "party" then
@@ -546,7 +578,7 @@ dungeonEventFrame:SetScript("OnEvent", function(self, event, unitIndex)
                         end
                     end
                     -- Print eligibility when re-entering so user sees messages every time
-                    CheckAndPrintEligibilityMessages(mapId, existingEntry)
+                    QueueEligibilityMessageOnInstanceInfo(mapId, existingEntry)
                     SaveDungeonEntryState()
                 else
                     -- First entry: store entry levels
@@ -583,7 +615,7 @@ dungeonEventFrame:SetScript("OnEvent", function(self, event, unitIndex)
                     UpdatePartyMemberLevels(mapId, entryData)
                     
                     -- Check and print eligibility messages for visible achievements matching this mapId
-                    CheckAndPrintEligibilityMessages(mapId, entryData)
+                    QueueEligibilityMessageOnInstanceInfo(mapId, entryData)
                     SaveDungeonEntryState()
                 end
             end
