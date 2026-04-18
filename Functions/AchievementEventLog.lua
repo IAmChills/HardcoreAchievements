@@ -21,11 +21,11 @@ loginFrame:RegisterEvent("PLAYER_LOGOUT")
 loginFrame:SetScript("OnEvent", function(_, event)
     if event == "PLAYER_ENTERING_WORLD" then
         if addon.EventLogAdd then
-            addon.EventLogAdd("Session started: " .. (UnitName("player") or "?"))
+            addon.EventLogAdd("Session started")
         end
     elseif event == "PLAYER_LOGOUT" then
         if addon.EventLogAdd then
-            addon.EventLogAdd("Session ended: " .. (UnitName("player") or "?"))
+            addon.EventLogAdd("Session ended")
         end
     end
 end)
