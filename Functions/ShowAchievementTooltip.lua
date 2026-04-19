@@ -229,18 +229,16 @@ local function ShowMetaAchievementRequirements(requiredAchievements, achievement
                 reqAchTitle = reqAchDef.title
             end
         end
-        -- Fallback: check AchievementPanel.achievements (for quest and profession achievements)
-        if reqAchTitle == tostring(reqAchId) and (addon and addon.AchievementPanel) and (addon and addon.AchievementPanel).achievements then
-            for _, row in ipairs((addon and addon.AchievementPanel).achievements) do
-                local rowId = row.id or row.achId
-                if rowId and tostring(rowId) == tostring(reqAchId) then
-                    if row.Title and row.Title.GetText then
-                        reqAchTitle = row.Title:GetText() or reqAchTitle
-                    elseif row._title then
-                        reqAchTitle = row._title
-                    end
-                    break
-                end
+        local reqRow = (addon and addon.GetAchievementRow and addon.GetAchievementRow(reqAchId)) or nil
+
+        -- Fallback: check the loaded row/model for quest and profession achievements.
+        if reqAchTitle == tostring(reqAchId) and reqRow then
+            if reqRow.Title and reqRow.Title.GetText then
+                reqAchTitle = reqRow.Title:GetText() or reqAchTitle
+            elseif reqRow._title then
+                reqAchTitle = reqRow._title
+            elseif reqRow.title then
+                reqAchTitle = reqRow.title
             end
         end
         
@@ -248,26 +246,16 @@ local function ShowMetaAchievementRequirements(requiredAchievements, achievement
         local reqProgress = addon and addon.GetProgress and addon.GetProgress(reqAchId)
         local reqCompleted = reqProgress and reqProgress.completed
         local reqFailed = false
-        local reqRow = nil
 
-        if (addon and addon.AchievementPanel) and (addon and addon.AchievementPanel).achievements then
-            for _, row in ipairs((addon and addon.AchievementPanel).achievements) do
-                local rowId = row.id or row.achId
-                if rowId and tostring(rowId) == tostring(reqAchId) then
-                    reqRow = row
-                    if row.completed then
-                        reqCompleted = true
-                    end
-                    break
-                end
-            end
+        if reqRow and reqRow.completed then
+            reqCompleted = true
         end
 
         -- Failed = outleveled or DB has .failed (e.g. meta)
         if not reqCompleted and addon and addon.IsRowOutleveled and reqRow and addon.IsRowOutleveled(reqRow) then
             reqFailed = true
         end
-        if not reqFailed and not reqCompleted and addon and addon.GetCharDB then
+        if not reqFailed and not reqCompleted and not reqRow and addon and addon.GetCharDB then
             local _, cdb = addon.GetCharDB()
             local rec = cdb and cdb.achievements and cdb.achievements[tostring(reqAchId)]
             if rec and rec.failed then

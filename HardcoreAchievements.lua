@@ -378,27 +378,33 @@ local function HookRowSubTextUpdates(row)
     fontString._hcaSetTextWrapped = true
 end
 
--- Helper function to check if a quest is in the player's quest log
-local function IsQuestInQuestLog(questID)
-    if not questID then return false end
-    -- Try modern API first
+local function GetQuestLogState(questID)
+    if not questID then return false, false end
+
     if GetQuestLogIndexByID then
         local logIndex = GetQuestLogIndexByID(questID)
         if logIndex and logIndex > 0 then
-            return true
+            if GetQuestLogTitle then
+                local _, _, _, isHeader, _, isComplete, _, questIDFromLog = GetQuestLogTitle(logIndex)
+                if not isHeader and questIDFromLog == questID then
+                    return true, (isComplete == 1 or isComplete == true)
+                end
+            end
+            return true, false
         end
     end
-    -- Fallback: check using classic API
-    if GetNumQuestLogEntries then
+
+    if GetNumQuestLogEntries and GetQuestLogTitle then
         local numEntries = GetNumQuestLogEntries()
         for i = 1, numEntries do
-            local title, level, suggestGroup, isHeader, isCollapsed, isComplete, frequency, questIDFromLog = GetQuestLogTitle(i)
+            local _, _, _, isHeader, _, isComplete, _, questIDFromLog = GetQuestLogTitle(i)
             if not isHeader and questIDFromLog == questID then
-                return true
+                return true, (isComplete == 1 or isComplete == true)
             end
         end
     end
-    return false
+
+    return false, false
 end
 
 local function IsRowOutleveled(row)
@@ -476,18 +482,27 @@ local function IsRowOutleveled(row)
         end
     end
     
+    local progress = achId and addon and addon.GetProgress and addon.GetProgress(achId)
+    local questID = row.requiredQuestId or (row._def and row._def.requiredQuestId)
+    local questInLog, questReadyForTurnIn = GetQuestLogState(questID)
+
+    -- If the quest is complete and ready to turn in, leveling afterward is still valid.
+    if isOverLevel and questID and not (progress and progress.quest) and questReadyForTurnIn then
+        return false
+    end
+
     -- Check if there's pending turn-in progress (kill completed but quest not turned in)
     -- If so, check if quest is still in quest log - if not, mark as failed
-    if row.questTracker and (row.killTracker or row.requiredKills) then
+    if row.questTracker and (row.killTracker or row.requiredKills or (row._def and (row._def.requiredKills or row._def.targetNpcId))) then
         -- Achievement requires both kill and quest
-        local progress = addon and addon.GetProgress and addon.GetProgress(row.id)
         if progress then
             local hasKill = false
-            if row.requiredKills then
+            local requiredKills = row.requiredKills or (row._def and row._def.requiredKills)
+            if requiredKills then
                 -- Check if all required kills are satisfied
                 if progress.eligibleCounts then
                     local allSatisfied = true
-                    for npcId, requiredCount in pairs(row.requiredKills) do
+                    for npcId, requiredCount in pairs(requiredKills) do
                         local idNum = tonumber(npcId) or npcId
                         local current = progress.eligibleCounts[idNum] or progress.eligibleCounts[tostring(idNum)] or 0
                         local required = tonumber(requiredCount) or 1
@@ -506,19 +521,13 @@ local function IsRowOutleveled(row)
             local questNotTurnedIn = not progress.quest
             -- If kills are satisfied but quest is not turned in
             if hasKill and questNotTurnedIn then
-                -- Get quest ID from row definition
-                local questID = nil
-                if row._def and row._def.requiredQuestId then
-                    questID = row._def.requiredQuestId
-                end
-                
                 -- If player is over level and quest is not in quest log (abandoned), fail the achievement
-                if isOverLevel and questID and not IsQuestInQuestLog(questID) then
+                if isOverLevel and questID and not questInLog then
                     return true -- Mark as outleveled/failed
                 end
                 
                 -- If quest is still in quest log, keep achievement available
-                if questID and IsQuestInQuestLog(questID) then
+                if questID and questInLog then
                     return false
                 end
             end
