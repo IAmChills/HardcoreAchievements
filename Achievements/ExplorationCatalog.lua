@@ -5,6 +5,28 @@ local UnitName = UnitName
 local UnitLevel = UnitLevel
 local UnitFactionGroup = UnitFactionGroup
 local table_insert = table.insert
+local string_gsub = string.gsub
+
+local function MakeExplorationAchId(zoneName)
+  local sanitized = string_gsub(zoneName or "", "[^%a%d]", "")
+  return "Explore" .. sanitized
+end
+
+local function CreateZoneExplorationAchievement(zoneName)
+  return {
+    achId = MakeExplorationAchId(zoneName),
+    title = zoneName,
+    level = nil,
+    tooltip = "Explore all the areas of " .. ClassColor .. zoneName .. "|r",
+    icon = "Interface\\Icons\\INV_Misc_Map_01",
+    points = 0,
+    explorationZone = zoneName,
+    customIsCompleted = function()
+      return CheckZoneDiscovery(zoneName)
+    end,
+    staticPoints = true,
+  }
+end
 
 local ExplorationAchievements = {
 {
@@ -37,7 +59,8 @@ local ExplorationAchievements = {
   tooltip = "Discover all of " .. ClassColor .. "Deadwind Pass|r and speak to " .. ClassColor .. "Archmage Leryda|r at the entrance of " .. ClassColor .. "Karazhan|r at or before level 25",
   icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_Raid_Karazhan.png",
   points = 0,
-  customIsCompleted = function() return CheckZoneDiscovery(1430) and UnitName("npc") == "Archmage Leryda" and UnitLevel("player") <= 25 end,
+  explorationZone = "Deadwind Pass",
+  customIsCompleted = function() return CheckZoneDiscovery(1430, 0.5) and UnitName("npc") == "Archmage Leryda" and UnitLevel("player") <= 25 end,
   staticPoints = true,
 }, {
   achId = "OrgA",
@@ -46,6 +69,7 @@ local ExplorationAchievements = {
   tooltip = "Discover " .. ClassColor .. "Orgrimmar|r",
   icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_PVP_Legion05.png",
   points = 0,
+  explorationZone = "Orgrimmar",
   customIsCompleted = function()
       return CheckZoneDiscovery(1411)
   end,
@@ -58,6 +82,7 @@ local ExplorationAchievements = {
   tooltip = "Discover " .. ClassColor .. "Stormwind City|r",
   icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_PVP_Legion05.png",
   points = 0,
+  explorationZone = "Stormwind City",
   customIsCompleted = function()
       return CheckZoneDiscovery(1429)
   end,
@@ -65,6 +90,79 @@ local ExplorationAchievements = {
   staticPoints = true,
 },
 }
+
+local ZoneExplorationOrder = {
+  -- Kalimdor
+  "Ashenvale",
+  "Azshara",
+  "Azuremyst Isle",
+  "Bloodmyst Isle",
+  "Darkshore",
+  --"Darnassus",
+  "Desolace",
+  "Durotar",
+  "Dustwallow Marsh",
+  "Felwood",
+  "Feralas",
+  "Moonglade",
+  "Mulgore",
+  --"Orgrimmar",
+  "Silithus",
+  "Stonetalon Mountains",
+  "Tanaris",
+  "Teldrassil",
+  "The Barrens",
+  --"The Exodar",
+  "Thousand Needles",
+  "Thunder Bluff",
+  "Un'Goro Crater",
+  "Winterspring",
+
+  -- Eastern Kingdoms
+  "Alterac Mountains",
+  "Arathi Highlands",
+  "Badlands",
+  "Blasted Lands",
+  "Burning Steppes",
+  "Deadwind Pass",
+  "Dun Morogh",
+  "Duskwood",
+  "Eastern Plaguelands",
+  "Elwynn Forest",
+  "Eversong Woods",
+  "Ghostlands",
+  "Hillsbrad Foothills",
+  --"Ironforge",
+  "Isle of Quel'Danas",
+  "Loch Modan",
+  "Redridge Mountains",
+  "Searing Gorge",
+  --"Silvermoon City",
+  "Silverpine Forest",
+  --"Stormwind City",
+  "Stranglethorn Vale",
+  "Swamp of Sorrows",
+  "The Hinterlands",
+  "Tirisfal Glades",
+  --"Undercity",
+  "Western Plaguelands",
+  "Westfall",
+  "Wetlands",
+
+  -- Outland
+  "Blade's Edge Mountains",
+  "Hellfire Peninsula",
+  "Nagrand",
+  "Netherstorm",
+  "Shadowmoon Valley",
+  --"Shattrath City",
+  "Terokkar Forest",
+  "Zangarmarsh",
+}
+
+for _, zoneName in ipairs(ZoneExplorationOrder) do
+  table_insert(ExplorationAchievements, CreateZoneExplorationAchievement(zoneName))
+end
 
 -- Defer registration until PLAYER_LOGIN to prevent load timeouts
 -- Check faction eligibility (same pattern as Catalog.lua and SecretCatalog.lua)

@@ -273,6 +273,28 @@ local function ShowMetaAchievementRequirements(requiredAchievements, achievement
     end
 end
 
+local function ShowExplorationRequirements(explorationZone)
+    if not explorationZone or not addon or type(addon.GetZoneDiscoveryDetails) ~= "function" then
+        return
+    end
+
+    local details, err = addon.GetZoneDiscoveryDetails(explorationZone)
+    if err or not details or #details == 0 then
+        return
+    end
+
+    GameTooltip:AddLine("\nRequired Areas:", 0, 1, 0)
+
+    for _, info in ipairs(details) do
+        local label = tostring(info.name or "Unknown")
+        if info.discovered then
+            GameTooltip:AddLine(label, 1, 1, 1)
+        else
+            GameTooltip:AddLine(label, 0.5, 0.5, 0.5)
+        end
+    end
+end
+
 ---------------------------------------
 -- Main Function
 ---------------------------------------
@@ -296,6 +318,7 @@ local function ShowAchievementTooltip(frame, data)
     local itemOrder = extracted.itemOrder
     local requiredAchievements = extracted.requiredAchievements
     local achievementOrder = extracted.achievementOrder
+    local explorationZone = nil
     
     -- Check database for completion status if not already set
     if not achievementCompleted and achId then
@@ -437,6 +460,9 @@ local function ShowAchievementTooltip(frame, data)
                 achievementOrder = achDef.achievementOrder
             end
         end
+        if achDef.explorationZone then
+            explorationZone = achDef.explorationZone
+        end
     end
     
     -- Also check def for requirements
@@ -453,6 +479,9 @@ local function ShowAchievementTooltip(frame, data)
         if def.achievementOrder then
             achievementOrder = def.achievementOrder
         end
+        if def.explorationZone then
+            explorationZone = def.explorationZone
+        end
     end
     
     -- Show boss requirements if available
@@ -464,6 +493,9 @@ local function ShowAchievementTooltip(frame, data)
     
     -- Show meta achievement requirements if available
     ShowMetaAchievementRequirements(requiredAchievements, achievementOrder, achievementCompleted)
+
+    -- Show exploration subzone requirements if available
+    ShowExplorationRequirements(explorationZone)
     
     -- Hint for linking the achievement in chat
     GameTooltip:AddLine("\nShift click to link in chat\nor add to tracking list", 0.5, 0.5, 0.5)

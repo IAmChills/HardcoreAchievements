@@ -240,6 +240,8 @@ local function RegisterAchievementDef(def, overrides)
         race = def.race,
         class = def.class,
         zone = def.zone,
+        explorationZone = def.explorationZone,
+        explorationThreshold = def.explorationThreshold,
         -- Type flags
         isQuest = def.isQuest or false,
         isRaid = def.isRaid or false,
