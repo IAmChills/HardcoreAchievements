@@ -200,7 +200,7 @@ local EasternKingdomsExplorationZones = {
 local OutlandExplorationZones = {
   { zone = "Blade's Edge Mountains", title = "Blade's Edge Mountains", icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_Zone_BladesEdgeMtns_01.png", points = 10 },
   { zone = "Hellfire Peninsula", title = "Hellfire Peninsula", icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_Zone_HellfirePeninsula_01.png", points = 10 },
-  { zone = "Nagrand", title = " ", icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_Zone_Nagrand_02.png", points = 10 },
+  { zone = "Nagrand", title = "Nagrand", icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_Zone_Nagrand_02.png", points = 10 },
   { zone = "Netherstorm", title = "Netherstorm", icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_Zone_Netherstorm_01.png", points = 10 },
   { zone = "Shadowmoon Valley", title = "Shadowmoon Valley", icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_Zone_Shadowmoon.png", points = 10 },
   --{ zone = "Shattrath City", title = "Shattrath City", icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_Zone_XXX.png", points = 0 },

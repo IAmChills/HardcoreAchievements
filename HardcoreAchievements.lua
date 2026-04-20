@@ -425,20 +425,18 @@ local function IsRowOutleveled(row)
         end
     end
     
-    -- Check if this is a meta achievement that should be failed based on required achievements
-    -- Meta achievements don't have maxLevel, so check database for failed flag
+    -- Achievements without a maxLevel normally stay available forever.
+    -- Only meta achievements and defs that explicitly opt in should honor a stored failed flag.
     if not row.maxLevel then
-      -- Check if this is a meta achievement (isMetaAchievement, isMeta, or requiredAchievements)
-      local isMetaAchievement = (row._def and (row._def.isMetaAchievement or row._def.isMeta)) or (row.requiredAchievements ~= nil)
-      if isMetaAchievement then
-        -- For meta achievements, check the database directly for failed flag (use tostring for key consistency)
+        local usesStoredFailure = (row._def and row._def.supportsStoredFailure)
+            or (row._def and (row._def.isMetaAchievement or row._def.isMeta))
+            or (row.requiredAchievements ~= nil)
         local _, cdb = GetCharDB()
         local achKey = achId and tostring(achId)
-        if cdb and cdb.achievements and achKey and cdb.achievements[achKey] and cdb.achievements[achKey].failed then
-          return true
+        if usesStoredFailure and cdb and cdb.achievements and achKey and cdb.achievements[achKey] and cdb.achievements[achKey].failed then
+            return true
         end
-      end
-      return false
+        return false
     end
     
     local lvl = UnitLevel("player") or 1
@@ -3466,11 +3464,12 @@ local function CreateAchievementRowFromData(data, index)
     row.killTracker  = killTracker
     row.questTracker = questTracker
     row.id = achId
-    -- Store solo doubling flag (defaults to true if killTracker exists for backward compatibility)
+    -- Store solo doubling flag (defaults to true for real kill-tracked achievements only).
+    local supportsSoloDoubleByDefault = not (def and (def.isMetaAchievement or def.isMeta or def.requiredAchievements ~= nil))
     if def and def.allowSoloDouble ~= nil then
         row.allowSoloDouble = def.allowSoloDouble
     else
-        row.allowSoloDouble = (killTracker ~= nil)
+        row.allowSoloDouble = supportsSoloDoubleByDefault and (killTracker ~= nil)
     end
     
     if def and type(def.customSpell) == "function" then
@@ -3510,7 +3509,8 @@ local function CreateAchievementRowFromData(data, index)
     end
 
     -- Secret/hidden achievement support (optional via def)
-    if def and (def.secret or def.secretTitle or def.secretTooltip or def.secretIcon or def.secretPoints) then
+    local isSecretDef = def and (def.secret or def.isSecretAchievement or def.secretTitle or def.secretTooltip or def.secretIcon or def.secretPoints)
+    if isSecretDef then
         row.isSecretAchievement = true
         -- Store reveal values (final state after completion)
         row.revealTitle = title
@@ -3572,13 +3572,15 @@ if addon then addon.AddRowUIInit = AddRowUIInit end
 
 local function CreateAchievementRow(parent, achId, title, tooltip, icon, level, points, killTracker, questTracker, staticPoints, zone, def)
     local capNum = tonumber(level)
+    local isSecretDef = def and (def.secret or def.isSecretAchievement or def.secretTitle or def.secretTooltip or def.secretIcon or def.secretPoints)
+    local supportsSoloDoubleByDefault = not (def and (def.isMetaAchievement or def.isMeta or def.requiredAchievements ~= nil))
     local data = {
         achId = achId, id = achId, title = title, tooltip = tooltip, icon = icon, level = level,
         points = points or 0, killTracker = killTracker, questTracker = questTracker, staticPoints = staticPoints,
         zone = zone, def = def, _def = def,
         completed = false, originalPoints = points or 0,
         maxLevel = (capNum and capNum > 0) and capNum or nil,
-        allowSoloDouble = (def and def.allowSoloDouble ~= nil) and def.allowSoloDouble or (killTracker ~= nil),
+        allowSoloDouble = (def and def.allowSoloDouble ~= nil) and def.allowSoloDouble or (supportsSoloDoubleByDefault and (killTracker ~= nil)),
         staticPoints = staticPoints or false,
     }
 
@@ -3621,7 +3623,7 @@ local function CreateAchievementRow(parent, achId, title, tooltip, icon, level, 
     end
 
     -- Secret/hidden achievement support (model fields; UI reveal happens when a frame exists)
-    if def and (def.secret or def.secretTitle or def.secretTooltip or def.secretIcon or def.secretPoints) then
+    if isSecretDef then
         data.isSecretAchievement = true
         data.revealTitle = title
         data.revealTooltip = tooltip

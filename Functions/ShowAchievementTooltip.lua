@@ -52,7 +52,7 @@ local function ExtractAchievementData(data)
         result.maxLevel = data.maxLevel
         result.points = data.points
         result.allowSoloDouble = data.allowSoloDouble or false
-        result.isSecretAchievement = data.isSecretAchievement or false
+        result.isSecretAchievement = data.isSecretAchievement or (data._def and data._def.secret) or data.secret or false
         result.def = data._def
         result.secretPoints = data.secretPoints
         if data.requireProfessionSkillID or (result.def and result.def.requireProfessionSkillID) then
@@ -69,7 +69,7 @@ local function ExtractAchievementData(data)
         result.maxLevel = data.maxLevel
         result.points = data.points
         result.allowSoloDouble = data.allowSoloDouble or false
-        result.isSecretAchievement = data.isSecretAchievement or false
+        result.isSecretAchievement = data.isSecretAchievement or data.secret or false
         result.secretPoints = data.secretPoints
         if data.requireProfessionSkillID then
             result.isProfessionAchievement = true
@@ -337,8 +337,14 @@ local function ShowAchievementTooltip(frame, data)
     -- Get achievement definition once
     local achDef = GetAchievementDefinition(achId)
     
+    local isSecret = isSecretAchievement or (def and def.secret) or (achDef and achDef.secret) or false
+    local isMetaAchievement = (def and (def.isMetaAchievement or def.isMeta or def.requiredAchievements ~= nil))
+        or (achDef and (achDef.isMetaAchievement or achDef.isMeta or achDef.requiredAchievements ~= nil))
+        or (requiredAchievements ~= nil)
+        or false
+
     -- For secret achievements that are not completed, use secretPoints instead of actual points
-    if isSecretAchievement and not achievementCompleted then
+    if isSecret and not achievementCompleted then
         -- Try to get secretPoints from extracted data first
         if extracted.secretPoints ~= nil then
             points = extracted.secretPoints
@@ -361,7 +367,7 @@ local function ShowAchievementTooltip(frame, data)
     -- Check if SSF mode is enabled and this achievement supports it
     -- Secret achievements should not show "Solo bonus"
     local isSoloMode = (addon and addon.IsSoloModeEnabled and addon.IsSoloModeEnabled()) or false
-    if isSoloMode and allowSoloDouble and not isSecretAchievement then
+    if isSoloMode and allowSoloDouble and not isSecret and not isMetaAchievement then
         -- Show title with "Solo bonus" on the right when SSF is enabled
         local soloText = "Solo bonus"
         local ClassColor = (addon and addon.GetClassColor())
@@ -373,7 +379,7 @@ local function ShowAchievementTooltip(frame, data)
     -- Show level and points for achievements with level requirements (right-aligned below title, before description)
     -- Achievements without level requirements show points below the description instead
     local hasLevelRequirement = maxLevel and maxLevel > 0
-    local showPointsInBody = isSecretAchievement or isProfessionAchievement or not hasLevelRequirement
+    local showPointsInBody = isSecret or isProfessionAchievement or not hasLevelRequirement
 
     if not showPointsInBody then
         local levelText = ""
@@ -400,8 +406,6 @@ local function ShowAchievementTooltip(frame, data)
             end
         end
     end
-    
-    local isSecret = (def and def.secret) or isSecretAchievement
     
     local requiresItemOnly = false
     if def then

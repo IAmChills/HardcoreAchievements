@@ -12,13 +12,15 @@ local RidiculousAchievements = {
     tooltip = "Reach level 60 without jumping",
     icon = 413584,
     points = 0,
+    supportsStoredFailure = true,
     customIsCompleted = function()
       local GetCharDB = addon and addon.GetCharDB
       if not GetCharDB then
         return false
       end
       local _, cdb = GetCharDB()
-      if not cdb or not cdb.stats or not cdb.stats.playerJumps then
+      local jumpCount = cdb and cdb.stats and cdb.stats.playerJumps
+      if jumpCount == nil then
         return false
       end
       
@@ -29,8 +31,13 @@ local RidiculousAchievements = {
         return false
       end
       
-      -- Only award if player is max level and has 0 jumps
-      return UnitLevel("player") >= 60 and cdb.stats.playerJumps == 0
+      -- Any tracked jump disqualifies the run immediately.
+      if jumpCount > 0 then
+        return false
+      end
+
+      -- Only award if player reaches max level with a verified zero-jump count.
+      return UnitLevel("player") >= 60 and jumpCount == 0
     end,
     staticPoints = true,
   },

@@ -169,6 +169,13 @@ end
 -- =========================================================
 -- Achievement Display Values (centralized for frames and links)
 -- =========================================================
+local function IsSecretSource(source)
+    return source and (
+        source.secret or source.isSecretAchievement or
+        source.secretTitle or source.secretTooltip or source.secretIcon or source.secretPoints
+    ) or false
+end
+
 -- Returns icon, title, tooltip, points to display.
 -- For frames: pass row/srow with .completed; useSourceCompletion=true (default).
 -- For links: pass def; useSourceCompletion=false, viewerCompleted=ViewerHasCompletedAchievement(achId).
@@ -181,10 +188,7 @@ local function GetAchievementDisplayValues(source, options)
     local skipSecrecy = options.skipSecrecy or false
     
     local completed = useSourceCompletion and (source.completed == true) or viewerCompleted
-    local isSecret = not skipSecrecy and (
-        source.secret or source.isSecretAchievement or
-        source.secretTitle or source.secretTooltip or source.secretIcon or source.secretPoints
-    )
+    local isSecret = not skipSecrecy and IsSecretSource(source)
     local useSecret = isSecret and not completed
     
     if useSecret then
@@ -215,6 +219,7 @@ local function RegisterAchievementDef(def, overrides)
         return
     end
     addon.AchievementDefs = addon.AchievementDefs or {}
+    local isSecretDef = IsSecretSource(def)
     
     -- Build the definition entry with all common fields
     local achDef = {
@@ -250,7 +255,8 @@ local function RegisterAchievementDef(def, overrides)
         isVariation = def.isVariation or false,
         baseAchId = def.baseAchId,
         -- Secret achievement fields (for links and UI)
-        secret = def.secret,
+        secret = isSecretDef,
+        isSecretAchievement = isSecretDef,
         secretTitle = def.secretTitle,
         secretTooltip = def.secretTooltip,
         secretIcon = def.secretIcon,

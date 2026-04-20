@@ -233,7 +233,7 @@ local LocationMap = {
         ["Nijel's Point"] = {x = 0.65, y = 0.09},
     },
     ["Durotar"] = {
-        ["Orgrimmar"] = {x = 0.45, y = 0.10},
+        ["Orgrimmar"] = {x = 0.45, y = 0.07},
         ["Skull Rock"] = {x = 0.55, y = 0.12},
         ["Drygulch Ravine"] = {x = 0.53, y = 0.23},
         ["Razor Hill"] = {x = 0.54, y = 0.43},

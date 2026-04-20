@@ -70,6 +70,7 @@ local Secrets = {
     icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_rat.png", -- ??
     points = 0,
     targetNpcId = {4075, 13016, 2110},
+    allowSoloDouble = false,
     secret = true,
     secretTitle = "Secret Achievement",
     secretTooltip = "You will probably complete this achievement by accident",

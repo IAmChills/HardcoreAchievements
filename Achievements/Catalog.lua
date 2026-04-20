@@ -300,7 +300,7 @@ local Achievements = {
     title = "The Great Hunt",
     level = 26,
     tooltip = "Complete " .. ClassColor .. "The Hunt Completed|r by slaying " .. ClassColor .. "Sharptalon|r, " .. ClassColor .. "Shadumbra|r, and " .. ClassColor .. "Ursangous|r before level 27",
-    icon = icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Spell_Hunter_Adaptation.png", -- 1036119
+    icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Spell_Hunter_Adaptation.png", -- 1036119
     points = 10,
     requiredQuestId = 247,
     targetNpcId = {12676, 12677, 12678},
