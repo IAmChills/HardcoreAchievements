@@ -114,7 +114,7 @@ local ZoneExplorationOrder = {
   "The Barrens",
   --"The Exodar",
   "Thousand Needles",
-  "Thunder Bluff",
+  --"Thunder Bluff",
   "Un'Goro Crater",
   "Winterspring",
 
