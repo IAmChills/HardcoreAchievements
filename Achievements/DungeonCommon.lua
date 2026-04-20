@@ -177,16 +177,11 @@ local function CheckAndPrintEligibilityMessages(mapId, entryData)
             local isFailed = progress and progress.failed
 
             if not isCompleted then
-                -- Also check if row exists and is outleveled
-                if not isFailed and (addon and addon.AchievementPanel) and (addon and addon.AchievementPanel).achievements then
-                    for _, row in ipairs(addon.AchievementPanel.achievements) do
-                        local rowId = row.id or row.achId
-                        if rowId and tostring(rowId) == tostring(achId) then
-                            if addon and addon.IsRowOutleveled and addon.IsRowOutleveled(row) then
-                                isFailed = true
-                            end
-                            break
-                        end
+                -- Also check the shared row/model state so failed base variants are skipped even if the panel is closed.
+                if not isFailed and addon and addon.IsRowOutleveled and addon.GetAchievementRow then
+                    local row = addon.GetAchievementRow(achId)
+                    if row and addon.IsRowOutleveled(row) then
+                        isFailed = true
                     end
                 end
                 
@@ -223,15 +218,34 @@ local function CheckAndPrintEligibilityMessages(mapId, entryData)
         return orderA < orderB
     end)
 
-    -- Prefer the first sorted achievement that is not failed/outleveled so entry messages still show.
-    local c = candidates[1]
+    -- Prefer the first sorted achievement that is both available and actually eligible for the current group.
+    local c = nil
+    local isEligible = false
     for i = 1, #candidates do
-        if not candidates[i].isFailed then
+        if not candidates[i].isFailed and CheckAchievementEligibility(mapId, candidates[i].achDef, entryData) then
             c = candidates[i]
+            isEligible = true
             break
         end
     end
-    local isEligible = CheckAchievementEligibility(mapId, c.achDef, entryData)
+
+    -- Otherwise fall back to the first non-failed candidate so the message still refers to the next available target.
+    if not c then
+        for i = 1, #candidates do
+            if not candidates[i].isFailed then
+                c = candidates[i]
+                isEligible = CheckAchievementEligibility(mapId, c.achDef, entryData)
+                break
+            end
+        end
+    end
+
+    -- Last resort: if everything is failed, keep the old behavior of using the first sorted candidate.
+    if not c then
+        c = candidates[1]
+        isEligible = CheckAchievementEligibility(mapId, c.achDef, entryData)
+    end
+
     local title = c.achDef.title or c.achDef.mapName or "Unknown"
     if isEligible then
         print("|cff008066[Hardcore Achievements]|r |cff00ff00Group is eligible for achievement: " .. title .. ". If any player levels beyond the achievement's allowed level while inside the dungeon, exiting and re-entering will disqualify the group from achievement eligibility.|r")
