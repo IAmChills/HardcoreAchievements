@@ -33,6 +33,7 @@
 local addonName, addon = ...
 local C_MapExplorationInfo = C_MapExplorationInfo
 local table_insert = table.insert
+local table_sort = table.sort
 local string_format = string.format
 
 ---------------------------------------
@@ -46,7 +47,7 @@ local ZoneMapIDs = {
     ["Azuremyst Isle"] = 1943,
     ["Bloodmyst Isle"] = 1950,
     ["Darkshore"] = 1439,
-    --["Darnassus"] = 1457,
+    ["Darnassus"] = 1457,
     ["Desolace"] = 1443,
     ["Durotar"] = 1411,
     ["Dustwallow Marsh"] = 1445,
@@ -54,7 +55,7 @@ local ZoneMapIDs = {
     ["Feralas"] = 1444,
     ["Moonglade"] = 1450,
     ["Mulgore"] = 1412,
-    --["Orgrimmar"] = 1454,
+    ["Orgrimmar"] = 1454,
     ["Silithus"] = 1451,
     ["Stonetalon Mountains"] = 1442,
     ["Tanaris"] = 1446,
@@ -62,7 +63,7 @@ local ZoneMapIDs = {
     ["The Barrens"] = 1413,
     ["The Exodar"] = 1947,
     ["Thousand Needles"] = 1441,
-    --["Thunder Bluff"] = 1456,
+    ["Thunder Bluff"] = 1456,
     ["Un'Goro Crater"] = 1449,
     ["Winterspring"] = 1452,
 
@@ -80,19 +81,19 @@ local ZoneMapIDs = {
     ["Eversong Woods"] = 1941,
     ["Ghostlands"] = 1942,
     ["Hillsbrad Foothills"] = 1424,
-    --["Ironforge"] = 1455,
+    ["Ironforge"] = 1455,
     ["Isle of Quel'Danas"] = 1957,
     ["Loch Modan"] = 1432,
     ["Redridge Mountains"] = 1433,
     ["Searing Gorge"] = 1427,
-    --["Silvermoon City"] = 1954,
+    ["Silvermoon City"] = 1954,
     ["Silverpine Forest"] = 1421,
-    --["Stormwind City"] = 1453,
+    ["Stormwind City"] = 1453,
     ["Stranglethorn Vale"] = 1434,
     ["Swamp of Sorrows"] = 1435,
     ["The Hinterlands"] = 1425,
     ["Tirisfal Glades"] = 1420,
-    --["Undercity"] = 1458,
+    ["Undercity"] = 1458,
     ["Western Plaguelands"] = 1422,
     ["Westfall"] = 1436,
     ["Wetlands"] = 1437,
@@ -103,7 +104,7 @@ local ZoneMapIDs = {
     ["Nagrand"] = 1951,
     ["Netherstorm"] = 1953,
     ["Shadowmoon Valley"] = 1948,
-    --["Shattrath City"] = 1955,
+    ["Shattrath City"] = 1955,
     ["Terokkar Forest"] = 1952,
     ["Zangarmarsh"] = 1946,
 }
@@ -504,9 +505,9 @@ local LocationMap = {
         ["Draco'dar"] = {x = 0.25, y = 0.62},
     },
     ["Deadwind Pass"] = {
-        ["Deadman's Crossing"] = {x = 0.50, y = 0.45},
-        ["The Vice"] = {x = 0.59, y = 0.64}, -- *
-        ["Karazhan"] = {x = 0.46, y = 0.73},
+        ["Deadman's Crossing"] = {x = 0.50, y = 0.45}, -- *
+        ["The Vice"] = {x = 0.59, y = 0.64},
+        ["Karazhan"] = {x = 0.46, y = 0.73}, -- *
     },
     ["Dun Morogh"] = {
         ["Helm's Bed Lake"] = {x = 0.77, y = 0.56},
@@ -1092,24 +1093,12 @@ local function CheckMapDiscoveryByCoords(mapID, x, y)
     return CheckMapDiscovery(mapID, x, y, nil, nil)
 end
 
----------------------------------------
--- Check if an entire zone has been discovered
--- This checks all defined locations in the zone from LocationMap
--- Parameters:
---   zone: string or number - Zone name (string) or mapID (number)
---   threshold: number (optional, 0-1) - Minimum percentage of locations that must be discovered (default: 1.0 = 100%)
--- Returns: boolean, errorMessage, discoveredCount, totalCount
----------------------------------------
-local function CheckZoneDiscovery(zone, threshold)
-    threshold = threshold or 1.0 -- Default to 100% coverage required
-    
+local function ResolveZoneDiscoveryTarget(zone)
     local mapID = nil
     local zoneName = nil
-    
-    -- Determine if zone is a mapID (number) or zone name (string)
+
     if type(zone) == "number" then
         mapID = zone
-        -- Try to find zone name from mapID (reverse lookup)
         for name, id in pairs(ZoneMapIDs) do
             if id == mapID then
                 zoneName = name
@@ -1120,63 +1109,95 @@ local function CheckZoneDiscovery(zone, threshold)
         zoneName = zone
         mapID = GetMapIDForZone(zoneName)
         if not mapID then
-            return false, "Unknown zone: " .. tostring(zone), 0, 0
+            return nil, nil, "Unknown zone: " .. tostring(zone)
         end
     else
-        return false, "Zone must be a string (zone name) or number (mapID)", 0, 0
+        return nil, nil, "Zone must be a string (zone name) or number (mapID)"
     end
-    
+
     if not mapID then
-        return false, "Could not determine mapID for zone: " .. tostring(zone), 0, 0
+        return nil, nil, "Could not determine mapID for zone: " .. tostring(zone)
     end
-    
-    -- Check if we have defined locations for this zone
+
     if not zoneName or not LocationMap[zoneName] then
-        return false, "No locations defined for zone: " .. tostring(zoneName or mapID), 0, 0
+        return nil, nil, "No locations defined for zone: " .. tostring(zoneName or mapID)
     end
-    
-    -- Check if API functions exist
+
+    return mapID, zoneName, nil
+end
+
+local function IsExploredAtPosition(mapID, x, y)
+    local position = CreateVector2D(x, y)
+    local exploredAreaIDs = C_MapExplorationInfo.GetExploredAreaIDsAtPosition(mapID, position)
+
+    if exploredAreaIDs and type(exploredAreaIDs) == "table" then
+        local count = 0
+        for _ in pairs(exploredAreaIDs) do
+            count = count + 1
+        end
+        return count > 0
+    end
+
+    return false
+end
+
+local function GetZoneDiscoveryDetails(zone)
+    local mapID, zoneName, err = ResolveZoneDiscoveryTarget(zone)
+    if err then
+        return nil, err, 0, 0, nil, nil
+    end
+
     if not C_MapExplorationInfo or not C_MapExplorationInfo.GetExploredAreaIDsAtPosition then
-        return false, "Map exploration API not available", 0, 0
+        return nil, "Map exploration API not available", 0, 0, zoneName, mapID
     end
-    
+
     if not CreateVector2D then
-        return false, "CreateVector2D function not available", 0, 0
+        return nil, "CreateVector2D function not available", 0, 0, zoneName, mapID
     end
-    
-    local locationsToCheck = {}
+
+    local details = {}
     local discoveredCount = 0
-    local totalCount = 0
-    
-    -- Check all defined locations in the zone
+
     for locationName, coords in pairs(LocationMap[zoneName]) do
-        table_insert(locationsToCheck, {x = coords.x, y = coords.y, name = locationName})
+        local discovered = IsExploredAtPosition(mapID, coords.x, coords.y)
+        if discovered then
+            discoveredCount = discoveredCount + 1
+        end
+        table_insert(details, {
+            name = locationName,
+            discovered = discovered,
+            x = coords.x,
+            y = coords.y,
+        })
     end
-    
-    totalCount = #locationsToCheck
+
+    table_sort(details, function(a, b)
+        return tostring(a.name or "") < tostring(b.name or "")
+    end)
+
+    return details, nil, discoveredCount, #details, zoneName, mapID
+end
+
+---------------------------------------
+-- Check if an entire zone has been discovered
+-- This checks all defined locations in the zone from LocationMap
+-- Parameters:
+--   zone: string or number - Zone name (string) or mapID (number)
+--   threshold: number (optional, 0-1) - Minimum percentage of locations that must be discovered (default: 1.0 = 100%)
+-- Returns: boolean, errorMessage, discoveredCount, totalCount
+---------------------------------------
+local function CheckZoneDiscovery(zone, threshold)
+    threshold = threshold or 1.0 -- Default to 100% coverage required
+
+    local details, err, discoveredCount, totalCount, zoneName, mapID = GetZoneDiscoveryDetails(zone)
+    if err then
+        return false, err, discoveredCount, totalCount
+    end
+
     if totalCount == 0 then
         return false, "No locations defined for zone: " .. tostring(zoneName), 0, 0
     end
-    
-    -- Check each location
-    for _, location in ipairs(locationsToCheck) do
-        local position = CreateVector2D(location.x, location.y)
-        local exploredAreaIDs = C_MapExplorationInfo.GetExploredAreaIDsAtPosition(mapID, position)
-        
-        local isExplored = false
-        if exploredAreaIDs and type(exploredAreaIDs) == "table" then
-            local count = 0
-            for _ in pairs(exploredAreaIDs) do
-                count = count + 1
-            end
-            isExplored = count > 0
-        end
-        
-        if isExplored then
-            discoveredCount = discoveredCount + 1
-        end
-    end
-    
+
     -- Calculate percentage and compare to threshold
     local percentage = totalCount > 0 and (discoveredCount / totalCount) or 0
     local isDiscovered = percentage >= threshold
@@ -1191,3 +1212,4 @@ local function CheckZoneDiscovery(zone, threshold)
 end
 
 addon.CheckZoneDiscovery = CheckZoneDiscovery
+addon.GetZoneDiscoveryDetails = GetZoneDiscoveryDetails
