@@ -141,6 +141,8 @@ local ExplorationAchievements = {
 local KalimdorExplorationZones = {
   { zone = "Ashenvale", title = "Ashenvale", icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_Zone_Ashenvale_01.png", points = 10 },
   { zone = "Azshara", title = "Azshara", icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_zone_azshara_01.png", points = 10 },
+  { zone = "Azuremyst Isle", title = "Azuremyst Isle", icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_Zone_AzuremystIsle_01.png", points = 10 },
+  { zone = "Bloodmyst Isle", title = "Bloodmyst Isle", icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_Zone_AzuremystIsle_01.png", points = 10 },
   { zone = "Darkshore", title = "Darkshore", icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_Zone_Darkshore_01.png", points = 10 },
   --{ zone = "Darnassus", title = "Darnassus", icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_Zone_XXX.png", points = 0 },
   { zone = "Desolace", title = "Desolace", icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_Zone_Desolace.png", points = 10 },
@@ -174,11 +176,15 @@ local EasternKingdomsExplorationZones = {
   { zone = "Duskwood", title = "Duskwood", icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_Zone_Duskwood.png", points = 0 },
   { zone = "Eastern Plaguelands", title = "Eastern Plaguelands", icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_Zone_EasternPlaguelands.png", points = 0 },
   { zone = "Elwynn Forest", title = "Elwynn Forest", icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_Zone_ElwynnForest.png", points = 10 },
+  { zone = "Eversong Woods", title = "Eversong Woods", icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_Zone_EversongWoods.png", points = 10 },
+  { zone = "Ghostlands", title = "Ghostlands", icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_Zone_Ghostlands.png", points = 10 },
   { zone = "Hillsbrad Foothills", title = "Hillsbrad Foothills", icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_Zone_HillsbradFoothills.png", points = 10 },
   --{ zone = "Ironforge", title = "Ironforge", icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_Zone_XXX.png", points = 0 },
+  { zone = "Isle of Quel'Danas", title = "Isle of Quel'Danas", icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_Zone_IsleOfQuelDanas.png", points = 10 },
   { zone = "Loch Modan", title = "Loch Modan", icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_Zone_LochModan.png", points = 10 },
   { zone = "Redridge Mountains", title = "Redridge Mountains", icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_Zone_RedridgeMountains.png", points = 10 },
   { zone = "Searing Gorge", title = "Searing Gorge", icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_Zone_SearingGorge_01.png", points = 10 },
+  --{ zone = "Silvermoon City", title = "Silvermoon City", icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_Zone_XXX.png", points = 0 },
   { zone = "Silverpine Forest", title = "Silverpine Forest", icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_Zone_Silverpine_01.png", points = 10 },
   --{ zone = "Stormwind City", title = "Stormwind City", icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_Zone_XXX.png", points = 0 },
   { zone = "Stranglethorn Vale", title = "Stranglethorn Vale", icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_Zone_Stranglethorn_01.png", points = 10 },
@@ -189,6 +195,17 @@ local EasternKingdomsExplorationZones = {
   { zone = "Western Plaguelands", title = "Western Plaguelands", icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_Zone_WesternPlaguelands_01.png", points = 10 },
   { zone = "Westfall", title = "Westfall", icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_Zone_WestFall_01.png", points = 10 },
   { zone = "Wetlands", title = "Wetlands", icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_Zone_Wetlands_01.png", points = 10 },
+}
+
+local OutlandExplorationZones = {
+  { zone = "Blade's Edge Mountains", title = "Blade's Edge Mountains", icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_Zone_BladesEdgeMtns_01.png", points = 10 },
+  { zone = "Hellfire Peninsula", title = "Hellfire Peninsula", icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_Zone_HellfirePeninsula_01.png", points = 10 },
+  { zone = "Nagrand", title = " ", icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_Zone_Nagrand_02.png", points = 10 },
+  { zone = "Netherstorm", title = "Netherstorm", icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_Zone_Netherstorm_01.png", points = 10 },
+  { zone = "Shadowmoon Valley", title = "Shadowmoon Valley", icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_Zone_Shadowmoon.png", points = 10 },
+  --{ zone = "Shattrath City", title = "Shattrath City", icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_Zone_XXX.png", points = 0 },
+  { zone = "Terokkar Forest", title = "Terokkar Forest", icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_Zone_Terrokar.png", points = 10 },
+  { zone = "Zangarmarsh", title = "Zangarmarsh", icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_Zone_Zangarmarsh.png", points = 10 },
 }
 
 local KalimdorContinentAchievement = {
@@ -203,11 +220,20 @@ local EasternKingdomsContinentAchievement = {
   points = 50,
 }
 
+local OutlandContinentAchievement = {
+  title = "Explore Outlands",
+  icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_Zone_Outland_01.png",
+  points = 25,
+}
+
 local ZoneExplorationOrder = {}
 for _, zoneCfg in ipairs(KalimdorExplorationZones) do
   table_insert(ZoneExplorationOrder, zoneCfg)
 end
 for _, zoneCfg in ipairs(EasternKingdomsExplorationZones) do
+  table_insert(ZoneExplorationOrder, zoneCfg)
+end
+for _, zoneCfg in ipairs(OutlandExplorationZones) do
   table_insert(ZoneExplorationOrder, zoneCfg)
 end
 
@@ -217,6 +243,7 @@ end
 
 table_insert(ExplorationAchievements, CreateContinentExplorationAchievement("Kalimdor", KalimdorExplorationZones, KalimdorContinentAchievement))
 table_insert(ExplorationAchievements, CreateContinentExplorationAchievement("Eastern Kingdoms", EasternKingdomsExplorationZones, EasternKingdomsContinentAchievement))
+table_insert(ExplorationAchievements, CreateContinentExplorationAchievement("Outland", OutlandExplorationZones, OutlandContinentAchievement))
 
 -- Defer registration until PLAYER_LOGIN to prevent load timeouts
 -- Check faction eligibility (same pattern as Catalog.lua and SecretCatalog.lua)
