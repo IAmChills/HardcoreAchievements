@@ -378,27 +378,33 @@ local function HookRowSubTextUpdates(row)
     fontString._hcaSetTextWrapped = true
 end
 
--- Helper function to check if a quest is in the player's quest log
-local function IsQuestInQuestLog(questID)
-    if not questID then return false end
-    -- Try modern API first
+local function GetQuestLogState(questID)
+    if not questID then return false, false end
+
     if GetQuestLogIndexByID then
         local logIndex = GetQuestLogIndexByID(questID)
         if logIndex and logIndex > 0 then
-            return true
+            if GetQuestLogTitle then
+                local _, _, _, isHeader, _, isComplete, _, questIDFromLog = GetQuestLogTitle(logIndex)
+                if not isHeader and questIDFromLog == questID then
+                    return true, (isComplete == 1 or isComplete == true)
+                end
+            end
+            return true, false
         end
     end
-    -- Fallback: check using classic API
-    if GetNumQuestLogEntries then
+
+    if GetNumQuestLogEntries and GetQuestLogTitle then
         local numEntries = GetNumQuestLogEntries()
         for i = 1, numEntries do
-            local title, level, suggestGroup, isHeader, isCollapsed, isComplete, frequency, questIDFromLog = GetQuestLogTitle(i)
+            local _, _, _, isHeader, _, isComplete, _, questIDFromLog = GetQuestLogTitle(i)
             if not isHeader and questIDFromLog == questID then
-                return true
+                return true, (isComplete == 1 or isComplete == true)
             end
         end
     end
-    return false
+
+    return false, false
 end
 
 local function IsRowOutleveled(row)
@@ -419,20 +425,18 @@ local function IsRowOutleveled(row)
         end
     end
     
-    -- Check if this is a meta achievement that should be failed based on required achievements
-    -- Meta achievements don't have maxLevel, so check database for failed flag
+    -- Achievements without a maxLevel normally stay available forever.
+    -- Only meta achievements and defs that explicitly opt in should honor a stored failed flag.
     if not row.maxLevel then
-      -- Check if this is a meta achievement (isMetaAchievement, isMeta, or requiredAchievements)
-      local isMetaAchievement = (row._def and (row._def.isMetaAchievement or row._def.isMeta)) or (row.requiredAchievements ~= nil)
-      if isMetaAchievement then
-        -- For meta achievements, check the database directly for failed flag (use tostring for key consistency)
+        local usesStoredFailure = (row._def and row._def.supportsStoredFailure)
+            or (row._def and (row._def.isMetaAchievement or row._def.isMeta))
+            or (row.requiredAchievements ~= nil)
         local _, cdb = GetCharDB()
         local achKey = achId and tostring(achId)
-        if cdb and cdb.achievements and achKey and cdb.achievements[achKey] and cdb.achievements[achKey].failed then
-          return true
+        if usesStoredFailure and cdb and cdb.achievements and achKey and cdb.achievements[achKey] and cdb.achievements[achKey].failed then
+            return true
         end
-      end
-      return false
+        return false
     end
     
     local lvl = UnitLevel("player") or 1
@@ -476,18 +480,27 @@ local function IsRowOutleveled(row)
         end
     end
     
+    local progress = achId and addon and addon.GetProgress and addon.GetProgress(achId)
+    local questID = row.requiredQuestId or (row._def and row._def.requiredQuestId)
+    local questInLog, questReadyForTurnIn = GetQuestLogState(questID)
+
+    -- If the quest is complete and ready to turn in, leveling afterward is still valid.
+    if isOverLevel and questID and not (progress and progress.quest) and questReadyForTurnIn then
+        return false
+    end
+
     -- Check if there's pending turn-in progress (kill completed but quest not turned in)
     -- If so, check if quest is still in quest log - if not, mark as failed
-    if row.questTracker and (row.killTracker or row.requiredKills) then
+    if row.questTracker and (row.killTracker or row.requiredKills or (row._def and (row._def.requiredKills or row._def.targetNpcId))) then
         -- Achievement requires both kill and quest
-        local progress = addon and addon.GetProgress and addon.GetProgress(row.id)
         if progress then
             local hasKill = false
-            if row.requiredKills then
+            local requiredKills = row.requiredKills or (row._def and row._def.requiredKills)
+            if requiredKills then
                 -- Check if all required kills are satisfied
                 if progress.eligibleCounts then
                     local allSatisfied = true
-                    for npcId, requiredCount in pairs(row.requiredKills) do
+                    for npcId, requiredCount in pairs(requiredKills) do
                         local idNum = tonumber(npcId) or npcId
                         local current = progress.eligibleCounts[idNum] or progress.eligibleCounts[tostring(idNum)] or 0
                         local required = tonumber(requiredCount) or 1
@@ -506,19 +519,13 @@ local function IsRowOutleveled(row)
             local questNotTurnedIn = not progress.quest
             -- If kills are satisfied but quest is not turned in
             if hasKill and questNotTurnedIn then
-                -- Get quest ID from row definition
-                local questID = nil
-                if row._def and row._def.requiredQuestId then
-                    questID = row._def.requiredQuestId
-                end
-                
                 -- If player is over level and quest is not in quest log (abandoned), fail the achievement
-                if isOverLevel and questID and not IsQuestInQuestLog(questID) then
+                if isOverLevel and questID and not questInLog then
                     return true -- Mark as outleveled/failed
                 end
                 
                 -- If quest is still in quest log, keep achievement available
-                if questID and IsQuestInQuestLog(questID) then
+                if questID and questInLog then
                     return false
                 end
             end
@@ -3457,11 +3464,12 @@ local function CreateAchievementRowFromData(data, index)
     row.killTracker  = killTracker
     row.questTracker = questTracker
     row.id = achId
-    -- Store solo doubling flag (defaults to true if killTracker exists for backward compatibility)
+    -- Store solo doubling flag (defaults to true for real kill-tracked achievements only).
+    local supportsSoloDoubleByDefault = not (def and (def.isMetaAchievement or def.isMeta or def.requiredAchievements ~= nil))
     if def and def.allowSoloDouble ~= nil then
         row.allowSoloDouble = def.allowSoloDouble
     else
-        row.allowSoloDouble = (killTracker ~= nil)
+        row.allowSoloDouble = supportsSoloDoubleByDefault and (killTracker ~= nil)
     end
     
     if def and type(def.customSpell) == "function" then
@@ -3501,7 +3509,8 @@ local function CreateAchievementRowFromData(data, index)
     end
 
     -- Secret/hidden achievement support (optional via def)
-    if def and (def.secret or def.secretTitle or def.secretTooltip or def.secretIcon or def.secretPoints) then
+    local isSecretDef = def and (def.secret or def.isSecretAchievement or def.secretTitle or def.secretTooltip or def.secretIcon or def.secretPoints)
+    if isSecretDef then
         row.isSecretAchievement = true
         -- Store reveal values (final state after completion)
         row.revealTitle = title
@@ -3563,13 +3572,15 @@ if addon then addon.AddRowUIInit = AddRowUIInit end
 
 local function CreateAchievementRow(parent, achId, title, tooltip, icon, level, points, killTracker, questTracker, staticPoints, zone, def)
     local capNum = tonumber(level)
+    local isSecretDef = def and (def.secret or def.isSecretAchievement or def.secretTitle or def.secretTooltip or def.secretIcon or def.secretPoints)
+    local supportsSoloDoubleByDefault = not (def and (def.isMetaAchievement or def.isMeta or def.requiredAchievements ~= nil))
     local data = {
         achId = achId, id = achId, title = title, tooltip = tooltip, icon = icon, level = level,
         points = points or 0, killTracker = killTracker, questTracker = questTracker, staticPoints = staticPoints,
         zone = zone, def = def, _def = def,
         completed = false, originalPoints = points or 0,
         maxLevel = (capNum and capNum > 0) and capNum or nil,
-        allowSoloDouble = (def and def.allowSoloDouble ~= nil) and def.allowSoloDouble or (killTracker ~= nil),
+        allowSoloDouble = (def and def.allowSoloDouble ~= nil) and def.allowSoloDouble or (supportsSoloDoubleByDefault and (killTracker ~= nil)),
         staticPoints = staticPoints or false,
     }
 
@@ -3612,7 +3623,7 @@ local function CreateAchievementRow(parent, achId, title, tooltip, icon, level, 
     end
 
     -- Secret/hidden achievement support (model fields; UI reveal happens when a frame exists)
-    if def and (def.secret or def.secretTitle or def.secretTooltip or def.secretIcon or def.secretPoints) then
+    if isSecretDef then
         data.isSecretAchievement = true
         data.revealTitle = title
         data.revealTooltip = tooltip

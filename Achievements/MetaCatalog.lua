@@ -113,6 +113,7 @@ local classicDungeons = GetClassicDungeonMasterAchievements()
 local coreRepAchievements = GetCoreReputationMasterAchievements()
 local raidAchievements = GetRaidMasterAchievements()
 local secondaryProfAchievements = GetSecondaryProfessionMasterAchievements()
+local continentExplorationAchievements = {"ExploreKalimdor", "ExploreEasternKingdoms"}
 
 ---------------------------------------
 -- Meta Achievement Definitions
@@ -156,6 +157,15 @@ local MetaAchievements = {
     achievementOrder = raidAchievements
   },
   {
+    achId = "ExplorationMeta",
+    title = "The Explorer",
+    tooltip = "Complete all continent exploration achievements",
+    icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\INV_Misc_Map02.png",
+    points = 100,
+    requiredAchievements = continentExplorationAchievements,
+    achievementOrder = continentExplorationAchievements
+  },
+  {
     achId = "SecoProfMeta",
     title = "The Scholar",
     tooltip = "Reach 300 skill in all secondary professions",
@@ -170,8 +180,8 @@ local MetaAchievements = {
     tooltip = "Complete all meta achievements",
     icon = 255343,
     points = 500,
-    requiredAchievements = {"DungeonMeta", "QuestMeta", "CoreRepMeta", "SecoProfMeta"},
-    achievementOrder = {"DungeonMeta", "QuestMeta", "CoreRepMeta", "SecoProfMeta"}
+    requiredAchievements = {"DungeonMeta", "QuestMeta", "CoreRepMeta", "ExplorationMeta", "SecoProfMeta"},
+    achievementOrder = {"DungeonMeta", "QuestMeta", "CoreRepMeta", "ExplorationMeta", "SecoProfMeta"}
   }
 }
 

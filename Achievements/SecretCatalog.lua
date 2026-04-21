@@ -70,6 +70,7 @@ local Secrets = {
     icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_rat.png", -- ??
     points = 0,
     targetNpcId = {4075, 13016, 2110},
+    allowSoloDouble = false,
     secret = true,
     secretTitle = "Secret Achievement",
     secretTooltip = "You will probably complete this achievement by accident",
@@ -161,20 +162,20 @@ local Secrets = {
     secret = true,
     staticPoints = true,
     hiddenUntilComplete = true,
-}, 
--- {
---   achId = "Secret006",
---   title = "PLACEHOLDER",
---   level = nil,
---   tooltip = "",
---   icon = 237542,
---   points = 0,
---   customIsCompleted = function() return false end,
---   secret = true,
---   staticPoints = true,
---   hiddenUntilComplete = true,
--- },
-{
+}, {
+    achId = "Secret006",
+    title = "Holographic!",
+    level = nil,
+    tooltip = "You have completed the secret achievement: |cffff8000Obtain the Prismatic Punch Card|r",
+    icon = 133229,
+    points = 0,
+    customIsCompleted = function() return false end,
+    customItem = function() return GetItemCount(9316, true) > 0 end,
+    -- Secret presentation before completion
+    secret = true,
+    staticPoints = true,
+    hiddenUntilComplete = true,
+}, {
     achId = "Secret007",
     title = "Mok'rash",
     level = 50,

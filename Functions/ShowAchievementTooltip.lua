@@ -52,7 +52,7 @@ local function ExtractAchievementData(data)
         result.maxLevel = data.maxLevel
         result.points = data.points
         result.allowSoloDouble = data.allowSoloDouble or false
-        result.isSecretAchievement = data.isSecretAchievement or false
+        result.isSecretAchievement = data.isSecretAchievement or (data._def and data._def.secret) or data.secret or false
         result.def = data._def
         result.secretPoints = data.secretPoints
         if data.requireProfessionSkillID or (result.def and result.def.requireProfessionSkillID) then
@@ -69,7 +69,7 @@ local function ExtractAchievementData(data)
         result.maxLevel = data.maxLevel
         result.points = data.points
         result.allowSoloDouble = data.allowSoloDouble or false
-        result.isSecretAchievement = data.isSecretAchievement or false
+        result.isSecretAchievement = data.isSecretAchievement or data.secret or false
         result.secretPoints = data.secretPoints
         if data.requireProfessionSkillID then
             result.isProfessionAchievement = true
@@ -229,18 +229,16 @@ local function ShowMetaAchievementRequirements(requiredAchievements, achievement
                 reqAchTitle = reqAchDef.title
             end
         end
-        -- Fallback: check AchievementPanel.achievements (for quest and profession achievements)
-        if reqAchTitle == tostring(reqAchId) and (addon and addon.AchievementPanel) and (addon and addon.AchievementPanel).achievements then
-            for _, row in ipairs((addon and addon.AchievementPanel).achievements) do
-                local rowId = row.id or row.achId
-                if rowId and tostring(rowId) == tostring(reqAchId) then
-                    if row.Title and row.Title.GetText then
-                        reqAchTitle = row.Title:GetText() or reqAchTitle
-                    elseif row._title then
-                        reqAchTitle = row._title
-                    end
-                    break
-                end
+        local reqRow = (addon and addon.GetAchievementRow and addon.GetAchievementRow(reqAchId)) or nil
+
+        -- Fallback: check the loaded row/model for quest and profession achievements.
+        if reqAchTitle == tostring(reqAchId) and reqRow then
+            if reqRow.Title and reqRow.Title.GetText then
+                reqAchTitle = reqRow.Title:GetText() or reqAchTitle
+            elseif reqRow._title then
+                reqAchTitle = reqRow._title
+            elseif reqRow.title then
+                reqAchTitle = reqRow.title
             end
         end
         
@@ -248,26 +246,16 @@ local function ShowMetaAchievementRequirements(requiredAchievements, achievement
         local reqProgress = addon and addon.GetProgress and addon.GetProgress(reqAchId)
         local reqCompleted = reqProgress and reqProgress.completed
         local reqFailed = false
-        local reqRow = nil
 
-        if (addon and addon.AchievementPanel) and (addon and addon.AchievementPanel).achievements then
-            for _, row in ipairs((addon and addon.AchievementPanel).achievements) do
-                local rowId = row.id or row.achId
-                if rowId and tostring(rowId) == tostring(reqAchId) then
-                    reqRow = row
-                    if row.completed then
-                        reqCompleted = true
-                    end
-                    break
-                end
-            end
+        if reqRow and reqRow.completed then
+            reqCompleted = true
         end
 
         -- Failed = outleveled or DB has .failed (e.g. meta)
         if not reqCompleted and addon and addon.IsRowOutleveled and reqRow and addon.IsRowOutleveled(reqRow) then
             reqFailed = true
         end
-        if not reqFailed and not reqCompleted and addon and addon.GetCharDB then
+        if not reqFailed and not reqCompleted and not reqRow and addon and addon.GetCharDB then
             local _, cdb = addon.GetCharDB()
             local rec = cdb and cdb.achievements and cdb.achievements[tostring(reqAchId)]
             if rec and rec.failed then
@@ -281,6 +269,28 @@ local function ShowMetaAchievementRequirements(requiredAchievements, achievement
             GameTooltip:AddLine("|cffff4444" .. reqAchTitle .. "|r", 1, 1, 1) -- Red for failed (color in text for visibility)
         else
             GameTooltip:AddLine(reqAchTitle, 0.5, 0.5, 0.5) -- Gray for available
+        end
+    end
+end
+
+local function ShowExplorationRequirements(explorationZone)
+    if not explorationZone or not addon or type(addon.GetZoneDiscoveryDetails) ~= "function" then
+        return
+    end
+
+    local details, err = addon.GetZoneDiscoveryDetails(explorationZone)
+    if err or not details or #details == 0 then
+        return
+    end
+
+    GameTooltip:AddLine("\nRequired Areas:", 0, 1, 0)
+
+    for _, info in ipairs(details) do
+        local label = tostring(info.name or "Unknown")
+        if info.discovered then
+            GameTooltip:AddLine(label, 1, 1, 1)
+        else
+            GameTooltip:AddLine(label, 0.5, 0.5, 0.5)
         end
     end
 end
@@ -308,6 +318,7 @@ local function ShowAchievementTooltip(frame, data)
     local itemOrder = extracted.itemOrder
     local requiredAchievements = extracted.requiredAchievements
     local achievementOrder = extracted.achievementOrder
+    local explorationZone = nil
     
     -- Check database for completion status if not already set
     if not achievementCompleted and achId then
@@ -326,8 +337,14 @@ local function ShowAchievementTooltip(frame, data)
     -- Get achievement definition once
     local achDef = GetAchievementDefinition(achId)
     
+    local isSecret = isSecretAchievement or (def and def.secret) or (achDef and achDef.secret) or false
+    local isMetaAchievement = (def and (def.isMetaAchievement or def.isMeta or def.requiredAchievements ~= nil))
+        or (achDef and (achDef.isMetaAchievement or achDef.isMeta or achDef.requiredAchievements ~= nil))
+        or (requiredAchievements ~= nil)
+        or false
+
     -- For secret achievements that are not completed, use secretPoints instead of actual points
-    if isSecretAchievement and not achievementCompleted then
+    if isSecret and not achievementCompleted then
         -- Try to get secretPoints from extracted data first
         if extracted.secretPoints ~= nil then
             points = extracted.secretPoints
@@ -350,7 +367,7 @@ local function ShowAchievementTooltip(frame, data)
     -- Check if SSF mode is enabled and this achievement supports it
     -- Secret achievements should not show "Solo bonus"
     local isSoloMode = (addon and addon.IsSoloModeEnabled and addon.IsSoloModeEnabled()) or false
-    if isSoloMode and allowSoloDouble and not isSecretAchievement then
+    if isSoloMode and allowSoloDouble and not isSecret and not isMetaAchievement then
         -- Show title with "Solo bonus" on the right when SSF is enabled
         local soloText = "Solo bonus"
         local ClassColor = (addon and addon.GetClassColor())
@@ -362,7 +379,7 @@ local function ShowAchievementTooltip(frame, data)
     -- Show level and points for achievements with level requirements (right-aligned below title, before description)
     -- Achievements without level requirements show points below the description instead
     local hasLevelRequirement = maxLevel and maxLevel > 0
-    local showPointsInBody = isSecretAchievement or isProfessionAchievement or not hasLevelRequirement
+    local showPointsInBody = isSecret or isProfessionAchievement or not hasLevelRequirement
 
     if not showPointsInBody then
         local levelText = ""
@@ -389,8 +406,6 @@ local function ShowAchievementTooltip(frame, data)
             end
         end
     end
-    
-    local isSecret = (def and def.secret) or isSecretAchievement
     
     local requiresItemOnly = false
     if def then
@@ -449,6 +464,9 @@ local function ShowAchievementTooltip(frame, data)
                 achievementOrder = achDef.achievementOrder
             end
         end
+        if achDef.explorationZone then
+            explorationZone = achDef.explorationZone
+        end
     end
     
     -- Also check def for requirements
@@ -465,6 +483,9 @@ local function ShowAchievementTooltip(frame, data)
         if def.achievementOrder then
             achievementOrder = def.achievementOrder
         end
+        if def.explorationZone then
+            explorationZone = def.explorationZone
+        end
     end
     
     -- Show boss requirements if available
@@ -476,6 +497,9 @@ local function ShowAchievementTooltip(frame, data)
     
     -- Show meta achievement requirements if available
     ShowMetaAchievementRequirements(requiredAchievements, achievementOrder, achievementCompleted)
+
+    -- Show exploration subzone requirements if available
+    ShowExplorationRequirements(explorationZone)
     
     -- Hint for linking the achievement in chat
     GameTooltip:AddLine("\nShift click to link in chat\nor add to tracking list", 0.5, 0.5, 0.5)

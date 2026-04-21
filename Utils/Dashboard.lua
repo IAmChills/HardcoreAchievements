@@ -1378,7 +1378,7 @@ local function CreateDashboardModernRow(parent, srow)
         end
         self.highlight:Show()
         if ShowAchievementTooltip then
-            ShowAchievementTooltip(self, self)
+            ShowAchievementTooltip(self, self.sourceRow or self)
         end
     end)
     
@@ -1448,7 +1448,6 @@ local function CreateDashboardModernRow(parent, srow)
     row._def = def or (srow and srow._def) or (addon and addon.AchievementDefs and addon.AchievementDefs[achId])
     row._tooltip = tooltip
     row._zone = zone
-    row._def = def
     row.sourceRow = srow
     row.requiredKills = srow.requiredKills
     
@@ -1462,7 +1461,7 @@ local function CreateDashboardModernRow(parent, srow)
     row.tooltip = tooltip
     row.zone = zone
     row.allowSoloDouble = (def and def.allowSoloDouble ~= nil) and def.allowSoloDouble or (srow.allowSoloDouble ~= nil and srow.allowSoloDouble)
-    row.isSecretAchievement = (def and def.isSecretAchievement) or (srow.isSecretAchievement)
+    row.isSecretAchievement = (def and (def.secret or def.isSecretAchievement)) or (srow.isSecretAchievement)
     
     -- Store trackers from source row
     row.killTracker = srow.killTracker
@@ -1509,6 +1508,7 @@ local function UpdateDashboardModernRow(row, srow)
     row.zone = srow.zone or srow._zone
     row._zone = row.zone
     row._title = title
+    row.isSecretAchievement = (def and (def.secret or def.isSecretAchievement)) or (srow.isSecretAchievement)
     
     -- Update default sub text to ensure it matches the current achievement
     if level and level > 0 then
