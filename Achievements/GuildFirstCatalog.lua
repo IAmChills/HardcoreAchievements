@@ -96,6 +96,111 @@ local achievements = {
     --     hiddenUntilComplete = true,
     --     achievementScope = {"Alliance Guild A", "Alliance Guild B"},  -- Only these guilds compete
     -- },
+  {
+    achId = "GF001",
+    title = "Guild First: Reach Level 60",
+    level = nil,
+    tooltip = "You were the first in your guild to reach level 60.",
+    icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\guild_first.png",
+    points = 0,
+    secret = true,
+    staticPoints = true,
+    hiddenUntilComplete = true,
+    triggerAchievementId = "Level60",
+    awardMode = "solo",
+    requireSameGuild = true,
+  }, {
+    achId = "GF002",
+    title = "Guild First: Complete the Meta Achievement 'The Ambassador'",
+    level = nil,
+    tooltip = "You were the first in your guild to complete the Meta Achievement 'The Ambassador'.",
+    icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\guild_first.png",
+    points = 0,
+    secret = true,
+    staticPoints = true,
+    hiddenUntilComplete = true,
+    triggerAchievementId = "CoreRepMeta",
+    awardMode = "solo",
+    requireSameGuild = true,
+  }, {
+    achId = "GF003",
+    title = "Guild First: Complete the Meta Achievement 'The Explorer'",
+    level = nil,
+    tooltip = "You were the first in your guild to complete the Meta Achievement 'The Explorer'.",
+    icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\guild_first.png",
+    points = 0,
+    secret = true,
+    staticPoints = true,
+    hiddenUntilComplete = true,
+    triggerAchievementId = "ExplorationMeta",
+    awardMode = "solo",
+    requireSameGuild = true,
+  }, {
+    achId = "GF004",
+    title = "Guild First: Complete the Meta Achievement 'The Raider'",
+    level = nil,
+    tooltip = "You were the first in your guild to complete the Meta Achievement 'The Raider'.",
+    icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\guild_first.png",
+    points = 0,
+    secret = true,
+    staticPoints = true,
+    hiddenUntilComplete = true,
+    triggerAchievementId = "RaidMeta",
+    awardMode = "solo",
+    requireSameGuild = true,
+  }, {
+    achId = "GF005",
+    title = "Guild First: Complete the Meta Achievement 'The Scholar'",
+    level = nil,
+    tooltip = "You were the first in your guild to complete the Meta Achievement 'The Scholar'.",
+    icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\guild_first.png",
+    points = 0,
+    secret = true,
+    staticPoints = true,
+    hiddenUntilComplete = true,
+    triggerAchievementId = "SecoProfMeta",
+    awardMode = "solo",
+    requireSameGuild = true,
+  }, {
+    achId = "GF006",
+    title = "Guild First: Complete the Meta Achievement 'The Dungeon Master'",
+    level = nil,
+    tooltip = "You were the first in your guild to complete the Meta Achievement 'The Dungeon Master'.",
+    icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\guild_first.png",
+    points = 0,
+    secret = true,
+    staticPoints = true,
+    hiddenUntilComplete = true,
+    triggerAchievementId = "DungeonMeta",
+    awardMode = "solo",
+    requireSameGuild = true,
+  }, {
+    achId = "GF007",
+    title = "Guild First: Complete the Meta Achievement 'Metalomaniac'",
+    level = nil,
+    tooltip = "You were the first in your guild to complete the Meta Achievement 'Metalomaniac'.",
+    icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\guild_first.png",
+    points = 0,
+    secret = true,
+    staticPoints = true,
+    hiddenUntilComplete = true,
+    triggerAchievementId = "Meta",
+    awardMode = "solo",
+    requireSameGuild = true,
+  }, {
+    achId = "GF008",
+    title = "Guild First: Complete the Meta Achievement 'The Diplomat'",
+    level = nil,
+    tooltip = "You were the first in your guild to complete the Meta Achievement 'The Diplomat'.",
+    icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\guild_first.png",
+    points = 0,
+    secret = true,
+    staticPoints = true,
+    hiddenUntilComplete = true,
+    triggerAchievementId = "QuestMeta",
+    awardMode = "solo",
+    requireSameGuild = true,
+  },
 }
 
 -- Publish defs/trigger index immediately (so awarding works even if UI rows haven't been created yet).
@@ -115,11 +220,11 @@ if addon then
 
   addon.RegistrationQueue = addon.RegistrationQueue or {}
   local queue = addon.RegistrationQueue
-  local CreateAchievementRow = addon.CreateAchievementRow
-  local AchievementPanel = addon.AchievementPanel
 
   for _, def in ipairs(achievements) do
     table_insert(queue, function()
+      local CreateAchievementRow = addon and addon.CreateAchievementRow
+      local AchievementPanel = addon and addon.AchievementPanel
       if CreateAchievementRow and AchievementPanel then
         local row = CreateAchievementRow(
           AchievementPanel,

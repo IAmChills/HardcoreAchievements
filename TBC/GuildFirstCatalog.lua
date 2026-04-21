@@ -107,6 +107,19 @@ local achievements = {
     awardMode = "solo",
     requireSameGuild = true,
   }, {
+    achId = "GF009",
+    title = "Guild First: Complete the Meta Achievement 'The Explorer'",
+    level = nil,
+    tooltip = "You were the first in your guild to complete the Meta Achievement 'The Explorer'.",
+    icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\guild_first.png",
+    points = 0,
+    secret = true,
+    staticPoints = true,
+    hiddenUntilComplete = true,
+    triggerAchievementId = "ExplorationMeta",
+    awardMode = "solo",
+    requireSameGuild = true,
+  }, {
     achId = "GF101",
     title = "Guild First: Heroic Hellfire Ramparts",
     level = nil,
@@ -448,6 +461,7 @@ if addon then
       table_insert(addon.GuildFirst_ByTrigger[k], def.achId)
     end
   end
+  
   addon.RegistrationQueue = addon.RegistrationQueue or {}
   local queue = addon.RegistrationQueue
 
