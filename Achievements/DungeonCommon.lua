@@ -97,26 +97,14 @@ local isInDungeonOrRaid = false
 -- Shared no-op; used as early-exit return from CreateTooltipHandler to avoid allocating a new function each time
 local function noop() end
 
--- GetInstanceInfo() 3rd return is difficultyID: 1 = normal 5-player, 2 = heroic 5-player (TBC-era norm/heroic split).
-function DungeonCommon.GetInstanceDifficultyID()
-    return select(3, GetInstanceInfo())
+local function GetCurrentInstanceMapID()
+    return select(8, GetInstanceInfo())
 end
 
-function DungeonCommon.IsNormalDungeonDifficulty()
-    return DungeonCommon.GetInstanceDifficultyID() == 1
-end
-
-function DungeonCommon.IsHeroicDungeonDifficulty()
-    return DungeonCommon.GetInstanceDifficultyID() == 2
-end
-
---- Normal and heroic dungeon defs often share requiredMapId and boss NPC ids; gate by instance difficulty.
-function DungeonCommon.DefMatchesInstanceDifficulty(achDef)
-    if not achDef then return false end
-    if achDef.isHeroicDungeon then
-        return DungeonCommon.IsHeroicDungeonDifficulty()
-    end
-    return DungeonCommon.IsNormalDungeonDifficulty()
+-- Classic has no heroic dungeons. Keep the gate simple and only ignore
+-- any mistakenly-registered heroic defs.
+local function IsSupportedClassicDungeonDef(achDef)
+    return achDef ~= nil and achDef.isHeroicDungeon ~= true
 end
 
 -- Helper function to check if a group is eligible for a dungeon achievement
@@ -161,7 +149,7 @@ local function CheckAchievementEligibility(mapId, achDef, entryData)
 end
 
 -- Helper function to check and print eligibility messages for achievements matching a mapId.
--- Prints only one message: for the lowest-level version (base then Trio, Duo, Solo, then Heroic if present).
+-- Prints only one message: for the lowest-level version (base then Trio, Duo, Solo).
 local function CheckAndPrintEligibilityMessages(mapId, entryData)
     if not mapId or not entryData then return end
     if not (addon and addon.AchievementDefs) then return end
@@ -171,7 +159,7 @@ local function CheckAndPrintEligibilityMessages(mapId, entryData)
 
     for achId, achDef in pairs(addon.AchievementDefs) do
         local defMapId = tonumber(achDef.mapID) or achDef.mapID
-        if defMapId and mapIdNum and defMapId == mapIdNum and DungeonCommon.DefMatchesInstanceDifficulty(achDef) then
+        if defMapId and mapIdNum and defMapId == mapIdNum and IsSupportedClassicDungeonDef(achDef) then
             local progress = addon and addon.GetProgress and addon.GetProgress(achId)
             local isCompleted = progress and progress.completed
             local isFailed = progress and progress.failed
@@ -202,8 +190,6 @@ local function CheckAndPrintEligibilityMessages(mapId, entryData)
             elseif a.achDef.variationType == "Solo" then orderA = 3
             else orderA = 4
             end
-        elseif a.achDef.isHeroicDungeon then
-            orderA = 5
         end
         local orderB = 0
         if b.achDef.isVariation then
@@ -212,8 +198,6 @@ local function CheckAndPrintEligibilityMessages(mapId, entryData)
             elseif b.achDef.variationType == "Solo" then orderB = 3
             else orderB = 4
             end
-        elseif b.achDef.isHeroicDungeon then
-            orderB = 5
         end
         return orderA < orderB
     end)
@@ -248,7 +232,7 @@ local function CheckAndPrintEligibilityMessages(mapId, entryData)
 
     local title = c.achDef.title or c.achDef.mapName or "Unknown"
     if isEligible then
-        print("|cff008066[Hardcore Achievements]|r |cff00ff00Group is eligible for achievement: " .. title .. ". If any player levels beyond the achievement's allowed level while inside the dungeon, exiting and re-entering will disqualify the group from achievement eligibility.|r")
+      print("|cff008066[Hardcore Achievements]|r |cff00ff00Group is eligible for achievement: " .. title .. "|r. If any player levels beyond the achievement's allowed level while inside the dungeon, they must remain inside the dungeon to remain eligible.")
         if addon.EventLogAdd then
             addon.EventLogAdd("Dungeon entered: group is |cff00ff00eligible|r for achievement: " .. title .. " (" .. tostring(c.achId) .. ")")
         end
@@ -260,26 +244,20 @@ local function CheckAndPrintEligibilityMessages(mapId, entryData)
     end
 end
 
--- GetInstanceInfo() return 3 is often 0 on PLAYER_ENTERING_WORLD; UPDATE_INSTANCE_INFO follows with valid difficulty.
+-- Queue the entry message until UPDATE_INSTANCE_INFO, which gives us a reliable
+-- post-zone callback after the client finishes loading the dungeon context.
 local function QueueEligibilityMessageOnInstanceInfo(mapId, entryData)
     if not mapId or not entryData then return end
-    local diff = select(3, GetInstanceInfo())
-    if diff == 1 or diff == 2 then
-        CheckAndPrintEligibilityMessages(mapId, entryData)
-        return
-    end
     entryData.awaitingEligibilityInstanceInfo = true
 end
 
 local function TryPrintPendingEligibilityOnInstanceInfo()
     local inInstance, instanceType = IsInInstance()
     if not (inInstance and instanceType == "party") then return end
-    local mapId = select(8, GetInstanceInfo())
+    local mapId = GetCurrentInstanceMapID()
     if not mapId then return end
     local entryData = instanceEntryLevels[mapId]
     if not entryData or not entryData.awaitingEligibilityInstanceInfo then return end
-    local diff = select(3, GetInstanceInfo())
-    if diff ~= 1 and diff ~= 2 then return end
     entryData.awaitingEligibilityInstanceInfo = nil
     CheckAndPrintEligibilityMessages(mapId, entryData)
 end
@@ -341,7 +319,7 @@ dungeonEventFrame:SetScript("OnEvent", function(self, event, unitIndex)
         local inInstance, instanceType = IsInInstance()
         if inInstance and instanceType == "party" then
             wasDeadOnExit = true
-            local mapId = select(8, GetInstanceInfo())
+            local mapId = GetCurrentInstanceMapID()
             if addon and addon.DebugPrint then
                 addon.DebugPrint("Tracking death in dungeon (mapId: " .. (mapId or "unknown") .. ")")
             end
@@ -351,7 +329,7 @@ dungeonEventFrame:SetScript("OnEvent", function(self, event, unitIndex)
         -- unitIndex is actually the unit ID string (e.g., "party1")
         local inInstance, instanceType = IsInInstance()
         if inInstance and instanceType == "party" then
-            local mapId = select(8, GetInstanceInfo())
+            local mapId = GetCurrentInstanceMapID()
             if mapId and instanceEntryLevels[mapId] then
                 if unitIndex then
                     -- unitIndex is already the full unit ID like "party1"
@@ -393,7 +371,7 @@ dungeonEventFrame:SetScript("OnEvent", function(self, event, unitIndex)
         -- unitIndex is actually the unit ID string (e.g., "party1")
         local inInstance, instanceType = IsInInstance()
         if inInstance and instanceType == "party" then
-            local mapId = select(8, GetInstanceInfo())
+            local mapId = GetCurrentInstanceMapID()
             if mapId and instanceEntryLevels[mapId] then
                 -- Check the specific party member that enabled
                 if unitIndex then
@@ -451,7 +429,7 @@ dungeonEventFrame:SetScript("OnEvent", function(self, event, unitIndex)
         local inInstance, instanceType = IsInInstance()
         local currentMapId = nil
         if inInstance and instanceType == "party" then
-            currentMapId = select(8, GetInstanceInfo())
+            currentMapId = GetCurrentInstanceMapID()
         end
         
         -- Process all stored entry levels (in case we're outside but have stored data to clean up)
@@ -526,7 +504,7 @@ dungeonEventFrame:SetScript("OnEvent", function(self, event, unitIndex)
             
             if instanceType == "party" then
                 -- Entering or already in a dungeon instance
-                local mapId = select(8, GetInstanceInfo())
+                local mapId = GetCurrentInstanceMapID()
               if mapId then
                   -- Restore from SavedVariables if we just reloaded (entry levels are in-memory only otherwise)
                   local didRestore = false
@@ -852,7 +830,7 @@ local function registerDungeonAchievement(def)
     if requiredMapId == nil then
       return true
     end
-    local mapId = select(8, GetInstanceInfo())
+    local mapId = GetCurrentInstanceMapID()
     return mapId == requiredMapId
   end
 
@@ -1267,7 +1245,7 @@ local function registerDungeonAchievement(def)
 
     -- Check if we're in an instance and have stored entry levels for this map
     local inInstance, instanceType = IsInInstance()
-    local currentMapId = inInstance and select(8, GetInstanceInfo())
+    local currentMapId = inInstance and GetCurrentInstanceMapID()
     local useEntryLevels = inInstance and instanceType == "party" and currentMapId and currentMapId == requiredMapId and instanceEntryLevels[currentMapId]
 
     -- Always use stored entry levels if in an instance, otherwise use current levels
@@ -1326,7 +1304,7 @@ local function registerDungeonAchievement(def)
       return false 
     end
 
-    if not DungeonCommon.DefMatchesInstanceDifficulty(def) then
+    if not IsSupportedClassicDungeonDef(def) then
       return false
     end
 
@@ -1435,10 +1413,7 @@ local function registerDungeonAchievement(def)
     -- Ensure dungeons never have allowSoloDouble enabled
     local dungeonDef = def or {}
     dungeonDef.allowSoloDouble = false
-    -- Only set isDungeon for non-heroic so Heroic Dungeons filter is independent of Dungeons filter
-    if not def.isHeroicDungeon then
-        dungeonDef.isDungeon = true
-    end
+    dungeonDef.isDungeon = true
     
     local AchievementPanel = addon and addon.AchievementPanel
     addon[rowVarName] = addon.CreateAchievementRow(
@@ -1571,7 +1546,7 @@ local function IsInDungeon(mapId)
     if not mapId then return false end
     local inInstance, instanceType = IsInInstance()
     if inInstance and instanceType == "party" then
-        local currentMapId = select(8, GetInstanceInfo())
+        local currentMapId = GetCurrentInstanceMapID()
         return currentMapId == mapId
     end
     return false
