@@ -111,7 +111,7 @@ local achievements = {
     requireSameGuild = true,
   }, {
     achId = "GF002",
-    title = "Guild First: Complete the Meta Achievement 'The Ambassador'",
+    title = "Guild First: 'The Ambassador'",
     level = nil,
     tooltip = "You were the first in your guild to complete the Meta Achievement 'The Ambassador'.",
     icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\guild_first.png",
@@ -124,7 +124,7 @@ local achievements = {
     requireSameGuild = true,
   }, {
     achId = "GF003",
-    title = "Guild First: Complete the Meta Achievement 'The Explorer'",
+    title = "Guild First: 'The Explorer'",
     level = nil,
     tooltip = "You were the first in your guild to complete the Meta Achievement 'The Explorer'.",
     icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\guild_first.png",
@@ -137,7 +137,7 @@ local achievements = {
     requireSameGuild = true,
   }, {
     achId = "GF004",
-    title = "Guild First: Complete the Meta Achievement 'The Raider'",
+    title = "Guild First: 'The Raider'",
     level = nil,
     tooltip = "You were the first in your guild to complete the Meta Achievement 'The Raider'.",
     icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\guild_first.png",
@@ -150,7 +150,7 @@ local achievements = {
     requireSameGuild = true,
   }, {
     achId = "GF005",
-    title = "Guild First: Complete the Meta Achievement 'The Scholar'",
+    title = "Guild First: 'The Scholar'",
     level = nil,
     tooltip = "You were the first in your guild to complete the Meta Achievement 'The Scholar'.",
     icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\guild_first.png",
@@ -163,7 +163,7 @@ local achievements = {
     requireSameGuild = true,
   }, {
     achId = "GF006",
-    title = "Guild First: Complete the Meta Achievement 'The Dungeon Master'",
+    title = "Guild First: 'The Dungeon Master'",
     level = nil,
     tooltip = "You were the first in your guild to complete the Meta Achievement 'The Dungeon Master'.",
     icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\guild_first.png",
@@ -176,7 +176,7 @@ local achievements = {
     requireSameGuild = true,
   }, {
     achId = "GF007",
-    title = "Guild First: Complete the Meta Achievement 'Metalomaniac'",
+    title = "Guild First: 'Metalomaniac'",
     level = nil,
     tooltip = "You were the first in your guild to complete the Meta Achievement 'Metalomaniac'.",
     icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\guild_first.png",
@@ -189,7 +189,7 @@ local achievements = {
     requireSameGuild = true,
   }, {
     achId = "GF008",
-    title = "Guild First: Complete the Meta Achievement 'The Diplomat'",
+    title = "Guild First: 'The Diplomat'",
     level = nil,
     tooltip = "You were the first in your guild to complete the Meta Achievement 'The Diplomat'.",
     icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\guild_first.png",
@@ -199,6 +199,110 @@ local achievements = {
     hiddenUntilComplete = true,
     triggerAchievementId = "QuestMeta",
     awardMode = "solo",
+    requireSameGuild = true,
+  }, {
+    achId = "GF201",
+    title = "Guild First: Upper Blackrock Spire",
+    level = nil,
+    tooltip = "You were the first in your guild to complete Upper Blackrock Spire.",
+    icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\guild_first.png",
+    points = 0,
+    secret = true,
+    staticPoints = true,
+    hiddenUntilComplete = true,
+    triggerAchievementId = "UBRS",
+    awardMode = "raid",
+    requireSameGuild = true,
+  }, {
+    achId = "GF202",
+    title = "Guild First: Molten Core",
+    level = nil,
+    tooltip = "You were the first in your guild to complete Molten Core.",
+    icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\guild_first.png",
+    points = 0,
+    secret = true,
+    staticPoints = true,
+    hiddenUntilComplete = true,
+    triggerAchievementId = "MC",
+    awardMode = "raid",
+    requireSameGuild = true,
+  }, {
+    achId = "GF203",
+    title = "Guild First: Onyxia's Lair",
+    level = nil,
+    tooltip = "You were the first in your guild to complete Onyxia's Lair.",
+    icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\guild_first.png",
+    points = 0,
+    secret = true,
+    staticPoints = true,
+    hiddenUntilComplete = true,
+    triggerAchievementId = "ONY",
+    awardMode = "raid",
+    requireSameGuild = true,
+  }, {
+    achId = "GF204",
+    title = "Guild First: Blackwing Lair",
+    level = nil,
+    tooltip = "You were the first in your guild to complete Blackwing Lair.",
+    icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\guild_first.png",
+    points = 0,
+    secret = true,
+    staticPoints = true,
+    hiddenUntilComplete = true,
+    triggerAchievementId = "BWL",
+    awardMode = "raid",
+    requireSameGuild = true,
+  }, {
+    achId = "GF205",
+    title = "Guild First: Zul'Gurub",
+    level = nil,
+    tooltip = "You were the first in your guild to complete Zul'Gurub.",
+    icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\guild_first.png",
+    points = 0,
+    secret = true,
+    staticPoints = true,
+    hiddenUntilComplete = true,
+    triggerAchievementId = "ZG",
+    awardMode = "raid",
+    requireSameGuild = true,
+  }, {
+    achId = "GF206",
+    title = "Guild First: Ruins of Ahn'Qiraj",
+    level = nil,
+    tooltip = "You were the first in your guild to complete Ruins of Ahn'Qiraj.",
+    icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\guild_first.png",
+    points = 0,
+    secret = true,
+    staticPoints = true,
+    hiddenUntilComplete = true,
+    triggerAchievementId = "AQ20",
+    awardMode = "raid",
+    requireSameGuild = true,
+  }, {
+    achId = "GF207",
+    title = "Guild First: Temple of Ahn'Qiraj",
+    level = nil,
+    tooltip = "You were the first in your guild to complete Temple of Ahn'Qiraj.",
+    icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\guild_first.png",
+    points = 0,
+    secret = true,
+    staticPoints = true,
+    hiddenUntilComplete = true,
+    triggerAchievementId = "AQ40",
+    awardMode = "raid",
+    requireSameGuild = true,
+  }, {
+    achId = "GF208",
+    title = "Guild First: Naxxramas",
+    level = nil,
+    tooltip = "You were the first in your guild to complete Naxxramas.",
+    icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\guild_first.png",
+    points = 0,
+    secret = true,
+    staticPoints = true,
+    hiddenUntilComplete = true,
+    triggerAchievementId = "NAXX",
+    awardMode = "raid",
     requireSameGuild = true,
   },
 }
@@ -244,5 +348,26 @@ if addon then
       end
     end)
   end
+
+  -- Backfill: if trigger achievements were already completed before GuildFirst rows/index
+  -- became active this session, attempt to claim now.
+  table_insert(queue, function()
+    local GuildFirst = addon and addon.GuildFirst
+    local getCharDB = addon and addon.GetCharDB
+    if not GuildFirst or type(GuildFirst.Trigger) ~= "function" or type(getCharDB) ~= "function" then
+      return
+    end
+    local _, cdb = getCharDB()
+    local achieved = cdb and cdb.achievements
+    if not achieved then return end
+
+    for _, def in ipairs(achievements) do
+      local trig = def and def.triggerAchievementId
+      local rec = trig and achieved[tostring(trig)]
+      if rec and rec.completed then
+        GuildFirst:Trigger(def.achId)
+      end
+    end
+  end)
 end
 

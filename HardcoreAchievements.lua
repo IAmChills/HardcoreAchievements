@@ -32,6 +32,9 @@ local EvaluateCustomCompletions
 local RefreshOutleveledAll
 local LoadTabPosition
 local QuestTrackedRows = {}
+local ACHIEVEMENT_SOUND_FILE = "Interface\\AddOns\\HardcoreAchievements\\Sounds\\AchievementSound1.ogg"
+local ACHIEVEMENT_SOUND_COOLDOWN = 0.35
+local lastAchievementSoundAt = 0
 
 -- True while we're doing the initial registration + post-login heavy operations.
 -- Used to suppress redundant UI recalculations (sorting/points/status) until the end of the initial load.
@@ -1736,8 +1739,8 @@ CreateAchToast = function(iconTex, title, pts, achIdOrRow)
     f:Show()
 
     --print(ACHIEVEMENT_BROADCAST_SELF:format(title))
-    if not skipBroadcastForRetroactive then
-        PlaySoundFile("Interface\\AddOns\\HardcoreAchievements\\Sounds\\AchievementSound1.ogg", "Effects")
+    if not skipBroadcastForRetroactive and addon and addon.PlayAchievementSound then
+        addon.PlayAchievementSound()
     end
 
     C_Timer.After(1, function()
@@ -1764,6 +1767,19 @@ CreateAchToast = function(iconTex, title, pts, achIdOrRow)
         if f:IsShown() then f:PlayFade(fadeSeconds) end
     end)
 end
+
+-- Shared achievement sound gate: prevent overlapping sound when many completions
+-- happen in a short burst (meta + dependent achievements, restore batches, etc.).
+local function PlayAchievementSound()
+    local now = GetTime and GetTime() or 0
+    if (now - (lastAchievementSoundAt or 0)) < ACHIEVEMENT_SOUND_COOLDOWN then
+        return false
+    end
+    lastAchievementSoundAt = now
+    PlaySoundFile(ACHIEVEMENT_SOUND_FILE, "Effects")
+    return true
+end
+if addon then addon.PlayAchievementSound = PlayAchievementSound end
 
 
 -- Check if an achievement ID is a level milestone achievement (Level10, Level20, etc.)
@@ -3740,6 +3756,12 @@ EvaluateCustomCompletions = function(newLevel)
 
     if anyCompleted then
         RefreshOutleveledAll()
+        -- Meta achievement checkers run inside RefreshAllAchievementPoints.
+        -- Custom completions (notably exploration) do not always pass through SetProgress,
+        -- so trigger a full refresh immediately when anything completed.
+        if addon and addon.RefreshAllAchievementPoints then
+            addon.RefreshAllAchievementPoints()
+        end
     end
 end
 
@@ -4712,6 +4734,11 @@ do
                     end
                 end
             elseif event == "MAP_EXPLORATION_UPDATED" then
+                -- Exploration updates must re-run custom completion checks (all zone/continent paths),
+                -- not just special one-off achievements.
+                if EvaluateCustomCompletions then
+                    EvaluateCustomCompletions(UnitLevel("player") or 1)
+                end
                 local playerFaction = select(2, UnitFactionGroup("player"))
                 for _, row in ipairs(addon.AchievementRowModel or {}) do
                     if not row.completed and row.id == "OrgA" and playerFaction == FACTION_ALLIANCE then

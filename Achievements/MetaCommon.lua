@@ -104,8 +104,32 @@ local function registerMetaAchievement(def)
     end
 
     for _, reqAchId in ipairs(requiredAchievements) do
+      local isCompleted = false
+
+      -- Primary source: progress DB (used by most tracker-style achievements)
       local progress = addon and addon.GetProgress and addon.GetProgress(reqAchId)
-      if not progress or not progress.completed then
+      if progress and progress.completed then
+        isCompleted = true
+      end
+
+      -- Fallback: row/model immediate state (important for custom completions)
+      if not isCompleted and addon and addon.GetAchievementRow then
+        local reqRow = addon.GetAchievementRow(reqAchId)
+        if reqRow and reqRow.completed then
+          isCompleted = true
+        end
+      end
+
+      -- Fallback: persisted achievement DB state
+      if not isCompleted and addon and addon.GetCharDB then
+        local _, cdb = addon.GetCharDB()
+        local rec = cdb and cdb.achievements and cdb.achievements[tostring(reqAchId)]
+        if rec and rec.completed then
+          isCompleted = true
+        end
+      end
+
+      if not isCompleted then
         return false
       end
     end
@@ -170,6 +194,36 @@ local function registerMetaAchievement(def)
     return false
   end
 
+  -- Complete a meta row through the canonical completion path so completedAt/guild-first/recent
+  -- and other side effects match regular achievements.
+  local function CompleteMetaRow(row)
+    if not row then return end
+
+    local id = row.achId or row.id
+    local alreadyCompleted = row.completed == true
+    if not alreadyCompleted and addon and addon.GetCharDB and id then
+      local _, cdb = addon.GetCharDB()
+      local rec = cdb and cdb.achievements and cdb.achievements[tostring(id)]
+      if rec and rec.completed then
+        alreadyCompleted = true
+      end
+    end
+
+    if addon and addon.MarkRowCompleted then
+      addon.MarkRowCompleted(row)
+    else
+      row.completed = true
+    end
+
+    if (not alreadyCompleted) and addon and type(addon.CreateAchToast) == "function" then
+      local iconTex = (row.frame and row.frame.Icon and row.frame.Icon.GetTexture and row.frame.Icon:GetTexture()) or row.icon or 136116
+      local titleText = (row.frame and row.frame.Title and row.frame.Title.GetText and row.frame.Title:GetText()) or row.title or "Achievement"
+      addon.CreateAchToast(iconTex, titleText, row.points or 0, row.frame or row)
+    end
+
+    UpdateUI(row)
+  end
+
   -- Initialize
   LoadProgress()
 
@@ -187,8 +241,7 @@ local function registerMetaAchievement(def)
     if CheckComplete() then
       local row = addon and addon.MetaRows and addon.MetaRows[rowVarName]
       if row and not row.completed then
-        row.completed = true
-        UpdateUI(row)
+        CompleteMetaRow(row)
       end
     end
     return state.completed
@@ -237,6 +290,12 @@ local function registerMetaAchievement(def)
       row.achievementOrder = achievementOrder
     end
 
+    -- If this meta already qualifies at registration time, finalize it through MarkRowCompleted
+    -- so the DB record, recent feed, toasts, and downstream handlers are consistent.
+    if row and state.completed and not row.completed then
+      CompleteMetaRow(row)
+    end
+
     -- Refresh points with multipliers after creation
     if not (addon and addon.Initializing) and RefreshAllAchievementPoints then
       RefreshAllAchievementPoints()
@@ -269,8 +328,7 @@ local function registerMetaAchievement(def)
             UpdateUI(r)
           end
         elseif CheckComplete() then
-          r.completed = true
-          UpdateUI(r)
+          CompleteMetaRow(r)
         end
       end
     end
