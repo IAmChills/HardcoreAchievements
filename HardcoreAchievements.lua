@@ -1331,6 +1331,14 @@ local function MarkRowCompleted(row, cdbParam)
         C_Timer.After(0, apply)
     end
 
+    -- Exploration rows do not write progress to SavedVariables; completing one zone may
+    -- newly satisfy a continent (or similar) meta — re-run custom completion checks once.
+    if EvaluateCustomCompletions and row._def and row._def.isExploration then
+        C_Timer.After(0, function()
+            EvaluateCustomCompletions()
+        end)
+    end
+
     -- Refresh achievement tracker so it shows updated status (completion, Solo, etc.)
     local tracker = addon and addon.AchievementTracker
     if tracker and type(tracker.Update) == "function" then
@@ -3620,6 +3628,12 @@ local function CreateAchievementRow(parent, achId, title, tooltip, icon, level, 
     if def and def.requireProfessionSkillID then
         -- NOTE: Profession must tolerate model-only rows (no frame yet).
         Profession.RegisterRow(data, def)
+    end
+    if def and def.requiredAchievements then
+        data.requiredAchievements = def.requiredAchievements
+    end
+    if def and def.achievementOrder then
+        data.achievementOrder = def.achievementOrder
     end
 
     -- Secret/hidden achievement support (model fields; UI reveal happens when a frame exists)

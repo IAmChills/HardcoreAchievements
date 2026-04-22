@@ -252,6 +252,7 @@ local function RegisterAchievementDef(def, overrides)
         isRaid = def.isRaid or false,
         isHeroicDungeon = def.isHeroicDungeon or false,
         isMetaAchievement = def.isMetaAchievement or false,
+        isContinentExploration = def.isContinentExploration or false,
         isVariation = def.isVariation or false,
         baseAchId = def.baseAchId,
         -- Secret achievement fields (for links and UI)

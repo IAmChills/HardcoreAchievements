@@ -66,6 +66,7 @@ local function CreateContinentExplorationAchievement(continentName, zoneConfigs,
     tooltip = continentCfg.tooltip or ("Explore all the zones in " .. ClassColor .. continentName .. "|r"),
     icon = continentCfg.icon,
     points = continentCfg.points,
+    isContinentExploration = true,
     requiredAchievements = requiredAchievements,
     achievementOrder = requiredAchievements,
     customIsCompleted = function()

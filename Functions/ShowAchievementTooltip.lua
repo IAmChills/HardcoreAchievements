@@ -210,12 +210,13 @@ local function ShowItemRequirements(requiredItems, itemOrder, achievementComplet
 end
 
 -- Show meta achievement requirements in tooltip
-local function ShowMetaAchievementRequirements(requiredAchievements, achievementOrder, achievementCompleted)
+-- headerLine: optional green header (default "\nRequired Achievements:")
+local function ShowMetaAchievementRequirements(requiredAchievements, achievementOrder, achievementCompleted, headerLine)
     if not requiredAchievements or type(requiredAchievements) ~= "table" or #requiredAchievements == 0 then
         return
     end
     
-    GameTooltip:AddLine("\nRequired Achievements:", 0, 1, 0) -- Green header
+    GameTooltip:AddLine(headerLine or "\nRequired Achievements:", 0, 1, 0) -- Green header
     
     -- Use achievementOrder if available, otherwise use requiredAchievements order
     local achievementsToShow = achievementOrder or requiredAchievements
@@ -455,14 +456,12 @@ local function ShowAchievementTooltip(frame, data)
         if achDef.itemOrder then
             itemOrder = achDef.itemOrder
         end
-        -- Check for meta achievement requirements
-        if achDef.isMetaAchievement then
-            if achDef.requiredAchievements then
-                requiredAchievements = achDef.requiredAchievements
-            end
-            if achDef.achievementOrder then
-                achievementOrder = achDef.achievementOrder
-            end
+        -- Meta / continent exploration: merge ordered child achievements from defs
+        if achDef.requiredAchievements then
+            requiredAchievements = achDef.requiredAchievements
+        end
+        if achDef.achievementOrder then
+            achievementOrder = achDef.achievementOrder
         end
         if achDef.explorationZone then
             explorationZone = achDef.explorationZone
@@ -495,8 +494,14 @@ local function ShowAchievementTooltip(frame, data)
     -- Show item requirements if available
     ShowItemRequirements(requiredItems, itemOrder, achievementCompleted)
     
-    -- Show meta achievement requirements if available
-    ShowMetaAchievementRequirements(requiredAchievements, achievementOrder, achievementCompleted)
+    -- Show meta achievement requirements if available (continent exploration uses zone-style header)
+    local useZoneListHeader = (achDef and achDef.isContinentExploration) or (def and def.isContinentExploration)
+    ShowMetaAchievementRequirements(
+        requiredAchievements,
+        achievementOrder,
+        achievementCompleted,
+        useZoneListHeader and "\nRequired Zones:" or nil
+    )
 
     -- Show exploration subzone requirements if available
     ShowExplorationRequirements(explorationZone)
