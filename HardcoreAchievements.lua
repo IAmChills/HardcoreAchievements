@@ -185,7 +185,7 @@ end
 -- Internal hook access for files loaded in this addon.
 if addon then addon.Hooks = HookSystem end
 
--- Public namespace for external addons. Exposes only registration surface.
+-- Public namespace for external addons.
 if _G then
     _G.HardcoreAchievements = _G.HardcoreAchievements or {}
     _G.HardcoreAchievements.Hooks = PublicHooks
@@ -1885,6 +1885,9 @@ local function ApplySelfFoundBonus()
         end
     end
 end
+
+-- Toast-only global for /run testing (not part of HardcoreAchievements.Hooks).
+if _G and type(CreateAchToast) == "function" then _G.HardcoreAchievementsToast = CreateAchToast end
 
 -- =========================================================
 -- Outleveled (missed) indicator
@@ -3948,25 +3951,76 @@ do
             return false
         end
         
-        -- Helper function to check if an NPC is tracked by any achievement
-        local function isNpcTrackedForAchievement(npcId)
-            if not npcId then
+        local function isSecretAchievementRow(row)
+            if not row then return false end
+            if row.isSecretAchievement then return true end
+            local d = row._def
+            return d and (d.secret or d.isSecret or d.isSecretAchievement) or false
+        end
+
+        -- True if this row's kill logic cares about this creature id (catalog npc id / requiredKills keys).
+        local function doesRowTrackNpc(row, npcId)
+            if not row or not npcId or type(row.killTracker) ~= "function" then
                 return false
             end
-            -- Check for Rats achievement
-            if RAT_NPC_IDS[npcId] then
+            local def = row._def
+            local targetNpcId = def and def.targetNpcId
+            if type(targetNpcId) == "table" then
+                for _, id in pairs(targetNpcId) do
+                    if tonumber(id) == npcId then return true end
+                end
+            elseif tonumber(targetNpcId) == npcId then
                 return true
             end
-            -- Check if any achievement has a killTracker (tracks NPCs)
+            local rk = row.requiredKills or (def and def.requiredKills)
+            if type(rk) ~= "table" then
+                return false
+            end
+            if rk[npcId] ~= nil or rk[tostring(npcId)] ~= nil then
+                return true
+            end
+            for key in pairs(rk) do
+                if tonumber(key) == npcId then return true end
+            end
+            return false
+        end
+
+        local function hasRelevantQuestInLog(row)
+            local questID = row and (row.requiredQuestId or (row._def and row._def.requiredQuestId))
+            if not questID then
+                return true
+            end
+            local questInLog, questReadyForTurnIn = GetQuestLogState(questID)
+            return questInLog or questReadyForTurnIn
+        end
+
+        -- Single pass: (1) should we treat this NPC as achievement-relevant for combat/kill plumbing,
+        -- (2) should we show the tap-denied chat line (non-secret, quest-relevant when applicable).
+        local function npcKillTrackContext(npcId)
+            if not npcId then
+                return false, false
+            end
+            local tracked = RAT_NPC_IDS[npcId] or false
+            local warnTapDenied = false
             local rows = addon.AchievementRowModel
-            if rows then
-                for _, row in ipairs(rows) do
-                    if not row.completed and type(row.killTracker) == "function" then
-                        return true
+            if not rows then
+                return tracked, warnTapDenied
+            end
+            for _, row in ipairs(rows) do
+                if row.completed or IsRowOutleveled(row) or not doesRowTrackNpc(row, npcId) then
+                    -- skip
+                else
+                    tracked = true
+                    if not isSecretAchievementRow(row) and hasRelevantQuestInLog(row) then
+                        warnTapDenied = true
                     end
                 end
             end
-            return false
+            return tracked, warnTapDenied
+        end
+
+        local function isNpcTrackedForAchievement(npcId)
+            return (npcKillTrackContext(npcId))
         end
         
         -- Cleanup old external player tracking entries
@@ -4255,35 +4309,16 @@ do
                     if shouldProcess and destGUID then
                         -- Player/party member/pet damage - track that we're fighting this NPC
                         local npcId = getNpcIdFromGUID(destGUID)
-                        if npcId then
-                            -- Check if any achievement tracks this NPC
-                            local isTracked = false
-                            local rows = addon.AchievementRowModel
-                            if rows then
-                                for _, row in ipairs(rows) do
-                                    if not row.completed and type(row.killTracker) == "function" then
-                                        isTracked = true
-                                        break
-                                    end
-                                end
-                            end
-                            -- Mark that we're fighting this tracked NPC
-                            if isTracked or (npcId and RAT_NPC_IDS[npcId]) then
-                                -- Check tap denial status whenever we can (not just when first engaging)
-                                -- This ensures we catch tap denial status even if NPC wasn't targeted initially
-                                local isTapDenied = checkAndStoreTapDenied(destGUID)
-                                
-                                -- If we discover the NPC is tap denied, don't track it (or remove it if already tracked)
-                                if isTapDenied == true then
-                                    npcsInCombat[destGUID] = nil
-                                    npcTapDenied[destGUID] = true
-                                else
-                                    -- Only track if we know it's NOT tap denied (false) or haven't checked yet (nil)
-                                    -- But we'll verify at kill time
-                                    npcsInCombat[destGUID] = true
-                                    -- Update threat for any tracked external players
-                                    updateExternalPlayerThreat(destGUID)
-                                end
+                        local npcTracked, npcTapDeniedWarn = npcKillTrackContext(npcId)
+                        if npcTracked then
+                            -- Check tap denial status whenever we can (not just when first engaging)
+                            local isTapDenied = checkAndStoreTapDenied(destGUID)
+                            if isTapDenied == true then
+                                npcsInCombat[destGUID] = nil
+                                npcTapDenied[destGUID] = true
+                            else
+                                npcsInCombat[destGUID] = true
+                                updateExternalPlayerThreat(destGUID)
                             end
                         end
                         
@@ -4301,7 +4336,9 @@ do
                             -- Use stored tap denial status (NPC is cleared from target when it dies, so we can't check at kill time)
                             local isTapDenied = npcTapDenied[destGUID]
                             if isTapDenied == true then
-                                print("|cff008066[Hardcore Achievements]|r |cffffd100Achievement cannot be fulfilled: Unit was not your tag.|r")
+                                if npcTapDeniedWarn then
+                                    print("|cff008066[Hardcore Achievements]|r |cffffd100Achievement cannot be fulfilled: Unit was not your tag.|r")
+                                end
                                 if addon.EventLogAdd then
                                     addon.EventLogAdd("Kill processing skipped (tap denied / not your tag) for GUID " .. tostring(destGUID))
                                 end
@@ -4311,32 +4348,10 @@ do
                                 return
                             end
                             
-                            -- Check for Rats achievement NPCs
-                            if npcId and RAT_NPC_IDS[npcId] then
+                            if npcTracked then
                                 processKill(destGUID)
-                                -- Clean up combat tracking
                                 npcsInCombat[destGUID] = nil
                                 npcTapDenied[destGUID] = nil
-                            -- Check if this is a tracked boss (any achievement with a killTracker)
-                            elseif npcId then
-                                -- Check if any achievement tracks this NPC
-                                local isTracked = false
-                                local rows = addon.AchievementRowModel
-                                if rows then
-                                    for _, row in ipairs(rows) do
-                                        if not row.completed and type(row.killTracker) == "function" then
-                                            -- This achievement has a kill tracker, let processKill check if it matches
-                                            isTracked = true
-                                            break
-                                        end
-                                    end
-                                end
-                                if isTracked then
-                                    processKill(destGUID)
-                                    -- Clean up combat tracking
-                                    npcsInCombat[destGUID] = nil
-                                    npcTapDenied[destGUID] = nil
-                                end
                             end
                         end
                     elseif not shouldProcess and destGUID then
