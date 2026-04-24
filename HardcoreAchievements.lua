@@ -102,8 +102,8 @@ end
 -- Allows other addons to register callbacks for achievement events
 -- 
 -- Usage example for other addons:
---   if HardcoreAchievements_Hooks then
---       HardcoreAchievements_Hooks:HookScript("OnAchievement", function(achievementData)
+--   if HardcoreAchievements and HardcoreAchievements.Hooks then
+--       HardcoreAchievements.Hooks:HookScript("OnAchievement", function(achievementData)
 --           -- achievementData contains:
 --           --   achievementId: string - The achievement ID
 --           --   title: string - The achievement title
@@ -120,6 +120,33 @@ local HookSystem = {
     hooks = {}
 }
 
+local PublicHooks = {}
+
+local function SnapshotHookList(hookList)
+    local count = #hookList
+    if count == 0 then
+        return nil
+    end
+
+    local snapshot = {}
+    for i = 1, count do
+        snapshot[i] = hookList[i]
+    end
+    return snapshot
+end
+
+local function ShallowCopyTable(source)
+    if type(source) ~= "table" then
+        return source
+    end
+
+    local copy = {}
+    for key, value in pairs(source) do
+        copy[key] = value
+    end
+    return copy
+end
+
 -- Register callback
 function HookSystem:HookScript(eventName, callback)
     if type(eventName) ~= "string" or type(callback) ~= "function" then
@@ -132,27 +159,37 @@ end
 -- Fire event
 function HookSystem:FireEvent(eventName, ...)
     local eventHooks = self.hooks[eventName]
-    if not eventHooks then return end
-    
-    for _, callback in ipairs(eventHooks) do
-        local success, err = pcall(callback, ...)
-        if not success then
-            -- Log error
-            if addon and addon.DebugPrint then addon.DebugPrint("Error in hook callback: " .. tostring(err)) end
-        end
-    end
+    local hookSnapshot = eventHooks and SnapshotHookList(eventHooks)
+    local args = {...}
+    local singleTablePayload = (#args == 1 and type(args[1]) == "table")
 
-    -- When called outside the initial load flow, refresh sorting/points/outleveled.
-    -- During initial load, these are handled once at the end to avoid extra work.
-    if not (addon and addon.Initializing) then
-        if SortAchievementRows then SortAchievementRows() end
-        if addon and addon.UpdateTotalPoints then addon.UpdateTotalPoints() end
-        if RefreshOutleveledAll then RefreshOutleveledAll() end
+    if hookSnapshot then
+        for _, callback in ipairs(hookSnapshot) do
+            local success, err
+            if singleTablePayload then
+                success, err = pcall(callback, ShallowCopyTable(args[1]))
+            else
+                success, err = pcall(callback, unpack(args))
+            end
+            if not success and addon and addon.DebugPrint then
+                addon.DebugPrint("Error in hook callback for " .. tostring(eventName) .. ": " .. tostring(err))
+            end
+        end
     end
 end
 
--- Expose hook system
+function PublicHooks:HookScript(eventName, callback)
+    return HookSystem:HookScript(eventName, callback)
+end
+
+-- Internal hook access for files loaded in this addon.
 if addon then addon.Hooks = HookSystem end
+
+-- Public namespace for external addons. Exposes only registration surface.
+if _G then
+    _G.HardcoreAchievements = _G.HardcoreAchievements or {}
+    _G.HardcoreAchievements.Hooks = PublicHooks
+end
 
 -- =========================================================
 -- Self-Found points bonus
