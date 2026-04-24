@@ -288,10 +288,11 @@ local function EvaluateCompletions(skillID)
                 if addon and addon.MarkRowCompleted then
                     addon.MarkRowCompleted(row)
                 end
-                local icon = row.Icon and row.Icon:GetTexture() or 136116
-                local title = row.Title and row.Title:GetText() or "Achievement"
+                local frame = row.frame or row
+                local icon = (frame.Icon and frame.Icon.GetTexture and frame.Icon:GetTexture()) or row.icon or 136116
+                local title = (frame.Title and frame.Title.GetText and frame.Title:GetText()) or row.title or "Achievement"
                 if addon and addon.CreateAchToast then
-                    addon.CreateAchToast(icon, title, row.points, row)
+                    addon.CreateAchToast(icon, title, row.points, frame)
                 end
                 anyCompleted = true
             end

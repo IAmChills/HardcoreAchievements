@@ -160,8 +160,8 @@ local function registerReputationAchievement(def)
     
     addon.MarkRowCompleted(row)
 
-    if showToast and addon and addon.AchToast_Show then
-      addon.AchToast_Show(row.Icon:GetTexture(), row.Title:GetText(), row.points, row)
+    if showToast and addon and addon.CreateAchToast then
+      addon.CreateAchToast(row.Icon:GetTexture(), row.Title:GetText(), row.points, row)
     end
   end
 
