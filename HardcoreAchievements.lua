@@ -1349,6 +1349,23 @@ local function MarkRowCompleted(row, cdbParam)
     end
 end
 
+-- Standard live-award path: complete the achievement if needed, then show the
+-- normal achievement toast using frame data when available and model data otherwise.
+local function CompleteAchievementWithToast(row)
+    if not row or IsAchievementAlreadyCompleted(row) then
+        return false
+    end
+
+    MarkRowCompleted(row)
+
+    local frame = row.frame or row
+    local iconTex = (frame.Icon and frame.Icon.GetTexture and frame.Icon:GetTexture()) or row.icon or 136116
+    local titleText = (frame.Title and frame.Title.GetText and frame.Title:GetText()) or row.title or "Achievement"
+    CreateAchToast(iconTex, titleText, row.points or 0, frame)
+    return true
+end
+if addon then addon.CompleteAchievementWithToast = CompleteAchievementWithToast end
+
 local function CheckPendingCompletions()
     local rows = (addon and addon.AchievementRowModel) or {}
     

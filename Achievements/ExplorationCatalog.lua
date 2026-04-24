@@ -304,9 +304,8 @@ fellowshipFrame:SetScript("OnEvent", function(self, event)
                 
                 -- If we received the message via SAY, we're within chat range (approximately 40 yards)
                 -- Complete Fellowship for the nearby player
-                if addon and addon.MarkRowCompleted and addon.CreateAchToast then
-                    addon.MarkRowCompleted(fellowshipRow)
-                    addon.CreateAchToast(fellowshipRow.Icon:GetTexture(), fellowshipRow.Title:GetText(), fellowshipRow.points, fellowshipRow)
+                if addon and addon.CompleteAchievementWithToast then
+                    addon.CompleteAchievementWithToast(fellowshipRow)
                 end
             end)
         end

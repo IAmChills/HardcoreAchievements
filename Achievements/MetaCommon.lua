@@ -209,16 +209,12 @@ local function registerMetaAchievement(def)
       end
     end
 
-    if addon and addon.MarkRowCompleted then
+    if (not alreadyCompleted) and addon and type(addon.CompleteAchievementWithToast) == "function" then
+      addon.CompleteAchievementWithToast(row)
+    elseif addon and addon.MarkRowCompleted then
       addon.MarkRowCompleted(row)
     else
       row.completed = true
-    end
-
-    if (not alreadyCompleted) and addon and type(addon.CreateAchToast) == "function" then
-      local iconTex = (row.frame and row.frame.Icon and row.frame.Icon.GetTexture and row.frame.Icon:GetTexture()) or row.icon or 136116
-      local titleText = (row.frame and row.frame.Title and row.frame.Title.GetText and row.frame.Title:GetText()) or row.title or "Achievement"
-      addon.CreateAchToast(iconTex, titleText, row.points or 0, row.frame or row)
     end
 
     UpdateUI(row)

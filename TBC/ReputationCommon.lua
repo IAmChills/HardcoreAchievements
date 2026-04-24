@@ -157,11 +157,11 @@ function ReputationCommon.registerReputationAchievement(def)
     if not row or not (addon and addon.MarkRowCompleted) then
       return
     end
-    
-    addon.MarkRowCompleted(row)
 
-    if showToast and addon.CreateAchToast then
-      addon.CreateAchToast(row.Icon:GetTexture(), row.Title:GetText(), row.points, row)
+    if showToast and addon and addon.CompleteAchievementWithToast then
+      addon.CompleteAchievementWithToast(row)
+    else
+      addon.MarkRowCompleted(row)
     end
   end
 
