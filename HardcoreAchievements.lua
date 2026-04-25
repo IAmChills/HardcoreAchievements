@@ -32,6 +32,9 @@ local EvaluateCustomCompletions
 local RefreshOutleveledAll
 local LoadTabPosition
 local QuestTrackedRows = {}
+local ACHIEVEMENT_SOUND_FILE = "Interface\\AddOns\\HardcoreAchievements\\Sounds\\AchievementSound1.ogg"
+local ACHIEVEMENT_SOUND_COOLDOWN = 0.35
+local lastAchievementSoundAt = 0
 
 -- True while we're doing the initial registration + post-login heavy operations.
 -- Used to suppress redundant UI recalculations (sorting/points/status) until the end of the initial load.
@@ -99,8 +102,8 @@ end
 -- Allows other addons to register callbacks for achievement events
 -- 
 -- Usage example for other addons:
---   if HardcoreAchievements_Hooks then
---       HardcoreAchievements_Hooks:HookScript("OnAchievement", function(achievementData)
+--   if HardcoreAchievements and HardcoreAchievements.Hooks then
+--       HardcoreAchievements.Hooks:HookScript("OnAchievement", function(achievementData)
 --           -- achievementData contains:
 --           --   achievementId: string - The achievement ID
 --           --   title: string - The achievement title
@@ -117,6 +120,33 @@ local HookSystem = {
     hooks = {}
 }
 
+local PublicHooks = {}
+
+local function SnapshotHookList(hookList)
+    local count = #hookList
+    if count == 0 then
+        return nil
+    end
+
+    local snapshot = {}
+    for i = 1, count do
+        snapshot[i] = hookList[i]
+    end
+    return snapshot
+end
+
+local function ShallowCopyTable(source)
+    if type(source) ~= "table" then
+        return source
+    end
+
+    local copy = {}
+    for key, value in pairs(source) do
+        copy[key] = value
+    end
+    return copy
+end
+
 -- Register callback
 function HookSystem:HookScript(eventName, callback)
     if type(eventName) ~= "string" or type(callback) ~= "function" then
@@ -129,27 +159,37 @@ end
 -- Fire event
 function HookSystem:FireEvent(eventName, ...)
     local eventHooks = self.hooks[eventName]
-    if not eventHooks then return end
-    
-    for _, callback in ipairs(eventHooks) do
-        local success, err = pcall(callback, ...)
-        if not success then
-            -- Log error
-            if addon and addon.DebugPrint then addon.DebugPrint("Error in hook callback: " .. tostring(err)) end
-        end
-    end
+    local hookSnapshot = eventHooks and SnapshotHookList(eventHooks)
+    local args = {...}
+    local singleTablePayload = (#args == 1 and type(args[1]) == "table")
 
-    -- When called outside the initial load flow, refresh sorting/points/outleveled.
-    -- During initial load, these are handled once at the end to avoid extra work.
-    if not (addon and addon.Initializing) then
-        if SortAchievementRows then SortAchievementRows() end
-        if addon and addon.UpdateTotalPoints then addon.UpdateTotalPoints() end
-        if RefreshOutleveledAll then RefreshOutleveledAll() end
+    if hookSnapshot then
+        for _, callback in ipairs(hookSnapshot) do
+            local success, err
+            if singleTablePayload then
+                success, err = pcall(callback, ShallowCopyTable(args[1]))
+            else
+                success, err = pcall(callback, unpack(args))
+            end
+            if not success and addon and addon.DebugPrint then
+                addon.DebugPrint("Error in hook callback for " .. tostring(eventName) .. ": " .. tostring(err))
+            end
+        end
     end
 end
 
--- Expose hook system
+function PublicHooks:HookScript(eventName, callback)
+    return HookSystem:HookScript(eventName, callback)
+end
+
+-- Internal hook access for files loaded in this addon.
 if addon then addon.Hooks = HookSystem end
+
+-- Public namespace for external addons.
+if _G then
+    _G.HardcoreAchievements = _G.HardcoreAchievements or {}
+    _G.HardcoreAchievements.Hooks = PublicHooks
+end
 
 -- =========================================================
 -- Self-Found points bonus
@@ -740,13 +780,14 @@ local function AchievementCount()
             -- This prevents incomplete miscellaneous achievements from inflating the total, but includes
             -- completed miscellaneous achievements so the completed count doesn't exceed the total
             -- Special achievements (like FourCandle) are excluded from count entirely
-            local isVariation = row._def and row._def.isVariation
-            local isDungeonSet = row._def and row._def.isDungeonSet
-            local isReputation = row._def and row._def.isReputation
-            local isExploration = row._def and row._def.isExploration
-            local isRidiculous = row._def and row._def.isRidiculous
-            local isSecret = row._def and row._def.isSecret
-            local excludeFromCount = row._def and row._def.excludeFromCount
+            local def = row._def or row.def
+            local isVariation = def and def.isVariation
+            local isDungeonSet = def and def.isDungeonSet
+            local isReputation = def and def.isReputation
+            local isExploration = def and def.isExploration
+            local isRidiculous = def and def.isRidiculous
+            local isSecret = def and def.isSecret
+            local excludeFromCount = def and def.excludeFromCount
             -- Note: isRaid is Core (index 4), so it always counts - don't exclude it
             local shouldCount = not hiddenByProfession and not hiddenUntilComplete and not excludeFromCount and (not isVariation or row.completed) and (not isDungeonSet or row.completed) and (not isReputation or row.completed) and (not isExploration or row.completed) and (not isRidiculous or row.completed) and (not isSecret or row.completed)
             
@@ -1278,12 +1319,19 @@ local function MarkRowCompleted(row, cdbParam)
     
     -- Reveal secret achievements before persisting/toast
     if row.isSecretAchievement then
-        if row.revealTitle and row.Title then 
-            row.Title:SetText(row.revealTitle)
-            if row.TitleShadow then row.TitleShadow:SetText(StripColorCodes(row.revealTitle)) end
+        if row.revealTitle then
+            if row.Title then
+                row.Title:SetText(row.revealTitle)
+                if row.TitleShadow then row.TitleShadow:SetText(StripColorCodes(row.revealTitle)) end
+            end
+            row.title = row.revealTitle
         end
         if row.revealIcon and row.Icon then row.Icon:SetTexture(row.revealIcon) end
-        if row.revealTooltip then row.tooltip = row.revealTooltip end
+        if row.revealTooltip then
+            row.tooltip = row.revealTooltip
+            if row._tooltip ~= nil then row._tooltip = row.revealTooltip end
+        end
+        if row.revealTitle and row._title ~= nil then row._title = row.revealTitle end
         row.staticPoints = row.revealStaticPoints or false
     end
 
@@ -1331,12 +1379,37 @@ local function MarkRowCompleted(row, cdbParam)
         C_Timer.After(0, apply)
     end
 
+    -- Exploration rows do not write progress to SavedVariables; completing one zone may
+    -- newly satisfy a continent (or similar) meta — re-run custom completion checks once.
+    if EvaluateCustomCompletions and row._def and row._def.isExploration then
+        C_Timer.After(0, function()
+            EvaluateCustomCompletions()
+        end)
+    end
+
     -- Refresh achievement tracker so it shows updated status (completion, Solo, etc.)
     local tracker = addon and addon.AchievementTracker
     if tracker and type(tracker.Update) == "function" then
         tracker:Update()
     end
 end
+
+-- Standard live-award path: complete the achievement if needed, then show the
+-- normal achievement toast using frame data when available and model data otherwise.
+local function CompleteAchievementWithToast(row)
+    if not row or IsAchievementAlreadyCompleted(row) then
+        return false
+    end
+
+    MarkRowCompleted(row)
+
+    local frame = row.frame or row
+    local iconTex = (frame.Icon and frame.Icon.GetTexture and frame.Icon:GetTexture()) or row.icon or 136116
+    local titleText = (frame.Title and frame.Title.GetText and frame.Title:GetText()) or row.title or "Achievement"
+    CreateAchToast(iconTex, titleText, row.points or 0, frame)
+    return true
+end
+if addon then addon.CompleteAchievementWithToast = CompleteAchievementWithToast end
 
 local function CheckPendingCompletions()
     local rows = (addon and addon.AchievementRowModel) or {}
@@ -1436,9 +1509,12 @@ local function RestoreCompletionsFromDB()
                     frame.tooltip = row.revealTooltip or frame.tooltip
                     frame.staticPoints = row.revealStaticPoints or frame.staticPoints
                 end
-                if row.revealTitle and frame.Title then
-                    frame.Title:SetText(row.revealTitle)
-                    if frame.TitleShadow then frame.TitleShadow:SetText(row.revealTitle) end
+                if row.revealTitle then
+                    row.title = row.revealTitle
+                    if frame.Title then
+                        frame.Title:SetText(row.revealTitle)
+                        if frame.TitleShadow then frame.TitleShadow:SetText(row.revealTitle) end
+                    end
                 end
                 if row.revealIcon and frame.Icon then frame.Icon:SetTexture(row.revealIcon) end
             end
@@ -1728,8 +1804,8 @@ CreateAchToast = function(iconTex, title, pts, achIdOrRow)
     f:Show()
 
     --print(ACHIEVEMENT_BROADCAST_SELF:format(title))
-    if not skipBroadcastForRetroactive then
-        PlaySoundFile("Interface\\AddOns\\HardcoreAchievements\\Sounds\\AchievementSound1.ogg", "Effects")
+    if not skipBroadcastForRetroactive and addon and addon.PlayAchievementSound then
+        addon.PlayAchievementSound()
     end
 
     C_Timer.After(1, function()
@@ -1756,6 +1832,19 @@ CreateAchToast = function(iconTex, title, pts, achIdOrRow)
         if f:IsShown() then f:PlayFade(fadeSeconds) end
     end)
 end
+
+-- Shared achievement sound gate: prevent overlapping sound when many completions
+-- happen in a short burst (meta + dependent achievements, restore batches, etc.).
+local function PlayAchievementSound()
+    local now = GetTime and GetTime() or 0
+    if (now - (lastAchievementSoundAt or 0)) < ACHIEVEMENT_SOUND_COOLDOWN then
+        return false
+    end
+    lastAchievementSoundAt = now
+    PlaySoundFile(ACHIEVEMENT_SOUND_FILE, "Effects")
+    return true
+end
+if addon then addon.PlayAchievementSound = PlayAchievementSound end
 
 
 -- Check if an achievement ID is a level milestone achievement (Level10, Level20, etc.)
@@ -1807,6 +1896,9 @@ local function ApplySelfFoundBonus()
         end
     end
 end
+
+-- Toast-only global for /run testing (not part of HardcoreAchievements.Hooks).
+if _G and type(CreateAchToast) == "function" then _G.HardcoreAchievementsToast = CreateAchToast end
 
 -- =========================================================
 -- Outleveled (missed) indicator
@@ -3531,6 +3623,8 @@ local function CreateAchievementRowFromData(data, index)
             if row.TitleShadow then row.TitleShadow:SetText(StripColorCodes(row.secretTitle)) end
         end
         row.tooltip = row.secretTooltip
+        row._tooltip = row.secretTooltip
+        row._title = row.secretTitle
         if row.Icon then row.Icon:SetTexture(row.secretIcon) end
         row.points = row.secretPoints
         if row.Points then row.Points:SetText(tostring(row.secretPoints)) end
@@ -3621,6 +3715,12 @@ local function CreateAchievementRow(parent, achId, title, tooltip, icon, level, 
         -- NOTE: Profession must tolerate model-only rows (no frame yet).
         Profession.RegisterRow(data, def)
     end
+    if def and def.requiredAchievements then
+        data.requiredAchievements = def.requiredAchievements
+    end
+    if def and def.achievementOrder then
+        data.achievementOrder = def.achievementOrder
+    end
 
     -- Secret/hidden achievement support (model fields; UI reveal happens when a frame exists)
     if isSecretDef then
@@ -3634,6 +3734,8 @@ local function CreateAchievementRow(parent, achId, title, tooltip, icon, level, 
         data.secretTooltip = def.secretTooltip or "Hidden"
         data.secretIcon = def.secretIcon or 134400
         data.secretPoints = tonumber(def.secretPoints) or 0
+        data.title = data.secretTitle
+        data.tooltip = data.secretTooltip
     end
     if addon and addon.AchievementRowModel then table_insert(addon.AchievementRowModel, data) end
 
@@ -3726,6 +3828,12 @@ EvaluateCustomCompletions = function(newLevel)
 
     if anyCompleted then
         RefreshOutleveledAll()
+        -- Meta achievement checkers run inside RefreshAllAchievementPoints.
+        -- Custom completions (notably exploration) do not always pass through SetProgress,
+        -- so trigger a full refresh immediately when anything completed.
+        if addon and addon.RefreshAllAchievementPoints then
+            addon.RefreshAllAchievementPoints()
+        end
     end
 end
 
@@ -3858,25 +3966,76 @@ do
             return false
         end
         
-        -- Helper function to check if an NPC is tracked by any achievement
-        local function isNpcTrackedForAchievement(npcId)
-            if not npcId then
+        local function isSecretAchievementRow(row)
+            if not row then return false end
+            if row.isSecretAchievement then return true end
+            local d = row._def
+            return d and (d.secret or d.isSecret or d.isSecretAchievement) or false
+        end
+
+        -- True if this row's kill logic cares about this creature id (catalog npc id / requiredKills keys).
+        local function doesRowTrackNpc(row, npcId)
+            if not row or not npcId or type(row.killTracker) ~= "function" then
                 return false
             end
-            -- Check for Rats achievement
-            if RAT_NPC_IDS[npcId] then
+            local def = row._def
+            local targetNpcId = def and def.targetNpcId
+            if type(targetNpcId) == "table" then
+                for _, id in pairs(targetNpcId) do
+                    if tonumber(id) == npcId then return true end
+                end
+            elseif tonumber(targetNpcId) == npcId then
                 return true
             end
-            -- Check if any achievement has a killTracker (tracks NPCs)
+            local rk = row.requiredKills or (def and def.requiredKills)
+            if type(rk) ~= "table" then
+                return false
+            end
+            if rk[npcId] ~= nil or rk[tostring(npcId)] ~= nil then
+                return true
+            end
+            for key in pairs(rk) do
+                if tonumber(key) == npcId then return true end
+            end
+            return false
+        end
+
+        local function hasRelevantQuestInLog(row)
+            local questID = row and (row.requiredQuestId or (row._def and row._def.requiredQuestId))
+            if not questID then
+                return true
+            end
+            local questInLog, questReadyForTurnIn = GetQuestLogState(questID)
+            return questInLog or questReadyForTurnIn
+        end
+
+        -- Single pass: (1) should we treat this NPC as achievement-relevant for combat/kill plumbing,
+        -- (2) should we show the tap-denied chat line (non-secret, quest-relevant when applicable).
+        local function npcKillTrackContext(npcId)
+            if not npcId then
+                return false, false
+            end
+            local tracked = RAT_NPC_IDS[npcId] or false
+            local warnTapDenied = false
             local rows = addon.AchievementRowModel
-            if rows then
-                for _, row in ipairs(rows) do
-                    if not row.completed and type(row.killTracker) == "function" then
-                        return true
+            if not rows then
+                return tracked, warnTapDenied
+            end
+            for _, row in ipairs(rows) do
+                if row.completed or IsRowOutleveled(row) or not doesRowTrackNpc(row, npcId) then
+                    -- skip
+                else
+                    tracked = true
+                    if not isSecretAchievementRow(row) and hasRelevantQuestInLog(row) then
+                        warnTapDenied = true
                     end
                 end
             end
-            return false
+            return tracked, warnTapDenied
+        end
+
+        local function isNpcTrackedForAchievement(npcId)
+            return (npcKillTrackContext(npcId))
         end
         
         -- Cleanup old external player tracking entries
@@ -4165,35 +4324,16 @@ do
                     if shouldProcess and destGUID then
                         -- Player/party member/pet damage - track that we're fighting this NPC
                         local npcId = getNpcIdFromGUID(destGUID)
-                        if npcId then
-                            -- Check if any achievement tracks this NPC
-                            local isTracked = false
-                            local rows = addon.AchievementRowModel
-                            if rows then
-                                for _, row in ipairs(rows) do
-                                    if not row.completed and type(row.killTracker) == "function" then
-                                        isTracked = true
-                                        break
-                                    end
-                                end
-                            end
-                            -- Mark that we're fighting this tracked NPC
-                            if isTracked or (npcId and RAT_NPC_IDS[npcId]) then
-                                -- Check tap denial status whenever we can (not just when first engaging)
-                                -- This ensures we catch tap denial status even if NPC wasn't targeted initially
-                                local isTapDenied = checkAndStoreTapDenied(destGUID)
-                                
-                                -- If we discover the NPC is tap denied, don't track it (or remove it if already tracked)
-                                if isTapDenied == true then
-                                    npcsInCombat[destGUID] = nil
-                                    npcTapDenied[destGUID] = true
-                                else
-                                    -- Only track if we know it's NOT tap denied (false) or haven't checked yet (nil)
-                                    -- But we'll verify at kill time
-                                    npcsInCombat[destGUID] = true
-                                    -- Update threat for any tracked external players
-                                    updateExternalPlayerThreat(destGUID)
-                                end
+                        local npcTracked, npcTapDeniedWarn = npcKillTrackContext(npcId)
+                        if npcTracked then
+                            -- Check tap denial status whenever we can (not just when first engaging)
+                            local isTapDenied = checkAndStoreTapDenied(destGUID)
+                            if isTapDenied == true then
+                                npcsInCombat[destGUID] = nil
+                                npcTapDenied[destGUID] = true
+                            else
+                                npcsInCombat[destGUID] = true
+                                updateExternalPlayerThreat(destGUID)
                             end
                         end
                         
@@ -4211,7 +4351,9 @@ do
                             -- Use stored tap denial status (NPC is cleared from target when it dies, so we can't check at kill time)
                             local isTapDenied = npcTapDenied[destGUID]
                             if isTapDenied == true then
-                                print("|cff008066[Hardcore Achievements]|r |cffffd100Achievement cannot be fulfilled: Unit was not your tag.|r")
+                                if npcTapDeniedWarn then
+                                    print("|cff008066[Hardcore Achievements]|r |cffffd100Achievement cannot be fulfilled: Unit was not your tag.|r")
+                                end
                                 if addon.EventLogAdd then
                                     addon.EventLogAdd("Kill processing skipped (tap denied / not your tag) for GUID " .. tostring(destGUID))
                                 end
@@ -4221,32 +4363,10 @@ do
                                 return
                             end
                             
-                            -- Check for Rats achievement NPCs
-                            if npcId and RAT_NPC_IDS[npcId] then
+                            if npcTracked then
                                 processKill(destGUID)
-                                -- Clean up combat tracking
                                 npcsInCombat[destGUID] = nil
                                 npcTapDenied[destGUID] = nil
-                            -- Check if this is a tracked boss (any achievement with a killTracker)
-                            elseif npcId then
-                                -- Check if any achievement tracks this NPC
-                                local isTracked = false
-                                local rows = addon.AchievementRowModel
-                                if rows then
-                                    for _, row in ipairs(rows) do
-                                        if not row.completed and type(row.killTracker) == "function" then
-                                            -- This achievement has a kill tracker, let processKill check if it matches
-                                            isTracked = true
-                                            break
-                                        end
-                                    end
-                                end
-                                if isTracked then
-                                    processKill(destGUID)
-                                    -- Clean up combat tracking
-                                    npcsInCombat[destGUID] = nil
-                                    npcTapDenied[destGUID] = nil
-                                end
                             end
                         end
                     elseif not shouldProcess and destGUID then
@@ -4698,6 +4818,11 @@ do
                     end
                 end
             elseif event == "MAP_EXPLORATION_UPDATED" then
+                -- Exploration updates must re-run custom completion checks (all zone/continent paths),
+                -- not just special one-off achievements.
+                if EvaluateCustomCompletions then
+                    EvaluateCustomCompletions(UnitLevel("player") or 1)
+                end
                 local playerFaction = select(2, UnitFactionGroup("player"))
                 for _, row in ipairs(addon.AchievementRowModel or {}) do
                     if not row.completed and row.id == "OrgA" and playerFaction == FACTION_ALLIANCE then

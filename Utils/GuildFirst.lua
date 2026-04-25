@@ -30,13 +30,13 @@ local TABLE_NAME = "Claims"
 -- again for that scope; all later use reuses this handle.
 local databases = {}  -- [scopeKey] = { db = DBHandle, prefix = string, presenceTicker = ticker, ... }
 
--- Cached local peer ID (smaller than full GUID for sync). Get with LibP2PDB:GetPeerId() at first use.
+-- Cached local peer ID (smaller than full GUID for sync). Get with LibP2PDB:GetLocalPeerID() at first use.
 -- Debug: format("%X", peerId) for hex; convert back to GUID with "Player-"..peerId or LibP2PDB:PeerIDToPlayerGUID if available.
 local localPeerId = nil
 
 local function GetLocalPeerId()
     if localPeerId == nil then
-        localPeerId = LibP2PDB:GetPeerId()
+        localPeerId = LibP2PDB:GetLocalPeerID()
     end
     return localPeerId
 end
@@ -45,6 +45,7 @@ local addonName, addon = ...
 local MarkRowCompleted = addon and addon.MarkRowCompleted
 local ApplyFilter = addon and addon.ApplyFilter
 local ShowAchievementWindow = addon and (addon.ShowAchievementWindow or addon.ShowAchievementTab)
+local PlayAchievementSound = addon and addon.PlayAchievementSound
 
 local M = {}
 
@@ -194,7 +195,11 @@ local function ShowGuildFirstToast(iconTex, title, pts)
             end
         end
         f:Show()
-        PlaySoundFile("Interface\\AddOns\\HardcoreAchievements\\Sounds\\AchievementSound1.ogg", "Effects")
+        if type(PlayAchievementSound) == "function" then
+            PlayAchievementSound()
+        else
+            PlaySoundFile("Interface\\AddOns\\HardcoreAchievements\\Sounds\\AchievementSound1.ogg", "Effects")
+        end
         C_Timer.After(3, function()
             if f:IsShown() then f:PlayFade(0.6) end
         end)
@@ -373,7 +378,20 @@ local function BuildWinnersPeerIDList(awardMode, requireSameGuild)
         if not UnitExists(unit) then return end
         local guid = UnitGUID(unit)
         if not guid or guid == "" then return end
-        local peerId = LibP2PDB:GetPeerIdFromGUID(guid)
+        local peerId = nil
+        if type(LibP2PDB.PlayerGUIDToPeerID) == "function" then
+            -- Current LibP2PDB export: convert "Player-XXXX-XXXXXXXX" GUID to compact peer ID.
+            local ok, converted = pcall(function()
+                return LibP2PDB:PlayerGUIDToPeerID(guid)
+            end)
+            if ok then
+                peerId = converted
+            end
+        end
+        if not peerId and unit == "player" then
+            -- Always include self for solo awards even if GUID conversion API is unavailable.
+            peerId = GetLocalPeerId()
+        end
         if not peerId or seen[peerId] then return end
 
         if myGuild and myGuild ~= "" then
@@ -852,8 +870,23 @@ if addon then
     addon.GuildFirst = M
 end
 
-local Hooks = addon and addon.Hooks
-if Hooks and Hooks.HookScript then
-    Hooks:HookScript("OnAchievement", OnAchievementCompleted)
+local function RegisterAchievementHook()
+    local Hooks = addon and addon.Hooks
+    if Hooks and Hooks.HookScript and not M._achievementHookRegistered then
+        Hooks:HookScript("OnAchievement", OnAchievementCompleted)
+        M._achievementHookRegistered = true
+    end
 end
+
+-- Try immediately (works if HookSystem is already initialized).
+RegisterAchievementHook()
+
+-- Load-order safe fallback: GuildFirst.lua loads before HardcoreAchievements.lua in .toc,
+-- so addon.Hooks may not exist yet at file load time.
+local hookInitFrame = CreateFrame("Frame")
+hookInitFrame:RegisterEvent("PLAYER_LOGIN")
+hookInitFrame:SetScript("OnEvent", function()
+    RegisterAchievementHook()
+    hookInitFrame:UnregisterAllEvents()
+end)
 

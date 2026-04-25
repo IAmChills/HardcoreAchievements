@@ -66,6 +66,7 @@ local function CreateContinentExplorationAchievement(continentName, zoneConfigs,
     tooltip = continentCfg.tooltip or ("Explore all the zones in " .. ClassColor .. continentName .. "|r"),
     icon = continentCfg.icon,
     points = continentCfg.points,
+    isContinentExploration = true,
     requiredAchievements = requiredAchievements,
     achievementOrder = requiredAchievements,
     customIsCompleted = function()
@@ -303,9 +304,8 @@ fellowshipFrame:SetScript("OnEvent", function(self, event)
                 
                 -- If we received the message via SAY, we're within chat range (approximately 40 yards)
                 -- Complete Fellowship for the nearby player
-                if addon and addon.MarkRowCompleted and addon.AchToast_Show then
-                    addon.MarkRowCompleted(fellowshipRow)
-                    addon.AchToast_Show(fellowshipRow.Icon:GetTexture(), fellowshipRow.Title:GetText(), fellowshipRow.points, fellowshipRow)
+                if addon and addon.CompleteAchievementWithToast then
+                    addon.CompleteAchievementWithToast(fellowshipRow)
                 end
             end)
         end

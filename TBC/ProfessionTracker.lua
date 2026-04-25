@@ -282,11 +282,9 @@ local function EvaluateCompletions(skillID)
         if not IsRowCompleted(row, cdb) and type(completionFn) == "function" then
             local ok, result = pcall(completionFn)
             if ok and result == true then
-                if addon and addon.MarkRowCompleted then addon.MarkRowCompleted(row) end
-                local icon = row.Icon and row.Icon:GetTexture() or 136116
-                local title = row.Title and row.Title:GetText() or "Achievement"
-                if addon and addon.AchToast_Show then addon.AchToast_Show(icon, title, row.points, row) end
-                anyCompleted = true
+                if addon and addon.CompleteAchievementWithToast then
+                    anyCompleted = addon.CompleteAchievementWithToast(row) or anyCompleted
+                end
             end
         end
     end

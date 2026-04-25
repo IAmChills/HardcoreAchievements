@@ -330,13 +330,16 @@ function RaidCommon.registerRaidAchievement(def)
     return bossNames[npcId] or ("Boss " .. tostring(npcId))
   end
 
+  if addon then
+    addon.GetRaidBossName = GetRaidBossName
+  end
+
   local function GetNpcIdFromGUID(guid)
     if not guid then return nil end
     local npcId = select(6, strsplit("-", guid))
     npcId = npcId and tonumber(npcId) or nil
     return npcId
   end
-  if addon then addon.GetRaidBossName = GetRaidBossName end
 
   local function IsOnRequiredMap()
     -- If no map restriction, allow anywhere
@@ -686,5 +689,4 @@ end
 
 if addon then
   addon.RaidCommon = RaidCommon
-  addon.GetRaidBossName = GetRaidBossName
 end

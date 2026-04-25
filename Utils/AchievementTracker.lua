@@ -712,7 +712,7 @@ local function InitializeSizer(self, baseFrame)
                         return
                     end
                     -- Update immediately to make word wrap responsive
-                    Update(AchievementTracker)
+                    AchievementTracker:Update()
                 end)
                 sizer.updateTimer = updateTimer
             end
@@ -751,7 +751,7 @@ local function InitializeSizer(self, baseFrame)
             SaveTrackerSize()
             
             -- Update the tracker
-            Update(AchievementTracker)
+            AchievementTracker:Update()
             
             -- Restore fade behavior after resize (if mouse is still over tracker, fade in; otherwise fade out)
             -- Small delay to check mouse position after resize ends
@@ -797,8 +797,12 @@ local function GetAchievementDescription(achievementId)
     local bossOrder = nil
     local requiredItems = nil
     local itemOrder = nil
+    local requiredAchievements = nil
+    local achievementOrder = nil
+    local isContinentExploration = false
     local isRaid = false
     local achDef = nil
+    local explorationZone = nil
     
     -- Check if achievement is completed first (needed for secret achievements)
     local achievementCompleted = false
@@ -833,6 +837,9 @@ local function GetAchievementDescription(achievementId)
     -- Try AchievementDefs (for dungeon/other achievements)
     if addon and addon.AchievementDefs and addon.AchievementDefs[tostring(achievementId)] then
         achDef = addon.AchievementDefs[tostring(achievementId)]
+        if achDef.explorationZone then
+            explorationZone = achDef.explorationZone
+        end
         if not baseTooltip then
             -- Check if it's a secret achievement and not completed
             if achDef.secret and not achievementCompleted and achDef.secretTooltip then
@@ -856,6 +863,15 @@ local function GetAchievementDescription(achievementId)
         if achDef.isRaid then
             isRaid = true
         end
+        if achDef.requiredAchievements then
+            requiredAchievements = achDef.requiredAchievements
+        end
+        if achDef.achievementOrder then
+            achievementOrder = achDef.achievementOrder
+        end
+        if achDef.isContinentExploration then
+            isContinentExploration = true
+        end
     end
     
     -- Try addon's single source (model or UI)
@@ -872,17 +888,67 @@ local function GetAchievementDescription(achievementId)
             if not requiredKills and row.requiredKills then requiredKills = row.requiredKills end
             if not requiredItems and row.requiredItems then requiredItems = row.requiredItems end
             if not itemOrder and row.itemOrder then itemOrder = row.itemOrder end
+            if not requiredAchievements and row.requiredAchievements then requiredAchievements = row.requiredAchievements end
+            if not achievementOrder and row.achievementOrder then achievementOrder = row.achievementOrder end
             if row._def and row._def.isRaid then isRaid = true end
             if row._def and row._def.requiredKills and not requiredKills then requiredKills = row._def.requiredKills end
             if row._def and row._def.bossOrder and not bossOrder then bossOrder = row._def.bossOrder end
+            if row._def and row._def.explorationZone and not explorationZone then
+                explorationZone = row._def.explorationZone
+            end
+            if row._def and row._def.requiredAchievements and not requiredAchievements then
+                requiredAchievements = row._def.requiredAchievements
+            end
+            if row._def and row._def.achievementOrder and not achievementOrder then
+                achievementOrder = row._def.achievementOrder
+            end
+            if row._def and row._def.isContinentExploration then
+                isContinentExploration = true
+            end
+        end
+    elseif addon and addon.GetAchievementRow then
+        -- Catalog may have supplied tooltip text already; still merge def-driven fields from the row model.
+        local row = addon.GetAchievementRow(achievementId)
+        if row then
+            if row._def and row._def.explorationZone and not explorationZone then
+                explorationZone = row._def.explorationZone
+            end
+            if row._def and row._def.requiredAchievements and not requiredAchievements then
+                requiredAchievements = row._def.requiredAchievements
+            end
+            if row._def and row._def.achievementOrder and not achievementOrder then
+                achievementOrder = row._def.achievementOrder
+            end
+            if row._def and row._def.isContinentExploration then
+                isContinentExploration = true
+            end
+            if not requiredAchievements and row.requiredAchievements then
+                requiredAchievements = row.requiredAchievements
+            end
+            if not achievementOrder and row.achievementOrder then
+                achievementOrder = row.achievementOrder
+            end
         end
     end
     
     -- Check if this is a dungeon/raid achievement (has requiredKills or requiredItems)
     local isDungeonOrRaidAchievement = (requiredKills and next(requiredKills) ~= nil) or (requiredItems and type(requiredItems) == "table" and #requiredItems > 0)
+
+    local explorationDetails, explorationErr, _, explorationTotal = nil, nil, 0, 0
+    if explorationZone and addon and type(addon.GetZoneDiscoveryDetails) == "function" then
+        explorationDetails, explorationErr, _, explorationTotal = addon.GetZoneDiscoveryDetails(explorationZone)
+    end
+    local hasExplorationSubzoneList = explorationDetails
+        and not explorationErr
+        and type(explorationTotal) == "number"
+        and explorationTotal > 0
+
+    local hasContinentZoneList = isContinentExploration
+        and type(requiredAchievements) == "table"
+        and #requiredAchievements > 0
     
     -- For dungeon achievements, we don't need baseTooltip - only return nil if it's not a dungeon achievement and we have no tooltip
-    if not baseTooltip and not isDungeonOrRaidAchievement then
+    if not baseTooltip and not isDungeonOrRaidAchievement and not hasExplorationSubzoneList and not hasContinentZoneList then
         return nil
     end
     
@@ -894,8 +960,8 @@ local function GetAchievementDescription(achievementId)
     -- For dungeon achievements (with requiredKills), skip the base tooltip and only show boss/item lists
     local description = ""
     
-    -- Only include base tooltip if this is NOT a dungeon achievement
-    if not isDungeonOrRaidAchievement and baseTooltip then
+    -- Only include base tooltip if this is NOT a dungeon achievement and NOT showing an exploration checklist
+    if not isDungeonOrRaidAchievement and not hasExplorationSubzoneList and not hasContinentZoneList and baseTooltip then
         description = baseTooltip
     end
     
@@ -1016,6 +1082,77 @@ local function GetAchievementDescription(achievementId)
                 description = description .. "\n|cffffffff" .. displayName .. "|r"
             else
                 description = description .. "\n|cff808080" .. displayName .. "|r"
+            end
+        end
+    end
+
+    -- Exploration achievements: list subzone probes (white = discovered, gray = not discovered)
+    if hasExplorationSubzoneList then
+        if description ~= "" then
+            description = description .. "\n\n|cff00ff00Required Areas:|r"
+        else
+            description = "|cff00ff00Required Areas:|r"
+        end
+
+        for _, loc in ipairs(explorationDetails) do
+            local name = tostring(loc and loc.name or "")
+            local discovered = achievementCompleted or (loc and loc.discovered == true)
+            if discovered then
+                description = description .. "\n|cffffffff" .. name .. "|r"
+            else
+                description = description .. "\n|cff808080" .. name .. "|r"
+            end
+        end
+    end
+
+    -- Continent exploration: list required zone achievements (white / gray / red failed)
+    if hasContinentZoneList then
+        if description ~= "" then
+            description = description .. "\n\n|cff00ff00Required Zones:|r"
+        else
+            description = "|cff00ff00Required Zones:|r"
+        end
+
+        local list = achievementOrder or requiredAchievements
+        for _, reqAchId in ipairs(list) do
+            local reqTitle = tostring(reqAchId)
+            if addon and addon.AchievementDefs then
+                local reqDef = addon.AchievementDefs[tostring(reqAchId)]
+                if reqDef and reqDef.title then
+                    reqTitle = reqDef.title
+                end
+            end
+            local reqRow = addon and addon.GetAchievementRow and addon.GetAchievementRow(reqAchId)
+            if reqTitle == tostring(reqAchId) and reqRow then
+                reqTitle = (reqRow.Title and reqRow.Title.GetText and reqRow.Title:GetText())
+                    or reqRow.title
+                    or reqTitle
+            end
+
+            local reqProgress = addon and addon.GetProgress and addon.GetProgress(reqAchId)
+            local reqCompleted = achievementCompleted or (reqProgress and reqProgress.completed)
+            if reqRow and reqRow.completed then
+                reqCompleted = true
+            end
+
+            local reqFailed = false
+            if not reqCompleted and addon and addon.IsRowOutleveled and reqRow and addon.IsRowOutleveled(reqRow) then
+                reqFailed = true
+            end
+            if not reqFailed and not reqCompleted and not reqRow and addon and addon.GetCharDB then
+                local _, cdb = addon.GetCharDB()
+                local rec = cdb and cdb.achievements and cdb.achievements[tostring(reqAchId)]
+                if rec and rec.failed then
+                    reqFailed = true
+                end
+            end
+
+            if reqCompleted then
+                description = description .. "\n|cffffffff" .. reqTitle .. "|r"
+            elseif reqFailed then
+                description = description .. "\n|cffff4444" .. reqTitle .. "|r"
+            else
+                description = description .. "\n|cff808080" .. reqTitle .. "|r"
             end
         end
     end
@@ -1144,7 +1281,7 @@ local function GetAchievementLine(self, index)
                     collapsedAchievements[achIdStr] = true
                 end
                 -- Update the display
-                Update(AchievementTracker)
+                AchievementTracker:Update()
             end
         end)
         -- Make sure button clicks don't trigger line clicks by registering for clicks separately
@@ -1566,7 +1703,10 @@ local function Update(self)
                     -- Check if this is a dungeon achievement (starts directly with "Required Bosses:" or "Required Items:")
                     -- Strip color codes temporarily to check the pattern
                     local cleanDesc = description:gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", "")
-                    local isDungeonDesc = cleanDesc:match("^Required Bosses:") or cleanDesc:match("^Required Items:")
+                    local isDungeonDesc = cleanDesc:match("^Required Bosses:")
+                        or cleanDesc:match("^Required Items:")
+                        or cleanDesc:match("^Required Areas:")
+                        or cleanDesc:match("^Required Zones:")
                     
                     -- Keep color codes for extended tooltips (boss/item lists with completion status)
                     -- Reposition description label with indent (12px from title start)
@@ -1994,6 +2134,72 @@ end
 
 -- Set up hooks after a short delay to ensure all functions are loaded
 C_Timer.After(1.0, HookAchievementRefresh)
+
+---------------------------------------
+-- Map exploration: MAP_EXPLORATION_UPDATED runs after fog updates (reliable vs zone/minimap).
+-- EvaluateCustomCompletions marks rows; tracker refreshes when a zone list is tracked.
+---------------------------------------
+
+local function GetExplorationZoneForAchievementId(achId)
+    if not achId then return nil end
+    local achIdStr = tostring(achId)
+
+    local defs = addon and addon.AchievementDefs
+    local def = defs and defs[achIdStr]
+    if def and def.explorationZone then
+        return def.explorationZone
+    end
+
+    local row = addon and addon.GetAchievementRow and addon.GetAchievementRow(achId)
+    if row and row._def and row._def.explorationZone then
+        return row._def.explorationZone
+    end
+
+    return nil
+end
+
+local function HasTrackedExplorationWithMapData()
+    if not next(trackedAchievements) then
+        return false
+    end
+    if not (addon and type(addon.GetZoneDiscoveryDetails) == "function") then
+        return false
+    end
+
+    for achId, _ in pairs(trackedAchievements) do
+        local zone = GetExplorationZoneForAchievementId(achId)
+        if zone then
+            local details, err, _, total = addon.GetZoneDiscoveryDetails(zone)
+            if details and not err and type(total) == "number" and total > 0 then
+                return true
+            end
+        end
+    end
+
+    return false
+end
+
+local explorationRefreshFrame = CreateFrame("Frame")
+pcall(function()
+    explorationRefreshFrame:RegisterEvent("MAP_EXPLORATION_UPDATED")
+end)
+explorationRefreshFrame:SetScript("OnEvent", function()
+    if addon and type(addon.EvaluateCustomCompletions) == "function" then
+        addon.EvaluateCustomCompletions()
+    end
+    if not isInitialized then
+        return
+    end
+    if not next(trackedAchievements) then
+        return
+    end
+    if not HasTrackedExplorationWithMapData() then
+        return
+    end
+    if AchievementTracker and AchievementTracker.Update then
+        AchievementTracker:Update()
+    end
+end)
 
 -- Restore tracked achievements on login/reload
 -- Wait for achievement registrations to complete before restoring
