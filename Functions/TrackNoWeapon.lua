@@ -99,9 +99,24 @@ local function SyncNoWeaponState(cdb, refreshOnFail, event, slot, hasCurrent)
 end
 
 local f = CreateFrame("Frame")
+
+local function UpdateXPEventRegistration(cdb)
+    if not cdb then return end
+    cdb.achievements = cdb.achievements or {}
+    local rec = cdb.achievements[ACH_ID]
+    if rec and (rec.completed or rec.failed) then
+        f:UnregisterEvent("PLAYER_XP_UPDATE")
+        return
+    end
+    if cdb.stats and cdb.stats.playerWeaponsArmed == true then
+        f:UnregisterEvent("PLAYER_XP_UPDATE")
+        return
+    end
+    f:RegisterEvent("PLAYER_XP_UPDATE")
+end
+
 f:RegisterEvent("PLAYER_LOGIN")
 f:RegisterEvent("PLAYER_ENTERING_WORLD")
-f:RegisterEvent("PLAYER_XP_UPDATE")
 f:RegisterEvent("PLAYER_EQUIPMENT_CHANGED")
 
 f:SetScript("OnEvent", function(_, event, arg1, arg2)
@@ -115,8 +130,5 @@ f:SetScript("OnEvent", function(_, event, arg1, arg2)
     end
 
     SyncNoWeaponState(cdb, event ~= "PLAYER_LOGIN", event, arg1, arg2)
-
-    if addon.EvaluateCustomCompletions then
-        addon.EvaluateCustomCompletions()
-    end
+    UpdateXPEventRegistration(cdb)
 end)
