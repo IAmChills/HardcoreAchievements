@@ -272,6 +272,30 @@ local Secrets = {
   staticPoints = true,
   hiddenUntilComplete = true,
 }, {
+    achId = "Secret014",
+    title = "Streamer Client",
+    level = nil,
+    tooltip = "You have completed the secret achievement: |cffff8000Loot a very rare quest item on the first kill|r",
+    icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_Boss_Golden_Lotus_Council.png",
+    points = 0,
+    customIsCompleted = function()
+        local p = addon and addon.GetProgress and addon.GetProgress("Secret014")
+        return p and p.firstKillRareState and p.firstKillRareState.met == true
+    end,
+    -- Variants: PARTY_KILL on npcIds only while questId is in the log (first such kill starts counting).
+    -- Progress is never cleared on accept/abandon/turn-in. BAG_UPDATE_DELAYED: killsTotal==1 and
+    -- GetItemCount(itemId,true)>=1 completes (no chat loot). No work while no variant quest is in log.
+    -- Implementation: Achievements/FirstKillRareQuestLoot.lua (shared with Classic).
+    firstKillRareQuestLoot = {
+        { itemId = 5097, questId = 896, npcIds = { 3283, 3286, 9336 } },             -- Cat's Eye Emerald / Miner's Fortune
+        { itemId = 4891, questId = 816, npcIds = { 3110, 3231 } },                   -- Kron's Amulet / Lost But Not Forgotten
+        { itemId = 3930, questId = 613, npcIds = { 709, 680, 710, 678, 679, 723 } }, -- Maury's Key / Cracking Maury's Foot
+    },
+    supportsStoredFailure = true,
+    secret = true,
+    staticPoints = true,
+    hiddenUntilComplete = true,
+}, {
     achId = "Secret100",
     title = "You've Got the Chills",
     level = nil,
