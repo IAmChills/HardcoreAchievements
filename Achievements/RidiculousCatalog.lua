@@ -9,7 +9,7 @@ local RidiculousAchievements = {
     achId = "NoJumpChallenge",
     title = "The Disciplined One",
     level = nil,
-    tooltip = "Reach level 60 without jumping",
+    tooltip = "Reach level 60 without jumping\n\n|cffffffffA jump is any instance of jumping in the air. Falling does not count as a jump.|r",
     icon = 413584,
     points = 0,
     supportsStoredFailure = true,
@@ -41,6 +41,75 @@ local RidiculousAchievements = {
     end,
     staticPoints = true,
   },
+  {
+    achId = "NoWeaponChallenge",
+    title = "Knuckle Up",
+    level = nil,
+    tooltip = "Reach level 60 without using a weapon (cannot have a mainhand, offhand, ranged equipped)\n\n|cffffffffA weapon may never be equipped at any point in the run. It is possible to start the run with a weapon equipped, but it must be removed before gaining experience.|r",
+    icon = "Interface\\Icons\\INV_Gauntlets_04",
+    points = 0,
+    supportsStoredFailure = true,
+    customIsCompleted = function()
+      local GetCharDB = addon and addon.GetCharDB
+      if not GetCharDB then
+        return false
+      end
+      local _, cdb = GetCharDB()
+      local playerWeapons = cdb and cdb.stats and cdb.stats.playerWeapons
+      if playerWeapons == nil then
+        return false
+      end
+
+      -- Check if achievement is already failed (e.g., player was max level on first load)
+      local achId = "NoWeaponChallenge"
+      local rec = cdb.achievements and cdb.achievements[achId]
+      if rec and rec.failed then
+        return false
+      end
+
+      -- Any tracked weapon use disqualifies the run immediately.
+      if playerWeapons == true then
+        return false
+      end
+
+      -- Only award if player reaches max level with a verified clean run.
+      return UnitLevel("player") >= 60 and playerWeapons == false
+    end,
+    staticPoints = true,
+  },
+  {
+    achId = "NoArmorChallenge",
+    title = "Birthday Suit",
+    level = nil,
+    tooltip = "Reach level 60 while completely nude (equipment slots 0-19 must remain empty)\n\n|cffffffffAll equipped gear must be removed before gaining experience, and no item may be equipped afterward.|r",
+    icon = 133886,
+    points = 0,
+    supportsStoredFailure = true,
+    customIsCompleted = function()
+      local GetCharDB = addon and addon.GetCharDB
+      if not GetCharDB then
+        return false
+      end
+      local _, cdb = GetCharDB()
+      local playerNude = cdb and cdb.stats and cdb.stats.playerNude
+      if playerNude == nil then
+        return false
+      end
+
+      local achId = "NoArmorChallenge"
+      local rec = cdb.achievements and cdb.achievements[achId]
+      if rec and rec.failed then
+        return false
+      end
+
+      if playerNude == true then
+        return false
+      end
+
+      return UnitLevel("player") >= 60 and playerNude == false
+    end,
+    staticPoints = true,
+  }
 }
 
 ---------------------------------------

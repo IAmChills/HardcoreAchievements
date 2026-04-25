@@ -20,6 +20,8 @@ Functions\RefreshAllAchievementPoints.lua
 Functions\ShowAchievementTooltip.lua
 Functions\NPCTooltip.lua
 Functions\TrackJumps.lua
+Functions\TrackNoWeapon.lua
+Functions\TrackNude.lua
 Functions\DataEncoding.lua
 Functions\CheckMapDiscovery.lua
 Functions\AchievementEventLog.lua

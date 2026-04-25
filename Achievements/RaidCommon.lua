@@ -264,6 +264,10 @@ local function registerRaidAchievement(def)
     return bossNames[npcId] or ("Boss " .. tostring(npcId))
   end
 
+  if addon then
+    addon.GetRaidBossName = GetRaidBossName
+  end
+
   local function GetNpcIdFromGUID(guid)
     if not guid then return nil end
     local npcId = select(6, strsplit("-", guid))
@@ -633,5 +637,4 @@ RaidCommon.registerRaidAchievement = registerRaidAchievement
 
 if addon then
   addon.RaidCommon = RaidCommon
-  addon.GetRaidBossName = GetRaidBossName
 end

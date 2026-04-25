@@ -780,13 +780,14 @@ local function AchievementCount()
             -- This prevents incomplete miscellaneous achievements from inflating the total, but includes
             -- completed miscellaneous achievements so the completed count doesn't exceed the total
             -- Special achievements (like FourCandle) are excluded from count entirely
-            local isVariation = row._def and row._def.isVariation
-            local isDungeonSet = row._def and row._def.isDungeonSet
-            local isReputation = row._def and row._def.isReputation
-            local isExploration = row._def and row._def.isExploration
-            local isRidiculous = row._def and row._def.isRidiculous
-            local isSecret = row._def and row._def.isSecret
-            local excludeFromCount = row._def and row._def.excludeFromCount
+            local def = row._def or row.def
+            local isVariation = def and def.isVariation
+            local isDungeonSet = def and def.isDungeonSet
+            local isReputation = def and def.isReputation
+            local isExploration = def and def.isExploration
+            local isRidiculous = def and def.isRidiculous
+            local isSecret = def and def.isSecret
+            local excludeFromCount = def and def.excludeFromCount
             -- Note: isRaid is Core (index 4), so it always counts - don't exclude it
             local shouldCount = not hiddenByProfession and not hiddenUntilComplete and not excludeFromCount and (not isVariation or row.completed) and (not isDungeonSet or row.completed) and (not isReputation or row.completed) and (not isExploration or row.completed) and (not isRidiculous or row.completed) and (not isSecret or row.completed)
             
