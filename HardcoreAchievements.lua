@@ -1318,12 +1318,19 @@ local function MarkRowCompleted(row, cdbParam)
     
     -- Reveal secret achievements before persisting/toast
     if row.isSecretAchievement then
-        if row.revealTitle and row.Title then 
-            row.Title:SetText(row.revealTitle)
-            if row.TitleShadow then row.TitleShadow:SetText(StripColorCodes(row.revealTitle)) end
+        if row.revealTitle then
+            if row.Title then
+                row.Title:SetText(row.revealTitle)
+                if row.TitleShadow then row.TitleShadow:SetText(StripColorCodes(row.revealTitle)) end
+            end
+            row.title = row.revealTitle
         end
         if row.revealIcon and row.Icon then row.Icon:SetTexture(row.revealIcon) end
-        if row.revealTooltip then row.tooltip = row.revealTooltip end
+        if row.revealTooltip then
+            row.tooltip = row.revealTooltip
+            if row._tooltip ~= nil then row._tooltip = row.revealTooltip end
+        end
+        if row.revealTitle and row._title ~= nil then row._title = row.revealTitle end
         row.staticPoints = row.revealStaticPoints or false
     end
 
@@ -1501,9 +1508,12 @@ local function RestoreCompletionsFromDB()
                     frame.tooltip = row.revealTooltip or frame.tooltip
                     frame.staticPoints = row.revealStaticPoints or frame.staticPoints
                 end
-                if row.revealTitle and frame.Title then
-                    frame.Title:SetText(row.revealTitle)
-                    if frame.TitleShadow then frame.TitleShadow:SetText(row.revealTitle) end
+                if row.revealTitle then
+                    row.title = row.revealTitle
+                    if frame.Title then
+                        frame.Title:SetText(row.revealTitle)
+                        if frame.TitleShadow then frame.TitleShadow:SetText(row.revealTitle) end
+                    end
                 end
                 if row.revealIcon and frame.Icon then frame.Icon:SetTexture(row.revealIcon) end
             end
@@ -3612,6 +3622,8 @@ local function CreateAchievementRowFromData(data, index)
             if row.TitleShadow then row.TitleShadow:SetText(StripColorCodes(row.secretTitle)) end
         end
         row.tooltip = row.secretTooltip
+        row._tooltip = row.secretTooltip
+        row._title = row.secretTitle
         if row.Icon then row.Icon:SetTexture(row.secretIcon) end
         row.points = row.secretPoints
         if row.Points then row.Points:SetText(tostring(row.secretPoints)) end
@@ -3721,6 +3733,8 @@ local function CreateAchievementRow(parent, achId, title, tooltip, icon, level, 
         data.secretTooltip = def.secretTooltip or "Hidden"
         data.secretIcon = def.secretIcon or 134400
         data.secretPoints = tonumber(def.secretPoints) or 0
+        data.title = data.secretTitle
+        data.tooltip = data.secretTooltip
     end
     if addon and addon.AchievementRowModel then table_insert(addon.AchievementRowModel, data) end
 

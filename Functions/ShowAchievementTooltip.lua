@@ -362,6 +362,24 @@ local function ShowAchievementTooltip(frame, data)
             end
         end
     end
+
+    -- Incomplete secrets: never show reveal title/tooltip (dashboard may pass model rows with stale strings).
+    if isSecret and not achievementCompleted then
+        local secTip = (def and def.secretTooltip) or (achDef and achDef.secretTooltip)
+        if type(data) == "table" and type(data.secretTooltip) == "string" and data.secretTooltip ~= "" then
+            secTip = secTip or data.secretTooltip
+        end
+        if type(secTip) == "string" and secTip ~= "" then
+            tooltip = secTip
+        end
+        local secTitle = (def and def.secretTitle) or (achDef and achDef.secretTitle)
+        if type(data) == "table" and type(data.secretTitle) == "string" and data.secretTitle ~= "" then
+            secTitle = secTitle or data.secretTitle
+        end
+        if type(secTitle) == "string" and secTitle ~= "" then
+            title = secTitle
+        end
+    end
     
     GameTooltip:SetOwner(frame, "ANCHOR_RIGHT")
     
