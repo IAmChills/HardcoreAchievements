@@ -3,7 +3,9 @@
 -- Per quest variation: PARTY_KILL on an npcId in the variant only counts while that questId is in the
 -- log (that first qualifying kill starts the counter at 1). Totals persist: quest accept, abandon,
 -- turn-in, or remove do not clear progress.
--- When BAG_UPDATE_DELAYED fires (bags settled), if killsTotal[questId] == 1 and GetItemCount(itemId, true) >= 1, complete.
+-- When BAG_UPDATE_DELAYED fires (bags settled), each variant can set:
+--   requiredKills (default 1) and requiredItems (default 1).
+-- If killsTotal[questId] == requiredKills and GetItemCount(itemId, true) >= requiredItems, complete.
 -- At 2+ kills for a variation that branch can no longer qualify; if every branch is at 2+ without
 -- completion, fail (requires supportsStoredFailure on the def).
 -- If no variant quest for any rule is in the log, handlers return immediately (no getState / bag work).
@@ -90,7 +92,8 @@ local function allVariationsExhausted(rule, state)
         local qid = tonumber(variant.questId)
         if qid then
             local n = tonumber(state.killsTotal[qid]) or 0
-            if n < 2 then
+            local maxKills = tonumber(variant.requiredKills) or 1
+            if n < (maxKills + 1) then
                 return false
             end
         end
@@ -214,8 +217,10 @@ local function onBagUpdateDelayed()
                         local itemId = tonumber(variant.itemId)
                         if qid and itemId and isQuestInLog(qid) then
                             local total = tonumber(state.killsTotal[qid]) or 0
-                            -- Inventory is settled on this event; require exactly one counted kill and at least one item.
-                            if total == 1 and (GetItemCount(itemId, true) or 0) >= 1 then
+                            local requiredKills = tonumber(variant.requiredKills) or 1
+                            local requiredItems = tonumber(variant.requiredItems) or 1
+                            -- Inventory is settled on this event; require exact counted kills and minimum item count.
+                            if total == requiredKills and (GetItemCount(itemId, true) or 0) >= requiredItems then
                                 state.met = true
                                 saveState(achId, state)
                                 if addon.CheckPendingCompletions then

@@ -48,7 +48,7 @@ local RidiculousAchievements = {
     title = "Knuckle Up",
     level = nil,
     tooltip = "Reach level 70 without using a weapon (cannot have a mainhand, offhand, ranged equipped)\n\n|cffffffffA weapon may never be equipped at any point in the run. It is possible to start the run with a weapon equipped, but it must be removed before gaining experience.|r",
-    icon = "Interface\\Icons\\INV_Gauntlets_04",
+    icon = 132334,
     points = 0,
     supportsStoredFailure = true,
     customIsCompleted = function()
@@ -109,6 +109,72 @@ local RidiculousAchievements = {
       end
 
       return UnitLevel("player") >= 70 and playerNude == false
+    end,
+    staticPoints = true,
+  },
+  {
+    achId = "NoQuestTurnInChallenge",
+    title = "Bloodbath",
+    level = nil,
+    tooltip = "Reach level 70 without completing a single quest\n\n|cffffffffThis challenge must begin on a fresh level 1 character and there are no exceptions to quest completion.\n\nYou may obtain quests and enable the Hardcore option to 'enable achievements that require an NPC kill be awarded immediately on kill rather than quest completion' if you would still like to complete achievements.|r",
+    icon = 135358,
+    points = 0,
+    supportsStoredFailure = true,
+    customIsCompleted = function()
+      local GetCharDB = addon and addon.GetCharDB
+      if not GetCharDB then
+        return false
+      end
+      local _, cdb = GetCharDB()
+      local turnIns = cdb and cdb.stats and cdb.stats.playerQuestTurnIns
+      if turnIns == nil then
+        return false
+      end
+
+      local achId = "NoQuestTurnInChallenge"
+      local rec = cdb.achievements and cdb.achievements[achId]
+      if rec and rec.failed then
+        return false
+      end
+
+      if turnIns > 0 then
+        return false
+      end
+
+      return UnitLevel("player") >= 70 and turnIns == 0
+    end,
+    staticPoints = true,
+  },
+  {
+    achId = "PVPChallenge",
+    title = "Warforged",
+    level = nil,
+    tooltip = "Reach level 70 without ever letting your PvP flag fall off\n\n|cffffffffThis challenge must begin on a fresh level 1 character while already PvP flagged. Toggling PvP off is allowed only while the flag remains active; once UnitIsPVP(\"player\") becomes false, the run fails.|r",
+    icon = 132272,
+    points = 0,
+    supportsStoredFailure = true,
+    customIsCompleted = function()
+      local GetCharDB = addon and addon.GetCharDB
+      if not GetCharDB then
+        return false
+      end
+      local _, cdb = GetCharDB()
+      local pvpDropped = cdb and cdb.stats and cdb.stats.playerWarforgedPvpDropped
+      if pvpDropped == nil then
+        return false
+      end
+
+      local achId = "PVPChallenge"
+      local rec = cdb.achievements and cdb.achievements[achId]
+      if rec and rec.failed then
+        return false
+      end
+
+      if pvpDropped == true then
+        return false
+      end
+
+      return UnitLevel("player") >= 70 and pvpDropped == false
     end,
     staticPoints = true,
   },

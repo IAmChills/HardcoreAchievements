@@ -22,6 +22,8 @@ Functions\NPCTooltip.lua
 Functions\TrackJumps.lua
 Functions\TrackNoWeapon.lua
 Functions\TrackNude.lua
+Functions\TrackNoQuestTurnIns.lua
+Functions\TrackWarforged.lua
 Functions\DataEncoding.lua
 Functions\CheckMapDiscovery.lua
 Functions\AchievementEventLog.lua

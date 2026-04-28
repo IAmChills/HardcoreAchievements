@@ -115,6 +115,25 @@ local function UpdateXPEventRegistration(cdb)
     f:RegisterEvent("PLAYER_XP_UPDATE")
 end
 
+local function UpdateEventRegistration(cdb)
+    if not cdb then return end
+    cdb.achievements = cdb.achievements or {}
+    cdb.stats = cdb.stats or {}
+
+    local rec = cdb.achievements[ACH_ID]
+    if rec and (rec.completed or rec.failed) then
+        f:UnregisterEvent("PLAYER_XP_UPDATE")
+        f:UnregisterEvent("PLAYER_EQUIPMENT_CHANGED")
+        f:UnregisterEvent("PLAYER_ENTERING_WORLD")
+        return
+    end
+
+    -- Initialization only needs to happen once.
+    if cdb.stats.playerWeapons ~= nil then
+        f:UnregisterEvent("PLAYER_ENTERING_WORLD")
+    end
+end
+
 f:RegisterEvent("PLAYER_LOGIN")
 f:RegisterEvent("PLAYER_ENTERING_WORLD")
 f:RegisterEvent("PLAYER_EQUIPMENT_CHANGED")
@@ -131,4 +150,5 @@ f:SetScript("OnEvent", function(_, event, arg1, arg2)
 
     SyncNoWeaponState(cdb, event ~= "PLAYER_LOGIN", event, arg1, arg2)
     UpdateXPEventRegistration(cdb)
+    UpdateEventRegistration(cdb)
 end)

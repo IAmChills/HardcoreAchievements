@@ -284,8 +284,9 @@ local Secrets = {
       return p and p.firstKillRareState and p.firstKillRareState.met == true
     end,
     -- Variants: PARTY_KILL on npcIds only while questId is in the log (first such kill starts counting).
-    -- Progress is never cleared on accept/abandon/turn-in. BAG_UPDATE_DELAYED: killsTotal==1 and
-    -- GetItemCount(itemId,true)>=1 completes (no chat loot). No work while no variant quest is in log.
+    -- Progress is never cleared on accept/abandon/turn-in. BAG_UPDATE_DELAYED: killsTotal must match
+    -- variant.requiredKills (default 1) and GetItemCount(itemId,true) >= variant.requiredItems
+    -- (default 1) to complete (no chat loot). No work while no variant quest is in log.
     -- Implementation: Achievements/FirstKillRareQuestLoot.lua (shared with TBC).
     firstKillRareQuestLoot = {
       { itemId = 5097, questId = 896, npcIds = { 3283, 3286, 9336 } },             -- Cat's Eye Emerald / Miner's Fortune [Horde]
@@ -296,7 +297,7 @@ local Secrets = {
       { itemId = 3349, questId = 470, npcIds = { 1032, 1031, 1033 } },             -- Sida's Bag / Digging Through the Ooze [Alliance]
       { itemId = 3930, questId = 613, npcIds = { 709, 680, 710, 678, 679, 723 } }, -- Maury's Key / Cracking Maury's Foot [Neutral]
       { itemId = 8428, questId = 2605, npcIds = { 5481 } },                        -- Laden Dew Gland / The Thirsty Goblin [Neutral]
-      { itemId = 12367, questId = 977, npcIds = { 7460, 7459 } },                  -- Pristine Yeti Horn / Are We There, Yeti? [Neutral]
+      { itemId = 12367, questId = 977, npcIds = { 7460, 7459 }, requiredKills = 2, requiredItems = 2 }, -- Pristine Yeti Horn / Are We There, Yeti? [Neutral]
     },
     supportsStoredFailure = true,
     secret = true,
