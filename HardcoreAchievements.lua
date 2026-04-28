@@ -652,7 +652,7 @@ local function FormatTimestamp(timestamp)
     end
 end
 
-local function EnsureFailureTimestamp(achId)
+local function EnsureFailureTimestamp(achId, row)
     if not achId then return nil end
     local _, cdb = GetCharDB()
     if not cdb then return nil end
@@ -664,6 +664,10 @@ local function EnsureFailureTimestamp(achId)
     end
     if not rec.completed and not rec.failedAt then
         rec.failedAt = time()
+        if addon and addon.EventLogAdd then
+            local title = (row and row.Title and row.Title.GetText and row.Title:GetText()) or (row and row.title) or tostring(achId)
+            addon.EventLogAdd("Achievement failed (no longer available): " .. tostring(title) .. " [" .. tostring(achId) .. "]")
+        end
     end
     if rec.failedAt and not rec.failed then
         rec.failed = true
@@ -1149,7 +1153,7 @@ local function ApplyOutleveledStyle(row)
         
         if row.TS then
             if isOutleveled then
-                local failedAt = GetFailureTimestamp(achId) or EnsureFailureTimestamp(achId) or time()
+                local failedAt = GetFailureTimestamp(achId) or EnsureFailureTimestamp(achId, row) or time()
                 row.TS:SetText(FormatTimestamp(failedAt))
             else
                 row.TS:SetText("")
