@@ -7,11 +7,13 @@ local UnitName = UnitName
 local UnitExists = UnitExists
 local UnitFactionGroup = UnitFactionGroup
 local UnitAffectingCombat = UnitAffectingCombat
+local IsResting = IsResting
 local GetTime = GetTime
 local time = time
 local GetLocale = GetLocale
 local CreateFrame = CreateFrame
 local C_Timer = C_Timer
+local UIParent = UIParent
 local hooksecurefunc = hooksecurefunc
 local IsShiftKeyDown = IsShiftKeyDown
 local InCombatLockdown = InCombatLockdown
@@ -343,6 +345,122 @@ end
 local function ClearProgress(achId)
     local _, cdb = GetCharDB()
     if cdb and cdb.progress then cdb.progress[achId] = nil end
+end
+
+local unsavedAchievementReminderPending = false
+local unsavedAchievementReminderFrame = nil
+local unsavedAchievementReminderDismissed = false
+
+local function EnsureUnsavedAchievementReminderFrame()
+    if unsavedAchievementReminderFrame or not UIParent then
+        return unsavedAchievementReminderFrame
+    end
+
+    local frame = CreateFrame("Button", nil, UIParent)
+    frame:SetFrameStrata("FULLSCREEN_DIALOG")
+    frame:SetFrameLevel(20)
+    frame:SetSize(520, 32)
+    frame:SetPoint("TOP", UIParent, "TOP", 0, -18)
+    frame:EnableMouse(true)
+    frame:Hide()
+    frame:RegisterForClicks("LeftButtonUp")
+    frame:SetScript("OnClick", function(self, button)
+        if button == "LeftButton" then
+            unsavedAchievementReminderDismissed = true
+            self:Hide()
+            if self.TextPulse and self.TextPulse:IsPlaying() then
+                self.TextPulse:Stop()
+            end
+            if self.IconPulse and self.IconPulse:IsPlaying() then
+                self.IconPulse:Stop()
+            end
+        end
+    end)
+
+    local icon = frame:CreateTexture(nil, "ARTWORK")
+    icon:SetTexture("Interface\\AddOns\\HardcoreAchievements\\Images\\HardcoreAchievementsButton.png")
+    icon:SetSize(22, 22)
+    frame.Icon = icon
+
+    local text = frame:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    text:SetPoint("CENTER", frame, "CENTER", 12, 0)
+    text:SetJustifyH("LEFT")
+    text:SetJustifyV("MIDDLE")
+    text:SetTextColor(1, 1, 1, 0.95)
+    text:SetText("You have unsaved achievement progress, please reload. Click to dismiss.")
+    frame.Text = text
+
+    icon:SetPoint("RIGHT", text, "LEFT", -8, 0)
+
+    local textPulse = text:CreateAnimationGroup()
+    textPulse:SetLooping("REPEAT")
+
+    local textFadeOut = textPulse:CreateAnimation("Alpha")
+    textFadeOut:SetOrder(1)
+    textFadeOut:SetFromAlpha(1.0)
+    textFadeOut:SetToAlpha(0.45)
+    textFadeOut:SetDuration(0.6)
+
+    local textFadeIn = textPulse:CreateAnimation("Alpha")
+    textFadeIn:SetOrder(2)
+    textFadeIn:SetFromAlpha(0.45)
+    textFadeIn:SetToAlpha(1.0)
+    textFadeIn:SetDuration(0.6)
+
+    local iconPulse = icon:CreateAnimationGroup()
+    iconPulse:SetLooping("REPEAT")
+
+    local iconFadeOut = iconPulse:CreateAnimation("Alpha")
+    iconFadeOut:SetOrder(1)
+    iconFadeOut:SetFromAlpha(1.0)
+    iconFadeOut:SetToAlpha(0.45)
+    iconFadeOut:SetDuration(0.6)
+
+    local iconFadeIn = iconPulse:CreateAnimation("Alpha")
+    iconFadeIn:SetOrder(2)
+    iconFadeIn:SetFromAlpha(0.45)
+    iconFadeIn:SetToAlpha(1.0)
+    iconFadeIn:SetDuration(0.6)
+
+    frame.TextPulse = textPulse
+    frame.IconPulse = iconPulse
+    unsavedAchievementReminderFrame = frame
+    return frame
+end
+
+local function UpdateUnsavedAchievementReminderVisibility()
+    local frame = EnsureUnsavedAchievementReminderFrame()
+    if not frame then
+        return
+    end
+
+    local isRestingNow = type(IsResting) == "function" and IsResting()
+    if not isRestingNow then
+        unsavedAchievementReminderDismissed = false
+    end
+
+    if unsavedAchievementReminderPending and isRestingNow and not unsavedAchievementReminderDismissed then
+        frame:Show()
+        if frame.TextPulse and not frame.TextPulse:IsPlaying() then
+            frame.TextPulse:Play()
+        end
+        if frame.IconPulse and not frame.IconPulse:IsPlaying() then
+            frame.IconPulse:Play()
+        end
+    else
+        if frame.TextPulse and frame.TextPulse:IsPlaying() then
+            frame.TextPulse:Stop()
+        end
+        if frame.IconPulse and frame.IconPulse:IsPlaying() then
+            frame.IconPulse:Stop()
+        end
+        frame:Hide()
+    end
+end
+
+local function MarkUnsavedAchievementProgress()
+    unsavedAchievementReminderPending = true
+    UpdateUnsavedAchievementReminderVisibility()
 end
 
 -- =========================================================
@@ -1302,6 +1420,10 @@ local function MarkRowCompleted(row, cdbParam)
             addon.Hooks:FireEvent("OnAchievement", achievementData)
         end
     end
+
+    if restorationsComplete and not skipBroadcastForRetroactive then
+        MarkUnsavedAchievementProgress()
+    end
     
     -- Set Sub text with "Solo" indicator if achievement was completed solo
     -- Solo indicators show based on hardcore status:
@@ -1986,6 +2108,10 @@ local function SetProgress(achId, key, value)
     end
     cdb.progress[achId] = p
 
+    if restorationsComplete and shouldSetLevelAt then
+        MarkUnsavedAchievementProgress()
+    end
+
     C_Timer.After(0, function()
         -- Only check if restorations are complete (this is called during gameplay, not initial login)
         -- During initial login, the RunHeavyOperations flow will handle completion checks
@@ -2129,8 +2255,14 @@ end
 
 local initFrame = CreateFrame("Frame")
 initFrame:RegisterEvent("PLAYER_LOGIN")
+initFrame:RegisterEvent("PLAYER_UPDATE_RESTING")
 initFrame:RegisterEvent("ADDON_LOADED")
 initFrame:SetScript("OnEvent", function(self, event, ...)
+    if event == "PLAYER_UPDATE_RESTING" then
+        UpdateUnsavedAchievementReminderVisibility()
+        return
+    end
+
     if event == "PLAYER_LOGIN" then
         playerGUID = UnitGUID("player")
 
@@ -2164,6 +2296,7 @@ initFrame:SetScript("OnEvent", function(self, event, ...)
         
         -- Load saved tab position (lightweight, can run immediately)
         LoadTabPosition()
+        UpdateUnsavedAchievementReminderVisibility()
         
         if UISpecialFrames then
             local frameName = AchievementPanel and AchievementPanel:GetName()
