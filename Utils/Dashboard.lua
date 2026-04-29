@@ -3403,15 +3403,142 @@ local function FinishDashboardOpenToTab(tabKey)
   end
 end
 
+local DASHBOARD_ACHIEVEMENT_TAB_KEYS = {
+  "quest",
+  "dungeon",
+  "heroic_dungeon",
+  "raid",
+  "profession",
+  "meta",
+  "reputation",
+  "exploration",
+  "gear_sets",
+  "dungeon_solo",
+  "dungeon_duo",
+  "dungeon_trio",
+  "ridiculous",
+  "secret",
+  "all",
+}
+
+local function GetDashboardTabKeyForAchievement(achId)
+  if not achId then
+    return "all"
+  end
+
+  local achKey = tostring(achId)
+  local srcRows = GetSourceRows()
+  if not srcRows then
+    return "all"
+  end
+
+  local matchedDef = nil
+  for _, srow in ipairs(srcRows) do
+    local rowAchId = tostring(srow and (srow.achId or srow.id) or "")
+    if rowAchId == achKey then
+      matchedDef = srow._def or (addon and addon.AchievementDefs and addon.AchievementDefs[achKey]) or nil
+      break
+    end
+  end
+
+  if not matchedDef then
+    matchedDef = addon and addon.AchievementDefs and addon.AchievementDefs[achKey]
+  end
+
+  if not matchedDef then
+    return "all"
+  end
+
+  for _, key in ipairs(DASHBOARD_ACHIEVEMENT_TAB_KEYS) do
+    if DefMatchesTabKey(matchedDef, key) then
+      return key
+    end
+  end
+
+  return "all"
+end
+
+local function ScrollDashboardToAchievement(achId)
+  if not achId or not (DashboardFrame and DashboardFrame:IsShown() and DashboardFrame.Scroll) then
+    return
+  end
+
+  local achKey = tostring(achId)
+  local target = nil
+
+  if DASHBOARD and DASHBOARD.rows then
+    for _, row in ipairs(DASHBOARD.rows) do
+      if row and row:IsShown() and tostring(row.achId or row.id or "") == achKey then
+        target = row
+        break
+      end
+    end
+  end
+
+  if not target and DASHBOARD and DASHBOARD.icons then
+    for _, icon in ipairs(DASHBOARD.icons) do
+      if icon and icon:IsShown() and tostring(icon.achId or icon.id or "") == achKey then
+        target = icon
+        break
+      end
+    end
+  end
+
+  if not target then
+    return
+  end
+
+  local scroll = DashboardFrame.Scroll
+  if scroll.UpdateScrollChildRect then
+    scroll:UpdateScrollChildRect()
+  end
+
+  local maxV = scroll.GetVerticalScrollRange and scroll:GetVerticalScrollRange() or 0
+  local currentV = scroll.GetVerticalScroll and scroll:GetVerticalScroll() or 0
+  local scrollTop = scroll.GetTop and scroll:GetTop()
+  local targetTop = target.GetTop and target:GetTop()
+  if not scrollTop or not targetTop then
+    return
+  end
+
+  local desired = currentV + (scrollTop - targetTop) - 16
+  if desired < 0 then
+    desired = 0
+  elseif desired > maxV then
+    desired = maxV
+  end
+
+  if scroll.SetVerticalScroll then
+    scroll:SetVerticalScroll(desired)
+  end
+end
+
+local function FinishDashboardOpenToAchievement(tabKey, achId)
+  FinishDashboardOpenToTab(tabKey)
+  if achId and C_Timer and C_Timer.After then
+    local targetId = achId
+    C_Timer.After(0, function()
+      ScrollDashboardToAchievement(targetId)
+    end)
+  elseif achId then
+    ScrollDashboardToAchievement(achId)
+  end
+end
+
 -- Show/Hide Dashboard functions
 function DASHBOARD:Show()
   if not DashboardFrame then
     BuildDashboardFrame()
   end
   local openToTab = nil
+  local openToAchievement = nil
   if addon and addon._hcaOpenDashboardTabKey then
     openToTab = addon._hcaOpenDashboardTabKey
     addon._hcaOpenDashboardTabKey = nil
+  end
+  if addon and addon._hcaOpenDashboardAchievementId then
+    openToAchievement = addon._hcaOpenDashboardAchievementId
+    addon._hcaOpenDashboardAchievementId = nil
   end
   if openToTab and DashboardFrame then
     DashboardFrame.SelectedTabKey = openToTab
@@ -3422,12 +3549,14 @@ function DASHBOARD:Show()
     if self.Rebuild then
       self:Rebuild()
     end
-    if openToTab then
-      FinishDashboardOpenToTab(openToTab)
+    if openToTab or openToAchievement then
+      local tabKey = openToTab or GetDashboardTabKeyForAchievement(openToAchievement)
+      FinishDashboardOpenToAchievement(tabKey, openToAchievement)
       if C_Timer and C_Timer.After then
-        local k = openToTab
+        local k = tabKey
+        local a = openToAchievement
         C_Timer.After(0, function()
-          FinishDashboardOpenToTab(k)
+          FinishDashboardOpenToAchievement(k, a)
         end)
       end
     end
@@ -3472,6 +3601,15 @@ end)
 if addon then
   addon.Dashboard = DASHBOARD
   addon.ShowDashboard = ShowDashboard
+  function addon.OpenDashboardToAchievement(achId)
+    if not achId then
+      ShowDashboard()
+      return
+    end
+    addon._hcaOpenDashboardAchievementId = tostring(achId)
+    addon._hcaOpenDashboardTabKey = GetDashboardTabKeyForAchievement(achId)
+    ShowDashboard()
+  end
   function addon.RefreshDashboard()
     if DashboardFrame and DashboardFrame:IsShown() and DASHBOARD and DASHBOARD.Rebuild then
       DASHBOARD:Rebuild()

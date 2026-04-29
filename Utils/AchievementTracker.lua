@@ -1410,8 +1410,11 @@ local function GetAchievementLine(self, index)
                         end
                     end
                 else
-                    -- Regular Click: Always open the standalone dashboard from the tracker.
-                    if addon and addon.Dashboard and addon.Dashboard.Toggle then
+                    -- Regular Click: Open the dashboard directly to this achievement when possible.
+                    local achId = line.achievementId
+                    if achId and addon and addon.OpenDashboardToAchievement then
+                        addon.OpenDashboardToAchievement(achId)
+                    elseif addon and addon.Dashboard and addon.Dashboard.Toggle then
                         addon.Dashboard:Toggle()
                     else
                         local ShowDashboard = addon and addon.ShowDashboard

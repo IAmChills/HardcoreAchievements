@@ -1716,7 +1716,9 @@ local function GetOrCreateAchToastFrame()
     -- Mouse button handler opens the dashboard (OnMouseUp for left button)
     f:SetScript("OnMouseUp", function(self, button)
         if button == "LeftButton" then
-            if addon and addon.Dashboard and addon.Dashboard.Toggle then
+            if self.achId and addon and addon.OpenDashboardToAchievement then
+                addon.OpenDashboardToAchievement(self.achId)
+            elseif addon and addon.Dashboard and addon.Dashboard.Toggle then
                 addon.Dashboard:Toggle()
             elseif addon and addon.ShowDashboard then
                 addon.ShowDashboard()
@@ -1790,6 +1792,7 @@ CreateAchToast = function(iconTex, title, pts, achIdOrRow)
     end
 
     -- these exist because we exposed them in the factory
+    f.achId = achId
     f.icon:SetTexture(tex)
     f.name:SetText(title or "")
     
