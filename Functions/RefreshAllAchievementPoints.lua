@@ -175,6 +175,9 @@ local function RefreshAllAchievementPoints()
     if addon and addon.RefreshOutleveledAll then
         addon.RefreshOutleveledAll()
     end
+    if addon and addon.RefreshAuxiliaryViews then
+        addon.RefreshAuxiliaryViews()
+    end
 
     if addon then addon.RefreshingPoints = nil end
     if addon and addon.PointsRefreshPending then

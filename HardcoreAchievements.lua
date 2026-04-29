@@ -666,7 +666,7 @@ local function EnsureFailureTimestamp(achId, row)
         rec.failedAt = time()
         if addon and addon.EventLogAdd then
             local title = (row and row.Title and row.Title.GetText and row.Title:GetText()) or (row and row.title) or tostring(achId)
-            addon.EventLogAdd("Achievement failed (no longer available): " .. tostring(title) .. " [" .. tostring(achId) .. "]")
+            addon.EventLogAdd("Achievement |cffff0000failed|r (no longer available): " .. tostring(title))
         end
     end
     if rec.failedAt and not rec.failed then
@@ -1348,7 +1348,7 @@ local function MarkRowCompleted(row, cdbParam)
         local achKey = row.achId or row.id or ""
         local titleLog = (row.Title and row.Title.GetText and row.Title:GetText()) or row.title or tostring(achKey)
         local ptsLog = tonumber(row.points) or 0
-        addon.EventLogAdd("Achievement completed: " .. tostring(titleLog) .. " [" .. tostring(achKey) .. "] +" .. tostring(ptsLog) .. " pts")
+        addon.EventLogAdd("Achievement |cff00ff00completed|r: " .. tostring(titleLog) .. " +" .. tostring(ptsLog) .. " pts")
     end
 
     if Profession and Profession.NotifyRowCompleted then
@@ -1713,10 +1713,16 @@ local function GetOrCreateAchToastFrame()
     -- Make the toast clickable
     f:EnableMouse(true)
     
-    -- Mouse button handler opens the achievements panel (OnMouseUp for left button)
+    -- Mouse button handler opens the dashboard (OnMouseUp for left button)
     f:SetScript("OnMouseUp", function(self, button)
         if button == "LeftButton" then
-            ShowHardcoreAchievementWindow()
+            if addon and addon.Dashboard and addon.Dashboard.Toggle then
+                addon.Dashboard:Toggle()
+            elseif addon and addon.ShowDashboard then
+                addon.ShowDashboard()
+            else
+                ShowHardcoreAchievementWindow()
+            end
         end
     end)
 
@@ -1913,14 +1919,43 @@ if _G and type(CreateAchToast) == "function" then _G.HardcoreAchievementsToast =
 -- Outleveled (missed) indicator
 -- =========================================================
 
-RefreshOutleveledAll = function()
-    if not AchievementPanel or not AchievementPanel.achievements then return end
-    for _, row in ipairs(AchievementPanel.achievements) do
-        ApplyOutleveledStyle(row)
+local pendingAuxiliaryViewRefresh = false
+
+local function RefreshAuxiliaryViews()
+    if pendingAuxiliaryViewRefresh then
+        return
     end
+
+    pendingAuxiliaryViewRefresh = true
+    C_Timer.After(0, function()
+        pendingAuxiliaryViewRefresh = false
+
+        local tracker = addon and addon.AchievementTracker
+        if tracker and type(tracker.Update) == "function" then
+            tracker:Update()
+        end
+
+        local refreshDashboard = addon and addon.RefreshDashboard
+        if type(refreshDashboard) == "function" then
+            refreshDashboard()
+        end
+    end)
 end
 
-if addon then addon.RefreshOutleveledAll = RefreshOutleveledAll end
+RefreshOutleveledAll = function()
+    if AchievementPanel and AchievementPanel.achievements then
+        for _, row in ipairs(AchievementPanel.achievements) do
+            ApplyOutleveledStyle(row)
+        end
+    end
+
+    RefreshAuxiliaryViews()
+end
+
+if addon then
+    addon.RefreshOutleveledAll = RefreshOutleveledAll
+    addon.RefreshAuxiliaryViews = RefreshAuxiliaryViews
+end
 
 -- =========================================================
 -- Progress Helpers

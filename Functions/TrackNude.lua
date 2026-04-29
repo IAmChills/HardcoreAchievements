@@ -9,9 +9,14 @@ local UnitXP = UnitXP
 local GetInventoryItemID = GetInventoryItemID
 local CreateFrame = CreateFrame
 
+local function SlotHasEquippedItem(slot)
+    local itemId = GetInventoryItemID("player", slot)
+    return type(itemId) == "number" and itemId > 0
+end
+
 local function HasAnyEquippedItem()
     for slot = 0, 19 do
-        if GetInventoryItemID("player", slot) ~= nil then
+        if SlotHasEquippedItem(slot) then
             return true
         end
     end
@@ -92,7 +97,7 @@ local function SyncNoArmorState(cdb, refreshOnFail, event, slot, hasCurrent)
         if not armed or state ~= false then
             return
         end
-        if type(slot) == "number" and slot >= 0 and slot <= 19 and hasCurrent == false then
+        if type(slot) == "number" and slot >= 0 and slot <= 19 and hasCurrent == true and SlotHasEquippedItem(slot) then
             MarkNoArmorFailure(cdb, refreshOnFail)
         end
     end

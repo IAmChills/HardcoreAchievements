@@ -1386,7 +1386,7 @@ local function GetAchievementLine(self, index)
                 end
             end
             
-            if button == "LeftButton" and not InCombatLockdown() and not wasDragging then
+            if button == "LeftButton" and not wasDragging then
                 if IsShiftKeyDown() then
                     -- Shift+Click: Check if chat is open, otherwise untrack
                     local editBox = ChatEdit_GetActiveWindow()
@@ -1410,10 +1410,19 @@ local function GetAchievementLine(self, index)
                         end
                     end
                 else
-                    -- Regular Click: Open HardcoreAchievementWindow (resolve at call time from addon)
-                    local ShowAchievementWindow = addon and addon.ShowAchievementWindow
-                    if type(ShowAchievementWindow) == "function" then
-                        ShowAchievementWindow()
+                    -- Regular Click: Always open the standalone dashboard from the tracker.
+                    if addon and addon.Dashboard and addon.Dashboard.Toggle then
+                        addon.Dashboard:Toggle()
+                    else
+                        local ShowDashboard = addon and addon.ShowDashboard
+                        if type(ShowDashboard) == "function" then
+                            ShowDashboard()
+                        else
+                            local ShowAchievementWindow = addon and addon.ShowAchievementWindow
+                            if type(ShowAchievementWindow) == "function" then
+                                ShowAchievementWindow()
+                            end
+                        end
                     end
                 end
             end

@@ -54,12 +54,30 @@ local function migrateGlobalEventLogToChar(db, cdb)
     db.eventLogLines = nil
 end
 
+local function migratePreLoginEventLogToChar(cdb)
+    if not cdb then
+        return
+    end
+
+    local preLoginLines = addon._hcaEventLogLinesPreLogin
+    if type(preLoginLines) ~= "table" or #preLoginLines == 0 then
+        return
+    end
+
+    cdb.eventLogLines = cdb.eventLogLines or {}
+    for i = 1, #preLoginLines do
+        cdb.eventLogLines[#cdb.eventLogLines + 1] = preLoginLines[i]
+    end
+    addon._hcaEventLogLinesPreLogin = nil
+end
+
 local function getEventLogLines()
     ensureGlobalDb()
     if type(addon.GetCharDB) == "function" then
         local db, cdb = addon.GetCharDB()
         if cdb then
             migrateGlobalEventLogToChar(db, cdb)
+            migratePreLoginEventLogToChar(cdb)
             cdb.eventLogLines = cdb.eventLogLines or {}
             return cdb.eventLogLines
         end

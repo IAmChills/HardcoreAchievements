@@ -3472,6 +3472,11 @@ end)
 if addon then
   addon.Dashboard = DASHBOARD
   addon.ShowDashboard = ShowDashboard
+  function addon.RefreshDashboard()
+    if DashboardFrame and DashboardFrame:IsShown() and DASHBOARD and DASHBOARD.Rebuild then
+      DASHBOARD:Rebuild()
+    end
+  end
   function addon.RefreshDashboardEventLog()
     local p = DashboardFrame and DashboardFrame.LogPanel
     if p and p.Refresh then
