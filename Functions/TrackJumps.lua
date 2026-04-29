@@ -10,8 +10,8 @@ local NO_JUMP_ACHIEVEMENT_ID = "NoJumpChallenge"
 
 local addonName, addon = ...
 local UnitLevel = UnitLevel
+local UnitXP = UnitXP
 local UnitGUID = UnitGUID
-local GetExpansionLevel = GetExpansionLevel
 local CreateFrame = CreateFrame
 local C_Timer = C_Timer
 local GetTime = GetTime
@@ -67,13 +67,6 @@ local function MigrateJumpCount(cdb)
     return jumpCount
 end
 
--- Check if player is max level for their expansion
-local function IsPlayerMaxLevel()
-    local playerLevel = UnitLevel("player") or 0
-    local expansionLevel = GetExpansionLevel()
-    return (playerLevel >= 60 and expansionLevel == 0) or (playerLevel >= 70 and expansionLevel == 1)
-end
-
 ---------------------------------------
 -- Main Initialization
 ---------------------------------------
@@ -113,12 +106,15 @@ jumpTrackingFrame:SetScript("OnEvent", function(self, event, addonName)
             -- Migrate jump count from UltraHardcoreDB if needed
             local jumpCount = MigrateJumpCount(cdb)
 
+            local playerLevel = UnitLevel("player") or 1
+            local playerXP = UnitXP("player") or 0
+
             -- Fail "NoJumpChallenge" achievement if player already has jumps > 0 on load
             if jumpCount and jumpCount > 0 then
                 FailNoJumpChallengeIfNeeded(cdb, false)
-            -- If playerJumps is nil (first load), check if player is already max level
-            -- If so, mark achievement as failed (can't verify they had 0 jumps when they reached max level)
-            elseif jumpCount == nil and IsPlayerMaxLevel() then
+            -- If this is the first load and we cannot verify prior jump history,
+            -- only a fresh level 1 / 0 XP character can remain eligible.
+            elseif jumpCount == nil and (playerLevel > 1 or playerXP > 0) then
                 FailNoJumpChallengeIfNeeded(cdb, false)
             end
 

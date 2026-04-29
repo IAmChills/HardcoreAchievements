@@ -3403,6 +3403,61 @@ local function FinishDashboardOpenToTab(tabKey)
   end
 end
 
+local DASHBOARD_ACHIEVEMENT_TAB_KEYS = {
+  "quest",
+  "dungeon",
+  "heroic_dungeon",
+  "raid",
+  "profession",
+  "meta",
+  "reputation",
+  "exploration",
+  "gear_sets",
+  "dungeon_solo",
+  "dungeon_duo",
+  "dungeon_trio",
+  "ridiculous",
+  "secret",
+  "all",
+}
+
+local function GetDashboardTabKeyForAchievement(achId)
+  if not achId then
+    return "all"
+  end
+
+  local achKey = tostring(achId)
+  local srcRows = GetSourceRows()
+  if not srcRows then
+    return "all"
+  end
+
+  local matchedDef = nil
+  for _, srow in ipairs(srcRows) do
+    local rowAchId = tostring(srow and (srow.achId or srow.id) or "")
+    if rowAchId == achKey then
+      matchedDef = srow._def or (addon and addon.AchievementDefs and addon.AchievementDefs[achKey]) or nil
+      break
+    end
+  end
+
+  if not matchedDef then
+    matchedDef = addon and addon.AchievementDefs and addon.AchievementDefs[achKey]
+  end
+
+  if not matchedDef then
+    return "all"
+  end
+
+  for _, key in ipairs(DASHBOARD_ACHIEVEMENT_TAB_KEYS) do
+    if DefMatchesTabKey(matchedDef, key) then
+      return key
+    end
+  end
+
+  return "all"
+end
+
 -- Show/Hide Dashboard functions
 function DASHBOARD:Show()
   if not DashboardFrame then
@@ -3472,6 +3527,19 @@ end)
 if addon then
   addon.Dashboard = DASHBOARD
   addon.ShowDashboard = ShowDashboard
+  function addon.OpenDashboardToAchievement(achId)
+    if not achId then
+      ShowDashboard()
+      return
+    end
+    addon._hcaOpenDashboardTabKey = GetDashboardTabKeyForAchievement(achId)
+    ShowDashboard()
+  end
+  function addon.RefreshDashboard()
+    if DashboardFrame and DashboardFrame:IsShown() and DASHBOARD and DASHBOARD.Rebuild then
+      DASHBOARD:Rebuild()
+    end
+  end
   function addon.RefreshDashboardEventLog()
     local p = DashboardFrame and DashboardFrame.LogPanel
     if p and p.Refresh then

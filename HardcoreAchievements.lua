@@ -7,11 +7,13 @@ local UnitName = UnitName
 local UnitExists = UnitExists
 local UnitFactionGroup = UnitFactionGroup
 local UnitAffectingCombat = UnitAffectingCombat
+local IsResting = IsResting
 local GetTime = GetTime
 local time = time
 local GetLocale = GetLocale
 local CreateFrame = CreateFrame
 local C_Timer = C_Timer
+local UIParent = UIParent
 local hooksecurefunc = hooksecurefunc
 local IsShiftKeyDown = IsShiftKeyDown
 local InCombatLockdown = InCombatLockdown
@@ -31,6 +33,8 @@ local string_format = string.format
 local EvaluateCustomCompletions
 local RefreshOutleveledAll
 local LoadTabPosition
+local InvalidateAchievementRuntimeIndex
+local EnsureAchievementRuntimeIndex
 local QuestTrackedRows = {}
 local ACHIEVEMENT_SOUND_FILE = "Interface\\AddOns\\HardcoreAchievements\\Sounds\\AchievementSound1.ogg"
 local ACHIEVEMENT_SOUND_COOLDOWN = 0.35
@@ -343,6 +347,122 @@ local function ClearProgress(achId)
     if cdb and cdb.progress then cdb.progress[achId] = nil end
 end
 
+local unsavedAchievementReminderPending = false
+local unsavedAchievementReminderFrame = nil
+local unsavedAchievementReminderDismissed = false
+
+local function EnsureUnsavedAchievementReminderFrame()
+    if unsavedAchievementReminderFrame or not UIParent then
+        return unsavedAchievementReminderFrame
+    end
+
+    local frame = CreateFrame("Button", nil, UIParent)
+    frame:SetFrameStrata("FULLSCREEN_DIALOG")
+    frame:SetFrameLevel(20)
+    frame:SetSize(520, 32)
+    frame:SetPoint("TOP", UIParent, "TOP", 0, -18)
+    frame:EnableMouse(true)
+    frame:Hide()
+    frame:RegisterForClicks("LeftButtonUp")
+    frame:SetScript("OnClick", function(self, button)
+        if button == "LeftButton" then
+            unsavedAchievementReminderDismissed = true
+            self:Hide()
+            if self.TextPulse and self.TextPulse:IsPlaying() then
+                self.TextPulse:Stop()
+            end
+            if self.IconPulse and self.IconPulse:IsPlaying() then
+                self.IconPulse:Stop()
+            end
+        end
+    end)
+
+    local icon = frame:CreateTexture(nil, "ARTWORK")
+    icon:SetTexture("Interface\\AddOns\\HardcoreAchievements\\Images\\HardcoreAchievementsButton.png")
+    icon:SetSize(22, 22)
+    frame.Icon = icon
+
+    local text = frame:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    text:SetPoint("CENTER", frame, "CENTER", 12, 0)
+    text:SetJustifyH("LEFT")
+    text:SetJustifyV("MIDDLE")
+    text:SetTextColor(1, 1, 1, 0.95)
+    text:SetText("You have unsaved achievement progress, please reload. Click to dismiss.")
+    frame.Text = text
+
+    icon:SetPoint("RIGHT", text, "LEFT", -8, 0)
+
+    local textPulse = text:CreateAnimationGroup()
+    textPulse:SetLooping("REPEAT")
+
+    local textFadeOut = textPulse:CreateAnimation("Alpha")
+    textFadeOut:SetOrder(1)
+    textFadeOut:SetFromAlpha(1.0)
+    textFadeOut:SetToAlpha(0.45)
+    textFadeOut:SetDuration(0.6)
+
+    local textFadeIn = textPulse:CreateAnimation("Alpha")
+    textFadeIn:SetOrder(2)
+    textFadeIn:SetFromAlpha(0.45)
+    textFadeIn:SetToAlpha(1.0)
+    textFadeIn:SetDuration(0.6)
+
+    local iconPulse = icon:CreateAnimationGroup()
+    iconPulse:SetLooping("REPEAT")
+
+    local iconFadeOut = iconPulse:CreateAnimation("Alpha")
+    iconFadeOut:SetOrder(1)
+    iconFadeOut:SetFromAlpha(1.0)
+    iconFadeOut:SetToAlpha(0.45)
+    iconFadeOut:SetDuration(0.6)
+
+    local iconFadeIn = iconPulse:CreateAnimation("Alpha")
+    iconFadeIn:SetOrder(2)
+    iconFadeIn:SetFromAlpha(0.45)
+    iconFadeIn:SetToAlpha(1.0)
+    iconFadeIn:SetDuration(0.6)
+
+    frame.TextPulse = textPulse
+    frame.IconPulse = iconPulse
+    unsavedAchievementReminderFrame = frame
+    return frame
+end
+
+local function UpdateUnsavedAchievementReminderVisibility()
+    local frame = EnsureUnsavedAchievementReminderFrame()
+    if not frame then
+        return
+    end
+
+    local isRestingNow = type(IsResting) == "function" and IsResting()
+    if not isRestingNow then
+        unsavedAchievementReminderDismissed = false
+    end
+
+    if unsavedAchievementReminderPending and isRestingNow and not unsavedAchievementReminderDismissed then
+        frame:Show()
+        if frame.TextPulse and not frame.TextPulse:IsPlaying() then
+            frame.TextPulse:Play()
+        end
+        if frame.IconPulse and not frame.IconPulse:IsPlaying() then
+            frame.IconPulse:Play()
+        end
+    else
+        if frame.TextPulse and frame.TextPulse:IsPlaying() then
+            frame.TextPulse:Stop()
+        end
+        if frame.IconPulse and frame.IconPulse:IsPlaying() then
+            frame.IconPulse:Stop()
+        end
+        frame:Hide()
+    end
+end
+
+local function MarkUnsavedAchievementProgress()
+    unsavedAchievementReminderPending = true
+    UpdateUnsavedAchievementReminderVisibility()
+end
+
 -- =========================================================
 -- Row Border Color Helper
 -- =========================================================
@@ -650,7 +770,7 @@ local function FormatTimestamp(timestamp)
     end
 end
 
-local function EnsureFailureTimestamp(achId)
+local function EnsureFailureTimestamp(achId, row)
     if not achId then return nil end
     local _, cdb = GetCharDB()
     if not cdb then return nil end
@@ -662,6 +782,10 @@ local function EnsureFailureTimestamp(achId)
     end
     if not rec.completed and not rec.failedAt then
         rec.failedAt = time()
+        if addon and addon.EventLogAdd then
+            local title = (row and row.Title and row.Title.GetText and row.Title:GetText()) or (row and row.title) or tostring(achId)
+            addon.EventLogAdd("Achievement |cffff0000failed|r (no longer available): " .. tostring(title))
+        end
     end
     if rec.failedAt and not rec.failed then
         rec.failed = true
@@ -1147,7 +1271,7 @@ local function ApplyOutleveledStyle(row)
         
         if row.TS then
             if isOutleveled then
-                local failedAt = GetFailureTimestamp(achId) or EnsureFailureTimestamp(achId) or time()
+                local failedAt = GetFailureTimestamp(achId) or EnsureFailureTimestamp(achId, row) or time()
                 row.TS:SetText(FormatTimestamp(failedAt))
             else
                 row.TS:SetText("")
@@ -1194,6 +1318,9 @@ local function MarkRowCompleted(row, cdbParam)
         return 
     end
     row.completed = true
+    if InvalidateAchievementRuntimeIndex then
+        InvalidateAchievementRuntimeIndex()
+    end
     UntrackRowForQuest(row)
 
     -- Title color will be set by UpdatePointsDisplay
@@ -1293,6 +1420,10 @@ local function MarkRowCompleted(row, cdbParam)
             addon.Hooks:FireEvent("OnAchievement", achievementData)
         end
     end
+
+    if restorationsComplete and not skipBroadcastForRetroactive then
+        MarkUnsavedAchievementProgress()
+    end
     
     -- Set Sub text with "Solo" indicator if achievement was completed solo
     -- Solo indicators show based on hardcore status:
@@ -1339,7 +1470,7 @@ local function MarkRowCompleted(row, cdbParam)
         local achKey = row.achId or row.id or ""
         local titleLog = (row.Title and row.Title.GetText and row.Title:GetText()) or row.title or tostring(achKey)
         local ptsLog = tonumber(row.points) or 0
-        addon.EventLogAdd("Achievement completed: " .. tostring(titleLog) .. " [" .. tostring(achKey) .. "] +" .. tostring(ptsLog) .. " pts")
+        addon.EventLogAdd("Achievement |cff00ff00completed|r: " .. tostring(titleLog) .. " +" .. tostring(ptsLog) .. " pts")
     end
 
     if Profession and Profession.NotifyRowCompleted then
@@ -1704,10 +1835,18 @@ local function GetOrCreateAchToastFrame()
     -- Make the toast clickable
     f:EnableMouse(true)
     
-    -- Mouse button handler opens the achievements panel (OnMouseUp for left button)
+    -- Mouse button handler opens the dashboard (OnMouseUp for left button)
     f:SetScript("OnMouseUp", function(self, button)
         if button == "LeftButton" then
-            ShowHardcoreAchievementWindow()
+            if self.achId and addon and addon.OpenDashboardToAchievement then
+                addon.OpenDashboardToAchievement(self.achId)
+            elseif addon and addon.Dashboard and addon.Dashboard.Toggle then
+                addon.Dashboard:Toggle()
+            elseif addon and addon.ShowDashboard then
+                addon.ShowDashboard()
+            else
+                ShowHardcoreAchievementWindow()
+            end
         end
     end)
 
@@ -1775,6 +1914,7 @@ CreateAchToast = function(iconTex, title, pts, achIdOrRow)
     end
 
     -- these exist because we exposed them in the factory
+    f.achId = achId
     f.icon:SetTexture(tex)
     f.name:SetText(title or "")
     
@@ -1904,14 +2044,43 @@ if _G and type(CreateAchToast) == "function" then _G.HardcoreAchievementsToast =
 -- Outleveled (missed) indicator
 -- =========================================================
 
-RefreshOutleveledAll = function()
-    if not AchievementPanel or not AchievementPanel.achievements then return end
-    for _, row in ipairs(AchievementPanel.achievements) do
-        ApplyOutleveledStyle(row)
+local pendingAuxiliaryViewRefresh = false
+
+local function RefreshAuxiliaryViews()
+    if pendingAuxiliaryViewRefresh then
+        return
     end
+
+    pendingAuxiliaryViewRefresh = true
+    C_Timer.After(0, function()
+        pendingAuxiliaryViewRefresh = false
+
+        local tracker = addon and addon.AchievementTracker
+        if tracker and type(tracker.Update) == "function" then
+            tracker:Update()
+        end
+
+        local refreshDashboard = addon and addon.RefreshDashboard
+        if type(refreshDashboard) == "function" then
+            refreshDashboard()
+        end
+    end)
 end
 
-if addon then addon.RefreshOutleveledAll = RefreshOutleveledAll end
+RefreshOutleveledAll = function()
+    if AchievementPanel and AchievementPanel.achievements then
+        for _, row in ipairs(AchievementPanel.achievements) do
+            ApplyOutleveledStyle(row)
+        end
+    end
+
+    RefreshAuxiliaryViews()
+end
+
+if addon then
+    addon.RefreshOutleveledAll = RefreshOutleveledAll
+    addon.RefreshAuxiliaryViews = RefreshAuxiliaryViews
+end
 
 -- =========================================================
 -- Progress Helpers
@@ -1938,6 +2107,10 @@ local function SetProgress(achId, key, value)
         p.levelAt = UnitLevel("player") or 1
     end
     cdb.progress[achId] = p
+
+    if restorationsComplete and shouldSetLevelAt then
+        MarkUnsavedAchievementProgress()
+    end
 
     C_Timer.After(0, function()
         -- Only check if restorations are complete (this is called during gameplay, not initial login)
@@ -2082,8 +2255,14 @@ end
 
 local initFrame = CreateFrame("Frame")
 initFrame:RegisterEvent("PLAYER_LOGIN")
+initFrame:RegisterEvent("PLAYER_UPDATE_RESTING")
 initFrame:RegisterEvent("ADDON_LOADED")
 initFrame:SetScript("OnEvent", function(self, event, ...)
+    if event == "PLAYER_UPDATE_RESTING" then
+        UpdateUnsavedAchievementReminderVisibility()
+        return
+    end
+
     if event == "PLAYER_LOGIN" then
         playerGUID = UnitGUID("player")
 
@@ -2117,6 +2296,7 @@ initFrame:SetScript("OnEvent", function(self, event, ...)
         
         -- Load saved tab position (lightweight, can run immediately)
         LoadTabPosition()
+        UpdateUnsavedAchievementReminderVisibility()
         
         if UISpecialFrames then
             local frameName = AchievementPanel and AchievementPanel:GetName()
@@ -3738,6 +3918,9 @@ local function CreateAchievementRow(parent, achId, title, tooltip, icon, level, 
         data.tooltip = data.secretTooltip
     end
     if addon and addon.AchievementRowModel then table_insert(addon.AchievementRowModel, data) end
+    if InvalidateAchievementRuntimeIndex then
+        InvalidateAchievementRuntimeIndex()
+    end
 
     -- Lazy mode: if row frames are not built yet, return the model entry.
     -- UI will build frames from AchievementRowModel on first open.
@@ -3891,6 +4074,7 @@ do
             [13016] = true,
             [2110] = true,
         }
+        local achievementRuntimeIndex
 
         -- Damage events that include overkill information for player attacks
         local DAMAGE_SUBEVENTS = {
@@ -3973,31 +4157,45 @@ do
             return d and (d.secret or d.isSecret or d.isSecretAchievement) or false
         end
 
-        -- True if this row's kill logic cares about this creature id (catalog npc id / requiredKills keys).
-        local function doesRowTrackNpc(row, npcId)
-            if not row or not npcId or type(row.killTracker) ~= "function" then
-                return false
+        local function collectTrackedNpcIds(row)
+            if not row or type(row.killTracker) ~= "function" then
+                return nil
             end
             local def = row._def
             local targetNpcId = def and def.targetNpcId
+            local rk = row.requiredKills or (def and def.requiredKills)
+            local trackedNpcIds
+            local seenNpcIds
+
+            local function addNpcId(value)
+                local npcId = tonumber(value)
+                if not npcId then
+                    return
+                end
+                if seenNpcIds and seenNpcIds[npcId] then
+                    return
+                end
+                trackedNpcIds = trackedNpcIds or {}
+                seenNpcIds = seenNpcIds or {}
+                seenNpcIds[npcId] = true
+                table_insert(trackedNpcIds, npcId)
+            end
+
             if type(targetNpcId) == "table" then
                 for _, id in pairs(targetNpcId) do
-                    if tonumber(id) == npcId then return true end
+                    addNpcId(id)
                 end
-            elseif tonumber(targetNpcId) == npcId then
-                return true
+            else
+                addNpcId(targetNpcId)
             end
-            local rk = row.requiredKills or (def and def.requiredKills)
-            if type(rk) ~= "table" then
-                return false
+
+            if type(rk) == "table" then
+                for key in pairs(rk) do
+                    addNpcId(key)
+                end
             end
-            if rk[npcId] ~= nil or rk[tostring(npcId)] ~= nil then
-                return true
-            end
-            for key in pairs(rk) do
-                if tonumber(key) == npcId then return true end
-            end
-            return false
+
+            return trackedNpcIds
         end
 
         local function hasRelevantQuestInLog(row)
@@ -4009,35 +4207,159 @@ do
             return questInLog or questReadyForTurnIn
         end
 
-        -- Single pass: (1) should we treat this NPC as achievement-relevant for combat/kill plumbing,
-        -- (2) should we show the tap-denied chat line (non-secret, quest-relevant when applicable).
+        -- Order for dungeon kill print: base first, then Trio, Duo, Solo (so only first eligible variation prints)
+        local function dungeonKillPrintOrder(row)
+            local def = row._def
+            local mapID = def and (def.mapID or def.requiredMapId)
+            if not def or not mapID then return 2, 0, 0 end
+            local achId = row.achId or row.id or ""
+            local order = 0
+            if achId:match("_Trio$") then order = 1
+            elseif achId:match("_Duo$") then order = 2
+            elseif achId:match("_Solo$") then order = 3
+            end
+            return 1, mapID, order
+        end
+
+        local function compareKillRows(a, b)
+            local da, ma, oa = dungeonKillPrintOrder(a)
+            local db, mb, ob = dungeonKillPrintOrder(b)
+            if da ~= db then return da < db end
+            if ma ~= mb then return ma < mb end
+            return oa < ob
+        end
+
+        local function isRuntimeKillRowActive(row)
+            return row and not row.completed and type(row.killTracker) == "function" and not IsRowOutleveled(row)
+        end
+
+        InvalidateAchievementRuntimeIndex = function()
+            achievementRuntimeIndex = nil
+        end
+
+        local function buildAchievementRuntimeIndex()
+            local index = {
+                killTrackerRowsSorted = {},
+                genericKillRowsSorted = {},
+                npcIdToKillRows = {},
+                npcIdToWarnRows = {},
+            }
+            local rows = (addon and addon.AchievementRowModel) or {}
+            for _, row in ipairs(rows) do
+                if not row.completed and type(row.killTracker) == "function" then
+                    table_insert(index.killTrackerRowsSorted, row)
+                end
+            end
+            table_sort(index.killTrackerRowsSorted, compareKillRows)
+
+            for sortIndex, row in ipairs(index.killTrackerRowsSorted) do
+                row._runtimeKillSortIndex = sortIndex
+                local trackedNpcIds = collectTrackedNpcIds(row)
+                if trackedNpcIds and #trackedNpcIds > 0 then
+                    for _, trackedNpcId in ipairs(trackedNpcIds) do
+                        local killBucket = index.npcIdToKillRows[trackedNpcId]
+                        if not killBucket then
+                            killBucket = {}
+                            index.npcIdToKillRows[trackedNpcId] = killBucket
+                        end
+                        table_insert(killBucket, row)
+
+                        if not isSecretAchievementRow(row) then
+                            local warnBucket = index.npcIdToWarnRows[trackedNpcId]
+                            if not warnBucket then
+                                warnBucket = {}
+                                index.npcIdToWarnRows[trackedNpcId] = warnBucket
+                            end
+                            table_insert(warnBucket, row)
+                        end
+                    end
+                else
+                    table_insert(index.genericKillRowsSorted, row)
+                end
+            end
+            return index
+        end
+
+        EnsureAchievementRuntimeIndex = function()
+            if not achievementRuntimeIndex then
+                achievementRuntimeIndex = buildAchievementRuntimeIndex()
+            end
+            return achievementRuntimeIndex
+        end
+
+        local function rowsContainActiveCandidates(rows)
+            if not rows then
+                return false
+            end
+            for _, row in ipairs(rows) do
+                if isRuntimeKillRowActive(row) then
+                    return true
+                end
+            end
+            return false
+        end
+
+        local function rowsContainActiveTapWarning(rows)
+            if not rows then
+                return false
+            end
+            for _, row in ipairs(rows) do
+                if isRuntimeKillRowActive(row) and hasRelevantQuestInLog(row) then
+                    return true
+                end
+            end
+            return false
+        end
+
+        -- Returns whether this NPC should participate in kill/tap-denied handling and whether
+        -- a tap-denied warning line should be shown for it.
         local function npcKillTrackContext(npcId)
             if not npcId then
                 return false, false
             end
-            local tracked = RAT_NPC_IDS[npcId] or false
-            local warnTapDenied = false
-            local rows = addon.AchievementRowModel
-            if not rows then
-                return tracked, warnTapDenied
-            end
-            for _, row in ipairs(rows) do
-                if row.completed or IsRowOutleveled(row) or not doesRowTrackNpc(row, npcId) then
-                    -- skip
-                else
-                    tracked = true
-                    if not isSecretAchievementRow(row) and hasRelevantQuestInLog(row) then
-                        warnTapDenied = true
-                    end
-                end
-            end
+            local runtimeIndex = EnsureAchievementRuntimeIndex and EnsureAchievementRuntimeIndex()
+            local trackedRows = runtimeIndex and runtimeIndex.npcIdToKillRows[npcId]
+            local warnRows = runtimeIndex and runtimeIndex.npcIdToWarnRows[npcId]
+            local tracked = RAT_NPC_IDS[npcId] or rowsContainActiveCandidates(trackedRows)
+            local warnTapDenied = rowsContainActiveTapWarning(warnRows)
             return tracked, warnTapDenied
         end
 
         local function isNpcTrackedForAchievement(npcId)
-            return (npcKillTrackContext(npcId))
+            local tracked = npcKillTrackContext(npcId)
+            return tracked
         end
-        
+
+        local function collectKillCandidatesForNpc(npcId)
+            local runtimeIndex = EnsureAchievementRuntimeIndex and EnsureAchievementRuntimeIndex()
+            local merged = {}
+            local seen = {}
+
+            local function appendActiveRows(rows)
+                if not rows then
+                    return
+                end
+                for _, row in ipairs(rows) do
+                    if not seen[row] and isRuntimeKillRowActive(row) then
+                        seen[row] = true
+                        table_insert(merged, row)
+                    end
+                end
+            end
+
+            if runtimeIndex then
+                appendActiveRows(runtimeIndex.npcIdToKillRows[npcId])
+                appendActiveRows(runtimeIndex.genericKillRowsSorted)
+            end
+
+            if #merged > 1 then
+                table_sort(merged, function(a, b)
+                    return (a._runtimeKillSortIndex or 0) < (b._runtimeKillSortIndex or 0)
+                end)
+            end
+            return merged
+        end
+
         -- Cleanup old external player tracking entries
         local function cleanupExternalPlayers()
             local now = GetTime()
@@ -4098,21 +4420,82 @@ do
             end
         end
 
-        -- Order for dungeon kill print: base first, then Trio, Duo, Solo (so only first eligible variation prints)
-        local function dungeonKillPrintOrder(row)
-            local def = row._def
-            local mapID = def and (def.mapID or def.requiredMapId)
-            if not def or not mapID then return 2, 0, 0 end
-            local achId = row.achId or row.id or ""
-            local order = 0
-            if achId:match("_Trio$") then order = 1
-            elseif achId:match("_Duo$") then order = 2
-            elseif achId:match("_Solo$") then order = 3
+        local function clearCombatTrackingForGUID(destGUID)
+            if not destGUID then
+                return
             end
-            return 1, mapID, order
+            npcsInCombat[destGUID] = nil
+            npcTapDenied[destGUID] = nil
         end
 
-        local function processKill(destGUID)
+        local function isPlayerPartyOrPetSource(sourceGUID)
+            local playerGUID = UnitGUID("player")
+            if playerGUID and sourceGUID == playerGUID then
+                return true
+            end
+            if sourceGUID and GetNumGroupMembers() > 1 then
+                for i = 1, 4 do
+                    local unit = "party" .. i
+                    if UnitExists(unit) then
+                        local partyMemberGUID = UnitGUID(unit)
+                        if partyMemberGUID and sourceGUID == partyMemberGUID then
+                            return true
+                        end
+                    end
+                end
+            end
+            return getPetOwnerGUID(sourceGUID) ~= nil
+        end
+
+        local function isExternalPlayerSource(sourceGUID)
+            local guidType = sourceGUID and select(1, strsplit("-", sourceGUID))
+            return guidType == "Player" and not isPlayerOrPartyMember(sourceGUID)
+        end
+
+        local function trackExternalPlayerForNpc(destGUID, sourceGUID)
+            local now = GetTime()
+            if not externalPlayersByNPC[destGUID] then
+                externalPlayersByNPC[destGUID] = {}
+            end
+
+            local playerData = externalPlayersByNPC[destGUID][sourceGUID]
+            if not playerData then
+                playerData = { lastSeen = now, threat = nil }
+                externalPlayersByNPC[destGUID][sourceGUID] = playerData
+            else
+                playerData.lastSeen = now
+            end
+
+            if npcsInCombat[destGUID] then
+                updateExternalPlayerThreat(destGUID)
+            end
+        end
+
+        local function updateSoloStatusForTrackedNpc(destGUID, sourceGUID)
+            if not destGUID then
+                return
+            end
+            local npcId = getNpcIdFromGUID(destGUID)
+            local npcTracked = npcId and isNpcTrackedForAchievement(npcId)
+            if not npcTracked then
+                return
+            end
+
+            local playerGUID = UnitGUID("player")
+            local isPlayerDamage = sourceGUID == playerGUID
+            local isExternalPlayerDamage = not isPlayerDamage and isExternalPlayerSource(sourceGUID)
+            if not (isPlayerDamage or isExternalPlayerDamage) or not UnitAffectingCombat("player") then
+                return
+            end
+            if UnitExists("target") and UnitGUID("target") == destGUID then
+                if isExternalPlayerDamage then
+                    updateExternalPlayerThreat(destGUID)
+                end
+                PlayerIsSolo_UpdateStatusForGUID(destGUID)
+            end
+        end
+
+        local function processKill(destGUID, npcId)
             if not destGUID or recentKills[destGUID] then
                 return
             end
@@ -4125,22 +4508,11 @@ do
 
             -- Do not reset DungeonKillPrintedForGUID here; multiple events can fire for the same kill,
             -- and we only want one print per kill. Next kill will have a different destGUID so the check will pass.
-            local rows = addon.AchievementRowModel
-            if not rows then return end
-
-            local rowsWithTracker = {}
-            for _, row in ipairs(rows) do
-                if not row.completed and type(row.killTracker) == "function" then
-                    table_insert(rowsWithTracker, row)
-                end
+            local rowsWithTracker = collectKillCandidatesForNpc(npcId)
+            if not rowsWithTracker or #rowsWithTracker == 0 then
+                externalPlayersByNPC[destGUID] = nil
+                return
             end
-            table_sort(rowsWithTracker, function(a, b)
-                local da, ma, oa = dungeonKillPrintOrder(a)
-                local db, mb, ob = dungeonKillPrintOrder(b)
-                if da ~= db then return da < db end
-                if ma ~= mb then return ma < mb end
-                return oa < ob
-            end)
 
             local anyAwarded = false
             for _, row in ipairs(rowsWithTracker) do
@@ -4203,6 +4575,9 @@ do
                 externalPlayersByNPC = {}
                 npcsInCombat = {}
                 npcTapDenied = {}
+                if InvalidateAchievementRuntimeIndex then
+                    InvalidateAchievementRuntimeIndex()
+                end
                 return
             end
             -- Handle BOSS_KILL event for raid achievements (fires regardless of who delivered final blow)
@@ -4234,6 +4609,9 @@ do
                     if not UnitAffectingCombat("player") then
                         npcsInCombat = {}
                         npcTapDenied = {}
+                        if InvalidateAchievementRuntimeIndex then
+                            InvalidateAchievementRuntimeIndex()
+                        end
                         -- Clean up old external player tracking (keep recent ones for a bit longer)
                         cleanupExternalPlayers()
                     end
@@ -4262,16 +4640,14 @@ do
                         if guidType == "Creature" then
                             local npcId = getNpcIdFromGUID(destGUID)
                             if npcId and isNpcTrackedForAchievement(npcId) then
-                                processKill(destGUID)
-                                npcsInCombat[destGUID] = nil
-                                npcTapDenied[destGUID] = nil
+                                processKill(destGUID, npcId)
+                                clearCombatTrackingForGUID(destGUID)
                             end
                         end
                     elseif npcsInCombat[destGUID] then
                         -- Open world: only if we were fighting this NPC
-                        processKill(destGUID)
-                        npcsInCombat[destGUID] = nil
-                        npcTapDenied[destGUID] = nil
+                        processKill(destGUID, getNpcIdFromGUID(destGUID))
+                        clearCombatTrackingForGUID(destGUID)
                     end
                 elseif subevent == "UNIT_DIED" then
                     -- UNIT_DIED always fires when something dies. In dungeon/raid use it as primary/fallback
@@ -4284,42 +4660,14 @@ do
                             if guidType == "Creature" then
                                 local npcId = getNpcIdFromGUID(destGUID)
                                 if npcId and isNpcTrackedForAchievement(npcId) then
-                                    processKill(destGUID)
-                                    npcsInCombat[destGUID] = nil
-                                    npcTapDenied[destGUID] = nil
+                                    processKill(destGUID, npcId)
+                                    clearCombatTrackingForGUID(destGUID)
                                 end
                             end
                         end
                     end
                 elseif DAMAGE_SUBEVENTS[subevent] then
-                    local playerGUID = UnitGUID("player")
-                    local shouldProcess = false
-                    
-                    -- Check if source is the player
-                    if playerGUID and sourceGUID == playerGUID then
-                        shouldProcess = true
-                    -- Check if source is a party member
-                    elseif sourceGUID and GetNumGroupMembers() > 1 then
-                        for i = 1, 4 do
-                            local unit = "party" .. i
-                            if UnitExists(unit) then
-                                local partyMemberGUID = UnitGUID(unit)
-                                if partyMemberGUID and sourceGUID == partyMemberGUID then
-                                    shouldProcess = true
-                                    break
-                                end
-                            end
-                        end
-                    end
-                    
-                    -- Check if source is a pet (player's or party member's)
-                    -- This catches pet kills that don't trigger PARTY_KILL
-                    if not shouldProcess then
-                        local ownerGUID = getPetOwnerGUID(sourceGUID)
-                        if ownerGUID then
-                            shouldProcess = true
-                        end
-                    end
+                    local shouldProcess = isPlayerPartyOrPetSource(sourceGUID)
                     
                     if shouldProcess and destGUID then
                         -- Player/party member/pet damage - track that we're fighting this NPC
@@ -4358,15 +4706,13 @@ do
                                     addon.EventLogAdd("Kill processing skipped (tap denied / not your tag) for GUID " .. tostring(destGUID))
                                 end
                                 -- Clean up combat tracking
-                                npcsInCombat[destGUID] = nil
-                                npcTapDenied[destGUID] = nil
+                                clearCombatTrackingForGUID(destGUID)
                                 return
                             end
                             
                             if npcTracked then
-                                processKill(destGUID)
-                                npcsInCombat[destGUID] = nil
-                                npcTapDenied[destGUID] = nil
+                                processKill(destGUID, npcId)
+                                clearCombatTrackingForGUID(destGUID)
                             end
                         end
                     elseif not shouldProcess and destGUID then
@@ -4374,28 +4720,11 @@ do
                         local npcId = getNpcIdFromGUID(destGUID)
                         
                         -- Check if source is an external player (not in our party)
-                        local guidType = sourceGUID and select(1, strsplit("-", sourceGUID))
-                        local isExternalPlayer = guidType == "Player" and not isPlayerOrPartyMember(sourceGUID)
+                        local isExternalPlayer = isExternalPlayerSource(sourceGUID)
                         
                         -- Track external players fighting tracked NPCs
                         if isExternalPlayer and npcId and isNpcTrackedForAchievement(npcId) then
-                            local now = GetTime()
-                            if not externalPlayersByNPC[destGUID] then
-                                externalPlayersByNPC[destGUID] = {}
-                            end
-                            
-                            local playerData = externalPlayersByNPC[destGUID][sourceGUID]
-                            if not playerData then
-                                playerData = { lastSeen = now, threat = nil }
-                                externalPlayersByNPC[destGUID][sourceGUID] = playerData
-                            else
-                                playerData.lastSeen = now
-                            end
-                            
-                            -- Try to update threat if NPC is currently our target
-                            if npcsInCombat[destGUID] then
-                                updateExternalPlayerThreat(destGUID)
-                            end
+                            trackExternalPlayerForNpc(destGUID, sourceGUID)
                         end
                         
                         -- Check if this is a kill by a non-party player
@@ -4415,11 +4744,10 @@ do
                                         -- Process the kill - the killTracker will check eligibility
                                         -- PlayerIsSolo tracks if non-party players helped (via threat)
                                         -- If they helped significantly (>10% threat), it will mark as ineligible
-                                        processKill(destGUID)
+                                        processKill(destGUID, npcId)
                                         
                                         -- Clean up combat tracking
-                                        npcsInCombat[destGUID] = nil
-                                        npcTapDenied[destGUID] = nil
+                                        clearCombatTrackingForGUID(destGUID)
                                     end
                                 end
                             end
@@ -4427,36 +4755,13 @@ do
                     end
                     
                     -- Track threat/solo status during combat for tracked NPCs
-                    -- This ensures we have solo status available when PARTY_KILL fires
-                    -- Update for both player damage and external player damage to tracked NPCs
-                    if destGUID then
-                        local npcId = getNpcIdFromGUID(destGUID)
-                        if npcId and isNpcTrackedForAchievement(npcId) then
-                            local playerGUID = UnitGUID("player")
-                            local isPlayerDamage = sourceGUID == playerGUID
-                            local isExternalPlayerDamage = false
-                            
-                            if not isPlayerDamage and sourceGUID then
-                                local guidType = select(1, strsplit("-", sourceGUID))
-                                isExternalPlayerDamage = guidType == "Player" and not isPlayerOrPartyMember(sourceGUID)
-                            end
-                            
-                            -- Update solo status if this is a tracked NPC and we're in combat
-                            if (isPlayerDamage or isExternalPlayerDamage) and UnitAffectingCombat("player") then
-                                -- Check if this is our current target
-                                if UnitExists("target") and UnitGUID("target") == destGUID then
-                                    -- Update threat for external players
-                                    if isExternalPlayerDamage then
-                                        updateExternalPlayerThreat(destGUID)
-                                    end
-                                    -- Update solo status
-                                    PlayerIsSolo_UpdateStatusForGUID(destGUID)
-                                end
-                            end
-                        end
-                    end
+                    -- This ensures we have solo status available when PARTY_KILL fires.
+                    updateSoloStatusForTrackedNpc(destGUID, sourceGUID)
                 end
             elseif event == "QUEST_ACCEPTED" then
+                if InvalidateAchievementRuntimeIndex then
+                    InvalidateAchievementRuntimeIndex()
+                end
                 -- arg2 is the QuestId
                 local arg1, arg2 = ...
                 local questID = arg2 and tonumber(arg2) or nil
@@ -4478,6 +4783,9 @@ do
                     end
                 end
             elseif event == "QUEST_TURNED_IN" then
+                if InvalidateAchievementRuntimeIndex then
+                    InvalidateAchievementRuntimeIndex()
+                end
                 local arg1 = ...
                 local questID = arg1 and tonumber(arg1) or nil
                 local currentTime = GetTime()
@@ -4721,6 +5029,9 @@ do
                     end
                 end
             elseif event == "PLAYER_LEVEL_CHANGED" then
+                if InvalidateAchievementRuntimeIndex then
+                    InvalidateAchievementRuntimeIndex()
+                end
                 -- arg1 is previous level, arg2 is new level
                 local prevArg, newArg = ...
                 local previousLevel = tonumber(tostring(prevArg))
@@ -4778,6 +5089,9 @@ do
                     end
                 end
             elseif event == "QUEST_REMOVED" then
+                if InvalidateAchievementRuntimeIndex then
+                    InvalidateAchievementRuntimeIndex()
+                end
                 local questIdArg = ...
                 local removedQuestId = questIdArg and tonumber(tostring(questIdArg)) or nil
                 if removedQuestId and QuestTrackedRows[removedQuestId] then
@@ -5121,6 +5435,7 @@ do
         -- Derived-state passes (no timer chaining)
         ApplySelfFoundBonus()
         if RestoreCompletionsFromDB then RestoreCompletionsFromDB() end
+        if InvalidateAchievementRuntimeIndex then InvalidateAchievementRuntimeIndex() end
         restorationsComplete = true
 
         -- Avoid guild/emote spam for retroactive completions during this first post-login pass
@@ -5136,6 +5451,7 @@ do
         if SortAchievementRows then SortAchievementRows() end
         if RefreshAllAchievementPoints then RefreshAllAchievementPoints() end
         if Profession then Profession.RefreshAll() end
+        if InvalidateAchievementRuntimeIndex then InvalidateAchievementRuntimeIndex() end
 
         addon.Initializing = false
         print("|cff008066[Hardcore Achievements]|r |cffffd100All achievements loaded!|r")

@@ -201,8 +201,8 @@ local Achievements = {
 }, {
     achId = "DragonkinMenace",
     title = "Wrath of the Dragonkin",
-    level = 57,
-    tooltip = "Complete " .. ClassColor .. "Dragonkin Menace|r before level 58",
+    level = 53,
+    tooltip = "Complete " .. ClassColor .. "Dragonkin Menace|r before level 54",
     icon = 236734,
     points = 10,
     requiredQuestId = 4182,

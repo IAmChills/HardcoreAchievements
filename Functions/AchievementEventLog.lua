@@ -11,21 +11,16 @@ local UnitName = UnitName
 local table_concat = table.concat
 local table_remove = table.remove
 
-local MAX_LINES = 50
+local MAX_LINES = 100
 
--- Session lines: login (SavedVariables activity + persistence check), logout/reload (UI unload).
--- Use PLAYER_LOGOUT (fires on /reload and real logout), not PLAYER_LEAVING_WORLD (can fire when zoning).
+-- Session line: logged once at PLAYER_LOGIN.
+-- Avoid PLAYER_ENTERING_WORLD/PLAYER_LOGOUT noise from relogs, reloads, and zoning.
 local loginFrame = CreateFrame("Frame")
-loginFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
-loginFrame:RegisterEvent("PLAYER_LOGOUT")
+loginFrame:RegisterEvent("PLAYER_LOGIN")
 loginFrame:SetScript("OnEvent", function(_, event)
-    if event == "PLAYER_ENTERING_WORLD" then
+    if event == "PLAYER_LOGIN" then
         if addon.EventLogAdd then
             addon.EventLogAdd("Session started")
-        end
-    elseif event == "PLAYER_LOGOUT" then
-        if addon.EventLogAdd then
-            addon.EventLogAdd("Session ended")
         end
     end
 end)
@@ -59,12 +54,30 @@ local function migrateGlobalEventLogToChar(db, cdb)
     db.eventLogLines = nil
 end
 
+local function migratePreLoginEventLogToChar(cdb)
+    if not cdb then
+        return
+    end
+
+    local preLoginLines = addon._hcaEventLogLinesPreLogin
+    if type(preLoginLines) ~= "table" or #preLoginLines == 0 then
+        return
+    end
+
+    cdb.eventLogLines = cdb.eventLogLines or {}
+    for i = 1, #preLoginLines do
+        cdb.eventLogLines[#cdb.eventLogLines + 1] = preLoginLines[i]
+    end
+    addon._hcaEventLogLinesPreLogin = nil
+end
+
 local function getEventLogLines()
     ensureGlobalDb()
     if type(addon.GetCharDB) == "function" then
         local db, cdb = addon.GetCharDB()
         if cdb then
             migrateGlobalEventLogToChar(db, cdb)
+            migratePreLoginEventLogToChar(cdb)
             cdb.eventLogLines = cdb.eventLogLines or {}
             return cdb.eventLogLines
         end

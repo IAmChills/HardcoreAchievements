@@ -9,9 +9,14 @@ local UnitXP = UnitXP
 local GetInventoryItemID = GetInventoryItemID
 local CreateFrame = CreateFrame
 
+local function SlotHasEquippedItem(slot)
+    local itemId = GetInventoryItemID("player", slot)
+    return type(itemId) == "number" and itemId > 0
+end
+
 local function HasAnyEquippedItem()
     for slot = 0, 19 do
-        if GetInventoryItemID("player", slot) ~= nil then
+        if SlotHasEquippedItem(slot) then
             return true
         end
     end
@@ -92,16 +97,50 @@ local function SyncNoArmorState(cdb, refreshOnFail, event, slot, hasCurrent)
         if not armed or state ~= false then
             return
         end
-        if type(slot) == "number" and slot >= 0 and slot <= 19 and hasCurrent == false then
+        if type(slot) == "number" and slot >= 0 and slot <= 19 and hasCurrent == true and SlotHasEquippedItem(slot) then
             MarkNoArmorFailure(cdb, refreshOnFail)
         end
     end
 end
 
 local f = CreateFrame("Frame")
+
+local function UpdateXPEventRegistration(cdb)
+    if not cdb then return end
+    cdb.achievements = cdb.achievements or {}
+    local rec = cdb.achievements[ACH_ID]
+    if rec and (rec.completed or rec.failed) then
+        f:UnregisterEvent("PLAYER_XP_UPDATE")
+        return
+    end
+    if cdb.stats and cdb.stats.playerNudeArmed == true then
+        f:UnregisterEvent("PLAYER_XP_UPDATE")
+        return
+    end
+    f:RegisterEvent("PLAYER_XP_UPDATE")
+end
+
+local function UpdateEventRegistration(cdb)
+    if not cdb then return end
+    cdb.achievements = cdb.achievements or {}
+    cdb.stats = cdb.stats or {}
+
+    local rec = cdb.achievements[ACH_ID]
+    if rec and (rec.completed or rec.failed) then
+        f:UnregisterEvent("PLAYER_XP_UPDATE")
+        f:UnregisterEvent("PLAYER_EQUIPMENT_CHANGED")
+        f:UnregisterEvent("PLAYER_ENTERING_WORLD")
+        return
+    end
+
+    -- Initialization only needs to happen once.
+    if cdb.stats.playerNude ~= nil then
+        f:UnregisterEvent("PLAYER_ENTERING_WORLD")
+    end
+end
+
 f:RegisterEvent("PLAYER_LOGIN")
 f:RegisterEvent("PLAYER_ENTERING_WORLD")
-f:RegisterEvent("PLAYER_XP_UPDATE")
 f:RegisterEvent("PLAYER_EQUIPMENT_CHANGED")
 
 f:SetScript("OnEvent", function(_, event, arg1, arg2)
@@ -115,8 +154,6 @@ f:SetScript("OnEvent", function(_, event, arg1, arg2)
     end
 
     SyncNoArmorState(cdb, event ~= "PLAYER_LOGIN", event, arg1, arg2)
-
-    if addon.EvaluateCustomCompletions then
-        addon.EvaluateCustomCompletions()
-    end
+    UpdateXPEventRegistration(cdb)
+    UpdateEventRegistration(cdb)
 end)
