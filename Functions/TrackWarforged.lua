@@ -15,44 +15,75 @@ local UIParent = UIParent
 
 local pvpWarningTicker = nil
 local lastWarnedMinute = nil
-local pvpTimerGlowText = nil
-local pvpTimerGlowIcon = nil
+local pvpTimerReminderFrame = nil
+local pvpTimerDismissed = false
 
-local function EnsurePvpTimerGlowText()
-    if (pvpTimerGlowText and pvpTimerGlowIcon) or not UIParent then
-        return
+local function FormatPvpCountdownText(remainingMs)
+    -- The PvP timer API tends to report about one extra second at the start of the grace period.
+    -- Trim that off so the displayed countdown does not lead the actual failure timing.
+    local adjustedMs = math.max(0, (tonumber(remainingMs) or 0) - 1000)
+    local totalSeconds = math.max(0, math.floor(adjustedMs / 1000))
+    local minutes = math.floor(totalSeconds / 60)
+    local seconds = math.floor(totalSeconds % 60)
+    return string.format("%d:%02d", minutes, seconds)
+end
+
+local function EnsurePvpTimerReminderFrame()
+    if pvpTimerReminderFrame or not UIParent then
+        return pvpTimerReminderFrame
     end
 
-    local glowText = UIParent:CreateFontString(nil, "BACKGROUND")
-    glowText:Hide()
-    glowText:SetJustifyH("CENTER")
-    glowText:SetJustifyV("MIDDLE")
-    glowText:SetTextColor(1, 1, 1, 0.95)
+    local frame = CreateFrame("Button", nil, UIParent)
+    frame:SetFrameStrata("FULLSCREEN_DIALOG")
+    frame:SetFrameLevel(20)
+    frame:SetSize(1100, 32)
+    frame:SetPoint("TOP", UIParent, "TOP", 0, -18)
+    frame:EnableMouse(true)
+    frame:Hide()
+    frame:RegisterForClicks("LeftButtonUp")
+    frame:SetScript("OnClick", function(self, button)
+        if button == "LeftButton" then
+            pvpTimerDismissed = true
+            self:Hide()
+            if self.TextPulse and self.TextPulse:IsPlaying() then
+                self.TextPulse:Stop()
+            end
+            if self.IconPulse and self.IconPulse:IsPlaying() then
+                self.IconPulse:Stop()
+            end
+        end
+    end)
 
-    local pulse = glowText:CreateAnimationGroup()
-    pulse:SetLooping("REPEAT")
+    local icon = frame:CreateTexture(nil, "ARTWORK")
+    icon:SetTexture("Interface\\AddOns\\HardcoreAchievements\\Images\\HardcoreAchievementsButton.png")
+    icon:SetSize(22, 22)
+    frame.Icon = icon
 
-    local fadeOut = pulse:CreateAnimation("Alpha")
-    fadeOut:SetOrder(1)
-    fadeOut:SetFromAlpha(1.0)
-    fadeOut:SetToAlpha(0.45)
-    fadeOut:SetDuration(0.6)
+    local text = frame:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    text:SetPoint("CENTER", frame, "CENTER", 12, 0)
+    text:SetJustifyH("LEFT")
+    text:SetJustifyV("MIDDLE")
+    text:SetTextColor(1, 1, 1, 0.95)
+    frame.Text = text
 
-    local fadeIn = pulse:CreateAnimation("Alpha")
-    fadeIn:SetOrder(2)
-    fadeIn:SetFromAlpha(0.45)
-    fadeIn:SetToAlpha(1.0)
-    fadeIn:SetDuration(0.6)
+    icon:SetPoint("RIGHT", text, "LEFT", -8, 0)
 
-    glowText.pulse = pulse
-    pvpTimerGlowText = glowText
+    local textPulse = text:CreateAnimationGroup()
+    textPulse:SetLooping("REPEAT")
 
-    local glowIcon = UIParent:CreateTexture(nil, "BACKGROUND")
-    glowIcon:SetTexture("Interface\\AddOns\\HardcoreAchievements\\Images\\HardcoreAchievementsCurse.png")
-    glowIcon:SetSize(100, 100)
-    glowIcon:Hide()
+    local textFadeOut = textPulse:CreateAnimation("Alpha")
+    textFadeOut:SetOrder(1)
+    textFadeOut:SetFromAlpha(1.0)
+    textFadeOut:SetToAlpha(0.45)
+    textFadeOut:SetDuration(0.6)
 
-    local iconPulse = glowIcon:CreateAnimationGroup()
+    local textFadeIn = textPulse:CreateAnimation("Alpha")
+    textFadeIn:SetOrder(2)
+    textFadeIn:SetFromAlpha(0.45)
+    textFadeIn:SetToAlpha(1.0)
+    textFadeIn:SetDuration(0.6)
+
+    local iconPulse = icon:CreateAnimationGroup()
     iconPulse:SetLooping("REPEAT")
 
     local iconFadeOut = iconPulse:CreateAnimation("Alpha")
@@ -67,57 +98,57 @@ local function EnsurePvpTimerGlowText()
     iconFadeIn:SetToAlpha(1.0)
     iconFadeIn:SetDuration(0.6)
 
-    glowIcon.pulse = iconPulse
-    pvpTimerGlowIcon = glowIcon
+    frame.TextPulse = textPulse
+    frame.IconPulse = iconPulse
+    pvpTimerReminderFrame = frame
+    return frame
 end
 
-local function UpdatePvpTimerGlowText()
-    if not PlayerPVPTimerText or not UIParent then
+local function UpdatePvpTimerReminder(remainingMs)
+    local frame = EnsurePvpTimerReminderFrame()
+    if not frame then
         return
     end
 
-    EnsurePvpTimerGlowText()
-
-    if pvpTimerGlowText then
-        local font, size = PlayerPVPTimerText:GetFont()
-        if font and size then
-            pvpTimerGlowText:SetFont(font, size + 6, "OUTLINE")
-        end
-        pvpTimerGlowText:SetText(PlayerPVPTimerText:GetText() or "")
-        pvpTimerGlowText:ClearAllPoints()
-        pvpTimerGlowText:SetPoint("CENTER", UIParent, "TOP", 0, -30)
-        pvpTimerGlowText:SetScale(2)
-        pvpTimerGlowText:Show()
-        if pvpTimerGlowText.pulse and not pvpTimerGlowText.pulse:IsPlaying() then
-            pvpTimerGlowText.pulse:Play()
-        end
+    if frame.Text then
+        local countdown = FormatPvpCountdownText(remainingMs)
+        frame.Text:SetText("PvP has been toggled off. The Warforged achievement will fail in " .. countdown .. " unless you enable PvP again. Click to dismiss.")
     end
 
-    if pvpTimerGlowIcon then
-        pvpTimerGlowIcon:ClearAllPoints()
-        pvpTimerGlowIcon:SetPoint("CENTER", pvpTimerGlowText, "CENTER", 0, 0)
-        pvpTimerGlowIcon:Show()
-        if pvpTimerGlowIcon.pulse and not pvpTimerGlowIcon.pulse:IsPlaying() then
-            pvpTimerGlowIcon.pulse:Play()
+    if pvpTimerDismissed then
+        frame:Hide()
+        if frame.TextPulse and frame.TextPulse:IsPlaying() then
+            frame.TextPulse:Stop()
         end
+        if frame.IconPulse and frame.IconPulse:IsPlaying() then
+            frame.IconPulse:Stop()
+        end
+        return
+    end
+
+    frame:Show()
+    if frame.TextPulse and not frame.TextPulse:IsPlaying() then
+        frame.TextPulse:Play()
+    end
+    if frame.IconPulse and not frame.IconPulse:IsPlaying() then
+        frame.IconPulse:Play()
     end
 end
 
 local function RestorePvpTimerText()
-    if pvpTimerGlowIcon then
-        if pvpTimerGlowIcon.pulse and pvpTimerGlowIcon.pulse:IsPlaying() then
-            pvpTimerGlowIcon.pulse:Stop()
-        end
-        pvpTimerGlowIcon:Hide()
-    end
+    pvpTimerDismissed = false
 
-    if pvpTimerGlowText then
-        if pvpTimerGlowText.pulse and pvpTimerGlowText.pulse:IsPlaying() then
-            pvpTimerGlowText.pulse:Stop()
+    if pvpTimerReminderFrame then
+        if pvpTimerReminderFrame.TextPulse and pvpTimerReminderFrame.TextPulse:IsPlaying() then
+            pvpTimerReminderFrame.TextPulse:Stop()
         end
-        pvpTimerGlowText:SetText("")
-        pvpTimerGlowText:SetScale(1)
-        pvpTimerGlowText:Hide()
+        if pvpTimerReminderFrame.IconPulse and pvpTimerReminderFrame.IconPulse:IsPlaying() then
+            pvpTimerReminderFrame.IconPulse:Stop()
+        end
+        if pvpTimerReminderFrame.Text then
+            pvpTimerReminderFrame.Text:SetText("")
+        end
+        pvpTimerReminderFrame:Hide()
     end
 end
 
@@ -183,7 +214,7 @@ local function UpdatePvpWarningTicker(cdb, announceStart)
         return
     end
 
-    UpdatePvpTimerGlowText()
+    UpdatePvpTimerReminder(remainingMs)
 
     if not pvpWarningTicker then
         if announceStart then
@@ -220,7 +251,7 @@ local function UpdatePvpWarningTicker(cdb, announceStart)
                 return
             end
 
-            UpdatePvpTimerGlowText()
+            UpdatePvpTimerReminder(latestRemainingMs)
 
             local remainingMinuteBucket = GetWarningMinuteBucket(latestRemainingMs)
             if remainingMinuteBucket <= 4 and remainingMinuteBucket >= 1 and remainingMinuteBucket < (lastWarnedMinute or 99) then
