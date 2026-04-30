@@ -16,68 +16,17 @@ local adminFrame = nil
 
 -- GuildFirst admin ops: write to LibP2PDB on admin's client; LibP2PDB propagates to players automatically.
 local function DoAdminOverrideClaim(achievementId, winnerName, winnerGUID)
-    if not LibP2PDB or not addon or not addon.GuildFirst then
+    if not addon or not addon.GuildFirst or type(addon.GuildFirst.OverrideClaim) ~= "function" then
         return false, "GuildFirst or LibP2PDB not loaded"
     end
-    achievementId = tostring(achievementId or "")
-    winnerName = tostring(winnerName or ""):trim()
-    winnerGUID = tostring(winnerGUID or ""):trim()
-    if achievementId == "" or winnerName == "" or winnerGUID == "" then
-        return false, "achievementId, winnerName, and winnerGUID are required"
-    end
-    local scopeKey = addon.GuildFirst:GetScopeKeyForAchievement(achievementId)
-    if not scopeKey then
-        return false, "Invalid scope (admin must be in guild for guild-first)"
-    end
-    local db, prefix = addon.GuildFirst:GetDBInfoForScope(scopeKey)
-    if not db or not prefix then
-        return false, "Failed to initialize GuildFirst database"
-    end
-    local claimsTable = addon.GuildFirst.CLAIMS_TABLE_NAME or "Claims"
-    local claim = { winnerName = winnerName, winnerGUID = winnerGUID, claimedAt = time() }
-    pcall(function()
-        LibP2PDB:SetKey(db, claimsTable, achievementId, claim)
-        LibP2PDB:BroadcastKey(db, claimsTable, achievementId)
-        LibP2PDB:DiscoverPeers(db)
-        LibP2PDB:SyncDatabase(db)
-        local root = (addon and addon.HardcoreAchievementsDB) or {}
-        root.guildFirst = root.guildFirst or {}
-        local dbState = LibP2PDB:ExportDatabase(db)
-        if dbState then
-            root.guildFirst[scopeKey] = { version = 1, prefix = prefix, state = dbState, savedAt = time() }
-        end
-    end)
-    return true
+    return addon.GuildFirst:OverrideClaim(achievementId, winnerName, winnerGUID)
 end
 
 local function DoAdminClearClaim(achievementId)
-    if not LibP2PDB or not addon or not addon.GuildFirst then
+    if not addon or not addon.GuildFirst or type(addon.GuildFirst.ClearClaim) ~= "function" then
         return false, "GuildFirst or LibP2PDB not loaded"
     end
-    achievementId = tostring(achievementId or "")
-    if achievementId == "" then
-        return false, "achievementId is required"
-    end
-    local scopeKey = addon.GuildFirst:GetScopeKeyForAchievement(achievementId)
-    if not scopeKey then
-        return false, "Invalid scope (admin must be in guild for guild-first)"
-    end
-    local db, prefix = addon.GuildFirst:GetDBInfoForScope(scopeKey)
-    if not db or not prefix then
-        return false, "Failed to initialize GuildFirst database"
-    end
-    local claimsTable = addon.GuildFirst.CLAIMS_TABLE_NAME or "Claims"
-    LibP2PDB:DeleteKey(db, claimsTable, achievementId)
-    LibP2PDB:BroadcastKey(db, claimsTable, achievementId)
-    LibP2PDB:DiscoverPeers(db)
-    LibP2PDB:SyncDatabase(db)
-    local root = (addon and addon.HardcoreAchievementsDB) or {}
-    root.guildFirst = root.guildFirst or {}
-    local dbState = LibP2PDB:ExportDatabase(db)
-    if dbState then
-        root.guildFirst[scopeKey] = { version = 1, prefix = prefix, state = dbState, savedAt = time() }
-    end
-    return true
+    return addon.GuildFirst:ClearClaim(achievementId)
 end
 
 -- SECURITY: Get admin secret key from database (set by admin via slash command)
@@ -242,6 +191,55 @@ local function SendClearDeletedByAdminCommand(achievementId, targetCharacter)
     end
     AceComm:SendCommMessage(COMM_PREFIX, serializedPayload, "WHISPER", targetCharacter)
     print("|cff00ff00[HardcoreAchievements Admin]|r Sent unban command for '" .. achievementId .. "' to " .. targetCharacter)
+end
+
+local function CreateGuildFirstRelayPayload(relayCharacter, achievementId, winnerName, winnerGUID, commandType)
+    local secretKey = GetAdminSecretKey()
+    if not secretKey or secretKey == "" then
+        error("Admin secret key not set! Use /hca adminkey set <key> first")
+    end
+
+    local payload = {
+        version = 2,
+        timestamp = time(),
+        commandType = commandType,
+        achievementId = achievementId,
+        targetCharacter = relayCharacter,
+        nonce = GenerateNonce(),
+    }
+    if winnerName ~= nil then payload.winnerName = winnerName end
+    if winnerGUID ~= nil then payload.winnerGUID = winnerGUID end
+
+    payload.validationHash = CreateSecureHash(payload, secretKey)
+    if not payload.validationHash then
+        error("Failed to create secure hash")
+    end
+    return payload
+end
+
+local function SendGuildFirstRelayCommand(relayCharacter, achievementId, winnerName, winnerGUID, commandType, actionLabel)
+    relayCharacter = tostring(relayCharacter or ""):trim()
+    if relayCharacter == "" or not achievementId or achievementId == "" then
+        print("|cffff0000[HardcoreAchievements Admin]|r Enter an online relay character in the guild")
+        return false
+    end
+
+    local success, payload = pcall(CreateGuildFirstRelayPayload, relayCharacter, achievementId, winnerName, winnerGUID, commandType)
+    if not success or not payload then
+        print("|cffff0000[HardcoreAchievements Admin]|r Failed to create GuildFirst relay payload: " .. tostring(payload))
+        return false
+    end
+
+    local serializedPayload = AceSerialize:Serialize(payload)
+    if not serializedPayload then
+        print("|cffff0000[HardcoreAchievements Admin]|r Failed to serialize GuildFirst relay payload")
+        return false
+    end
+
+    AceComm:SendCommMessage(COMM_PREFIX, serializedPayload, "WHISPER", relayCharacter)
+    print("|cff00ff00[HardcoreAchievements Admin]|r Sent GuildFirst " .. tostring(actionLabel or "relay") .. " command to " .. relayCharacter)
+    print("|CFFFFD100[HardcoreAchievements Admin]|r Relay target must be online, in the guild, and have the admin key configured.")
+    return true
 end
 
 -- SECURITY: Create secure payload for clear secret key command
@@ -465,7 +463,7 @@ local function CreateAdminPanel()
     
 	-- Create main frame (use a unique name that doesn't collide with exported table)
 	adminFrame = CreateFrame("Frame", "HardcoreAchievementsAdminPanelFrame", UIParent, "BasicFrameTemplateWithInset")
-    adminFrame:SetSize(400, 550)
+    adminFrame:SetSize(400, 575)
     adminFrame:SetPoint("CENTER")
     adminFrame:Hide()
 
@@ -706,6 +704,8 @@ local function CreateAdminPanel()
         GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
         GameTooltip:SetText("Override GuildFirst claim to correct player", 0.5, 0.8, 1)
         GameTooltip:AddLine("Enter correct player name and GUID.", 1, 1, 1, true)
+        GameTooltip:AddLine("If you are outside the guild, enter an online guild member above as relay target.", 1, 0.82, 0.2, true)
+        GameTooltip:AddLine("Relay target must also have the admin key configured.", 1, 0.82, 0.2, true)
         GameTooltip:Show()
     end)
     fixClaimBtn:SetScript("OnLeave", function() GameTooltip:Hide() end)
@@ -717,17 +717,19 @@ local function CreateAdminPanel()
         GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
         GameTooltip:SetText("Remove GuildFirst claim entirely", 1, 0.5, 0.5)
         GameTooltip:AddLine("Then use Send to award to correct player.", 1, 1, 1, true)
+        GameTooltip:AddLine("If you are outside the guild, enter an online guild member above as relay target.", 1, 0.82, 0.2, true)
+        GameTooltip:AddLine("Relay target must also have the admin key configured.", 1, 0.82, 0.2, true)
         GameTooltip:Show()
     end)
     clearClaimBtn:SetScript("OnLeave", function() GameTooltip:Hide() end)
     
     -- Status text
     local statusText = adminFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    statusText:SetPoint("BOTTOM", adminFrame, "BOTTOM", 0, -20)
+    statusText:SetPoint("BOTTOM", adminFrame, "BOTTOM", 0, 5)
     statusText:SetSize(360, 100)
     statusText:SetJustifyH("LEFT")
     statusText:SetJustifyV("TOP")
-    statusText:SetText("Select achievement, enter target character.\n|cff00ff00Send|r Complete | |cffff0000Delete|r Remove (check Permanent to ban from earning again) | |cff00aaffUnban|r Allow earning again | |cffff0000Clear Key|r Revoke key\n|cffaaaaaaGuildFirst:|r Fix Claim = correct winner | Clear Claim = remove, then Send to correct player.")
+    statusText:SetText("Select achievement, enter target character.\n|cff00ff00Send|r Complete | |cffff0000Delete|r Remove (check Permanent to ban from earning again) | |cff00aaffUnban|r Allow earning again | |cffff0000Clear Key|r Revoke key\n|cffaaaaaaGuildFirst:|r Fix Claim = correct winner | Clear Claim = remove, then Send to correct player.\nIf you are outside the guild, the target character field becomes a relay client in that guild (must be online and have the admin key).")
     
     -- Populate achievement dropdown
 	local function PopulateAchievementDropdown()
@@ -966,6 +968,7 @@ local function CreateAdminPanel()
             end
             local winnerName = (gfWinnerName:GetText() or ""):trim()
             local winnerGUID = (gfWinnerGUID:GetText() or ""):trim()
+            local relayCharacter = (characterInput:GetText() or ""):trim()
             if winnerName == "" or winnerGUID == "" then
                 print("|cffff0000[HardcoreAchievements Admin]|r Enter correct player name and GUID")
                 print("|cffffff00Player gets GUID via: /run print(UnitGUID(\"player\"))|r")
@@ -974,6 +977,8 @@ local function CreateAdminPanel()
             local ok, err = DoAdminOverrideClaim(selectedAchievement.achId, winnerName, winnerGUID)
             if ok then
                 print("|cff00ff00[HardcoreAchievements Admin]|r GuildFirst claim updated for '" .. selectedAchievement.achId .. "' -> " .. winnerName)
+            elseif err and tostring(err):find("Invalid scope", 1, true) and relayCharacter ~= "" then
+                SendGuildFirstRelayCommand(relayCharacter, selectedAchievement.achId, winnerName, winnerGUID, "guildfirst_override_claim", "override")
             else
                 print("|cffff0000[HardcoreAchievements Admin]|r " .. (err or "Failed"))
             end
@@ -985,9 +990,12 @@ local function CreateAdminPanel()
                 print("|cffff0000[HardcoreAchievements Admin]|r Please select a GuildFirst achievement")
                 return
             end
+            local relayCharacter = (characterInput:GetText() or ""):trim()
             local ok, err = DoAdminClearClaim(selectedAchievement.achId)
             if ok then
                 print("|cff00ff00[HardcoreAchievements Admin]|r GuildFirst claim cleared for '" .. selectedAchievement.achId .. "'")
+            elseif err and tostring(err):find("Invalid scope", 1, true) and relayCharacter ~= "" then
+                SendGuildFirstRelayCommand(relayCharacter, selectedAchievement.achId, nil, nil, "guildfirst_clear_claim", "clear")
             else
                 print("|cffff0000[HardcoreAchievements Admin]|r " .. (err or "Failed"))
             end
