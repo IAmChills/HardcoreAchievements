@@ -23,6 +23,7 @@ local AdminCommandHandler = {}
 local COMM_PREFIX = "HCA_Admin_Cmd" -- AceComm prefix for admin commands
 local RESPONSE_PREFIX = "HCA_Admin_Resp" -- AceComm prefix for responses (max 16 chars)
 local PRECIOUS_COMPLETE_PREFIX = "HCA_Fellowship" -- AceComm prefix for Precious completion
+local DUNGEON_BOSS_SYNC_PREFIX = "HCA_DngBoss" -- AceComm prefix for dungeon boss credit sync
 local MAX_PAYLOAD_AGE = 300 -- 5 minutes in seconds
 
 -- Callback registry for Precious completion messages
@@ -205,6 +206,27 @@ end
 
 -- SECURITY: Handle delete achievement command
 -- This command removes an achievement from the player's database
+local function IsGuildFirstAchievementRow(row)
+    return row and row._def and row._def.isGuildFirst == true
+end
+
+local function MarkDeletedGuildFirstClaim(cdb, achievementId)
+    if not cdb or not achievementId or achievementId == "" then
+        return
+    end
+    cdb.revokedGuildFirstClaims = cdb.revokedGuildFirstClaims or {}
+    cdb.revokedGuildFirstClaims[achievementId] = true
+end
+
+local function RefreshCompletionDependencies()
+    if addon and type(addon.EvaluateCustomCompletions) == "function" then
+        addon.EvaluateCustomCompletions(UnitLevel("player") or 1)
+    end
+    if addon and type(addon.RefreshAllAchievementPoints) == "function" then
+        addon.RefreshAllAchievementPoints()
+    end
+end
+
 local function ProcessDeleteAchievementCommand(payload, sender)
     -- Check if target character matches current player
     local currentCharacter = UnitName("player")
@@ -244,7 +266,13 @@ local function ProcessDeleteAchievementCommand(payload, sender)
         cdb.progress[id] = nil
     end
 
-    -- Tombstone (only when permanent): prevent GuildFirst onChange from re-awarding if claim syncs back
+    -- Temporary tombstone: prevent an existing GuildFirst claim from being re-awarded
+    -- while the corrected claim/remove state propagates through the guild.
+    if IsGuildFirstAchievementRow(achievementRow) then
+        MarkDeletedGuildFirstClaim(cdb, id)
+    end
+
+    -- Permanent tombstone: prevent the player from earning the achievement again until unbanned.
     if payload.permanent then
         cdb.deletedByAdmin = cdb.deletedByAdmin or {}
         cdb.deletedByAdmin[id] = true
@@ -346,14 +374,68 @@ local function ProcessClearDeletedByAdminCommand(payload, sender)
     cdb.deletedByAdmin = cdb.deletedByAdmin or {}
     local hadEntry = cdb.deletedByAdmin[achievementId]
     cdb.deletedByAdmin[achievementId] = nil
+    local hadRevokedClaim = false
+    if cdb.revokedGuildFirstClaims then
+        hadRevokedClaim = cdb.revokedGuildFirstClaims[achievementId] and true or false
+        cdb.revokedGuildFirstClaims[achievementId] = nil
+    end
 
-    if hadEntry then
+    if hadEntry or hadRevokedClaim then
         SendResponseToAdmin(sender, "|cff00ff00[Hardcore Achievements]|r Achievement '" .. achievementId .. "' unbanned for " .. currentCharacter .. " - player can earn again")
         --print("|cff00ff00[Hardcore Achievements]|r Achievement '" .. achievementId .. "' has been unbanned - you can earn it again")
     else
         SendResponseToAdmin(sender, "|CFFFFD100[Hardcore Achievements]|r Achievement '" .. achievementId .. "' was not banned for " .. currentCharacter)
     end
 
+    return true
+end
+
+local function ProcessGuildFirstRelayClearCommand(payload, sender)
+    local currentCharacter = UnitName("player")
+    if payload.targetCharacter ~= currentCharacter then
+        SendResponseToAdmin(sender, "|cffff0000[Hardcore Achievements]|r GuildFirst clear relay rejected: Target character mismatch")
+        return false
+    end
+    if not addon or not addon.GuildFirst or type(addon.GuildFirst.ClearClaim) ~= "function" then
+        SendResponseToAdmin(sender, "|cffff0000[Hardcore Achievements]|r GuildFirst clear relay rejected: GuildFirst not available")
+        return false
+    end
+
+    local ok, err = addon.GuildFirst:ClearClaim(payload.achievementId)
+    if not ok then
+        SendResponseToAdmin(sender, "|cffff0000[Hardcore Achievements]|r GuildFirst clear relay failed: " .. tostring(err or "Unknown error"))
+        return false
+    end
+
+    SendResponseToAdmin(sender, "|cff00ff00[Hardcore Achievements]|r GuildFirst claim cleared for '" .. tostring(payload.achievementId) .. "' via relay " .. currentCharacter)
+    return true
+end
+
+local function ProcessGuildFirstRelayOverrideCommand(payload, sender)
+    local currentCharacter = UnitName("player")
+    if payload.targetCharacter ~= currentCharacter then
+        SendResponseToAdmin(sender, "|cffff0000[Hardcore Achievements]|r GuildFirst override relay rejected: Target character mismatch")
+        return false
+    end
+    if not addon or not addon.GuildFirst or type(addon.GuildFirst.OverrideClaim) ~= "function" then
+        SendResponseToAdmin(sender, "|cffff0000[Hardcore Achievements]|r GuildFirst override relay rejected: GuildFirst not available")
+        return false
+    end
+
+    local winnerName = tostring(payload.winnerName or ""):trim()
+    local winnerGUID = tostring(payload.winnerGUID or ""):trim()
+    if winnerName == "" or winnerGUID == "" then
+        SendResponseToAdmin(sender, "|cffff0000[Hardcore Achievements]|r GuildFirst override relay rejected: winnerName and winnerGUID are required")
+        return false
+    end
+
+    local ok, err = addon.GuildFirst:OverrideClaim(payload.achievementId, winnerName, winnerGUID)
+    if not ok then
+        SendResponseToAdmin(sender, "|cffff0000[Hardcore Achievements]|r GuildFirst override relay failed: " .. tostring(err or "Unknown error"))
+        return false
+    end
+
+    SendResponseToAdmin(sender, "|cff00ff00[Hardcore Achievements]|r GuildFirst claim updated for '" .. tostring(payload.achievementId) .. "' -> " .. winnerName .. " via relay " .. currentCharacter)
     return true
 end
 
@@ -433,6 +515,24 @@ local function ProcessAdminCommand(payload, sender)
             return false
         end
         return ProcessClearDeletedByAdminCommand(payload, sender)
+    end
+
+    if payload.commandType == "guildfirst_clear_claim" then
+        local isValid, reason = ValidatePayload(payload, sender)
+        if not isValid then
+            SendResponseToAdmin(sender, "|cffff0000[Hardcore Achievements]|r GuildFirst clear relay rejected: " .. reason)
+            return false
+        end
+        return ProcessGuildFirstRelayClearCommand(payload, sender)
+    end
+
+    if payload.commandType == "guildfirst_override_claim" then
+        local isValid, reason = ValidatePayload(payload, sender)
+        if not isValid then
+            SendResponseToAdmin(sender, "|cffff0000[Hardcore Achievements]|r GuildFirst override relay rejected: " .. reason)
+            return false
+        end
+        return ProcessGuildFirstRelayOverrideCommand(payload, sender)
     end
 
     -- Check if this is a clear secret key command
@@ -532,6 +632,7 @@ local function ProcessAdminCommand(payload, sender)
 				if addon and type(addon.UpdateTotalPoints) == "function" then
 					addon.UpdateTotalPoints()
 				end
+                RefreshCompletionDependencies()
 				-- Toast to indicate update
 				local showToast = (addon and addon.CreateAchToast)
 				if type(showToast) == "function" then
@@ -637,6 +738,8 @@ local function ProcessAdminCommand(payload, sender)
 			end
 		end
 	end
+
+    RefreshCompletionDependencies()
 	
 	-- Show achievement toast
 	local showToast = (addon and addon.CreateAchToast)
@@ -713,11 +816,39 @@ local function OnPreciousCompletedMessage(prefix, message, distribution, sender)
     end
 end
 
+local function OnDungeonBossCreditMessage(prefix, message, distribution, sender)
+    local success, payload = AceSerialize:Deserialize(message)
+    if not success or not payload or payload.type ~= "dungeon_boss_credit" then
+        return
+    end
+
+    local playerName = UnitName("player")
+    if payload.senderName == playerName or sender == playerName then
+        return
+    end
+
+    local achievementId = payload.achievementId and tostring(payload.achievementId) or ""
+    if achievementId == "" then
+        return
+    end
+
+    local syncFn = addon and addon.GetAchievementFunction and addon.GetAchievementFunction(achievementId, "SyncBossKill")
+    if type(syncFn) ~= "function" then
+        return
+    end
+
+    local ok, err = pcall(syncFn, payload, sender)
+    if not ok and DebugPrint then
+        DebugPrint("Error in dungeon boss credit callback: " .. tostring(err))
+    end
+end
+
 -- Initialize the handler
 local function InitializeAdminCommandHandler()
     -- Register AceComm handlers
     AceComm:RegisterComm(COMM_PREFIX, OnCommReceived)
     AceComm:RegisterComm(PRECIOUS_COMPLETE_PREFIX, OnPreciousCompletedMessage)
+    AceComm:RegisterComm(DUNGEON_BOSS_SYNC_PREFIX, OnDungeonBossCreditMessage)
 end
 
 -- Slash command handler
@@ -925,6 +1056,45 @@ local function RegisterPreciousCompletionCallback(callback)
     end
 end
 
+local function SendDungeonBossCreditMessage(achievementId, mapId, npcId, killToken)
+    achievementId = achievementId and tostring(achievementId) or ""
+    killToken = killToken and tostring(killToken) or ""
+    npcId = tonumber(npcId)
+    if achievementId == "" or killToken == "" or not npcId then
+        return false
+    end
+
+    local distribution = nil
+    if IsInRaid and IsInRaid() then
+        distribution = "RAID"
+    elseif IsInGroup and IsInGroup() then
+        distribution = "PARTY"
+    end
+    if not distribution then
+        return false
+    end
+
+    local messagePayload = {
+        type = "dungeon_boss_credit",
+        achievementId = achievementId,
+        mapId = tonumber(mapId),
+        npcId = npcId,
+        killToken = killToken,
+        senderName = UnitName("player"),
+    }
+
+    local serializedMessage = AceSerialize:Serialize(messagePayload)
+    if not serializedMessage then
+        return false
+    end
+
+    AceComm:SendCommMessage(DUNGEON_BOSS_SYNC_PREFIX, serializedMessage, distribution)
+    if DebugPrint then
+        DebugPrint("Dungeon boss credit sync sent for " .. achievementId .. " npc " .. tostring(npcId))
+    end
+    return true
+end
+
 -- Helper function to create a secure admin command payload
 -- This is what the admin panel should use to send commands
 local function CreateAdminPayload(targetCharacter, achievementId, overridePoints, overrideLevel, forceUpdate)
@@ -960,4 +1130,5 @@ if addon then
     addon.AdminCommandHandler = AdminCommandHandler
     addon.SendPreciousCompletionMessage = SendPreciousCompletionMessage
     addon.RegisterPreciousCompletionCallback = RegisterPreciousCompletionCallback
+    addon.SendDungeonBossCreditMessage = SendDungeonBossCreditMessage
 end

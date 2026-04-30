@@ -246,12 +246,12 @@ local function CheckAndPrintEligibilityMessages(mapId, entryData)
     if isEligible then
       print("|cff008066[Hardcore Achievements]|r |cff00ff00Group is eligible for achievement: " .. title .. "|r. If any player levels beyond the achievement's allowed level while inside the dungeon, they must remain inside the dungeon to remain eligible.")
         if addon.EventLogAdd then
-            addon.EventLogAdd("Dungeon entered: group is |cff00ff00eligible|r for achievement: " .. title .. " (" .. tostring(c.achId) .. ")")
+            addon.EventLogAdd("Dungeon entered: group is |cff00ff00eligible|r for achievement: " .. title)
         end
     else
         print("|cff008066[Hardcore Achievements]|r |cffff0000Group is not eligible for achievement: " .. title .. "|r")
         if addon.EventLogAdd then
-            addon.EventLogAdd("Dungeon entered: group is |cffff0000not eligible|r for achievement: " .. title .. " (" .. tostring(c.achId) .. ")")
+            addon.EventLogAdd("Dungeon entered: group is |cffff0000not eligible|r for achievement: " .. title)
         end
     end
 end
@@ -769,6 +769,7 @@ function DungeonCommon.registerDungeonAchievement(def)
     counts = {},           -- npcId => kills this achievement
     completed = false,     -- set true once achievement conditions met in this achievement
   }
+  local processedKillTokens = {}
 
   -- Load progress from database on initialization
   local function LoadProgress()
@@ -859,10 +860,32 @@ function DungeonCommon.registerDungeonAchievement(def)
     return false
   end
 
+  local UpdateTooltip
+
   -- Increment kill count for a boss
   local function IncrementBossKill(npcId)
     if not npcId then return end
     state.counts[npcId] = (state.counts[npcId] or 0) + 1
+  end
+
+  local function BuildKillToken(destGUID, npcId)
+    if destGUID and destGUID ~= "" then
+      return tostring(destGUID)
+    end
+    if npcId then
+      return tostring(requiredMapId or 0) .. ":" .. tostring(achId) .. ":" .. tostring(npcId)
+    end
+    return nil
+  end
+
+  local function HasProcessedKillToken(killToken)
+    return killToken and processedKillTokens[killToken] == true
+  end
+
+  local function MarkKillTokenProcessed(killToken)
+    if killToken then
+      processedKillTokens[killToken] = true
+    end
   end
 
   -- Calculate and store points for this achievement
@@ -881,6 +904,35 @@ function DungeonCommon.registerDungeonAchievement(def)
       pointsToStore = math.floor(base * multiplier + 0.5)
     end
     if addon and addon.SetProgress then addon.SetProgress(achId, "pointsAtKill", pointsToStore) end
+  end
+
+  local function ApplyBossKillCredit(npcId, killToken)
+    if not npcId or not IsRequiredBoss(npcId) then
+      return false
+    end
+    if killToken and HasProcessedKillToken(killToken) then
+      return false
+    end
+
+    IncrementBossKill(npcId)
+    MarkKillTokenProcessed(killToken)
+    StorePointsAtKill()
+    SaveProgress()
+    UpdateTooltip()
+
+    local progress = addon and addon.GetProgress and addon.GetProgress(achId)
+    if progress and progress.completed then
+      state.completed = true
+      return true
+    end
+
+    if CountsSatisfied() then
+      state.completed = true
+      if addon and addon.SetProgress then addon.SetProgress(achId, "completed", true) end
+      return true
+    end
+
+    return true
   end
 
   -- Get boss names from NPC IDs (you can expand this with a lookup table)
@@ -1256,7 +1308,7 @@ function DungeonCommon.registerDungeonAchievement(def)
   end
 
   -- Update tooltip when progress changes (triggers lazy re-initialization on next hover)
-  local function UpdateTooltip()
+  UpdateTooltip = function()
     -- Mark as needing update - tooltip will be re-initialized on next hover
     tooltipHandler = nil
   end
@@ -1361,24 +1413,28 @@ function DungeonCommon.registerDungeonAchievement(def)
         addon.DungeonKillPrintedForGUID = destGUID
         print("|cff008066[Hardcore Achievements]|r |cffffd100" .. GetBossName(npcId) .. " killed but group is ineligible - kill not counted for achievement: " .. title .. "|r")
         if addon.EventLogAdd then
-          addon.EventLogAdd("Boss kill not counted (group ineligible): " .. GetBossName(npcId) .. " (npc " .. tostring(npcId) .. ") — " .. title .. " [" .. tostring(achId) .. "]")
+          addon.EventLogAdd("Boss kill not counted (group ineligible): " .. GetBossName(npcId) .. " (npc " .. tostring(npcId) .. ") — " .. title)
         end
       end
       return false
     end
     
     -- Group is eligible - count this kill
-    IncrementBossKill(npcId)
-    StorePointsAtKill()
-    SaveProgress()
-    UpdateTooltip()
+    local killToken = BuildKillToken(destGUID, npcId)
+    local applied = ApplyBossKillCredit(npcId, killToken)
+    if not applied then
+      return false
+    end
     -- Only print for the first eligible variation (processKill iterates base then Trio, Duo, Solo)
     if addon and addon.DungeonKillPrintedForGUID ~= destGUID then
         addon.DungeonKillPrintedForGUID = destGUID
         print("|cff008066[Hardcore Achievements]|r |cffffd100" .. GetBossName(npcId) .. " killed as part of achievement: " .. title .. "|r")
         if addon.EventLogAdd then
-          addon.EventLogAdd("Boss kill counted toward dungeon achievement: " .. GetBossName(npcId) .. " (npc " .. tostring(npcId) .. ") — " .. title .. " [" .. tostring(achId) .. "]")
+          addon.EventLogAdd("Boss kill counted toward dungeon achievement: " .. GetBossName(npcId) .. " (npc " .. tostring(npcId) .. ") — " .. title)
         end
+    end
+    if addon and type(addon.SendDungeonBossCreditMessage) == "function" and killToken then
+      addon.SendDungeonBossCreditMessage(achId, requiredMapId, npcId, killToken)
     end
 
     -- Check if achievement should be completed
@@ -1386,7 +1442,7 @@ function DungeonCommon.registerDungeonAchievement(def)
     if progress and progress.completed then
       state.completed = true
       if addon.EventLogAdd then
-        addon.EventLogAdd("Dungeon achievement completed: " .. title .. " [" .. tostring(achId) .. "]")
+        addon.EventLogAdd("Dungeon achievement completed: " .. title)
       end
       return true
     end
@@ -1398,7 +1454,7 @@ function DungeonCommon.registerDungeonAchievement(def)
       state.completed = true
       if addon and addon.SetProgress then addon.SetProgress(achId, "completed", true) end
       if addon.EventLogAdd then
-        addon.EventLogAdd("Dungeon achievement completed: " .. title .. " [" .. tostring(achId) .. "]")
+        addon.EventLogAdd("Dungeon achievement completed: " .. title)
       end
       return true
     end
@@ -1412,6 +1468,23 @@ function DungeonCommon.registerDungeonAchievement(def)
   if addon and addon.RegisterAchievementFunction then
     addon.RegisterAchievementFunction(achId, "Kill", KillTracker)
     addon.RegisterAchievementFunction(achId, "IsCompleted", function() return state.completed end)
+    addon.RegisterAchievementFunction(achId, "SyncBossKill", function(payload, sender)
+      if not payload then return false end
+      if tostring(payload.achievementId or "") ~= tostring(achId) then return false end
+      if tonumber(payload.mapId) ~= tonumber(requiredMapId) then return false end
+      if not IsOnRequiredMap() then return false end
+
+      LoadProgress()
+      local npcId = tonumber(payload.npcId)
+      local killToken = payload.killToken and tostring(payload.killToken) or nil
+      if not npcId or not killToken then return false end
+      if not ApplyBossKillCredit(npcId, killToken) then return false end
+
+      if addon and addon.EventLogAdd then
+        addon.EventLogAdd("Boss kill synced from party: " .. GetBossName(npcId) .. " (npc " .. tostring(npcId) .. ") — " .. title)
+      end
+      return true
+    end)
   end
 
   ---------------------------------------

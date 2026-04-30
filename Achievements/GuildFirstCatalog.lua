@@ -312,8 +312,12 @@ if addon then
   addon.GuildFirst_DefById = addon.GuildFirst_DefById or {}
   addon.GuildFirst_ByTrigger = addon.GuildFirst_ByTrigger or {}
   for _, def in ipairs(achievements) do
-    def.isSecret = true
     def.isGuildFirst = true
+    -- Keep GuildFirst achievements categorized as secrets, but display code should
+    -- treat them as hidden-only rather than replacing their title/tooltip with
+    -- generic "Secret" placeholders.
+    def.secret = true
+    def.isSecret = true
     addon.GuildFirst_DefById[def.achId] = def
     if def.triggerAchievementId then
       local k = tostring(def.triggerAchievementId)

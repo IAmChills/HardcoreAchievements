@@ -155,9 +155,19 @@ local function CreateGuildFirstToast()
     end
 
     f:EnableMouse(true)
-    f:SetScript("OnMouseUp", function(_, button)
-        if button == "LeftButton" and ShowAchievementWindow then
-            ShowAchievementWindow()
+    f:SetScript("OnMouseUp", function(self, button)
+        if button == "LeftButton" then
+            if self.achId and addon and addon.OpenDashboardToAchievement then
+                addon.OpenDashboardToAchievement(self.achId)
+            elseif addon and addon.Dashboard and addon.Dashboard.Toggle then
+                addon.Dashboard:Toggle()
+            elseif addon and addon.ShowDashboard then
+                addon.ShowDashboard()
+            elseif ShowHardcoreAchievementWindow then
+                ShowHardcoreAchievementWindow()
+            elseif ShowAchievementWindow then
+                ShowAchievementWindow()
+            end
         end
     end)
 
@@ -165,12 +175,13 @@ local function CreateGuildFirstToast()
     return f
 end
 
-local function ShowGuildFirstToast(iconTex, title, pts)
+local function ShowGuildFirstToast(iconTex, title, pts, achId)
     -- Defer to next frame so we're not hidden by the same event that triggered the claim
     C_Timer.After(0.05, function()
         local f = CreateGuildFirstToast()
         f:Hide()
         f:SetAlpha(1)
+        f.achId = achId
         local tex = iconTex
         if type(iconTex) == "table" and iconTex.GetTexture then
             tex = iconTex:GetTexture()
@@ -365,6 +376,21 @@ local function IsWinnerRecord(self, rec)
     return RecordIncludesPeerID(rec, myPeerId)
 end
 
+local function ClearRevokedGuildFirstClaim(achievementId, reason)
+    local _, cdb
+    if addon and addon.GetCharDB then
+        _, cdb = addon.GetCharDB()
+    end
+    if not cdb or not cdb.revokedGuildFirstClaims or not cdb.revokedGuildFirstClaims[tostring(achievementId)] then
+        return
+    end
+    cdb.revokedGuildFirstClaims[tostring(achievementId)] = nil
+    if next(cdb.revokedGuildFirstClaims) == nil then
+        cdb.revokedGuildFirstClaims = nil
+    end
+    Debug("Cleared revoked GuildFirst tombstone for " .. tostring(achievementId) .. " (" .. tostring(reason or "state changed") .. ")")
+end
+
 --- Build ';'-delimited list of winner peer IDs (smaller than GUIDs for sync).
 local function BuildWinnersPeerIDList(awardMode, requireSameGuild)
     awardMode = tostring(awardMode or "solo"):lower()
@@ -472,16 +498,18 @@ local function EnsureDBForScope(scopeKey)
         onChange = function(key, data)
                 -- When a claim changes, refresh the achievement filter to hide/show rows
                 local myPeerId = GetLocalPeerId()
+                local _, cdb
+                if addon and addon.GetCharDB then
+                    _, cdb = addon.GetCharDB()
+                end
                 if data and (data.winnerPeerID or data.winnerGUID) then
                     if RecordIncludesPeerID(data, myPeerId) then
                         Debug("Received claim update: Achievement '" .. tostring(key) .. "' claimed and I am an eligible winner")
-                        -- Skip re-awarding if admin manually deleted this achievement from the player (tombstone)
-                        local _, cdb
-                        if addon and addon.GetCharDB then
-                            _, cdb = addon.GetCharDB()
-                        end
+                        -- Skip re-awarding if admin manually deleted this achievement from the player.
                         if cdb and cdb.deletedByAdmin and cdb.deletedByAdmin[tostring(key)] then
                             Debug("Skipping GuildFirst re-award: achievement was deleted by admin")
+                        elseif cdb and cdb.revokedGuildFirstClaims and cdb.revokedGuildFirstClaims[tostring(key)] then
+                            Debug("Skipping GuildFirst re-award: claim was revoked by admin and is waiting for corrected propagation")
                         else
                             -- Mark row completed when we receive the claim (e.g. from sync or broadcast).
                             -- Do NOT show toast here: onChange also fires on load/relog when we ImportDatabase,
@@ -506,7 +534,7 @@ local function EnsureDBForScope(scopeKey)
                                 local icon = (frame.Icon and frame.Icon.GetTexture and frame.Icon:GetTexture()) or (def and def.icon) or 136116
                                 local titleText = (frame.Title and frame.Title.GetText and frame.Title:GetText()) or (def and def.title) or tostring(key)
                                 local pts = frame.points or (def and def.points) or 0
-                                ShowGuildFirstToast(icon, titleText, pts)
+                                ShowGuildFirstToast(icon, titleText, pts, tostring(key))
                             elseif not frame and addon and addon.GetCharDB then
                                 -- No frame yet (model not built) - persist to DB so RestoreCompletionsFromDB applies when panel opens
                                 local _, cdb = addon.GetCharDB()
@@ -529,9 +557,11 @@ local function EnsureDBForScope(scopeKey)
                         end
                     else
                         Debug("Received claim update: Achievement '" .. tostring(key) .. "' claimed by " .. tostring(data.winnerName or "?") .. " - not eligible (silent fail)")
+                        ClearRevokedGuildFirstClaim(tostring(key), "claim now belongs to another player")
                     end
                 else
                     Debug("Received claim update: Achievement '" .. tostring(key) .. "' claim removed")
+                    ClearRevokedGuildFirstClaim(tostring(key), "claim removed")
                 end
                 
                 if type(ApplyFilter) == "function" then
@@ -573,6 +603,32 @@ local function EnsureDBForScope(scopeKey)
     LibP2PDB:BroadcastPresence(db)
 
     return db
+end
+
+local function PersistScopeState(scopeKey, db)
+    if not scopeKey or not db or not databases[scopeKey] then
+        return
+    end
+    local root = (addon and addon.HardcoreAchievementsDB) or {}
+    root.guildFirst = root.guildFirst or {}
+    local dbState = LibP2PDB:ExportDatabase(db)
+    if dbState then
+        root.guildFirst[scopeKey] = {
+            version = 1,
+            prefix = databases[scopeKey].prefix,
+            state = dbState,
+            savedAt = time(),
+        }
+    end
+end
+
+local function SyncPeers(db)
+    if type(LibP2PDB.BroadcastPresence) == "function" then
+        LibP2PDB:BroadcastPresence(db)
+    end
+    if type(LibP2PDB.SyncDatabase) == "function" then
+        LibP2PDB:SyncDatabase(db)
+    end
 end
 
 -- ---------------------------------------------------------------------------------------------------------------------
@@ -742,7 +798,7 @@ local function CanClaimAndAward(self, achievementId, row, winnersPeerIDs)
         local icon = (row and ((row.Icon and row.Icon.GetTexture and row.Icon:GetTexture()) or row.icon)) or (def and def.icon) or 136116
         local titleText = (row and ((row.Title and row.Title.GetText and row.Title:GetText()) or row.title)) or (def and def.title) or tostring(achievementId)
         local pts = (row and row.points) or (def and def.points) or 0
-        ShowGuildFirstToast(icon, titleText, pts)
+        ShowGuildFirstToast(icon, titleText, pts, achievementId)
         Debug("CanClaimAndAward(" .. achievementId .. "): Achievement awarded successfully!")
         return true
     else
@@ -842,7 +898,7 @@ local function OnAchievementCompleted(achievementData)
     end
 end
 
--- Admin helpers: exposed for AdminPanel only. AdminPanel implements Override/Clear; LibP2PDB propagates to players.
+-- Admin helpers: used by AdminPanel directly and by relay clients via CommandHandler.
 --- @return string? scopeKey
 function M.GetScopeKeyForAchievement(self, achievementId)
     local row = FindRowByAchId(achievementId)
@@ -855,6 +911,80 @@ function M.GetDBInfoForScope(self, scopeKey)
     local db = EnsureDBForScope(scopeKey)
     if not db or not databases[scopeKey] then return nil, nil end
     return db, databases[scopeKey].prefix
+end
+
+function M.OverrideClaim(self, achievementId, winnerName, winnerGUID)
+    achievementId = tostring(achievementId or "")
+    winnerName = Trim(winnerName)
+    winnerGUID = Trim(winnerGUID)
+    if achievementId == "" or winnerName == "" or winnerGUID == "" then
+        return false, "achievementId, winnerName, and winnerGUID are required"
+    end
+
+    local scopeKey = self:GetScopeKeyForAchievement(achievementId)
+    if not scopeKey then
+        return false, "Invalid scope (client must be in guild for guild-first)"
+    end
+
+    local db = EnsureDBForScope(scopeKey)
+    if not db then
+        return false, "Failed to initialize GuildFirst database"
+    end
+
+    local claim = {
+        winnerName = winnerName,
+        winnerGUID = winnerGUID,
+        claimedAt = time(),
+    }
+    if type(LibP2PDB.PlayerGUIDToPeerID) == "function" then
+        local okPeer, peerId = pcall(function()
+            return LibP2PDB:PlayerGUIDToPeerID(winnerGUID)
+        end)
+        if okPeer and peerId ~= nil and peerId ~= "" then
+            claim.winnerPeerID = tostring(peerId)
+        end
+    end
+
+    local ok, err = pcall(function()
+        LibP2PDB:SetKey(db, TABLE_NAME, achievementId, claim)
+        LibP2PDB:BroadcastKey(db, TABLE_NAME, achievementId)
+        SyncPeers(db)
+        PersistScopeState(scopeKey, db)
+    end)
+    if not ok then
+        return false, err
+    end
+
+    return true
+end
+
+function M.ClearClaim(self, achievementId)
+    achievementId = tostring(achievementId or "")
+    if achievementId == "" then
+        return false, "achievementId is required"
+    end
+
+    local scopeKey = self:GetScopeKeyForAchievement(achievementId)
+    if not scopeKey then
+        return false, "Invalid scope (client must be in guild for guild-first)"
+    end
+
+    local db = EnsureDBForScope(scopeKey)
+    if not db then
+        return false, "Failed to initialize GuildFirst database"
+    end
+
+    local ok, err = pcall(function()
+        LibP2PDB:DeleteKey(db, TABLE_NAME, achievementId)
+        LibP2PDB:BroadcastKey(db, TABLE_NAME, achievementId)
+        SyncPeers(db)
+        PersistScopeState(scopeKey, db)
+    end)
+    if not ok then
+        return false, err
+    end
+
+    return true
 end
 
 M.CLAIMS_TABLE_NAME = TABLE_NAME

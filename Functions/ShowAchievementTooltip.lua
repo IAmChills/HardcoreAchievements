@@ -337,8 +337,9 @@ local function ShowAchievementTooltip(frame, data)
     
     -- Get achievement definition once
     local achDef = GetAchievementDefinition(achId)
+    local isGuildFirst = (def and def.isGuildFirst) or (achDef and achDef.isGuildFirst) or false
     
-    local isSecret = isSecretAchievement or (def and def.secret) or (achDef and achDef.secret) or false
+    local isSecret = (isSecretAchievement or (def and def.secret) or (achDef and achDef.secret) or false) and not isGuildFirst
     local isMetaAchievement = (def and (def.isMetaAchievement or def.isMeta or def.requiredAchievements ~= nil))
         or (achDef and (achDef.isMetaAchievement or achDef.isMeta or achDef.requiredAchievements ~= nil))
         or (requiredAchievements ~= nil)
