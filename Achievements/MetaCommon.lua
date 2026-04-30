@@ -51,12 +51,32 @@ local function registerMetaAchievement(def)
   ---------------------------------------
 
   -- Load progress from database on initialization
-  local function LoadProgress()
+  local function GetCurrentCompletionState()
     local progress = addon and addon.GetProgress and addon.GetProgress(achId)
-    -- Check if already completed in previous session
     if progress and progress.completed then
-      state.completed = true
+      return true
     end
+
+    if addon and addon.GetAchievementRow then
+      local row = addon.GetAchievementRow(achId)
+      if row and row.completed then
+        return true
+      end
+    end
+
+    if addon and addon.GetCharDB then
+      local _, cdb = addon.GetCharDB()
+      local rec = cdb and cdb.achievements and cdb.achievements[tostring(achId)]
+      if rec and rec.completed then
+        return true
+      end
+    end
+
+    return false
+  end
+
+  local function LoadProgress()
+    state.completed = GetCurrentCompletionState()
   end
 
   -- Save progress to database
@@ -68,6 +88,13 @@ local function registerMetaAchievement(def)
 
   -- Find an achievement row by achievement ID
   local function FindAchievementRow(reqAchId)
+    if addon and addon.GetAchievementRow then
+      local row = addon.GetAchievementRow(reqAchId)
+      if row then
+        return row
+      end
+    end
+
     if not addon or not addon.AchievementPanel or not addon.AchievementPanel.achievements then
       return nil
     end
@@ -90,6 +117,19 @@ local function registerMetaAchievement(def)
     for _, reqAchId in ipairs(requiredAchievements) do
       local row = FindAchievementRow(reqAchId)
       if row and addon and addon.IsRowOutleveled and addon.IsRowOutleveled(row) then
+        return true
+      end
+
+      if addon and addon.GetCharDB then
+        local _, cdb = addon.GetCharDB()
+        local rec = cdb and cdb.achievements and cdb.achievements[tostring(reqAchId)]
+        if rec and not rec.completed and (rec.failed or rec.failedAt) then
+          return true
+        end
+      end
+
+      local progress = addon and addon.GetProgress and addon.GetProgress(reqAchId)
+      if progress and progress.failed then
         return true
       end
     end
@@ -144,6 +184,31 @@ local function registerMetaAchievement(def)
     end
   end
 
+  -- If a prerequisite failure is corrected later (for example via admin action),
+  -- the meta should return to available/complete state instead of staying failed
+  -- until someone manually deletes the meta record.
+  local function ClearFailedState()
+    if not (addon and addon.GetCharDB) then
+      return false
+    end
+    local _, cdb = addon.GetCharDB()
+    local rec = cdb and cdb.achievements and cdb.achievements[tostring(achId)]
+    if not rec then
+      return false
+    end
+
+    local changed = false
+    if rec.failed then
+      rec.failed = nil
+      changed = true
+    end
+    if rec.failedAt then
+      rec.failedAt = nil
+      changed = true
+    end
+    return changed
+  end
+
   -- Update UI when achievement state changes
   local function UpdateUI(row)
     if not row then return end
@@ -175,6 +240,7 @@ local function registerMetaAchievement(def)
 
   -- Check if achievement is complete (called periodically)
   local function CheckComplete()
+    state.completed = GetCurrentCompletionState()
     if state.completed then
       return true
     end
@@ -184,6 +250,10 @@ local function registerMetaAchievement(def)
       MarkAsFailed()
       return false
     end
+
+    -- Prerequisite failure was corrected; clear any stale failed state on this meta
+    -- before checking completion so the dashboard/list can recover immediately.
+    ClearFailedState()
 
     if AllRequiredAchievementsCompleted() then
       state.completed = true
@@ -323,8 +393,15 @@ local function registerMetaAchievement(def)
           if not wasAlreadyFailed then
             UpdateUI(r)
           end
-        elseif CheckComplete() then
-          CompleteMetaRow(r)
+        else
+          local clearedFailure = ClearFailedState()
+          if clearedFailure then
+            UpdateUI(r)
+          end
+
+          if CheckComplete() then
+            CompleteMetaRow(r)
+          end
         end
       end
     end

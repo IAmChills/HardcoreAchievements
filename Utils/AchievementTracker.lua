@@ -822,7 +822,7 @@ local function GetAchievementDescription(achievementId)
     if addon and addon.CatalogAchievements then
         for _, rec in ipairs(addon.CatalogAchievements) do
             if tostring(rec.achId) == tostring(achievementId) then
-                isSecretAchievement = rec.secret == true
+                isSecretAchievement = rec.secret == true and rec.isGuildFirst ~= true
                 -- For secret achievements that aren't completed, use secretTooltip
                 if isSecretAchievement and not achievementCompleted and rec.secretTooltip then
                     baseTooltip = rec.secretTooltip
@@ -842,7 +842,7 @@ local function GetAchievementDescription(achievementId)
         end
         if not baseTooltip then
             -- Check if it's a secret achievement and not completed
-            if achDef.secret and not achievementCompleted and achDef.secretTooltip then
+            if achDef.secret and achDef.isGuildFirst ~= true and not achievementCompleted and achDef.secretTooltip then
                 baseTooltip = achDef.secretTooltip
             else
                 baseTooltip = achDef.tooltip
@@ -878,7 +878,7 @@ local function GetAchievementDescription(achievementId)
     if not baseTooltip and addon and addon.GetAchievementRow then
         local row = addon.GetAchievementRow(achievementId)
         if row then
-            local rowIsSecret = row.isSecretAchievement or (row._def and row._def.secret)
+            local rowIsSecret = (row.isSecretAchievement or (row._def and row._def.secret)) and not (row._def and row._def.isGuildFirst)
             local rowCompleted = row.completed or achievementCompleted
             if rowIsSecret and not rowCompleted and row.secretTooltip then
                 baseTooltip = row.secretTooltip

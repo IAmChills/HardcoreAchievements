@@ -185,7 +185,8 @@ local function GetAchievementDisplayValues(source, options)
     options = options or {}
     local useSourceCompletion = options.useSourceCompletion ~= false
     local viewerCompleted = options.viewerCompleted or false
-    local skipSecrecy = options.skipSecrecy or false
+    local isGuildFirst = source.isGuildFirst or (source._def and source._def.isGuildFirst)
+    local skipSecrecy = options.skipSecrecy or isGuildFirst or false
     
     local completed = useSourceCompletion and (source.completed == true) or viewerCompleted
     local isSecret = not skipSecrecy and IsSecretSource(source)

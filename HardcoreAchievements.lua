@@ -3847,6 +3847,7 @@ if addon then addon.AddRowUIInit = AddRowUIInit end
 local function CreateAchievementRow(parent, achId, title, tooltip, icon, level, points, killTracker, questTracker, staticPoints, zone, def)
     local capNum = tonumber(level)
     local isSecretDef = def and (def.secret or def.isSecretAchievement or def.secretTitle or def.secretTooltip or def.secretIcon or def.secretPoints)
+    local skipSecretPlaceholders = def and def.isGuildFirst
     local supportsSoloDoubleByDefault = not (def and (def.isMetaAchievement or def.isMeta or def.requiredAchievements ~= nil))
     local data = {
         achId = achId, id = achId, title = title, tooltip = tooltip, icon = icon, level = level,
@@ -3914,8 +3915,10 @@ local function CreateAchievementRow(parent, achId, title, tooltip, icon, level, 
         data.secretTooltip = def.secretTooltip or "Hidden"
         data.secretIcon = def.secretIcon or 134400
         data.secretPoints = tonumber(def.secretPoints) or 0
-        data.title = data.secretTitle
-        data.tooltip = data.secretTooltip
+        if not skipSecretPlaceholders then
+            data.title = data.secretTitle
+            data.tooltip = data.secretTooltip
+        end
     end
     if addon and addon.AchievementRowModel then table_insert(addon.AchievementRowModel, data) end
     if InvalidateAchievementRuntimeIndex then
