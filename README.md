@@ -31,11 +31,13 @@
 
 ### <span style="color: #745e06;"><strong>Achievement Categories</strong></span>
 
-*   **Boss Kills**: Defeat legendary bosses like Hogger, Fizzle, and Mor'Ladim
+*   **NPC Kills**: Defeat legendary NPCs like Hogger, Fizzle, and Mor'Ladim
 *   **Quest Completion**: Complete challenging quests within level requirements
 *   **Level Milestones**: Reach level caps without dying (10, 20, 30, 40, 50, 60)
 *   **Profession Milestones**: Earn points for reaching level caps (75, 150, 225, 300)
 *   **Dungeon Challenges**: Complete dungeons and defeat dungeon bosses (party, trio, duo, solo)
+*   **Raid Challenges**: Complete raids and defeat raid bosses
+*   **Exploration Challenges**: Fun achievements related to exploration
 *   **Dungeon Sets**: Acquire and equip notable dungeon sets
 *   **Reputation Rewards**: Earn exalted status with various factions
 *   **Special Events**: Unique achievements for special encounters and rare spawns
@@ -48,7 +50,7 @@
 4.  **Tracking**: Watch your progress as you complete requirements
 5.  **Celebration**: Enjoy achievement popups and point rewards
 
-undefined
+ 
 
 ## <span style="color: #14304d;">Achievement Examples</span>
 
@@ -61,8 +63,8 @@ undefined
 
 ## <span style="color: #14304d;">Technical Details</span>
 
-*   **Interface Version**: 11508 (WoW Classic compatible)
-*   **Dependencies**: Ace3 libraries (AceComm, AceSerializer)
+*   **Interface Version**: 11508/20505 (WoW Classic and TBC compatible)
+*   **Dependencies**: Ace3 libraries (AceComm, AceSerializer), LibP2PDB, LibBucketedHashSet
 *   **Integration**: UltraHardcore addon compatibility
 *   **Database**: Persistent achievement tracking across sessions on the same computer
 *   **Performance**: Lightweight and optimized for smooth gameplay
@@ -70,8 +72,6 @@ undefined
 ## Future Features
 
 *   **More Achievements**: Additional challenges and milestones
-*   **Achievement Sharing**: Seeing what achievements other players have unlocked by linking them in chat or inspecting other players
-*   **Statistics**: Detailed achievement statistics and analytics with it's companion addons Ulra Hardcore Leaderboard and Ultra Hardcore
 
 ***
 
