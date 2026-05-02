@@ -104,7 +104,6 @@ local Secrets = {
     tooltip = "You have completed the secret achievement: " .. ClassColor .. "Pet Spot the Wolf|r",
     icon = 132203,
     points = 0,
-    faction = FACTION_ALLIANCE,
     customIsCompleted = function() return false end,
     customEmote = function(token)
         if token ~= "PET" then
@@ -293,8 +292,10 @@ local Secrets = {
       { itemId = 4891, questId = 816, npcIds = { 3110, 3231 } },                   -- Kron's Amulet / Lost But Not Forgotten [Horde]
       { itemId = 3708, questId = 552, npcIds = { 2248, 2249, 2250, 2251 } },       -- Helcular's Rod / Helcular's Revenge [Horde]
       { itemId = 3693, questId = 547, npcIds = { 2345, 2344, 2346 } },             -- Humbert's Sword / Humbert's Sword [Horde]
+      { itemId = 4639, questId = 736, npcIds = { 4363 } },                         -- Enchanted Sea Kelp / The Star, THe Hand, and the Heart [Horde]
       { itemId = 3862, questId = 571, npcIds = { 1557 } },                         -- Aged Gorilla Sinew / Mok'thardin's Enchantment [Horde]
       { itemId = 3349, questId = 470, npcIds = { 1032, 1031, 1033 } },             -- Sida's Bag / Digging Through the Ooze [Alliance]
+      { itemId = 4639, questId = 735, npcIds = { 4363 } },                         -- Enchanted Sea Kelp / The Star, THe Hand, and the Heart [Alliance]
       { itemId = 3930, questId = 613, npcIds = { 709, 680, 710, 678, 679, 723 } }, -- Maury's Key / Cracking Maury's Foot [Neutral]
       { itemId = 8428, questId = 2605, npcIds = { 5481 } },                        -- Laden Dew Gland / The Thirsty Goblin [Neutral]
       { itemId = 12367, questId = 977, npcIds = { 7460, 7459 }, requiredKills = 2, requiredItems = 2 }, -- Pristine Yeti Horn / Are We There, Yeti? [Neutral]

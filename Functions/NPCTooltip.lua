@@ -24,8 +24,8 @@ local function GetAchievementsForNPC(npcId)
     -- Check AchievementDefs (all achievement types: quest, dungeon, raid)
     if addon and addon.AchievementDefs then
         for achId, achDef in pairs(addon.AchievementDefs) do
-            -- Skip variations (Solo, Duo, Trio) - only show base achievements
-            if not achDef.isVariation then
+            -- Skip variations and secret achievements so hidden objectives stay hidden.
+            if not achDef.isVariation and not achDef.secret then
                 local found = false
                 
                 -- Check targetNpcId (single ID or array)
