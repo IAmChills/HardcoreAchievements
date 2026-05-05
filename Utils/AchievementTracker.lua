@@ -32,7 +32,7 @@ local CONFIG = {
     minHeight = 100,
     paddingBetweenAchievements = 4,
     maxWidth = 500,
-    maxHeight = 600,
+    maxHeight = 750,
     collapseButtonOffset = 15,  -- Button horizontal offset from left margin
 }
 
@@ -43,6 +43,7 @@ local isInitialized = false
 local isExpanded = true
 local trackedAchievements = {}
 local collapsedAchievements = {}  -- Track which achievements are collapsed (true = collapsed, nil/false = expanded)
+local nextTrackedOrder = 1  -- Preserve the order achievements were tracked in
 local isSizing = false
 local savedBackdropSettings = { enabled = false, alpha = 0 }
 local savedFrameHeight = nil  -- Store the frame height to persist across collapse/expand
@@ -254,6 +255,84 @@ local function LoadTrackerSize()
     return validWidth and width or nil, validHeight and height or nil, wasUserSetWidth, wasUserSetHeight
 end
 
+local function SaveTrackerExpandedState()
+    local getCharDB = addon and addon.GetCharDB
+    if type(getCharDB) ~= "function" then return end
+    
+    local _, cdb = getCharDB()
+    if not cdb then return end
+    
+    cdb.tracker = cdb.tracker or {}
+    cdb.tracker.isExpanded = isExpanded == true
+end
+
+local function LoadTrackerExpandedState()
+    local getCharDB = addon and addon.GetCharDB
+    if type(getCharDB) ~= "function" then
+        return true
+    end
+    
+    local _, cdb = getCharDB()
+    if not cdb or not cdb.tracker or cdb.tracker.isExpanded == nil then
+        return true
+    end
+    
+    return cdb.tracker.isExpanded == true
+end
+
+local function SaveCollapsedAchievements()
+    local getCharDB = addon and addon.GetCharDB
+    if type(getCharDB) ~= "function" then return end
+    
+    local _, cdb = getCharDB()
+    if not cdb then return end
+    
+    cdb.tracker = cdb.tracker or {}
+    
+    local savedCollapsedAchievements = {}
+    for achievementId, isCollapsed in pairs(collapsedAchievements) do
+        if isCollapsed then
+            savedCollapsedAchievements[tostring(achievementId)] = true
+        end
+    end
+    
+    cdb.tracker.collapsedAchievements = savedCollapsedAchievements
+end
+
+local function LoadCollapsedAchievements()
+    local getCharDB = addon and addon.GetCharDB
+    if type(getCharDB) ~= "function" then
+        return {}
+    end
+    
+    local _, cdb = getCharDB()
+    if not cdb or not cdb.tracker or not cdb.tracker.collapsedAchievements then
+        return {}
+    end
+    
+    local loadedCollapsedAchievements = {}
+    for achievementId, isCollapsed in pairs(cdb.tracker.collapsedAchievements) do
+        if isCollapsed then
+            loadedCollapsedAchievements[tostring(achievementId)] = true
+        end
+    end
+    
+    return loadedCollapsedAchievements
+end
+
+local function GetTrackedAchievementOrder(data)
+    if type(data) == "table" and data.trackedOrder then
+        return data.trackedOrder
+    end
+    return nil
+end
+
+local function GetNextTrackedOrder()
+    local order = nextTrackedOrder
+    nextTrackedOrder = nextTrackedOrder + 1
+    return order
+end
+
 -- Helper function to save tracked achievements to database
 local function SaveTrackedAchievements()
     -- Get character-specific database
@@ -270,9 +349,19 @@ local function SaveTrackedAchievements()
     local savedAchievements = {}
     for achievementId, data in pairs(trackedAchievements) do
         local achIdStr = tostring(achievementId)
-        if type(data) == "table" and data.title then
-            -- Custom achievement with title
-            savedAchievements[achIdStr] = { title = data.title }
+        if type(data) == "table" then
+            local savedData = {}
+            if data.title then
+                savedData.title = data.title
+            end
+            if data.trackedOrder then
+                savedData.trackedOrder = data.trackedOrder
+            end
+            if next(savedData) ~= nil then
+                savedAchievements[achIdStr] = savedData
+            else
+                savedAchievements[achIdStr] = true
+            end
         else
             -- Standard achievement (just mark as tracked)
             savedAchievements[achIdStr] = true
@@ -303,8 +392,11 @@ local function LoadTrackedAchievements()
     -- Return a copy of the saved achievements
     local loadedAchievements = {}
     for achievementId, data in pairs(trackerData.trackedAchievements) do
-        if type(data) == "table" and data.title then
-            loadedAchievements[achievementId] = { title = data.title }
+        if type(data) == "table" then
+            loadedAchievements[achievementId] = {
+                title = data.title,
+                trackedOrder = data.trackedOrder,
+            }
         else
             loadedAchievements[achievementId] = true
         end
@@ -326,16 +418,61 @@ local function RestoreTrackedAchievements()
     
     -- Clear current tracked achievements
     trackedAchievements = {}
+    collapsedAchievements = LoadCollapsedAchievements()
+    nextTrackedOrder = 1
     
+    local sortedSavedAchievements = {}
     -- Restore each saved achievement
     for achievementId, data in pairs(savedAchievements) do
+        table_insert(sortedSavedAchievements, {
+            achievementId = achievementId,
+            data = data,
+            trackedOrder = type(data) == "table" and data.trackedOrder or nil,
+        })
+    end
+    
+    table_sort(sortedSavedAchievements, function(a, b)
+        local aOrder = a.trackedOrder
+        local bOrder = b.trackedOrder
+        if aOrder and bOrder and aOrder ~= bOrder then
+            return aOrder < bOrder
+        end
+        if aOrder and not bOrder then
+            return true
+        end
+        if bOrder and not aOrder then
+            return false
+        end
+        return tostring(a.achievementId) < tostring(b.achievementId)
+    end)
+    
+    for _, entry in ipairs(sortedSavedAchievements) do
+        local achievementId = entry.achievementId
+        local data = entry.data
         -- Convert string ID back to number if possible
         local achId = tonumber(achievementId) or achievementId
-        
-        if type(data) == "table" and data.title then
-            trackedAchievements[achId] = { title = data.title }
+        local trackedOrder = GetTrackedAchievementOrder(data)
+        if not trackedOrder then
+            trackedOrder = GetNextTrackedOrder()
         else
-            trackedAchievements[achId] = true
+            nextTrackedOrder = math.max(nextTrackedOrder, trackedOrder + 1)
+        end
+        
+        if type(data) == "table" then
+            trackedAchievements[achId] = {
+                title = data.title,
+                trackedOrder = trackedOrder,
+            }
+        else
+            trackedAchievements[achId] = { trackedOrder = trackedOrder }
+        end
+    end
+    
+    -- Drop stale collapse state for achievements that are no longer tracked.
+    for achievementId, _ in pairs(collapsedAchievements) do
+        local normalizedAchievementId = tonumber(achievementId) or achievementId
+        if not trackedAchievements[normalizedAchievementId] and not trackedAchievements[tostring(achievementId)] then
+            collapsedAchievements[achievementId] = nil
         end
     end
     
@@ -362,6 +499,7 @@ local function Initialize()
     
     -- Load saved size from database, or use initial values
     local savedWidth, savedHeight, wasUserSetWidth, wasUserSetHeight = LoadTrackerSize()
+    isExpanded = LoadTrackerExpandedState()
     if savedWidth and savedHeight then
         trackerBaseFrame:SetSize(savedWidth, savedHeight)
         savedFrameWidth = savedWidth
@@ -559,6 +697,7 @@ local function InitializeHeader(self, baseFrame)
             return
         end
         isExpanded = not isExpanded
+        SaveTrackerExpandedState()
         addon.UpdateTracker(AchievementTracker)
     end)
 
@@ -1280,6 +1419,7 @@ local function GetAchievementLine(self, index)
                 else
                     collapsedAchievements[achIdStr] = true
                 end
+                SaveCollapsedAchievements()
                 -- Update the display
                 AchievementTracker:Update()
             end
@@ -1603,20 +1743,22 @@ local function Update(self)
         -- Set content frame width to match base frame (for text wrapping)
         trackerContentFrame:SetWidth(baseFrameWidth)
 
-        -- Sort tracked achievements by level (easiest to hardest)
+        -- Sort tracked achievements by the order they were tracked in so new items appear at the bottom.
         local sortedAchievements = {}
         for achievementId, data in pairs(trackedAchievements) do
-            local level = GetAchievementLevel(achievementId) or 999  -- Put achievements without level at end
             table_insert(sortedAchievements, {
                 id = achievementId,
                 data = data,
-                level = level
+                trackedOrder = GetTrackedAchievementOrder(data) or math.huge,
             })
         end
         
-        -- Sort by level (ascending - easiest first)
+        -- Sort by tracked order so older tracked items stay at the top.
         table_sort(sortedAchievements, function(a, b)
-            return a.level < b.level
+            if a.trackedOrder ~= b.trackedOrder then
+                return a.trackedOrder < b.trackedOrder
+            end
+            return tostring(a.id) < tostring(b.id)
         end)
 
         -- Display each tracked achievement in sorted order
@@ -1971,15 +2113,21 @@ local function TrackAchievement(self, achievementId, title)
         return
     end
 
-    -- Store achievement data (title for custom achievements)
+    local existingData = trackedAchievements[achievementId]
+    local trackedOrder = GetTrackedAchievementOrder(existingData)
+    if not trackedOrder then
+        trackedOrder = GetNextTrackedOrder()
+    end
+    
+    -- Store achievement data (title for custom achievements) while preserving tracked order.
+    trackedAchievements[achievementId] = { trackedOrder = trackedOrder }
     if title then
-        trackedAchievements[achievementId] = { title = title }
-    else
-        trackedAchievements[achievementId] = true
+        trackedAchievements[achievementId].title = title
     end
     
     -- Save to database
     SaveTrackedAchievements()
+    SaveCollapsedAchievements()
     
     Update(self)
 end
@@ -1988,8 +2136,10 @@ end
 local function UntrackAchievement(self, achievementId)
     if trackedAchievements[achievementId] then
         trackedAchievements[achievementId] = nil
+        collapsedAchievements[tostring(achievementId)] = nil
         -- Save to database
         SaveTrackedAchievements()
+        SaveCollapsedAchievements()
         Update(self)
     end
 end
@@ -2035,12 +2185,14 @@ end
 -- Public API: Expand tracker
 local function Expand(self)
     isExpanded = true
+    SaveTrackerExpandedState()
     Update(self)
 end
 
 -- Public API: Collapse tracker
 local function Collapse(self)
     isExpanded = false
+    SaveTrackerExpandedState()
     Update(self)
 end
 

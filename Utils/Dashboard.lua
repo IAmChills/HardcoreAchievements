@@ -1979,6 +1979,7 @@ local function UpdateDashboardProgressOverview(srcRows)
   local rightKeys = { }
   if isTBC then
     table_insert(rightKeys, "profession")
+    table_insert(rightKeys, "reputation")
   else
     table_insert(rightKeys, "reputation")
   end
