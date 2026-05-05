@@ -296,6 +296,8 @@ local Secrets = {
       { itemId = 4639, questId = 735, npcIds = { 4363 } },                         -- Enchanted Sea Kelp / The Star, THe Hand, and the Heart [Alliance]
       { itemId = 3930, questId = 613, npcIds = { 709, 680, 710, 678, 679, 723 } }, -- Maury's Key / Cracking Maury's Foot [Neutral]
       { itemId = 8428, questId = 2605, npcIds = { 5481 } },                        -- Laden Dew Gland / The Thirsty Goblin [Neutral]
+      { itemId = 18959, questId = 7728, npcIds = { 5840 } },                       -- Smithing Tuyere / STOLEN: Smithing Tuyere and Lookout's Spyglass [Neutral]
+      { itemId = 18960, questId = 7728, npcIds = { 8566 } },                       -- Lookout's Spyglass / STOLEN: Smithing Tuyere and Lookout's Spyglass [Neutral]
       { itemId = 12367, questId = 977, npcIds = { 7460, 7459 }, requiredKills = 2, requiredItems = 2 }, -- Pristine Yeti Horn / Are We There, Yeti? [Neutral]
     },
     supportsStoredFailure = true,
