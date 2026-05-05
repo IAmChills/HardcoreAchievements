@@ -298,6 +298,7 @@ local Secrets = {
       { itemId = 8428, questId = 2605, npcIds = { 5481 } },                        -- Laden Dew Gland / The Thirsty Goblin [Neutral]
       { itemId = 18959, questId = 7728, npcIds = { 5840 } },                       -- Smithing Tuyere / STOLEN: Smithing Tuyere and Lookout's Spyglass [Neutral]
       { itemId = 18960, questId = 7728, npcIds = { 8566 } },                       -- Lookout's Spyglass / STOLEN: Smithing Tuyere and Lookout's Spyglass [Neutral]
+      { itemId = 10552, questId = 3452, npcIds = { 5860, 5861, 5862 } },           -- Symbol of Ragnaros / The Flame's Casing [Neutral]
       { itemId = 12367, questId = 977, npcIds = { 7460, 7459 }, requiredKills = 2, requiredItems = 2 }, -- Pristine Yeti Horn / Are We There, Yeti? [Neutral]
     },
     supportsStoredFailure = true,
