@@ -328,6 +328,11 @@ local function ProcessDeleteAchievementCommand(payload, sender)
     if addon and type(addon.ClearProgress) == "function" then
         addon.ClearProgress(id)
     end
+
+    -- Dashboard / tracker: main row is updated above; embed dashboard reads from DB — rebuild if open
+    if addon and type(addon.RefreshAuxiliaryViews) == "function" then
+        addon.RefreshAuxiliaryViews()
+    end
     
     -- Log the action
     if not addon.HardcoreAchievementsDB.adminCommands then addon.HardcoreAchievementsDB.adminCommands = {} end
@@ -387,6 +392,10 @@ local function ProcessClearDeletedByAdminCommand(payload, sender)
         SendResponseToAdmin(sender, "|CFFFFD100[Hardcore Achievements]|r Achievement '" .. achievementId .. "' was not banned for " .. currentCharacter)
     end
 
+    if addon and type(addon.RefreshAuxiliaryViews) == "function" then
+        addon.RefreshAuxiliaryViews()
+    end
+
     return true
 end
 
@@ -408,6 +417,9 @@ local function ProcessGuildFirstRelayClearCommand(payload, sender)
     end
 
     SendResponseToAdmin(sender, "|cff00ff00[Hardcore Achievements]|r GuildFirst claim cleared for '" .. tostring(payload.achievementId) .. "' via relay " .. currentCharacter)
+    if addon and type(addon.RefreshAuxiliaryViews) == "function" then
+        addon.RefreshAuxiliaryViews()
+    end
     return true
 end
 
@@ -436,6 +448,9 @@ local function ProcessGuildFirstRelayOverrideCommand(payload, sender)
     end
 
     SendResponseToAdmin(sender, "|cff00ff00[Hardcore Achievements]|r GuildFirst claim updated for '" .. tostring(payload.achievementId) .. "' -> " .. winnerName .. " via relay " .. currentCharacter)
+    if addon and type(addon.RefreshAuxiliaryViews) == "function" then
+        addon.RefreshAuxiliaryViews()
+    end
     return true
 end
 
@@ -641,6 +656,9 @@ local function ProcessAdminCommand(payload, sender)
 					showToast(iconTex, titleText, newPoints)
 				end
 				SendResponseToAdmin(sender, "|cff00ff00[Hardcore Achievements]|r Achievement '" .. payload.achievementId .. "' updated via admin command")
+                if addon and type(addon.RefreshAuxiliaryViews) == "function" then
+                    addon.RefreshAuxiliaryViews()
+                end
 				return true
 			end
 		else
@@ -751,6 +769,10 @@ local function ProcessAdminCommand(payload, sender)
 	
 	SendResponseToAdmin(sender, "|cff00ff00[Hardcore Achievements]|r Achievement '" .. payload.achievementId .. "' completed via admin command")
     
+    if addon and type(addon.RefreshAuxiliaryViews) == "function" then
+        addon.RefreshAuxiliaryViews()
+    end
+
     -- Log the admin command (for audit trail)
     if not addon.HardcoreAchievementsDB.adminCommands then addon.HardcoreAchievementsDB.adminCommands = {} end
     
