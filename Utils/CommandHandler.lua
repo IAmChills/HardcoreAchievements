@@ -859,9 +859,9 @@ local function OnDungeonBossCreditMessage(prefix, message, distribution, sender)
         return
     end
 
-    local ok, err = pcall(syncFn, payload, sender)
-    if not ok and DebugPrint then
-        DebugPrint("Error in dungeon boss credit callback: " .. tostring(err))
+    local okCall, errResult = pcall(syncFn, payload, sender)
+    if not okCall and DebugPrint then
+        DebugPrint("Error in dungeon boss credit callback: " .. tostring(errResult))
     end
 end
 

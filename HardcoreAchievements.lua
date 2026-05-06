@@ -608,32 +608,29 @@ local function IsRowOutleveled(row)
     if isOverLevel then
         local isDungeonAchievement = false
         local dungeonMapId = nil
-        
-        -- Check if row is a dungeon achievement (normal or heroic) for in-dungeon exception
-        if row._def and (row._def.isDungeon or row._def.isHeroicDungeon) then
+        local rowDef = row._def
+
+        -- Prefer map id from the row def (always present for dungeons) then AchievementDefs
+        if rowDef and (rowDef.isDungeon or rowDef.isHeroicDungeon) then
             isDungeonAchievement = true
-            -- Get mapID from achievement definition
-            local achId = row.achId or row.id
-            if achId and addon and addon.AchievementDefs then
+            dungeonMapId = rowDef.requiredMapId or rowDef.mapID
+            if (not dungeonMapId) and achId and addon and addon.AchievementDefs then
                 local achDef = addon.AchievementDefs[tostring(achId)]
                 if achDef and achDef.mapID then
                     dungeonMapId = achDef.mapID
                 end
             end
         end
-        
-        -- Check if achievement definition has mapID (dungeon achievements have mapID)
-        if not isDungeonAchievement then
-            local achId = row.achId or row.id
-            if achId and addon and addon.AchievementDefs then
-                local achDef = addon.AchievementDefs[tostring(achId)]
-                if achDef and achDef.mapID then
-                    isDungeonAchievement = true
-                    dungeonMapId = achDef.mapID
-                end
+
+        -- Fallback: AchievementDefs alone (e.g. def flag missing on a row model)
+        if not isDungeonAchievement and achId and addon and addon.AchievementDefs then
+            local achDef = addon.AchievementDefs[tostring(achId)]
+            if achDef and achDef.mapID then
+                isDungeonAchievement = true
+                dungeonMapId = achDef.mapID
             end
         end
-        
+
         -- If it's a dungeon achievement and player is in that specific dungeon, don't mark as failed
         if isDungeonAchievement and dungeonMapId and addon and addon.IsInDungeon and addon.IsInDungeon(dungeonMapId) then
             return false
@@ -4232,8 +4229,23 @@ do
             return oa < ob
         end
 
+        -- Keep dungeon kill rows registered for CLEU even if IsRowOutleveled mis-fires briefly
+        -- (e.g. instance id not ready). KillTracker still enforces entry-level eligibility.
         local function isRuntimeKillRowActive(row)
-            return row and not row.completed and type(row.killTracker) == "function" and not IsRowOutleveled(row)
+            if not row or row.completed or type(row.killTracker) ~= "function" then
+                return false
+            end
+            if not IsRowOutleveled(row) then
+                return true
+            end
+            local def = row._def
+            if def and (def.isDungeon or def.isHeroicDungeon) then
+                local mapId = def.requiredMapId or def.mapID
+                if mapId and addon and addon.IsInDungeon and addon.IsInDungeon(mapId) then
+                    return true
+                end
+            end
+            return false
         end
 
         InvalidateAchievementRuntimeIndex = function()
@@ -4509,8 +4521,6 @@ do
                 PlayerIsSolo_UpdateStatusForGUID(destGUID)
             end
 
-            -- Do not reset DungeonKillPrintedForGUID here; multiple events can fire for the same kill,
-            -- and we only want one print per kill. Next kill will have a different destGUID so the check will pass.
             local rowsWithTracker = collectKillCandidatesForNpc(npcId)
             if not rowsWithTracker or #rowsWithTracker == 0 then
                 externalPlayersByNPC[destGUID] = nil
@@ -4620,13 +4630,13 @@ do
                     end
                 end)
             elseif event == "COMBAT_LOG_EVENT_UNFILTERED" then
-                local _, subevent, _, sourceGUID, _, _, _, destGUID, _, _, _, param12, param13, param14, param15, param16 = CombatLogGetCurrentEventInfo()
                 --DevTools_Dump(COMBAT_LOG_EVENT_UNFILTERED)
+                local cleu = { CombatLogGetCurrentEventInfo() }
+                local subevent = cleu[2]
+                local sourceGUID, sourceName = cleu[4], cleu[5]
+                local destGUID, destName = cleu[8], cleu[9]
+                local param12, param13, param14, param15, param16 = cleu[12], cleu[13], cleu[14], cleu[15], cleu[16]
                 
-                -- Debug: Print threat situation for player when damage events occur
-                -- if DAMAGE_SUBEVENTS[subevent] and UnitExists("target") then
-                --     print("[CLEU Debug]", subevent, "| Threat:", UnitDetailedThreatSituation("player", "target"))
-                -- end
                 if subevent == "PARTY_KILL" then
                     -- PARTY_KILL fires when the player/party gets credit for a kill.
                     -- In dungeon/raid: only the group is present, so we always process (interchangeable with UNIT_DIED).
@@ -4649,7 +4659,8 @@ do
                         end
                     elseif npcsInCombat[destGUID] then
                         -- Open world: only if we were fighting this NPC
-                        processKill(destGUID, getNpcIdFromGUID(destGUID))
+                        local owId = getNpcIdFromGUID(destGUID)
+                        processKill(destGUID, owId)
                         clearCombatTrackingForGUID(destGUID)
                     end
                 elseif subevent == "UNIT_DIED" then
