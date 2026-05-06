@@ -101,6 +101,19 @@ local function GetCurrentInstanceMapID()
     return select(8, GetInstanceInfo())
 end
 
+local function DungeonMapIdsMatch(a, b)
+    return a ~= nil and b ~= nil and tonumber(a) == tonumber(b)
+end
+
+-- instanceEntryLevels may use number or string keys depending on API / savedvars restores.
+local function ResolveDungeonEntryLevelsForInstance(rawMapId)
+    if rawMapId == nil then return nil end
+    local num = tonumber(rawMapId)
+    return (num ~= nil and instanceEntryLevels[num])
+        or instanceEntryLevels[rawMapId]
+        or (num ~= nil and instanceEntryLevels[tostring(num)])
+end
+
 -- Classic has no heroic dungeons. Keep the gate simple and only ignore
 -- any mistakenly-registered heroic defs.
 local function IsSupportedClassicDungeonDef(achDef)
@@ -256,7 +269,7 @@ local function TryPrintPendingEligibilityOnInstanceInfo()
     if not (inInstance and instanceType == "party") then return end
     local mapId = GetCurrentInstanceMapID()
     if not mapId then return end
-    local entryData = instanceEntryLevels[mapId]
+    local entryData = ResolveDungeonEntryLevelsForInstance(mapId)
     if not entryData or not entryData.awaitingEligibilityInstanceInfo then return end
     entryData.awaitingEligibilityInstanceInfo = nil
     CheckAndPrintEligibilityMessages(mapId, entryData)
@@ -264,9 +277,10 @@ end
 
 -- Helper function to update party member levels when they join the dungeon
 local function UpdatePartyMemberLevels(mapId, entryData)
-    if not mapId or not entryData then return end
-    
+    if not mapId or not entryData then return false end
+
     local members = GetNumGroupMembers()
+    local mutated = false
     if members > 1 then
         for i = 1, 4 do
             local unit = "party" .. i
@@ -282,6 +296,7 @@ local function UpdatePartyMemberLevels(mapId, entryData)
                         local currentLevel = UnitLevel(unit) or 1
                         local unitName = UnitName(unit) or ("Party" .. i)
                         entryData.partyLevels[guid] = currentLevel
+                        mutated = true
                         if addon and addon.DebugPrint then
                             addon.DebugPrint("Party member " .. unitName .. " joined dungeon - level stored: " .. currentLevel)
                         end
@@ -290,6 +305,7 @@ local function UpdatePartyMemberLevels(mapId, entryData)
             end
         end
     end
+    return mutated
 end
 
 -- Initialize event frame for PLAYER_ENTERING_WORLD, PLAYER_DEAD, and party member events
@@ -330,7 +346,8 @@ dungeonEventFrame:SetScript("OnEvent", function(self, event, unitIndex)
         local inInstance, instanceType = IsInInstance()
         if inInstance and instanceType == "party" then
             local mapId = GetCurrentInstanceMapID()
-            if mapId and instanceEntryLevels[mapId] then
+            local entryDataForMap = ResolveDungeonEntryLevelsForInstance(mapId)
+            if mapId and entryDataForMap then
                 if unitIndex then
                     -- unitIndex is already the full unit ID like "party1"
                     local unit = unitIndex
@@ -338,9 +355,9 @@ dungeonEventFrame:SetScript("OnEvent", function(self, event, unitIndex)
                         local guid = UnitGUID(unit)
                         local unitName = UnitName(unit) or unitIndex
                         local isDeadOrGhost = UnitIsDeadOrGhost(unit)
-                        
+
                         if guid then
-                            local entryData = instanceEntryLevels[mapId]
+                            local entryData = entryDataForMap
                             if entryData.partyLevels and entryData.partyLevels[guid] then
                                 if not isDeadOrGhost then
                                     -- Party member left normally (not dead/ghost) - clear their data to allow replacement
@@ -372,7 +389,8 @@ dungeonEventFrame:SetScript("OnEvent", function(self, event, unitIndex)
         local inInstance, instanceType = IsInInstance()
         if inInstance and instanceType == "party" then
             local mapId = GetCurrentInstanceMapID()
-            if mapId and instanceEntryLevels[mapId] then
+            local entryDataForMap = ResolveDungeonEntryLevelsForInstance(mapId)
+            if mapId and entryDataForMap then
                 -- Check the specific party member that enabled
                 if unitIndex then
                     -- unitIndex is already the full unit ID like "party1"
@@ -380,7 +398,7 @@ dungeonEventFrame:SetScript("OnEvent", function(self, event, unitIndex)
                     if UnitExists(unit) then
                         local guid = UnitGUID(unit)
                         if guid then
-                            local entryData = instanceEntryLevels[mapId]
+                            local entryData = entryDataForMap
                             local storedLevel = entryData.partyLevels and entryData.partyLevels[guid]
                             local unitName = UnitName(unit) or unitIndex
                             local currentLevel = UnitLevel(unit) or 1
@@ -418,11 +436,13 @@ dungeonEventFrame:SetScript("OnEvent", function(self, event, unitIndex)
                         end
                     end
                 else
-                        -- No unit provided, check all party members
-                        UpdatePartyMemberLevels(mapId, instanceEntryLevels[mapId])
+                    -- No unit provided, check all party members
+                    if UpdatePartyMemberLevels(mapId, entryDataForMap) then
+                        SaveDungeonEntryState()
                     end
                 end
             end
+        end
     elseif event == "GROUP_ROSTER_UPDATE" then
         -- Group roster changed (player joined or left the group)
         -- Process for all tracked instances (in case we're not currently in one but have stored data)
@@ -831,8 +851,7 @@ local function registerDungeonAchievement(def)
     if requiredMapId == nil then
       return true
     end
-    local mapId = GetCurrentInstanceMapID()
-    return mapId == requiredMapId
+    return DungeonMapIdsMatch(GetCurrentInstanceMapID(), requiredMapId)
   end
 
   local function CountsSatisfied()
@@ -1295,21 +1314,31 @@ local function registerDungeonAchievement(def)
     local maxPartySize = def.maxPartySize or 5
     if members > maxPartySize then return false end
 
-    -- Check if we're in an instance and have stored entry levels for this map
     local inInstance, instanceType = IsInInstance()
-    local currentMapId = inInstance and GetCurrentInstanceMapID()
-    local useEntryLevels = inInstance and instanceType == "party" and currentMapId and currentMapId == requiredMapId and instanceEntryLevels[currentMapId]
+    local rawMapId = inInstance and GetCurrentInstanceMapID()
+    local entryData = ResolveDungeonEntryLevelsForInstance(rawMapId)
+    local useEntryLevels = inInstance and instanceType == "party"
+      and DungeonMapIdsMatch(rawMapId, requiredMapId)
+      and entryData ~= nil
 
-    -- Always use stored entry levels if in an instance, otherwise use current levels
+    -- Use stored dungeon snapshot when we have one; otherwise open-world fallback uses live levels
     if useEntryLevels then
-      -- We're in a tracked instance - must use stored levels only
-      local entryData = instanceEntryLevels[currentMapId]
-      
-      -- Check player level (must use stored level)
+      local dirty = false
+      if UpdatePartyMemberLevels(rawMapId, entryData) then
+        dirty = true
+      end
+
       local playerLevel = entryData.playerLevel
+      if (not playerLevel or playerLevel <= 0) then
+        local live = UnitLevel("player") or 0
+        if live > 0 and not IsOverLeveled(live) then
+          entryData.playerLevel = live
+          playerLevel = live
+          dirty = true
+        end
+      end
       if not playerLevel or IsOverLeveled(playerLevel) then return false end
       
-      -- Check party member levels (must use stored levels only)
       if members > 1 then
         for i = 1, 4 do
           local u = "party"..i
@@ -1317,8 +1346,15 @@ local function registerDungeonAchievement(def)
             local guid = UnitGUID(u)
             if guid then
               local partyLevel = entryData.partyLevels and entryData.partyLevels[guid]
-              -- If we don't have stored level for this party member, they shouldn't be eligible
-              -- (they should have been added when they entered)
+              if not partyLevel then
+                local live = UnitLevel(u) or 0
+                if live > 0 and not IsOverLeveled(live) then
+                  if not entryData.partyLevels then entryData.partyLevels = {} end
+                  entryData.partyLevels[guid] = live
+                  partyLevel = live
+                  dirty = true
+                end
+              end
               if not partyLevel or IsOverLeveled(partyLevel) then
                 return false
               end
@@ -1328,6 +1364,9 @@ local function registerDungeonAchievement(def)
             end
           end
         end
+      end
+      if dirty then
+        SaveDungeonEntryState()
       end
     else
       -- Not in a tracked instance - use current levels (fallback for non-instance scenarios)
@@ -1374,12 +1413,15 @@ local function registerDungeonAchievement(def)
     -- Only count kills when group is eligible - allows returning later with eligible group
     local isEligible = IsGroupEligible()
     if not isEligible then
-      -- Group is ineligible - don't count this kill
-      -- Player can return later with an eligible group to kill this boss
-      -- Only print one message per kill (lowest-level variant); processKill sorts base then Trio/Duo/Solo
+      -- Trio/Duo/Solo stay "active" at higher level caps; with a full 5-player group they
+      -- always fail party-size eligibility — don't spam logs implying the trio goal failed.
+      local membersNow = GetNumGroupMembers()
+      local maxSz = def.maxPartySize or 5
+      local skipWrongPartySizeNoise = membersNow > maxSz
+
       local progress = addon and addon.GetProgress and addon.GetProgress(achId)
       local isStillAvailable = not state.completed and not (progress and progress.failed)
-      if isStillAvailable and addon and addon.DungeonKillPrintedForGUID ~= destGUID then
+      if not skipWrongPartySizeNoise and isStillAvailable and addon and addon.DungeonKillPrintedForGUID ~= destGUID then
         addon.DungeonKillPrintedForGUID = destGUID
         print("|cff008066[Hardcore Achievements]|r |cffffd100" .. GetBossName(npcId) .. " killed but group is ineligible - kill not counted for achievement: " .. title .. "|r")
         if addon.EventLogAdd then
@@ -1620,7 +1662,7 @@ local function IsInDungeon(mapId)
     local inInstance, instanceType = IsInInstance()
     if inInstance and instanceType == "party" then
         local currentMapId = GetCurrentInstanceMapID()
-        return currentMapId == mapId
+        return tonumber(currentMapId) == tonumber(mapId)
     end
     return false
 end

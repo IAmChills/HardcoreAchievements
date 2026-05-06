@@ -17,6 +17,7 @@ local C_Timer = C_Timer
 
 -- Get item names from item IDs (you can expand this with a lookup table)
 local function GetItemName(itemId)
+  local id = tonumber(itemId) or itemId
   -- This is a basic mapping - you can expand this with more item names
   local itemNames = {
     -- Defias Set (Rogue)
@@ -276,18 +277,18 @@ local function GetItemName(itemId)
   }
   
   -- First try the lookup table
-  if itemNames[itemId] then
-    return itemNames[itemId]
+  if itemNames[id] then
+    return itemNames[id]
   end
   
   -- Fallback to GetItemInfo if item not in table (for items not yet added)
-  local itemName = GetItemInfo(itemId)
+  local itemName = GetItemInfo(id)
   if itemName then
     return itemName
   end
   
   -- Last resort: return formatted item ID
-  return "Item " .. tostring(itemId)
+  return "Item " .. tostring(id)
 end
 
 ---------------------------------------
@@ -299,7 +300,6 @@ function DungeonSetCommon.registerDungeonSetAchievement(def)
   local title = def.title or ""
   local tooltip = def.tooltip or ""
   local icon = def.icon
-  local level = def.level
   local points = def.points or 0
   local requiredItems = def.requiredItems or {}
   local itemOrder = def.itemOrder -- Optional ordering for tooltip display
@@ -613,7 +613,7 @@ function DungeonSetCommon.registerDungeonSetAchievement(def)
       title,
       tooltip,
       icon,
-      level,
+      nil, -- no max level; dungeon sets can be completed at any level
       points,
       nil, -- No kill tracker for item sets
       nil, -- No quest tracker for item sets
