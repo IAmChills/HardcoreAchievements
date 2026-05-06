@@ -192,8 +192,10 @@ local function ShowItemRequirements(requiredItems, itemOrder, achievementComplet
     
     for _, itemId in ipairs(itemsToShow) do
         local itemName, itemLink = GetItemInfo(itemId)
-        if not itemName then
-            -- Item not cached, use fallback
+        if (not itemName or itemName == "") and addon and addon.GetItemName then
+            itemName = addon.GetItemName(itemId)
+        end
+        if not itemName or itemName == "" then
             itemName = "Item " .. tostring(itemId)
         end
         

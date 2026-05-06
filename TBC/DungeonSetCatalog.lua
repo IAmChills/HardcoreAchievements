@@ -1,4 +1,4 @@
----------------------------------------
+﻿---------------------------------------
 -- Dungeon Set Achievement Definitions
 ---------------------------------------
 local addonName, addon = ...
@@ -6,12 +6,13 @@ local ClassColor = (addon and addon.GetClassColor())
 local table_insert = table.insert
 
 local DungeonSets = {
+  -- Archival level caps (inactive): strip the leading `--` on `level` lines below and pass `def.level` from DungeonSetCommon into CreateAchievementRow to restore max-level behavior.
   -- DEADMINES
   {
     achId = "DefiasSet",
     title = "Blackened Defias Set",
-    level = 24,
-    tooltip = "Equip the " .. ClassColor .. "Blackened Defias Set|r before level 25",
+    -- level = 24,
+    tooltip = "Equip the " .. ClassColor .. "Blackened Defias Set|r",
     icon = 132723,
     points = 50,
     requiredItems = {10399, 10403, 10402, 10401, 10400},
@@ -25,8 +26,8 @@ local DungeonSets = {
   {
     achId = "ViperSet",
     title = "Embrace of the Viper Set",
-    level = 25,
-    tooltip = "Equip the " .. ClassColor .. "Embrace of the Viper Set|r before level 26",
+    -- level = 25,
+    tooltip = "Equip the " .. ClassColor .. "Embrace of the Viper Set|r",
     icon = 135020,
     points = 50,
     requiredItems = {10412, 10411, 10413, 10410, 6473},
@@ -40,8 +41,8 @@ local DungeonSets = {
   {
     achId = "CrusadeSet",
     title = "Chain of the Scarlet Crusade Set",
-    level = 45,
-    tooltip = "Equip the " .. ClassColor .. "Chain of the Scarlet Crusade Set|r before level 46",
+    -- level = 45,
+    tooltip = "Equip the " .. ClassColor .. "Chain of the Scarlet Crusade Set|r",
     icon = 132629,
     points = 60,
     requiredItems = {10329, 10332, 10328, 10331, 10330, 10333},
@@ -55,7 +56,7 @@ local DungeonSets = {
   {
     achId = "BloodmailSet",
     title = "Bloodmail Regalia Set",
-    level = 60,
+    -- level = 60,
     tooltip = "Equip the " .. ClassColor .. "Bloodmail Regalia Set|r",
     icon = 132960,
     points = 50,
@@ -67,7 +68,7 @@ local DungeonSets = {
   }, {
     achId = "CadaverousSet",
     title = "Cadaverous Garb Set",
-    level = 60,
+    -- level = 60,
     tooltip = "Equip the " .. ClassColor .. "Cadaverous Garb Set|r",
     icon = 132718,
     points = 50,
@@ -79,7 +80,7 @@ local DungeonSets = {
   }, {
     achId = "DeathboneSet",
     title = "Deathbone Guardian Set",
-    level = 60,
+    -- level = 60,
     tooltip = "Equip the " .. ClassColor .. "Deathbone Guardian Set|r",
     icon = 132637,
     points = 50,
@@ -91,7 +92,7 @@ local DungeonSets = {
   }, {
     achId = "NecropileSet",
     title = "Necropile Raiment Set",
-    level = 60,
+    -- level = 60,
     tooltip = "Equip the " .. ClassColor .. "Necropile Raiment Set|r",
     icon = 132684,
     points = 50,
@@ -103,7 +104,7 @@ local DungeonSets = {
   }, {
     achId = "PostmasterSet",
     title = "Postmaster's Set",
-    level = 60,
+    -- level = 60,
     tooltip = "Equip the " .. ClassColor .. "Postmaster's Set|r",
     icon = 132725,
     points = 50,
@@ -118,7 +119,7 @@ local DungeonSets = {
   {
     achId = "IronweaveSet",
     title = "Ironweave Battlesuit Set",
-    level = 60,
+    -- level = 60,
     tooltip = "Equip the " .. ClassColor .. "Ironweave Battlesuit Set|r",
     icon = 132689,
     points = 80,
@@ -133,7 +134,7 @@ local DungeonSets = {
   {
     achId = "GladiatorSet",
     title = "The Gladiator Set",
-    level = 60,
+    -- level = 60,
     tooltip = "Equip the " .. ClassColor .. "The Gladiator Set|r",
     icon = 132637,
     points = 50,
@@ -148,7 +149,7 @@ local DungeonSets = {
   {
     achId = "BeaststalkerSet",
     title = "Beaststalker's Armor Set |cffaad372[Hunter]|r",
-    level = 60,
+    -- level = 60,
     tooltip = "Equip the " .. ClassColor .. "Beaststalker's Armor Set|r",
     icon = 132625,
     points = 100,
@@ -159,7 +160,7 @@ local DungeonSets = {
   }, {
     achId = "BeastmasterSet",
     title = "Beastmaster's Armor Set |cffaad372[Hunter]|r",
-    level = 60,
+    -- level = 60,
     tooltip = "Equip the " .. ClassColor .. "Beastmaster's Armor Set|r",
     icon = 132625,
     points = 200,
@@ -173,7 +174,7 @@ local DungeonSets = {
   {
     achId = "MagistersSet",
     title = "Magister's Regalia Set |cff3fc7eb[Mage]|r",
-    level = 60,
+    -- level = 60,
     tooltip = "Equip the " .. ClassColor .. "Magister's Regalia Set|r",
     icon = 132666,
     points = 100,
@@ -184,7 +185,7 @@ local DungeonSets = {
   }, {
     achId = "SorcererSet",
     title = "Sorcerer's Regalia Set |cff3fc7eb[Mage]|r",
-    level = 60,
+    -- level = 60,
     tooltip = "Equip the " .. ClassColor .. "Sorcerer's Regalia Set|r",
     icon = 132666,
     points = 200,
@@ -198,7 +199,7 @@ local DungeonSets = {
   {
     achId = "WildheartSet",
     title = "Wildheart RaimentSet |cffff7c0a[Druid]|r",
-    level = 60,
+    -- level = 60,
     tooltip = "Equip the " .. ClassColor .. "Wildheart Raiment Set|r",
     icon = 132741,
     points = 100,
@@ -209,7 +210,7 @@ local DungeonSets = {
   }, {
     achId = "FeralheartSet",
     title = "Feralheart RaimentSet |cffff7c0a[Druid]|r",
-    level = 60,
+    -- level = 60,
     tooltip = "Equip the " .. ClassColor .. "Feralheart Raiment Set|r",
     icon = 132741,
     points = 200,
@@ -223,7 +224,7 @@ local DungeonSets = {
   {
     achId = "ValorSet",
     title = "Battlegear of Valor Set |cffc69b6d[Warrior]|r",
-    level = 60,
+    -- level = 60,
     tooltip = "Equip the " .. ClassColor .. "Battlegear of Valor Set|r",
     icon = 132738,
     points = 100,
@@ -234,7 +235,7 @@ local DungeonSets = {
   }, {
     achId = "BattlegearSet",
     title = "Battlegear of Heroism Set |cffc69b6d[Warrior]|r",
-    level = 60,
+    -- level = 60,
     tooltip = "Equip the " .. ClassColor .. "Battlegear of Heroism Set|r",
     icon = 132738,
     points = 200,
@@ -248,7 +249,7 @@ local DungeonSets = {
   {
     achId = "DevoutSet",
     title = "Vestments of the Devout Set |cffffffff[Priest]|r",
-    level = 60,
+    -- level = 60,
     tooltip = "Equip the " .. ClassColor .. "Vestments of the Devout Set|r",
     icon = 132652,
     points = 100,
@@ -259,7 +260,7 @@ local DungeonSets = {
   }, {
     achId = "VirtuousSet",
     title = "Vestments of the Virtuous Set |cffffffff[Priest]|r",
-    level = 60,
+    -- level = 60,
     tooltip = "Equip the " .. ClassColor .. "Vestments of the Virtuous Set|r",
     icon = 132652,
     points = 200,
@@ -273,7 +274,7 @@ local DungeonSets = {
   {
     achId = "DreadmistSet",
     title = "Dreadmist Raiment Set |cff8788ee[Warlock]|r",
-    level = 60,
+    -- level = 60,
     tooltip = "Equip the " .. ClassColor .. "Dreadmist Raiment Set|r",
     icon = 132690,
     points = 100,
@@ -284,7 +285,7 @@ local DungeonSets = {
   }, {
     achId = "DeathmistSet",
     title = "Deathmist Raiment Set |cff8788ee[Warlock]|r",
-    level = 60,
+    -- level = 60,
     tooltip = "Equip the " .. ClassColor .. "Deathmist Raiment Set|r",
     icon = 132690,
     points = 200,
@@ -298,7 +299,7 @@ local DungeonSets = {
   {
     achId = "LightforgeSet",
     title = "Lightforge Armor Set |cfff48cba[Paladin]|r",
-    level = 60,
+    -- level = 60,
     tooltip = "Equip the " .. ClassColor .. "Lightforge Armor Set|r",
     icon = 132738,
     points = 100,
@@ -309,7 +310,7 @@ local DungeonSets = {
   }, {
     achId = "SoulforgeSet",
     title = "Soulforge Armor Set |cfff48cba[Paladin]|r",
-    level = 60,
+    -- level = 60,
     tooltip = "Equip the " .. ClassColor .. "Soulforge Armor Set|r",
     icon = 132738,
     points = 200,
@@ -323,7 +324,7 @@ local DungeonSets = {
   {
     achId = "ShadowcraftSet",
     title = "Shadowcraft Armor Set |cfffff468[Rogue]|r",
-    level = 60,
+    -- level = 60,
     tooltip = "Equip the " .. ClassColor .. "Shadowcraft Armor Set|r",
     icon = 132722,
     points = 100,
@@ -334,7 +335,7 @@ local DungeonSets = {
   }, {
     achId = "DarkmantleSet",
     title = "Darkmantle Armor Set |cfffff468[Rogue]|r",
-    level = 60,
+    -- level = 60,
     tooltip = "Equip the " .. ClassColor .. "Darkmantle Armor Set|r",
     icon = 132722,
     points = 200,
@@ -348,7 +349,7 @@ local DungeonSets = {
   {
     achId = "ElementsSet",
     title = "The Elements Set |cfff48cba[Shaman]|r",
-    level = 60,
+    -- level = 60,
     tooltip = "Equip the " .. ClassColor .. "The Elements Set|r",
     icon = 132633,
     points = 100,
@@ -359,7 +360,7 @@ local DungeonSets = {
   }, {
     achId = "FiveThundersSet",
     title = "The Five Thunders Set |cfff48cba[Shaman]|r",
-    level = 60,
+    -- level = 60,
     tooltip = "Equip the " .. ClassColor .. "The Five Thunders Set|r",
     icon = 132633,
     points = 200,
