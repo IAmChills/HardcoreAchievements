@@ -2240,6 +2240,13 @@ local function InitializeMinimapButton()
                 tooltip:AddLine(" ")
                 local countStr = string_format("%d/%d", completedCount, totalCount)
                 tooltip:AddLine(string_format(ACHIEVEMENT_META_COMPLETED_DATE, countStr), 0.6, 0.9, 0.6)
+
+                local lbData = addon and addon.Leaderboard and addon.Leaderboard.Data
+                local rankLbl = lbData and lbData.GetPointsRankLabel and lbData:GetPointsRankLabel()
+                if rankLbl then
+                    tooltip:AddLine("Rank: " .. rankLbl, 0.85, 0.85, 0.92)
+                    tooltip:AddLine("(current leaderboard filters)", 0.45, 0.45, 0.45)
+                end
             end,
         })
     end

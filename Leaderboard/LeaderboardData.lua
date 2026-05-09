@@ -256,3 +256,92 @@ function Data:GetScopeLabel()
     end
     return table.concat(labels, " + ")
 end
+
+local function SamePointsRankingTier(a, b)
+    if a.points ~= b.points then
+        return false
+    end
+    local ca, ta = a.completed, a.total
+    local cb, tb = b.completed, b.total
+    if ta > 0 and tb > 0 then
+        return (ca * tb) == (cb * ta)
+    end
+    return ta <= 0 and tb <= 0
+end
+
+--- Rank label for the local player in the current leaderboard scope (#1 / #T11 / —).
+function Data:GetPointsRankLabel()
+    PruneStaleLeaderboardRows()
+
+    local db = Leaderboard:GetDB()
+    local scope = Leaderboard:GetScope()
+    local entries = {}
+
+    for key, row in pairs(db.rows or {}) do
+        if type(row) == "table" and InScope(row, scope) then
+            entries[#entries + 1] = {
+                key = key,
+                points = tonumber(row.points) or 0,
+                completed = tonumber(row.completed) or 0,
+                total = tonumber(row.total) or 0,
+                name = tostring(row.name or key),
+            }
+        end
+    end
+
+    if #entries == 0 then
+        return "—"
+    end
+
+    table_sort(entries, function(a, b)
+        if a.points ~= b.points then
+            return a.points > b.points
+        end
+        local ca, ta = a.completed, a.total
+        local cb, tb = b.completed, b.total
+        if ta > 0 and tb > 0 then
+            local left = ca * tb
+            local right = cb * ta
+            if left ~= right then
+                return left > right
+            end
+        elseif ta > 0 then
+            return true
+        elseif tb > 0 then
+            return false
+        end
+        return string.lower(a.name) < string.lower(b.name)
+    end)
+
+    entries[1].rank = 1
+    for i = 2, #entries do
+        if SamePointsRankingTier(entries[i], entries[i - 1]) then
+            entries[i].rank = entries[i - 1].rank
+        else
+            entries[i].rank = i
+        end
+    end
+
+    local countAtRank = {}
+    for i = 1, #entries do
+        local r = entries[i].rank
+        countAtRank[r] = (countAtRank[r] or 0) + 1
+    end
+
+    local myKey = GetLocalCharacterKey()
+    if not myKey then
+        return "—"
+    end
+
+    for i = 1, #entries do
+        if entries[i].key == myKey then
+            local r = entries[i].rank
+            if (countAtRank[r] or 0) >= 2 then
+                return "#T" .. r
+            end
+            return "#" .. r
+        end
+    end
+
+    return "—"
+end

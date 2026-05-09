@@ -1122,6 +1122,13 @@ local function UpdateLeaderboardScopeCaption()
   DashboardFrame.LeaderboardScopeText:SetText("Scope: " .. label)
 end
 
+local function UpdateLeaderboardRankCaption()
+  if not DashboardFrame or not DashboardFrame.LeaderboardRankText then return end
+  local lbData = addon and addon.Leaderboard and addon.Leaderboard.Data
+  local rankLbl = lbData and lbData.GetPointsRankLabel and lbData:GetPointsRankLabel()
+  DashboardFrame.LeaderboardRankText:SetText("Rank: " .. (rankLbl or "—"))
+end
+
 local function LayoutLeaderboardColumns(parent, cells, width)
   local gap = 6
   local totalFixed = 0
@@ -1199,6 +1206,17 @@ local function EnsureDashboardLeaderboardUI()
   end
 end
 
+local function EnsureDashboardLeaderboardRankText()
+  if not DashboardFrame or not DashboardFrame.Scroll then return end
+  if DashboardFrame.LeaderboardRankText then return end
+  local rankText = DashboardFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+  rankText:SetPoint("BOTTOMLEFT", DashboardFrame.Scroll, "TOPLEFT", 4, 10)
+  rankText:SetJustifyH("LEFT")
+  rankText:SetTextColor(0.922, 0.871, 0.761)
+  rankText:Hide()
+  DashboardFrame.LeaderboardRankText = rankText
+end
+
 local function CreateDashboardLeaderboardRow(parent)
   local row = CreateFrame("Button", nil, parent)
   row:SetHeight(LEADERBOARD_ROW_HEIGHT)
@@ -1267,6 +1285,9 @@ local function HideLeaderboardUI()
   if DashboardFrame and DashboardFrame.LeaderboardScopeText then
     DashboardFrame.LeaderboardScopeText:Hide()
   end
+  if DashboardFrame and DashboardFrame.LeaderboardRankText then
+    DashboardFrame.LeaderboardRankText:Hide()
+  end
   if DashboardFrame and DashboardFrame.LeaderboardHeader then
     DashboardFrame.LeaderboardHeader:Hide()
   end
@@ -1313,6 +1334,7 @@ local SetDashboardFooterControlsForLeaderboard
 local function BuildDashboardLeaderboardRows()
   if not DashboardFrame or not DashboardFrame.Content then return end
   EnsureDashboardLeaderboardUI()
+  EnsureDashboardLeaderboardRankText()
   HideAchievementDashboardContent()
 
   if DashboardFrame.ScrollBackground then
@@ -1328,6 +1350,9 @@ local function BuildDashboardLeaderboardRows()
   if DashboardFrame.LeaderboardScopeText then
     DashboardFrame.LeaderboardScopeText:Show()
   end
+  if DashboardFrame.LeaderboardRankText then
+    DashboardFrame.LeaderboardRankText:Show()
+  end
 
   local lb = addon and addon.Leaderboard
   local data = lb and lb.Data and lb.Data.GetRows and lb.Data:GetRows(leaderboardSortState) or {}
@@ -1339,6 +1364,7 @@ local function BuildDashboardLeaderboardRows()
   LayoutLeaderboardColumns(DashboardFrame.LeaderboardHeader, DashboardFrame.LeaderboardHeaders, width)
   UpdateLeaderboardHeaderText()
   UpdateLeaderboardScopeCaption()
+  UpdateLeaderboardRankCaption()
 
   local localCharacterKey = GetLeaderboardLocalCharacterKey()
   for i, rowData in ipairs(data) do
