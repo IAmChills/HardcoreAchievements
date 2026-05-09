@@ -11,6 +11,7 @@ local DEFAULT_SCOPE = {
     guild = true,
     realm = false,
     faction = false,
+    dead = false,
 }
 
 local function EnsureRootDB()

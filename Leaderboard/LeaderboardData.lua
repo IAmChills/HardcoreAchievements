@@ -103,7 +103,7 @@ local function PruneStaleLeaderboardRows()
 end
 
 local function ScopeHasFilters(scope)
-    return scope and (scope.guild or scope.realm or scope.faction)
+    return scope and (scope.guild or scope.realm or scope.faction or scope.dead)
 end
 
 local function GetPlayerGuildNameForScope()
@@ -133,6 +133,9 @@ local function InScope(row, scope)
         return false
     end
     if scope.faction and (row.faction or "") ~= (UnitFactionGroup("player") or "") then
+        return false
+    end
+    if scope.dead and row.dead ~= true then
         return false
     end
     return true
@@ -237,6 +240,7 @@ function Data:GetScopeLabel()
     end
     if scope.realm then labels[#labels + 1] = "Realm" end
     if scope.faction then labels[#labels + 1] = "Faction" end
+    if scope.dead then labels[#labels + 1] = "Dead" end
     if #labels == 0 then
         return "World"
     end

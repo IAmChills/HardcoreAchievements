@@ -61,7 +61,7 @@ local SETTINGS_ICON_TEXTURE = "Interface\\AddOns\\HardcoreAchievements\\Images\\
 local LEADERBOARD_ROW_HEIGHT = 24
 local LEADERBOARD_HEADER_HEIGHT = 24
 local LEADERBOARD_OFFLINE_COLOR = { 0.65, 0.65, 0.65 }
-local LEADERBOARD_GUILD_MEMBER_COLOR = { 0.4, 0.8, 0.4 }
+local LEADERBOARD_GUILD_BRIGHT_GREEN = { 0.25, 1, 0.25 }
 local LEADERBOARD_DEAD_COLOR = { 0.95, 0.26, 0.21 }
 local LEADERBOARD_WHITE = "|cffffffff"
 
@@ -915,6 +915,11 @@ local leaderboardSortState = {
   asc = false,
 }
 
+local function ResetLeaderboardSortStateToDefault()
+  leaderboardSortState.key = nil
+  leaderboardSortState.asc = false
+end
+
 local leaderboardContextMenu
 local leaderboardContextTarget
 local leaderboardContextRow
@@ -980,16 +985,6 @@ end
 
 local function GetLeaderboardTooltipLine(key, value)
   return key .. ": " .. LEADERBOARD_WHITE .. tostring(value or "") .. "|r"
-end
-
-local function IsLeaderboardGuildOnlyScope()
-  local lb = addon and addon.Leaderboard
-  local scope = lb and lb.GetScope and lb:GetScope()
-  if not scope or not scope.guild or scope.realm or scope.faction then
-    return false
-  end
-  local g = select(1, GetGuildInfo("player"))
-  return type(g) == "string" and g ~= ""
 end
 
 local function IsLeaderboardGuildMember(rowData)
@@ -1136,8 +1131,10 @@ local function EnsureDashboardLeaderboardUI()
   DashboardFrame.LeaderboardScopeText = scopeText
 
   local header = CreateFrame("Frame", nil, DashboardFrame)
-  header:SetPoint("TOPLEFT", DashboardFrame.Scroll, "TOPLEFT", 4, -2)
-  header:SetPoint("TOPRIGHT", DashboardFrame.Scroll, "TOPRIGHT", -2, -2)
+  -- Match BorderClip TOP y-inset (+2 vs Scroll TOP): anchoring slightly up covers the viewport band
+  -- where scrolled rows would otherwise show through above the opaque header (UIPanel clip + font bleed).
+  header:SetPoint("TOPLEFT", DashboardFrame.Scroll, "TOPLEFT", 1, -1)
+  header:SetPoint("TOPRIGHT", DashboardFrame.Scroll, "TOPRIGHT", -1, -1)
   header:SetHeight(LEADERBOARD_HEADER_HEIGHT)
   header:SetFrameLevel((DashboardFrame.Scroll:GetFrameLevel() or 1) + 20)
   header:Hide()
@@ -1146,7 +1143,7 @@ local function EnsureDashboardLeaderboardUI()
 
   local bg = header:CreateTexture(nil, "BACKGROUND")
   bg:SetAllPoints(header)
-  bg:SetColorTexture(0, 0, 0, 0.48)
+  bg:SetColorTexture(0, 0, 0, 1)
   header.Background = bg
 
   for i, col in ipairs(LEADERBOARD_COLS) do
@@ -1333,7 +1330,6 @@ local function BuildDashboardLeaderboardRows()
 
     local isOffline = not rowData.online
     local isGuildMember = IsLeaderboardGuildMember(rowData)
-    local isGlobalView = not IsLeaderboardGuildOnlyScope()
     local cellColor = isOffline and LEADERBOARD_OFFLINE_COLOR or nil
     local nameColor = cellColor
 
@@ -1367,10 +1363,8 @@ local function BuildDashboardLeaderboardRows()
     elseif localCharacterKey and rowData.key == localCharacterKey then
       local r, g, b = GetPlayerClassColor()
       nameColor = { r, g, b }
-    elseif isGlobalView and isGuildMember then
-      nameColor = LEADERBOARD_GUILD_MEMBER_COLOR
-    elseif rowData.online then
-      nameColor = { 0.25, 1, 0.25 }
+    elseif isGuildMember then
+      nameColor = LEADERBOARD_GUILD_BRIGHT_GREEN
     end
 
     SetLeaderboardCell(row, 1, name, nameColor)
@@ -1422,6 +1416,7 @@ SetDashboardFooterControlsForLeaderboard = function(enabled, playerCount)
   local list = DashboardFrame.LayoutListCheckbox
   local grid = DashboardFrame.LayoutGridCheckbox
   local solo = DashboardFrame.SoloModeCheckbox
+  local deadScope = DashboardFrame.LeaderboardScopeDeadCheckbox
 
   if enabled then
     if DashboardFrame.LayoutLabel then
@@ -1454,6 +1449,10 @@ SetDashboardFooterControlsForLeaderboard = function(enabled, playerCount)
     setupScopeCheckbox(list, "Guild", "guild")
     setupScopeCheckbox(grid, "Realm", "realm")
     setupScopeCheckbox(solo, "Faction", "faction")
+    if deadScope then
+      deadScope:Show()
+      setupScopeCheckbox(deadScope, "Dead", "dead")
+    end
 
     if DashboardFrame.UseCharacterPanelCheckbox then
       DashboardFrame.UseCharacterPanelCheckbox:Hide()
@@ -1467,6 +1466,9 @@ SetDashboardFooterControlsForLeaderboard = function(enabled, playerCount)
 
   if DashboardFrame.LayoutLabel then
     DashboardFrame.LayoutLabel:SetText("Layout:")
+  end
+  if deadScope then
+    deadScope:Hide()
   end
   if list then
     list.text:SetText("List")
@@ -3290,7 +3292,11 @@ local function BuildDashboardFrame()
     DashboardFrame:SetFrameStrata("DIALOG")
     DashboardFrame:SetFrameLevel(15)
     DashboardFrame:SetClipsChildren(true)
-    
+
+    DashboardFrame:SetScript("OnHide", function()
+      ResetLeaderboardSortStateToDefault()
+    end)
+
     -- Class-based background texture (matching UltraHardcore style)
     DashboardFrame.ClassBackground = DashboardFrame:CreateTexture(nil, "BACKGROUND")
     DashboardFrame.ClassBackground:SetPoint("CENTER", DashboardFrame, "CENTER", 0, 0)
@@ -3972,6 +3978,20 @@ local function BuildDashboardFrame()
     DashboardFrame.SoloModeCheckbox:SetScript("OnLeave", function(self)
       GameTooltip:Hide()
     end)
+  end
+
+  if not DashboardFrame.LeaderboardScopeDeadCheckbox then
+    local parent = DashboardFrame.UIOverlayFrame or DashboardFrame
+    DashboardFrame.LeaderboardScopeDeadCheckbox = CreateFrame("CheckButton", nil, parent, "UICheckButtonTemplate")
+    DashboardFrame.LeaderboardScopeDeadCheckbox:SetPoint("LEFT", DashboardFrame.SoloModeCheckbox.Text, "RIGHT", 6, 0)
+    DashboardFrame.LeaderboardScopeDeadCheckbox:SetSize(10, 10)
+    DashboardFrame.LeaderboardScopeDeadCheckbox:SetFrameLevel(19)
+    DashboardFrame.LeaderboardScopeDeadCheckbox.text:SetText("Dead")
+    DashboardFrame.LeaderboardScopeDeadCheckbox.text:SetTextColor(0.922, 0.871, 0.761)
+    DashboardFrame.LeaderboardScopeDeadCheckbox.text:ClearAllPoints()
+    DashboardFrame.LeaderboardScopeDeadCheckbox.text:SetPoint("LEFT", DashboardFrame.LeaderboardScopeDeadCheckbox, "RIGHT", 5, 0)
+    ApplyCustomCheckboxTextures(DashboardFrame.LeaderboardScopeDeadCheckbox)
+    DashboardFrame.LeaderboardScopeDeadCheckbox:Hide()
   end
 
   -- Filter dropdown removed (tabs replace category selection)
