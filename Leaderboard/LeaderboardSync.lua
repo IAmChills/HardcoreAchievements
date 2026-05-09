@@ -42,9 +42,7 @@ local function GetPlayerRaceIdSex()
     return raceId, sex
 end
 
--- Prefix bump when LibP2PDB table schema column set changes (fixed at NewTable).
-local DB_PREFIX = "HCA_LB2"
-local DB_VERSION = 2
+local DB_PREFIX = "HCA_LB"
 local TABLE_NAME = "players"
 
 local LibP2PDB = LibStub and LibStub("LibP2PDB", true)
@@ -178,8 +176,8 @@ local function PersistState()
     end)
     if ok and state then
         db.state = state
-        db.stateVersion = DB_VERSION
         db.savedAt = Now()
+        db.stateVersion = nil
     end
 end
 
@@ -211,7 +209,6 @@ function Sync:Initialize()
     if not db then
         db = LibP2PDB:NewDatabase({
             prefix = DB_PREFIX,
-            version = DB_VERSION,
         })
         created = true
     end
@@ -252,13 +249,8 @@ function Sync:Initialize()
     end)
 
     local root = Leaderboard:GetDB()
-    if (root.stateVersion or 0) ~= DB_VERSION then
-        root.state = nil
-    end
-
     local saved = root.state
-    local savedVer = root.stateVersion
-    if saved and savedVer == DB_VERSION then
+    if saved then
         pcall(function()
             LibP2PDB:ImportDatabase(db, saved)
         end)
