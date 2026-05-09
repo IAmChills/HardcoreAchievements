@@ -3,9 +3,49 @@ if not addon then return end
 
 local C_Timer = C_Timer
 local CreateFrame = CreateFrame
+local UnitClass = UnitClass
 
 local Leaderboard = addon.Leaderboard or {}
 addon.Leaderboard = Leaderboard
+
+-- English display + sync — derived from Blizzard class index (UnitClass third return) when known.
+local CLASS_ID_TO_ENGLISH = {
+    [1] = "Warrior",
+    [2] = "Paladin",
+    [3] = "Hunter",
+    [4] = "Rogue",
+    [5] = "Priest",
+    [7] = "Shaman",
+    [8] = "Mage",
+    [9] = "Warlock",
+    [11] = "Druid",
+}
+
+--- English name from class id; if id is unknown/missing, uses fallback (e.g. synced class string).
+function Leaderboard.GetEnglishClassName(classId, fallback)
+    local id = tonumber(classId)
+    if id and CLASS_ID_TO_ENGLISH[id] then
+        return CLASS_ID_TO_ENGLISH[id]
+    end
+    if type(fallback) == "string" and fallback ~= "" then
+        return fallback
+    end
+    return "Unknown"
+end
+
+--- English class + numeric id from UnitClass (arg2 locale-free token; arg3 class id).
+function Leaderboard.GetNormalizedPlayerClass()
+    local localized, token, classId = UnitClass("player")
+    classId = tonumber(classId)
+    if classId and CLASS_ID_TO_ENGLISH[classId] then
+        return CLASS_ID_TO_ENGLISH[classId], classId
+    end
+    if type(token) == "string" and token ~= "" then
+        local lc = token:lower()
+        return lc:sub(1, 1):upper() .. lc:sub(2), classId
+    end
+    return localized or "Unknown", classId
+end
 
 local DEFAULT_SCOPE = {
     guild = true,

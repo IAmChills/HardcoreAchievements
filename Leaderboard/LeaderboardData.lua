@@ -144,7 +144,14 @@ end
 local function ValueForSort(row, key)
     if key == "updated" then
         return tonumber(row.lastSeenSec) or math.huge
-    elseif key == "name" or key == "class" or key == "faction" or key == "version" then
+    elseif key == "class" then
+        -- Prefer English from classId; fallback to synced class string (legacy rows).
+        local label = row.class or "Unknown"
+        if Leaderboard.GetEnglishClassName then
+            label = Leaderboard.GetEnglishClassName(row.classId, label)
+        end
+        return tostring(label):lower()
+    elseif key == "name" or key == "faction" or key == "version" then
         return tostring(row[key] or ""):lower()
     elseif key == "achievements" then
         return tonumber(row.points) or 0
@@ -207,11 +214,14 @@ function Data:GetRows(sortState)
                 guild = row.guild or "",
                 faction = row.faction or "",
                 class = row.class or "Unknown",
+                classId = tonumber(row.classId),
                 level = tonumber(row.level) or 0,
                 completed = tonumber(row.completed) or 0,
                 total = tonumber(row.total) or 0,
                 points = tonumber(row.points) or 0,
                 label = row.label or "",
+                raceId = tonumber(row.raceId),
+                sex = tonumber(row.sex),
                 selfFound = row.selfFound == true or row.label == "Self Found",
                 dead = row.dead == true,
                 offline = row.offline == true,

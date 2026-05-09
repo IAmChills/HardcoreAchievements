@@ -20,10 +20,31 @@ local UnitIsDeadOrGhost = UnitIsDeadOrGhost
 local UnitIsGhost = UnitIsGhost
 local UnitLevel = UnitLevel
 local UnitName = UnitName
+local UnitRace = UnitRace
+local UnitSex = UnitSex
 local time = time
 
-local DB_PREFIX = "HCA_LB"
-local DB_VERSION = 1
+--- Numeric race id from UnitRace("player") third return only (Anniversary exposes it).
+local function GetPlayerRaceIdSex()
+    local sex = UnitSex and UnitSex("player") or 2
+    if sex ~= 2 and sex ~= 3 then
+        sex = 2
+    end
+
+    local raceId
+    if UnitRace then
+        local _, _, rid = UnitRace("player")
+        if type(rid) == "number" then
+            raceId = rid
+        end
+    end
+
+    return raceId, sex
+end
+
+-- Prefix bump when LibP2PDB table schema column set changes (fixed at NewTable).
+local DB_PREFIX = "HCA_LB2"
+local DB_VERSION = 2
 local TABLE_NAME = "players"
 
 local LibP2PDB = LibStub and LibStub("LibP2PDB", true)
@@ -208,10 +229,13 @@ function Sync:Initialize()
                 guild = "string",
                 faction = "string",
                 class = "string",
+                classId = { "number", "nil" },
                 level = "number",
                 completed = "number",
                 total = "number",
                 points = "number",
+                raceId = { "number", "nil" },
+                sex = { "number", "nil" },
                 label = "string",
                 selfFound = { "boolean", "nil" },
                 dead = "boolean",
@@ -275,16 +299,28 @@ function Sync:BuildLocalRow(options)
         dead = options.dead and true or false
     end
 
+    local raceId, sex = GetPlayerRaceIdSex()
+    local classEnglish, classId
+    if Leaderboard.GetNormalizedPlayerClass then
+        classEnglish, classId = Leaderboard.GetNormalizedPlayerClass()
+    end
+    if not classEnglish or classEnglish == "" then
+        classEnglish = "Unknown"
+    end
+
     return {
         name = name,
         realm = GetRealmName() or "",
         guild = GuildForPublish(options.publishReason),
         faction = UnitFactionGroup("player") or "",
-        class = select(1, UnitClass("player")) or "Unknown",
+        class = classEnglish,
+        classId = classId,
         level = UnitLevel("player") or 0,
         completed = tonumber(completed) or 0,
         total = tonumber(total) or 0,
         points = tonumber(points) or 0,
+        raceId = raceId,
+        sex = sex,
         label = label,
         selfFound = label == "Self Found",
         dead = dead,

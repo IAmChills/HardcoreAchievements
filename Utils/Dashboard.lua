@@ -903,7 +903,7 @@ end
 local LEADERBOARD_COLS = {
   { key = "name", title = "Player Name", width = 100, align = "LEFT" },
   { key = "level", title = "Lvl", width = 25, align = "CENTER" },
-  { key = "class", title = "Class", width = 70, align = "CENTER" },
+  { key = "class", title = "Class", width = 84, align = "CENTER" },
   { key = "faction", title = "Faction", width = 50, align = "CENTER" },
   { key = "selfFound", title = "Self Found", width = 60, align = "CENTER" },
   { key = "achievements", title = "Achievements", width = 120, align = "CENTER" },
@@ -972,6 +972,35 @@ local function GetLeaderboardFactionTextures(faction)
     return "Interface\\Timer\\Alliance-Logo.PNG", "Interface\\Timer\\AllianceGlow-Logo.PNG"
   end
   return nil, nil
+end
+
+-- Images\\Icons\\Achievement_Character_<race>_<Male|Female>.PNG — race id from UnitRace arg3; sex UnitSex 2=male / 3=female.
+local LEADERBOARD_RACE_PORTRAIT_TOKEN = {
+  [1] = "Human",
+  [2] = "Orc",
+  [3] = "Dwarf",
+  [4] = "Nightelf",
+  [5] = "Undead",
+  [6] = "Tauren",
+  [7] = "Gnome",
+  [8] = "Troll",
+  [10] = "Bloodelf",
+  [11] = "Draenei",
+}
+
+local function LeaderboardClassCellWithPortrait(classText, raceId, sex)
+  local rid = tonumber(raceId)
+  local sx = tonumber(sex)
+  if not sx or (sx ~= 2 and sx ~= 3) then
+    sx = 2
+  end
+  local token = rid and LEADERBOARD_RACE_PORTRAIT_TOKEN[rid]
+  if not token then
+    return tostring(classText or "")
+  end
+  local gender = (sx == 3) and "Female" or "Male"
+  local path = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_Character_" .. token .. "_" .. gender .. ".PNG"
+  return string_format("|T%s:16:16:0:-1|t %s", path, tostring(classText or ""))
 end
 
 local function GetLeaderboardLocalCharacterKey()
@@ -1369,7 +1398,11 @@ local function BuildDashboardLeaderboardRows()
 
     SetLeaderboardCell(row, 1, name, nameColor)
     SetLeaderboardCell(row, 2, tostring(rowData.level or 0), cellColor)
-    SetLeaderboardCell(row, 3, rowData.class or "", cellColor)
+    SetLeaderboardCell(row, 3, LeaderboardClassCellWithPortrait(
+      lb and lb.GetEnglishClassName and lb.GetEnglishClassName(rowData.classId, rowData.class) or rowData.class,
+      rowData.raceId,
+      rowData.sex
+    ), cellColor)
     SetLeaderboardCell(row, 4, "", cellColor)
 
     local factionLogo, factionGlow = GetLeaderboardFactionTextures(rowData.faction)
