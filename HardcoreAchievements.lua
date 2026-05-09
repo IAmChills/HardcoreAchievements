@@ -2214,9 +2214,14 @@ local function InitializeMinimapButton()
                         -- Fallback to Character Panel if Dashboard not available
                         ShowHardcoreAchievementWindow()
                     end
-                elseif button == "RightButton" then
-                    -- Right-click to open options panel
+                elseif button == "RightButton" and IsShiftKeyDown() then
+                    -- Shift-right-click to open options panel
                     OpenOptionsPanel()
+                elseif button == "RightButton" then
+                    -- Right-click to open achievement leaderboard
+                    if addon and addon.Leaderboard and addon.Leaderboard.Toggle then
+                        addon.Leaderboard:Toggle()
+                    end
                 elseif button == "LeftButton" and IsShiftKeyDown() then
                     -- Left-click with Shift to open admin panel
                     if HardcoreAchievementsAdminPanel and HardcoreAchievementsAdminPanel.Toggle then
@@ -2228,7 +2233,8 @@ local function InitializeMinimapButton()
                 tooltip:AddLine("Hardcore Achievements", 1, 1, 1)
 
                 tooltip:AddLine("Left-click to open Dashboard", 0.5, 0.5, 0.5)
-                tooltip:AddLine("Right-click to open Options", 0.5, 0.5, 0.5)
+                tooltip:AddLine("Right-click to open Leaderboard", 0.5, 0.5, 0.5)
+                tooltip:AddLine("Shift-right-click to open Options", 0.5, 0.5, 0.5)
 
                 local completedCount, totalCount = AchievementCount()
                 tooltip:AddLine(" ")

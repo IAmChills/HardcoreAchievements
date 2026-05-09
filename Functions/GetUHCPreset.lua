@@ -144,6 +144,7 @@ local function UpdateMultiplierText(multiplierTextElement, textColor)
     -- In TBC, this will be false, so Self Found will never be active
     -- Resolve IsSelfFound at call time (SharedUtils loads after GetUHCPreset, so addon.IsSelfFound is nil at load)
     local isHardcoreActive = C_GameRules and C_GameRules.IsHardcoreActive and C_GameRules.IsHardcoreActive() or false
+    local isSelfFound = false
     local isSelfFoundFn = addon and addon.IsSelfFound
     if isHardcoreActive and isSelfFoundFn and type(isSelfFoundFn) == "function" and isSelfFoundFn() then
         isSelfFound = true
@@ -189,6 +190,15 @@ local function UpdateMultiplierText(multiplierTextElement, textColor)
     end
 end
 
+local function GetPlayerSelfFoundLabel()
+    local isHardcoreActive = C_GameRules and C_GameRules.IsHardcoreActive and C_GameRules.IsHardcoreActive() or false
+    local isSelfFoundFn = addon and addon.IsSelfFound
+    if isHardcoreActive and type(isSelfFoundFn) == "function" and isSelfFoundFn() then
+        return "Self Found"
+    end
+    return ""
+end
+
 -- Event frame for ADDON_LOADED
 local eventFrame = CreateFrame("Frame")
 eventFrame:RegisterEvent("ADDON_LOADED")
@@ -223,7 +233,7 @@ eventFrame:SetScript("OnEvent", function(self, event, addonName)
     end
 end)
 
-function GetPlayerPresetFromSettings()
+GetPlayerPresetFromSettings = function()
     -- Return early if UltraHardcoreDB doesn't exist
     if not UltraHardcoreDB then
         return
@@ -278,4 +288,5 @@ if addon then
     addon.GetPresetMultiplier = GetPresetMultiplier
     addon.UpdateMultiplierText = UpdateMultiplierText
     addon.GetPlayerPresetFromSettings = GetPlayerPresetFromSettings
+    addon.GetPlayerSelfFoundLabel = GetPlayerSelfFoundLabel
 end
