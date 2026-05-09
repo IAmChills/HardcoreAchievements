@@ -998,6 +998,12 @@ local function HandleSlashCommand(msg)
         else
             print("|cff008066[Hardcore Achievements]|r Event log: |CFFFFD100/hca log|r or |CFFFFD100/hca log show|r")
         end
+    elseif command == "leaderboard" or command == "lb" then
+        if addon and addon.Leaderboard and addon.Leaderboard.Toggle then
+            addon.Leaderboard:Toggle()
+        else
+            print("|cffff0000[Hardcore Achievements]|r Achievement leaderboard is not available yet.")
+        end
     elseif command == "debug" then
         -- Debug toggle command
         if args[2] and string.lower(args[2]) == "on" then
@@ -1023,6 +1029,7 @@ local function HandleSlashCommand(msg)
         print("  |CFFFFD100/hca show|r - Enable and show the custom achievement tab")
         print("  |CFFFFD100/hca reset tab|r - Reset the tab position to default")
         print("  |CFFFFD100/hca tracker|r - Manage the achievement tracker")
+        print("  |CFFFFD100/hca leaderboard|r - Toggle the achievement leaderboard")
         print("  |CFFFFD100/hca debug|r - Toggle debug mode (on/off)")
         print("  |CFFFFD100/hca log|r - Open troubleshooting event log")
         --print("  |CFFFFD100/hca log clear|r - Clear the event log")
