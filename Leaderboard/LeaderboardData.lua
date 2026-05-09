@@ -42,6 +42,9 @@ local function FormatAgo(seconds)
 end
 
 local function GetLocalCharacterKey()
+    if Leaderboard.GetLeaderboardRowKey then
+        return Leaderboard.GetLeaderboardRowKey()
+    end
     local name, realm = UnitName("player")
     realm = realm or GetRealmName()
     if not name or name == "" then

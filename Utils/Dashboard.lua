@@ -1004,12 +1004,16 @@ local function LeaderboardClassCellWithPortrait(classText, raceId, sex)
 end
 
 local function GetLeaderboardLocalCharacterKey()
-  local name, realm = UnitName("player")
-  realm = realm or GetRealmName()
-  if not name or name == "" then
-    return nil
-  end
-  return (realm and realm ~= "" and (name .. "-" .. realm)) or name
+    local lb = addon and addon.Leaderboard
+    if lb and lb.GetLeaderboardRowKey then
+        return lb.GetLeaderboardRowKey()
+    end
+    local name, realm = UnitName("player")
+    realm = realm or GetRealmName()
+    if not name or name == "" then
+        return nil
+    end
+    return (realm and realm ~= "" and (name .. "-" .. realm)) or name
 end
 
 local function GetLeaderboardTooltipLine(key, value)

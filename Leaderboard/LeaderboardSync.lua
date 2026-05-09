@@ -68,12 +68,7 @@ end
 Leaderboard.GetAddOnVersionString = GetAddOnVersionString
 
 local function GetCharacterKey()
-    local name, realm = UnitName("player")
-    realm = realm or GetRealmName()
-    if not name or name == "" then
-        return nil
-    end
-    return (realm and realm ~= "" and (name .. "-" .. realm)) or name
+    return Leaderboard.GetLeaderboardRowKey and Leaderboard.GetLeaderboardRowKey()
 end
 
 --- Guild name for sync: GetGuildInfo is often nil during logout / zoning; keep last known + stored row.
@@ -186,6 +181,58 @@ local function OnTableChanged(key, newData)
     PersistState()
 end
 
+--- Old "Name-Realm" row key used before switching to UnitGUID; migrate once to the GUID key.
+local function LegacyNameRealmKey()
+    local name, realm = UnitName("player")
+    realm = realm or GetRealmName()
+    if not name or name == "" then
+        return nil
+    end
+    return (realm and realm ~= "" and (name .. "-" .. realm)) or name
+end
+
+local function MigrateLegacyLeaderboardKey()
+    if not LibP2PDB or not Sync.db then
+        return
+    end
+    local newKey = Leaderboard.GetLeaderboardRowKey and Leaderboard.GetLeaderboardRowKey()
+    local legacy = LegacyNameRealmKey()
+    if not newKey or not legacy or newKey == legacy then
+        return
+    end
+
+    local root = Leaderboard:GetDB()
+    root.rows = root.rows or {}
+    local oldRow = root.rows[legacy]
+    if not oldRow then
+        return
+    end
+
+    if root.rows[newKey] then
+        root.rows[legacy] = nil
+    else
+        root.rows[newKey] = oldRow
+        root.rows[legacy] = nil
+    end
+
+    root.guildLastKnown = root.guildLastKnown or {}
+    if root.guildLastKnown[legacy] ~= nil and root.guildLastKnown[newKey] == nil then
+        root.guildLastKnown[newKey] = root.guildLastKnown[legacy]
+    end
+    root.guildLastKnown[legacy] = nil
+
+    pcall(function()
+        LibP2PDB:DeleteKey(Sync.db, TABLE_NAME, legacy)
+    end)
+    if root.rows[newKey] then
+        pcall(function()
+            LibP2PDB:SetKey(Sync.db, TABLE_NAME, newKey, root.rows[newKey])
+        end)
+    end
+
+    PersistState()
+end
+
 function Sync:GetDatabase()
     return self.db
 end
@@ -255,6 +302,8 @@ function Sync:Initialize()
             LibP2PDB:ImportDatabase(db, saved)
         end)
     end
+
+    MigrateLegacyLeaderboardKey()
 
     self:PublishLocal("init")
     C_Timer.After(5, function()

@@ -4,6 +4,9 @@ if not addon then return end
 local C_Timer = C_Timer
 local CreateFrame = CreateFrame
 local UnitClass = UnitClass
+local UnitGUID = UnitGUID
+local UnitName = UnitName
+local GetRealmName = GetRealmName
 
 local Leaderboard = addon.Leaderboard or {}
 addon.Leaderboard = Leaderboard
@@ -45,6 +48,20 @@ function Leaderboard.GetNormalizedPlayerClass()
         return lc:sub(1, 1):upper() .. lc:sub(2), classId
     end
     return localized or "Unknown", classId
+end
+
+--- Stable row key for leaderboard storage and sync (Player-xxxx, or legacy name-realm if GUID unavailable).
+function Leaderboard.GetLeaderboardRowKey()
+    local guid = UnitGUID("player")
+    if type(guid) == "string" and guid ~= "" then
+        return guid
+    end
+    local name, realm = UnitName("player")
+    realm = realm or GetRealmName()
+    if not name or name == "" then
+        return nil
+    end
+    return (realm and realm ~= "" and (name .. "-" .. realm)) or name
 end
 
 local DEFAULT_SCOPE = {
