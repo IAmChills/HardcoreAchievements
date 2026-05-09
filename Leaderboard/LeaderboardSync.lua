@@ -57,6 +57,58 @@ local function GetCharacterKey()
     return (realm and realm ~= "" and (name .. "-" .. realm)) or name
 end
 
+--- Guild name for sync: GetGuildInfo is often nil during logout / zoning; keep last known + stored row.
+local function GuildForPublish(reason)
+    local key = GetCharacterKey()
+    if not key then
+        return ""
+    end
+    local root = Leaderboard:GetDB()
+    root.guildLastKnown = root.guildLastKnown or {}
+
+    local liveRaw = GetGuildInfo("player")
+    if type(liveRaw) == "string" and liveRaw ~= "" then
+        root.guildLastKnown[key] = liveRaw
+        return liveRaw
+    end
+    if liveRaw == "" then
+        root.guildLastKnown[key] = nil
+        return ""
+    end
+
+    if reason == "PLAYER_LOGOUT" then
+        local prev = root.rows and root.rows[key]
+        if prev and type(prev.guild) == "string" and prev.guild ~= "" then
+            return prev.guild
+        end
+        local cached = root.guildLastKnown[key]
+        if type(cached) == "string" and cached ~= "" then
+            return cached
+        end
+    end
+
+    local prevGuild = root.rows and root.rows[key] and root.rows[key].guild
+    if type(prevGuild) == "string" and prevGuild ~= "" then
+        return prevGuild
+    end
+    local cached = root.guildLastKnown[key]
+    if type(cached) == "string" and cached ~= "" then
+        return cached
+    end
+    return ""
+end
+
+local function ClearGuildCacheForPlayer()
+    local key = GetCharacterKey()
+    if not key then
+        return
+    end
+    local root = Leaderboard:GetDB()
+    if root.guildLastKnown then
+        root.guildLastKnown[key] = nil
+    end
+end
+
 local function ShallowEqual(a, b)
     if type(a) ~= "table" or type(b) ~= "table" then
         return false
@@ -163,6 +215,7 @@ function Sync:Initialize()
                 label = "string",
                 selfFound = { "boolean", "nil" },
                 dead = "boolean",
+                offline = { "boolean", "nil" },
                 version = "string",
                 updatedAt = "number",
             },
@@ -174,8 +227,14 @@ function Sync:Initialize()
         LibP2PDB:RegisterTableChange(db, TABLE_NAME, self, OnTableChanged)
     end)
 
-    local saved = Leaderboard:GetDB().state
-    if saved then
+    local root = Leaderboard:GetDB()
+    if (root.stateVersion or 0) ~= DB_VERSION then
+        root.state = nil
+    end
+
+    local saved = root.state
+    local savedVer = root.stateVersion
+    if saved and savedVer == DB_VERSION then
         pcall(function()
             LibP2PDB:ImportDatabase(db, saved)
         end)
@@ -189,7 +248,8 @@ function Sync:Initialize()
     end)
 end
 
-function Sync:BuildLocalRow()
+function Sync:BuildLocalRow(options)
+    options = options or {}
     local name = UnitName("player")
     if not name or name == "" then
         return nil
@@ -210,10 +270,15 @@ function Sync:BuildLocalRow()
         label = addon.GetPlayerSelfFoundLabel() or ""
     end
 
+    local dead = PlayerIsDead()
+    if options.dead ~= nil then
+        dead = options.dead and true or false
+    end
+
     return {
         name = name,
         realm = GetRealmName() or "",
-        guild = GetGuildInfo("player") or "",
+        guild = GuildForPublish(options.publishReason),
         faction = UnitFactionGroup("player") or "",
         class = select(1, UnitClass("player")) or "Unknown",
         level = UnitLevel("player") or 0,
@@ -222,7 +287,8 @@ function Sync:BuildLocalRow()
         points = tonumber(points) or 0,
         label = label,
         selfFound = label == "Self Found",
-        dead = PlayerIsDead(),
+        dead = dead,
+        offline = options.offline == true,
         version = GetAddOnVersionString(),
         updatedAt = Now(),
     }
@@ -234,12 +300,22 @@ function Sync:PublishLocal(reason)
     end
 
     local key = GetCharacterKey()
-    local row = self:BuildLocalRow()
+    local current = key and Leaderboard:GetDB().rows and Leaderboard:GetDB().rows[key]
+
+    -- Logout often runs after unit state clears; keep dead=true from the last stored row.
+    local buildOpts = {
+        offline = (reason == "PLAYER_LOGOUT"),
+        publishReason = reason,
+    }
+    if reason == "PLAYER_DEAD" then
+        buildOpts.dead = true
+    elseif reason == "PLAYER_LOGOUT" and current and current.dead == true then
+        buildOpts.dead = true
+    end
+    local row = self:BuildLocalRow(buildOpts)
     if not key or not row then
         return false
     end
-
-    local current = Leaderboard:GetDB().rows and Leaderboard:GetDB().rows[key]
     if current and ShallowEqual(current, row) then
         return true
     end
@@ -256,6 +332,10 @@ function Sync:PublishLocal(reason)
         return true
     end
     return false
+end
+
+function Sync:ClearGuildLastKnown()
+    ClearGuildCacheForPlayer()
 end
 
 function Sync:SyncPeers()

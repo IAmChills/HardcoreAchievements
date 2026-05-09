@@ -11,11 +11,20 @@ local GetGuildInfo = GetGuildInfo
 local GetRealmName = GetRealmName
 local GetServerTime = GetServerTime
 local UnitFactionGroup = UnitFactionGroup
+local UnitName = UnitName
 local math_floor = math.floor
 local table_sort = table.sort
 local time = time
 
-local RECENT_SECONDS = 10 * 60
+local LibStub = LibStub
+local LibP2PDB = LibStub and LibStub("LibP2PDB", true)
+
+local RECENT_SECONDS = 5 * 60
+-- Drop other players' rows with no heartbeat for this long (UI + saved DB cleanup).
+local STALE_ROW_SECONDS = 7 * 86400
+-- Avoid pruning work on every GetRows refresh.
+local PRUNE_COOLDOWN_SECONDS = 120
+local lastPruneAt = 0
 
 local function Now()
     return (GetServerTime and GetServerTime()) or time()
@@ -32,8 +41,77 @@ local function FormatAgo(seconds)
     return ("%dd"):format(math_floor(seconds / 86400))
 end
 
+local function GetLocalCharacterKey()
+    local name, realm = UnitName("player")
+    realm = realm or GetRealmName()
+    if not name or name == "" then
+        return nil
+    end
+    return (realm and realm ~= "" and (name .. "-" .. realm)) or name
+end
+
+local function PruneStaleLeaderboardRows()
+    local now = Now()
+    if (now - lastPruneAt) < PRUNE_COOLDOWN_SECONDS then
+        return
+    end
+    lastPruneAt = now
+
+    local localKey = GetLocalCharacterKey()
+    if not localKey then
+        return
+    end
+
+    local root = Leaderboard:GetDB()
+    local rows = root.rows
+    if not rows then
+        return
+    end
+
+    local sync = Leaderboard.Sync
+    local pdb = sync and sync.GetDatabase and sync:GetDatabase()
+    local tableName = sync and sync.GetTableName and sync:GetTableName()
+
+    local toDrop = {}
+    for key, row in pairs(rows) do
+        if type(row) == "table" and key ~= localKey then
+            local updatedAt = tonumber(row.updatedAt) or 0
+            if updatedAt > 0 and (now - updatedAt) > STALE_ROW_SECONDS then
+                toDrop[#toDrop + 1] = key
+            end
+        end
+    end
+
+    if #toDrop == 0 then
+        return
+    end
+
+    for _, key in ipairs(toDrop) do
+        if LibP2PDB and pdb and tableName then
+            pcall(function()
+                LibP2PDB:DeleteKey(pdb, tableName, key)
+                LibP2PDB:BroadcastKey(pdb, tableName, key)
+            end)
+        else
+            rows[key] = nil
+        end
+    end
+
+    if sync and sync.Persist then
+        sync:Persist()
+    end
+end
+
 local function ScopeHasFilters(scope)
     return scope and (scope.guild or scope.realm or scope.faction)
+end
+
+local function GetPlayerGuildNameForScope()
+    local g = select(1, GetGuildInfo("player"))
+    if type(g) ~= "string" or g == "" then
+        return nil
+    end
+    return g
 end
 
 local function InScope(row, scope)
@@ -41,8 +119,15 @@ local function InScope(row, scope)
         return true
     end
 
-    if scope.guild and (row.guild or "") ~= (GetGuildInfo("player") or "") then
-        return false
+    -- Guild filter only applies when the viewer is in a guild; otherwise it would match every guildless row.
+    if scope.guild then
+        local playerGuild = GetPlayerGuildNameForScope()
+        if playerGuild then
+            local rowGuild = (type(row.guild) == "string" and row.guild ~= "") and row.guild or ""
+            if rowGuild ~= playerGuild then
+                return false
+            end
+        end
     end
     if scope.realm and (row.realm or "") ~= (GetRealmName() or "") then
         return false
@@ -101,6 +186,8 @@ local function SortRows(rows, sortState)
 end
 
 function Data:GetRows(sortState)
+    PruneStaleLeaderboardRows()
+
     local db = Leaderboard:GetDB()
     local scope = Leaderboard:GetScope()
     local rows = {}
@@ -124,11 +211,12 @@ function Data:GetRows(sortState)
                 label = row.label or "",
                 selfFound = row.selfFound == true or row.label == "Self Found",
                 dead = row.dead == true,
+                offline = row.offline == true,
                 version = row.version or "0.0.0",
                 updatedAt = updatedAt,
                 lastSeenSec = lastSeenSec,
                 lastSeenText = FormatAgo(lastSeenSec),
-                online = lastSeenSec <= RECENT_SECONDS,
+                online = (row.offline ~= true) and (lastSeenSec <= RECENT_SECONDS),
             }
         end
     end
@@ -144,8 +232,13 @@ function Data:GetScopeLabel()
     end
 
     local labels = {}
-    if scope.guild then labels[#labels + 1] = "Guild" end
+    if scope.guild and GetPlayerGuildNameForScope() then
+        labels[#labels + 1] = "Guild"
+    end
     if scope.realm then labels[#labels + 1] = "Realm" end
     if scope.faction then labels[#labels + 1] = "Faction" end
+    if #labels == 0 then
+        return "World"
+    end
     return table.concat(labels, " + ")
 end

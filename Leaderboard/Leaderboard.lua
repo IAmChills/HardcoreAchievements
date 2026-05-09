@@ -46,22 +46,38 @@ function Leaderboard:SetScopeValue(key, enabled)
     if self.UI and self.UI.Refresh then
         self.UI:Refresh()
     end
+    if addon.RefreshDashboard then
+        addon.RefreshDashboard()
+    end
 end
 
 function Leaderboard:Refresh()
     if self.UI and self.UI.Refresh then
         self.UI:Refresh()
     end
-end
-
-function Leaderboard:Toggle()
-    if self.UI and self.UI.Toggle then
-        self.UI:Toggle()
+    if addon.RefreshDashboard then
+        addon.RefreshDashboard()
     end
 end
 
+function Leaderboard:Toggle()
+    local dashboardFrame = addon and addon.DashboardFrame
+    if dashboardFrame and dashboardFrame:IsShown() and dashboardFrame.SelectedTabKey == "leaderboard" then
+        if addon.Dashboard and addon.Dashboard.Hide then
+            addon.Dashboard:Hide()
+        else
+            dashboardFrame:Hide()
+        end
+        return
+    end
+    self:Show()
+end
+
 function Leaderboard:Show()
-    if self.UI and self.UI.Show then
+    addon._hcaOpenDashboardTabKey = "leaderboard"
+    if addon.Dashboard and addon.Dashboard.Show then
+        addon.Dashboard:Show()
+    elseif self.UI and self.UI.Show then
         self.UI:Show()
     end
 end
@@ -101,6 +117,7 @@ function Leaderboard:Initialize()
     eventFrame:RegisterEvent("PLAYER_ALIVE")
     eventFrame:RegisterEvent("PLAYER_UNGHOST")
     eventFrame:RegisterEvent("PLAYER_LOGOUT")
+    eventFrame:RegisterEvent("PLAYER_GUILD_UPDATE")
     eventFrame:SetScript("OnEvent", function(_, event)
         if event == "PLAYER_ENTERING_WORLD" then
             C_Timer.After(2, function()
@@ -109,6 +126,14 @@ function Leaderboard:Initialize()
                     Leaderboard.Sync:SyncPeers()
                 end
             end)
+        elseif event == "PLAYER_DEAD" then
+            -- Publish immediately so a fast logout does not write offline=false before dead=true is stored.
+            publish("PLAYER_DEAD")
+        elseif event == "PLAYER_GUILD_UPDATE" then
+            if Leaderboard.Sync and Leaderboard.Sync.ClearGuildLastKnown then
+                Leaderboard.Sync:ClearGuildLastKnown()
+            end
+            publish("PLAYER_GUILD_UPDATE")
         else
             publish(event)
         end
@@ -117,6 +142,7 @@ function Leaderboard:Initialize()
     if self.refreshTicker then
         self.refreshTicker:Cancel()
     end
+    -- Heartbeat: must run sooner than RECENT_SECONDS in LeaderboardData (offline threshold).
     self.refreshTicker = C_Timer.NewTicker(90, function()
         publish("periodic")
         if Leaderboard.Sync and Leaderboard.Sync.SyncPeers then
