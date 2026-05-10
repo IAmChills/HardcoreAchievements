@@ -10,6 +10,7 @@ local UnitClass = UnitClass
 local UnitLevel = UnitLevel
 local GetLocale = GetLocale
 local time = time
+local GetTime = GetTime
 local GetExpansionLevel = GetExpansionLevel
 local IsShiftKeyDown = IsShiftKeyDown
 local ChatEdit_GetActiveWindow = ChatEdit_GetActiveWindow
@@ -901,7 +902,7 @@ local function GetMostRecentCompletedSet(srcRows, maxCount)
 end
 
 local LEADERBOARD_COLS = {
-  { key = "name", title = "Player Name", width = 100, align = "LEFT" },
+  { key = "name", title = "Player Name", width = 100, align = "CENTER" },
   { key = "level", title = "Lvl", width = 25, align = "CENTER" },
   { key = "class", title = "Class", width = 84, align = "CENTER" },
   { key = "faction", title = "Faction", width = 50, align = "CENTER" },
@@ -1020,14 +1021,15 @@ local function GetLeaderboardTooltipLine(key, value)
   return key .. ": " .. LEADERBOARD_WHITE .. tostring(value or "") .. "|r"
 end
 
-local function IsLeaderboardGuildMember(rowData)
-    local playerGuild = select(1, GetGuildInfo("player"))
-    playerGuild = (type(playerGuild) == "string" and playerGuild ~= "") and playerGuild or ""
+-- Compare synced row.guild to the viewer's current guild only (highlight guildmates).
+-- Cached once per leaderboard rebuild — GetGuildInfo("player") is you, not the remote row's data.
+local function IsLeaderboardGuildMember(rowData, viewerGuildCached)
+    viewerGuildCached = viewerGuildCached or ""
     local rowGuild = (type(rowData.guild) == "string" and rowData.guild ~= "") and rowData.guild or ""
-    if playerGuild == "" or rowGuild == "" then
+    if viewerGuildCached == "" or rowGuild == "" then
         return false
     end
-    return rowGuild == playerGuild
+    return rowGuild == viewerGuildCached
 end
 
 local function CanLeaderboardInvite(name, rowData)
@@ -1131,6 +1133,36 @@ local function UpdateLeaderboardRankCaption()
   local lbData = addon and addon.Leaderboard and addon.Leaderboard.Data
   local rankLbl = lbData and lbData.GetPointsRankLabel and lbData:GetPointsRankLabel()
   DashboardFrame.LeaderboardRankText:SetText("Rank: " .. (rankLbl or "—"))
+end
+
+-- Heavy: scan + sort. Trailing debounce so LibP2P bursts don't rerun dozens of times per second.
+local leaderboardRankCaptionDefer = CreateFrame("Frame")
+leaderboardRankCaptionDefer:Hide()
+local leaderboardRankCaptionDeferDeadline
+leaderboardRankCaptionDefer:SetScript("OnUpdate", function(self)
+  local deadline = leaderboardRankCaptionDeferDeadline
+  if not deadline then
+    self:Hide()
+    return
+  end
+  if (GetTime() or 0) < deadline then
+    return
+  end
+  self:Hide()
+  leaderboardRankCaptionDeferDeadline = nil
+  if DashboardFrame and DashboardFrame:IsShown() and IsLeaderboardTab() then
+    UpdateLeaderboardRankCaption()
+  end
+end)
+
+local function QueueLeaderboardRankCaptionUpdate()
+  if not DashboardFrame then
+    return
+  end
+  leaderboardRankCaptionDeferDeadline = (GetTime() or 0) + 0.35
+  if not leaderboardRankCaptionDefer:IsShown() then
+    leaderboardRankCaptionDefer:Show()
+  end
 end
 
 local function LayoutLeaderboardColumns(parent, cells, width)
@@ -1365,12 +1397,19 @@ local function BuildDashboardLeaderboardRows()
   local container = DashboardFrame.Content
   local inset = 4
   local width = math.max((container:GetWidth() or 1) - inset - 2, 1)
-  LayoutLeaderboardColumns(DashboardFrame.LeaderboardHeader, DashboardFrame.LeaderboardHeaders, width)
+  if DashboardFrame._hcaLbHdrColW ~= width then
+    DashboardFrame._hcaLbHdrColW = width
+    LayoutLeaderboardColumns(DashboardFrame.LeaderboardHeader, DashboardFrame.LeaderboardHeaders, width)
+  end
   UpdateLeaderboardHeaderText()
   UpdateLeaderboardScopeCaption()
-  UpdateLeaderboardRankCaption()
+  QueueLeaderboardRankCaptionUpdate()
 
   local localCharacterKey = GetLeaderboardLocalCharacterKey()
+  -- One call per rebuild: guild name from DB for each row; this is only for comparing to YOUR guild for name colour.
+  local viewerGuildCached = select(1, GetGuildInfo("player"))
+  viewerGuildCached = (type(viewerGuildCached) == "string" and viewerGuildCached ~= "") and viewerGuildCached or ""
+
   for i, rowData in ipairs(data) do
     local row = DASHBOARD.leaderboardRows[i]
     if not row then
@@ -1381,14 +1420,17 @@ local function BuildDashboardLeaderboardRows()
     row:ClearAllPoints()
     row:SetPoint("TOPLEFT", container, "TOPLEFT", inset, -((i - 1) * (LEADERBOARD_ROW_HEIGHT + 3)) - LEADERBOARD_HEADER_HEIGHT - 8)
     row:SetWidth(width)
-    LayoutLeaderboardColumns(row, row.cells, width)
+    if row._hcaLbLayW ~= width then
+      row._hcaLbLayW = width
+      LayoutLeaderboardColumns(row, row.cells, width)
+    end
     row.FactionGlow:ClearAllPoints()
     row.FactionGlow:SetPoint("CENTER", row.cells[4], "CENTER")
     row.FactionLogo:ClearAllPoints()
     row.FactionLogo:SetPoint("CENTER", row.cells[4], "CENTER")
 
     local isOffline = not rowData.online
-    local isGuildMember = IsLeaderboardGuildMember(rowData)
+    local isGuildMember = IsLeaderboardGuildMember(rowData, viewerGuildCached)
     local cellColor = isOffline and LEADERBOARD_OFFLINE_COLOR or nil
     local nameColor = cellColor
 
@@ -1436,16 +1478,20 @@ local function BuildDashboardLeaderboardRows()
     SetLeaderboardCell(row, 4, "", cellColor)
 
     local factionLogo, factionGlow = GetLeaderboardFactionTextures(rowData.faction)
+    local fs = rowData.faction or ""
     if factionLogo and factionGlow then
-      row.FactionGlow:SetTexture(factionGlow)
+      if fs ~= row._hcaLbFaction then
+        row._hcaLbFaction = fs
+        row.FactionGlow:SetTexture(factionGlow)
+        row.FactionLogo:SetTexture(factionLogo)
+      end
       row.FactionGlow:Show()
-      row.FactionLogo:SetTexture(factionLogo)
       row.FactionLogo:Show()
     else
+      row._hcaLbFaction = fs
       row.FactionGlow:Hide()
       row.FactionLogo:Hide()
     end
-
     SetLeaderboardCell(row, 5, rowData.selfFound and "|TInterface\\RAIDFRAME\\ReadyCheck-Ready.blp:16:16:0:0|t" or "", cellColor)
     local colorCode = GetLeaderboardAchievementColor(rowData.completed, rowData.total)
     local achievementText = string_format("%d pts |cff%s[%d/%d]|r", rowData.points or 0, colorCode, rowData.completed or 0, rowData.total or 0)
@@ -1488,6 +1534,30 @@ SetDashboardFooterControlsForLeaderboard = function(enabled, playerCount)
 
     local lb = addon and addon.Leaderboard
     local scope = lb and lb.GetScope and lb:GetScope() or {}
+
+    if DashboardFrame._hcaLeaderboardFooterMode then
+      local function syncScopeChecked(checkbox, key)
+        if checkbox then
+          checkbox:SetChecked(scope[key] and true or false)
+        end
+      end
+      syncScopeChecked(list, "guild")
+      syncScopeChecked(grid, "realm")
+      syncScopeChecked(solo, "faction")
+      if deadScope then
+        deadScope:Show()
+        syncScopeChecked(deadScope, "dead")
+      end
+      if DashboardFrame.UseCharacterPanelCheckbox then
+        DashboardFrame.UseCharacterPanelCheckbox:Hide()
+      end
+      if DashboardFrame.UseCharacterPanelLabel then
+        DashboardFrame.UseCharacterPanelLabel:SetText(string_format("Players: %d", tonumber(playerCount) or 0))
+        DashboardFrame.UseCharacterPanelLabel:Show()
+      end
+      return
+    end
+
     local function setupScopeCheckbox(checkbox, label, key)
       if not checkbox then return end
       checkbox:Enable()
@@ -1517,6 +1587,8 @@ SetDashboardFooterControlsForLeaderboard = function(enabled, playerCount)
       setupScopeCheckbox(deadScope, "Dead", "dead")
     end
 
+    DashboardFrame._hcaLeaderboardFooterMode = true
+
     if DashboardFrame.UseCharacterPanelCheckbox then
       DashboardFrame.UseCharacterPanelCheckbox:Hide()
     end
@@ -1527,6 +1599,7 @@ SetDashboardFooterControlsForLeaderboard = function(enabled, playerCount)
     return
   end
 
+  DashboardFrame._hcaLeaderboardFooterMode = nil
   if DashboardFrame.LayoutLabel then
     DashboardFrame.LayoutLabel:SetText("Layout:")
   end
@@ -4133,12 +4206,20 @@ local function BuildDashboardFrame()
   return true
 end
 
+-- Pause background dashboard rebuilds while the achievement leaderboard tab is open (avoid list/scroll jitter).
+local function PauseDashboardRebuildWhileLeaderboardTabVisible()
+  return DashboardFrame and DashboardFrame:IsShown() and DashboardFrame.SelectedTabKey == "leaderboard"
+end
+
 -- Hook source signals for updates
 local function HookSourceSignals()
   if DASHBOARD._hooked then return end
   local function RequestRebuild()
     C_Timer.After(0, function()
       if not DashboardFrame or not DashboardFrame:IsShown() then return end
+      if PauseDashboardRebuildWhileLeaderboardTabVisible() then
+        return
+      end
 
       -- If we were waiting for summary data, clear the pending flag once it becomes available.
       if DashboardFrame._hcaSummaryRefreshPending and DashboardFrame.SelectedTabKey == "summary" then
@@ -4320,10 +4401,14 @@ if addon then
     addon._hcaOpenDashboardTabKey = GetDashboardTabKeyForAchievement(achId)
     ShowDashboard()
   end
-  function addon.RefreshDashboard()
-    if DashboardFrame and DashboardFrame:IsShown() and DASHBOARD and DASHBOARD.Rebuild then
-      DASHBOARD:Rebuild()
+  function addon.RefreshDashboard(force)
+    if not (DashboardFrame and DashboardFrame:IsShown() and DASHBOARD and DASHBOARD.Rebuild) then
+      return
     end
+    if force ~= true and PauseDashboardRebuildWhileLeaderboardTabVisible() then
+      return
+    end
+    DASHBOARD:Rebuild()
   end
   function addon.RefreshDashboardEventLog()
     local p = DashboardFrame and DashboardFrame.LogPanel

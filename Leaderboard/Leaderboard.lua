@@ -105,16 +105,13 @@ function Leaderboard:SetScopeValue(key, enabled)
         self.UI:Refresh()
     end
     if addon.RefreshDashboard then
-        addon.RefreshDashboard()
+        addon.RefreshDashboard(true)
     end
 end
 
 function Leaderboard:Refresh()
     if self.UI and self.UI.Refresh then
         self.UI:Refresh()
-    end
-    if addon.RefreshDashboard then
-        addon.RefreshDashboard()
     end
 end
 
