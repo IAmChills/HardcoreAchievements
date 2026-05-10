@@ -11,6 +11,9 @@ local GetRealmName = GetRealmName
 local Leaderboard = addon.Leaderboard or {}
 addon.Leaderboard = Leaderboard
 
+-- Periodic dashboard leaderboard rebuild while tab is visible (does not bypass sync/data; pairs with paused instant refresh).
+local LEADERBOARD_VIEW_UI_REFRESH_SEC = 60
+
 -- English display + sync — derived from Blizzard class index (UnitClass third return) when known.
 local CLASS_ID_TO_ENGLISH = {
     [1] = "Warrior",
@@ -202,6 +205,16 @@ function Leaderboard:Initialize()
         publish("periodic")
         if Leaderboard.Sync and Leaderboard.Sync.SyncPeers then
             Leaderboard.Sync:SyncPeers()
+        end
+    end)
+
+    if self.leaderboardUIViewTicker then
+        self.leaderboardUIViewTicker:Cancel()
+    end
+    self.leaderboardUIViewTicker = C_Timer.NewTicker(LEADERBOARD_VIEW_UI_REFRESH_SEC, function()
+        local df = addon.DashboardFrame
+        if df and df:IsShown() and df.SelectedTabKey == "leaderboard" and addon.RefreshDashboard then
+            addon.RefreshDashboard(true)
         end
     end)
 end
