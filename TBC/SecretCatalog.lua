@@ -292,6 +292,7 @@ local Secrets = {
       { itemId = 3693, questId = 547, npcIds = { 2345, 2344, 2346 } },             -- Humbert's Sword / Humbert's Sword [Horde]
       { itemId = 4639, questId = 736, npcIds = { 4363 } },                         -- Enchanted Sea Kelp / The Star, THe Hand, and the Heart [Horde]
       { itemId = 3862, questId = 571, npcIds = { 1557 } },                         -- Aged Gorilla Sinew / Mok'thardin's Enchantment [Horde]
+      { itemId = 8363, questId = 2541, npcIds = { 2009 } },                        -- Shaman Voodoo Charm / The Sleeping Druid [Alliance]
       { itemId = 3349, questId = 470, npcIds = { 1032, 1031, 1033 } },             -- Sida's Bag / Digging Through the Ooze [Alliance]
       { itemId = 4639, questId = 735, npcIds = { 4363 } },                         -- Enchanted Sea Kelp / The Star, THe Hand, and the Heart [Alliance]
       { itemId = 3930, questId = 613, npcIds = { 709, 680, 710, 678, 679, 723 } }, -- Maury's Key / Cracking Maury's Foot [Neutral]
