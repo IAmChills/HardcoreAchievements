@@ -155,7 +155,7 @@ local KalimdorExplorationZones = {
   { zone = "Silithus", title = "Silithus", icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_Zone_Silithus_01.png", points = 10 },
   { zone = "Stonetalon Mountains", title = "Stonetalon Mountains", icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_Zone_Stonetalon_01.png", points = 10 },
   { zone = "Tanaris", title = "Tanaris", icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_Zone_Tanaris_01.png", points = 10 },
-  { zone = "Teldrassil", title = "Teldrassil", icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_Zone_Darnassus.png", points = 10 },
+  --{ zone = "Teldrassil", title = "Teldrassil", icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_Zone_Darnassus.png", points = 10 },
   { zone = "The Barrens", title = "The Barrens", icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_Zone_Barrens_01.png", points = 10 },
   --{ zone = "The Exodar", title = "The Exodar", icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_Zone_XXX.png", points = 0 },
   { zone = "Thousand Needles", title = "Thousand Needles", icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_Zone_ThousandNeedles_01.png", points = 10 },
