@@ -1418,7 +1418,8 @@ local function MarkRowCompleted(row, cdbParam)
         end
     end
 
-    if restorationsComplete and not skipBroadcastForRetroactive then
+    -- Match SetProgress: do not prompt for reload during addon init / retroactive login pass
+    if restorationsComplete and not skipBroadcastForRetroactive and not (addon and addon.Initializing) then
         MarkUnsavedAchievementProgress()
     end
     
@@ -2105,7 +2106,10 @@ local function SetProgress(achId, key, value)
     end
     cdb.progress[achId] = p
 
-    if restorationsComplete and shouldSetLevelAt then
+    -- Same gates as MarkRowCompleted: CheckPendingCompletions runs IsCompleted during init, which
+    -- can call topUpFromServer/setProg (quest/soloQuest/pointsAtKill) — that must not imply a new
+    -- user-visible "unsaved" state until init finishes and we are past the retroactive pass.
+    if restorationsComplete and shouldSetLevelAt and not skipBroadcastForRetroactive and not (addon and addon.Initializing) then
         MarkUnsavedAchievementProgress()
     end
 
@@ -2242,7 +2246,7 @@ local function InitializeMinimapButton()
                 tooltip:AddLine(string_format(ACHIEVEMENT_META_COMPLETED_DATE, countStr), 0.6, 0.9, 0.6)
 
                 local lbData = addon and addon.Leaderboard and addon.Leaderboard.Data
-                local rankLbl = lbData and lbData.GetPointsRankLabel and lbData:GetPointsRankLabel()
+                local rankLbl = lbData and lbData.GetPointsRankLabelCached and lbData:GetPointsRankLabelCached()
                 if rankLbl then
                     tooltip:AddLine("Rank: " .. rankLbl, 0.85, 0.85, 0.92)
                     tooltip:AddLine("(current leaderboard filters)", 0.45, 0.45, 0.45)
