@@ -141,11 +141,6 @@ local function ApplyDropdownBorder(frame)
     border:Show()
 end
 
-hooksecurefunc("UIDropDownMenu_CreateFrames", function(level)
-    ApplyDropdownBorder(_G["DropDownList" .. level .. "Backdrop"])
-    ApplyDropdownBorder(_G["DropDownList" .. level .. "MenuBackdrop"])
-end)
-
 -- Status filters are now stored in database via FilterDropdown.GetStatusFilterStates()
 
 local POINTS_FONT_PATH = "Interface\\AddOns\\HardcoreAchievements\\Fonts\\friz-quadrata-regular.ttf"
