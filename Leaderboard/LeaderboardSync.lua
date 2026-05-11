@@ -44,8 +44,10 @@ end
 
 local DB_PREFIX = "HCA_LB"
 local TABLE_NAME = "players"
+local PERSIST_DEBOUNCE_SECONDS = 3
 
 local LibP2PDB = LibStub and LibStub("LibP2PDB", true)
+local persistDebounceToken = 0
 
 local function Now()
     return (GetServerTime and GetServerTime()) or time()
@@ -149,6 +151,9 @@ local function StoreRow(key, row)
         db.rows[key] = nil
     end
     db.updatedAt = Now()
+    if Leaderboard.Data and Leaderboard.Data.Invalidate then
+        Leaderboard.Data:Invalidate()
+    end
     if Leaderboard.Refresh then
         Leaderboard:Refresh()
     end
@@ -159,6 +164,13 @@ local function PlayerIsDead()
         return UnitIsDeadOrGhost("player") and true or false
     end
     return ((UnitIsDead and UnitIsDead("player")) or (UnitIsGhost and UnitIsGhost("player"))) and true or false
+end
+
+local function GetCachedLeaderboardStats(current)
+    if type(current) == "table" then
+        return tonumber(current.completed) or 0, tonumber(current.total) or 0, tonumber(current.points) or 0
+    end
+    return 0, 0, 0
 end
 
 local function PersistState()
@@ -176,9 +188,24 @@ local function PersistState()
     end
 end
 
+local function SchedulePersistState(immediate)
+    persistDebounceToken = persistDebounceToken + 1
+    if immediate or not C_Timer or not C_Timer.After then
+        PersistState()
+        return
+    end
+
+    local token = persistDebounceToken
+    C_Timer.After(PERSIST_DEBOUNCE_SECONDS, function()
+        if token == persistDebounceToken then
+            PersistState()
+        end
+    end)
+end
+
 local function OnTableChanged(key, newData)
     StoreRow(key, newData)
-    PersistState()
+    SchedulePersistState(false)
 end
 
 --- Old "Name-Realm" row key used before switching to UnitGUID; migrate once to the GUID key.
@@ -230,7 +257,7 @@ local function MigrateLegacyLeaderboardKey()
         end)
     end
 
-    PersistState()
+    SchedulePersistState(true)
 end
 
 function Sync:GetDatabase()
@@ -305,6 +332,8 @@ function Sync:Initialize()
 
     MigrateLegacyLeaderboardKey()
 
+    -- Immediate publish on init (reverted from delayed version for testing).
+    -- Safety is provided by skipHeavyStats in PublishLocal/BuildLocalRow when Initializing is true.
     self:PublishLocal("init")
     C_Timer.After(5, function()
         if Sync.SyncPeers then
@@ -320,13 +349,17 @@ function Sync:BuildLocalRow(options)
         return nil
     end
 
-    local completed, total = 0, 0
-    if addon.AchievementCount then
+    local current = options.currentRow
+    if options.skipHeavyStats and type(current) ~= "table" then
+        return nil
+    end
+    local completed, total, points = GetCachedLeaderboardStats(current)
+    local allowHeavyStats = not options.skipHeavyStats and not (addon and addon.Initializing)
+    if allowHeavyStats and addon.AchievementCount then
         completed, total = addon.AchievementCount()
     end
 
-    local points = 0
-    if addon.GetTotalPoints then
+    if allowHeavyStats and addon.GetTotalPoints then
         points = addon.GetTotalPoints()
     end
 
@@ -383,6 +416,12 @@ function Sync:PublishLocal(reason)
     local buildOpts = {
         offline = (reason == "PLAYER_LOGOUT"),
         publishReason = reason,
+        currentRow = current,
+        -- Init/login publishes are lightweight presence beacons only.
+        -- They must never call AchievementCount/GetTotalPoints because those
+        -- can exceed the script time limit during/after PLAYER_LOGIN on large catalogs.
+        -- The 90-second periodic ticker will publish a full-stats row later.
+        skipHeavyStats = (reason == "init" or reason == "login"),
     }
     if reason == "PLAYER_DEAD" then
         buildOpts.dead = true
@@ -402,7 +441,7 @@ function Sync:PublishLocal(reason)
     end)
     if ok and success then
         StoreRow(key, row)
-        PersistState()
+        SchedulePersistState(reason == "PLAYER_LOGOUT" or reason == "PLAYER_DEAD")
         pcall(function()
             LibP2PDB:BroadcastKey(self.db, TABLE_NAME, key)
         end)
@@ -428,5 +467,5 @@ function Sync:SyncPeers()
 end
 
 function Sync:Persist()
-    PersistState()
+    SchedulePersistState(true)
 end

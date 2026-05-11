@@ -11,8 +11,152 @@ local GetRealmName = GetRealmName
 local Leaderboard = addon.Leaderboard or {}
 addon.Leaderboard = Leaderboard
 
--- Periodic dashboard leaderboard rebuild while tab is visible (does not bypass sync/data; pairs with paused instant refresh).
+-- Periodic full dashboard leaderboard rebuild while tab is visible.
+-- This serves as the batch refresh timer for Option B (pause instant peer-driven rebuilds).
+-- Leaderboard can be up to ~60s out of date while viewing, with one rebuild hitch per cycle.
 local LEADERBOARD_VIEW_UI_REFRESH_SEC = 60
+local LEADERBOARD_DASHBOARD_REFRESH_DEBOUNCE_SEC = 0.35
+local dashboardRefreshToken = 0
+
+-- =============================================================================
+-- OPTION A: INCREMENTAL / DIRTY-ROW UPDATE PLAN (FUTURE WORK)
+-- =============================================================================
+-- Goal
+--   Replace the current Option B 60-second full-rebuild ticker with targeted,
+--   near-zero-cost updates that only touch the row frames whose underlying
+--   player data actually changed. This eliminates the periodic hitch entirely
+--   while keeping the leaderboard near real-time for visible rows.
+--
+-- Why we are not doing this yet (May 2026)
+--   Current combination (Option B pause + 500-row cap + data caching) already
+--   feels "very responsive and snappy". We want to validate real-world usage
+--   and the "Top N of M" UX before investing in the more intrusive incremental
+--   path. This plan is recorded here so we can return to it quickly later.
+--
+-- Current State (what Option A builds on)
+--   - LeaderboardData.lua: full sort + LEADERBOARD_MAX_DISPLAY_ROWS=500 cap
+--     with totalUntruncated attached to the returned table.
+--   - Leaderboard.lua: QueueDashboardLeaderboardRefresh() is a no-op while
+--     leaderboard tab visible; 60s ticker does full RefreshDashboard(true).
+--   - StoreRow() calls Data:Invalidate() + Leaderboard:Refresh().
+--   - Dashboard.lua: BuildDashboardLeaderboardRows() creates/reuses rows in
+--     DASHBOARD.leaderboardRows[], each row has .rowData, .playerName, cells[].
+--   - Pre-computed display strings (_displayClassPortrait, _displayAchievementColor)
+--     already live on row data objects.
+--   - PauseDashboardRebuildWhileLeaderboardTabVisible() guard exists.
+--
+-- High-Level Approach
+--   1. Track "dirty" player keys instead of forcing full rebuilds on every peer
+--      broadcast.
+--   2. Maintain a cheap reverse lookup (playerKey -> row frame or index) so we
+--      can locate the exact row that needs updating.
+--   3. Implement a lightweight UpdateLeaderboardRow(key) that re-binds only the
+--      changed cells on an existing row (re-using the same SetLeaderboardCell,
+--      faction texture, color, tooltip, etc. logic).
+--   4. On new rows that enter the visible set (or deletions), fall back to a
+--      single full rebuild (rare under normal operation with the 500 cap).
+--   5. The 60 s ticker becomes a pure safety net / no-op.
+--
+-- Detailed Implementation Steps (do in order)
+--   1. Add dirty tracking
+--      - local dirtyLeaderboardKeys = {}   -- set: key -> true
+--      - In StoreRow() (LeaderboardSync.lua), after Invalidate(), do:
+--          dirtyLeaderboardKeys[row.key] = true
+--          -- Do NOT call Leaderboard:Refresh() here anymore (or make it conditional)
+--
+--   2. Create reverse lookup on rebuild
+--      - In BuildDashboardLeaderboardRows() (or a new EnsureLeaderboardRowMap()),
+--        build a transient map: DASHBOARD.leaderboardRowByKey = { [key] = rowFrame }
+--        This is cheap (max 500 entries) and only rebuilt on full rebuilds.
+--
+--   3. Implement the core incremental function
+--      local function UpdateLeaderboardRow(playerKey)
+--        local row = DASHBOARD.leaderboardRowByKey and DASHBOARD.leaderboardRowByKey[playerKey]
+--        if not row or not row:IsShown() then return false end
+--
+--        local lb = addon.Leaderboard
+--        -- Re-fetch the latest rowData for this key (from cached GetRows or direct)
+--        local latest = ... -- obtain from Leaderboard.Data or a new GetRowByKey helper
+--        if not latest then return false end
+--
+--        -- Re-bind using the exact same logic as the classic path, but targeted:
+--        --   - name, level, class portrait (use _displayClassPortrait if present)
+--        --   - faction textures (compare to row._hcaLbFaction to avoid redundant sets)
+--        --   - selfFound icon, achievement text with color code (_displayAchievementColor)
+--        --   - lastSeenText
+--        --   - tooltipTitle / tooltipLines
+--        --   - alpha / offline state
+--        -- All of this already exists in BuildDashboardLeaderboardRows; extract a
+--        -- helper BindLeaderboardRowData(row, rowData, localCharacterKey, viewerGuild) if needed.
+--
+--        row.rowData = latest
+--        -- ... perform the SetLeaderboardCell / texture / alpha updates ...
+--        return true
+--      end
+--
+--   4. Wire dirty application
+--      - Add a new exported function Leaderboard:ApplyPendingUpdates()
+--        that iterates dirtyLeaderboardKeys, calls UpdateLeaderboardRow(k) for each,
+--        then clears the set.
+--      - Call it from:
+--          - The existing 60 s ticker (now becomes a cheap "apply dirty" pass)
+--          - Any place that currently does RefreshDashboard(true) while viewing
+--            (make it conditional: if dirty set is small, use incremental; else full)
+--
+--   5. Handle edge cases that still need a full rebuild
+--      - New player enters the top 500 after sort (rank changes for many rows)
+--      - Player drops out of top 500
+--      - Scope change (guild/realm/dead filters)
+--      - Sort column change (different ordering)
+--      - Manual refresh / explicit force
+--      Detection: keep a "lastKnownCount" or simply fall back to full rebuild
+--      if any UpdateLeaderboardRow returns false (row not found).
+--
+--   6. Update the 60 s ticker
+--      - Change from addon.RefreshDashboard(true) to Leaderboard:ApplyPendingUpdates()
+--        (or keep a very cheap safety rebuild every 5–10 minutes).
+--
+--   7. Cleanup & safety
+--      - On tab hide or scope change, clear dirtyLeaderboardKeys.
+--      - Add a small size guard: if #dirty > 50 then do a full rebuild instead.
+--      - Preserve the existing render cache (_hcaLbCellText, _hcaLbCellColor, etc.)
+--        so incremental sets are still cheap.
+--
+-- Integration with 500 Cap
+--   Because we already truncate to 500 after accurate sort, the reverse map never
+--   exceeds 500 entries and linear scans (if we choose not to maintain a map) are
+--   trivial. Option A becomes dramatically cheaper with the cap in place.
+--
+-- Expected Outcome After Implementation
+--   - Memory stays flat after first leaderboard open.
+--   - CPU while viewing leaderboard stays near baseline (6–10 ms) even with
+--     constant peer broadcasts.
+--   - Updates to any visible row appear almost instantly.
+--   - One full rebuild only on explicit user actions or rare structural changes.
+--   - The "Top 500 of X" label and all other current optimizations remain.
+--
+-- Rollback Strategy
+--   - Remove dirtyLeaderboardKeys and ApplyPendingUpdates.
+--   - Restore the 60 s full-rebuild ticker and the original Refresh path in StoreRow.
+--   - The 500 cap and Option B pause can stay or be removed independently.
+--
+-- Testing Checklist (when we implement)
+--   [ ] Peer earns achievement → only that row updates, no hitch
+--   [ ] New high-score player appears in top 500 → full rebuild once, then incremental
+--   [ ] Scrolling while peers update → no frame drops
+--   [ ] Switch sort column → one full rebuild, then incremental again
+--   [ ] Large guild (400 players) + many broadcasts → steady low CPU
+--   [ ] Toggle leaderboard tab on/off → no leaks or stale dirty keys
+--
+-- Future Enhancements (optional, post-Option A)
+--   - Virtual scrolling on top of incremental (if we ever remove the 500 cap)
+--   - Delta compression on LibP2P row diffs to reduce network chatter
+--   - "Find Me" button that scrolls to your row using the key→row map
+--
+-- This plan is intentionally verbose so that when we return to it the implementation
+-- work is mechanical and low-risk. All the heavy lifting (caching, pre-computed
+-- strings, render caching, 500 cap) is already done.
+-- =============================================================================
 
 -- English display + sync — derived from Blizzard class index (UnitClass third return) when known.
 local CLASS_ID_TO_ENGLISH = {
@@ -74,6 +218,19 @@ local DEFAULT_SCOPE = {
     dead = false,
 }
 
+local function QueueDashboardLeaderboardRefresh()
+    local df = addon and addon.DashboardFrame
+    if not (df and df:IsShown() and df.SelectedTabKey == "leaderboard" and addon.RefreshDashboard) then
+        return
+    end
+    -- When the leaderboard tab is visible we skip forced rebuilds on peer updates.
+    -- StoreRow still calls Invalidate() so the data model stays correct.
+    -- A full rebuild occurs periodically via the 60s leaderboardUIViewTicker
+    -- (or immediately on scope changes / manual refresh via direct RefreshDashboard(true)).
+    -- This eliminates the "every few seconds" full-rebuild thrashing while viewing.
+    return
+end
+
 local function EnsureRootDB()
     if type(HardcoreAchievementsDB) ~= "table" then
         HardcoreAchievementsDB = {}
@@ -104,6 +261,9 @@ end
 function Leaderboard:SetScopeValue(key, enabled)
     local scope = self:GetScope()
     scope[key] = enabled and true or false
+    if self.Data and self.Data.Invalidate then
+        self.Data:Invalidate()
+    end
     if self.UI and self.UI.Refresh then
         self.UI:Refresh()
     end
@@ -116,6 +276,7 @@ function Leaderboard:Refresh()
     if self.UI and self.UI.Refresh then
         self.UI:Refresh()
     end
+    QueueDashboardLeaderboardRefresh()
 end
 
 function Leaderboard:Toggle()
@@ -214,6 +375,8 @@ function Leaderboard:Initialize()
     self.leaderboardUIViewTicker = C_Timer.NewTicker(LEADERBOARD_VIEW_UI_REFRESH_SEC, function()
         local df = addon.DashboardFrame
         if df and df:IsShown() and df.SelectedTabKey == "leaderboard" and addon.RefreshDashboard then
+            -- Full rebuild every 60s while viewing (batch refresh for Option B).
+            -- Accepts one periodic hitch instead of many small ones from peer updates.
             addon.RefreshDashboard(true)
         end
     end)

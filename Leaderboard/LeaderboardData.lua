@@ -26,8 +26,78 @@ local STALE_ROW_SECONDS = 7 * 86400
 local PRUNE_COOLDOWN_SECONDS = 120
 local lastPruneAt = 0
 
+-- Hard cap on displayed leaderboard rows after accurate sorting.
+-- Keeps memory/CPU bounded for very large scopes (World) while still showing
+-- the true top N for any sort column. Guild/Realm scopes usually stay under this.
+local LEADERBOARD_MAX_DISPLAY_ROWS = 500
+
+-- Small duplicated token table + formatter so we can pre-compute the expensive portrait string once per row.
+-- This avoids calling Dashboard.LeaderboardClassCellWithPortrait (which does string_format + path concat) on every rebuild.
+local LEADERBOARD_RACE_PORTRAIT_TOKEN = {
+  [1] = "Human",
+  [2] = "Orc",
+  [3] = "Dwarf",
+  [4] = "Nightelf",
+  [5] = "Undead",
+  [6] = "Tauren",
+  [7] = "Gnome",
+  [8] = "Troll",
+  [10] = "Bloodelf",
+  [11] = "Draenei",
+}
+
+local function FormatClassPortrait(classText, raceId, sex)
+  local rid = tonumber(raceId)
+  local sx = tonumber(sex)
+  if not sx or (sx ~= 2 and sx ~= 3) then
+    sx = 2
+  end
+  local token = rid and LEADERBOARD_RACE_PORTRAIT_TOKEN[rid]
+  if not token then
+    return tostring(classText or "")
+  end
+  local gender = (sx == 3) and "Female" or "Male"
+  local path = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_Character_" .. token .. "_" .. gender .. ".PNG"
+  return string.format("|T%s:16:16:0:-1|t %s", path, tostring(classText or ""))
+end
+
+local function GetLeaderboardAchievementColorCode(completed, total)
+  if not total or total == 0 then
+    return "9d9d9d"
+  end
+  local percentage = (completed or 0) / total * 100
+  if percentage == 0 then
+    return "9d9d9d"
+  elseif percentage > 0 and percentage < 20 then
+    return "ffffff"
+  elseif percentage >= 20 and percentage < 40 then
+    return "1eff00"
+  elseif percentage >= 40 and percentage < 60 then
+    return "0070dd"
+  elseif percentage >= 60 and percentage < 80 then
+    return "a335ee"
+  end
+  return "ff8000"
+end
+local dataVersion = 0
+local cachedBaseRows
+local cachedBaseVersion
+local cachedBaseScopeSignature
+local cachedSortedRows
+local cachedSortSignature
+local cachedRankLabel
+local cachedRankVersion
+local cachedRankScopeSignature
+
 local function Now()
     return (GetServerTime and GetServerTime()) or time()
+end
+
+function Data:Invalidate()
+    dataVersion = dataVersion + 1
+    cachedBaseRows = nil
+    cachedSortedRows = nil
+    cachedRankLabel = nil
 end
 
 local function FormatAgo(seconds)
@@ -103,6 +173,7 @@ local function PruneStaleLeaderboardRows()
     if sync and sync.Persist then
         sync:Persist()
     end
+    Data:Invalidate()
 end
 
 local function ScopeHasFilters(scope)
@@ -117,14 +188,35 @@ local function GetPlayerGuildNameForScope()
     return g
 end
 
-local function InScope(row, scope)
+local function BuildScopeContext()
+    return {
+        guild = GetPlayerGuildNameForScope(),
+        realm = GetRealmName() or "",
+        faction = UnitFactionGroup("player") or "",
+    }
+end
+
+local function ScopeSignature(scope, context)
+    context = context or BuildScopeContext()
+    return table.concat({
+        scope and scope.guild and "1" or "0",
+        scope and scope.realm and "1" or "0",
+        scope and scope.faction and "1" or "0",
+        scope and scope.dead and "1" or "0",
+        context.guild or "",
+        context.realm or "",
+        context.faction or "",
+    }, "|")
+end
+
+local function InScope(row, scope, context)
     if not ScopeHasFilters(scope) then
         return true
     end
 
     -- Guild filter only applies when the viewer is in a guild; otherwise it would match every guildless row.
     if scope.guild then
-        local playerGuild = GetPlayerGuildNameForScope()
+        local playerGuild = context and context.guild or GetPlayerGuildNameForScope()
         if playerGuild then
             local rowGuild = (type(row.guild) == "string" and row.guild ~= "") and row.guild or ""
             if rowGuild ~= playerGuild then
@@ -132,10 +224,10 @@ local function InScope(row, scope)
             end
         end
     end
-    if scope.realm and (row.realm or "") ~= (GetRealmName() or "") then
+    if scope.realm and (row.realm or "") ~= ((context and context.realm) or (GetRealmName() or "")) then
         return false
     end
-    if scope.faction and (row.faction or "") ~= (UnitFactionGroup("player") or "") then
+    if scope.faction and (row.faction or "") ~= ((context and context.faction) or (UnitFactionGroup("player") or "")) then
         return false
     end
     if scope.dead and row.dead ~= true then
@@ -146,20 +238,19 @@ end
 
 local function ValueForSort(row, key)
     if key == "updated" then
-        return tonumber(row.lastSeenSec) or math.huge
+        return row._sortUpdated or tonumber(row.lastSeenSec) or math.huge
     elseif key == "class" then
-        -- Prefer English from classId; fallback to synced class string (legacy rows).
-        local label = row.class or "Unknown"
-        if Leaderboard.GetEnglishClassName then
-            label = Leaderboard.GetEnglishClassName(row.classId, label)
-        end
-        return tostring(label):lower()
-    elseif key == "name" or key == "faction" or key == "version" then
-        return tostring(row[key] or ""):lower()
+        return row._sortClass or ""
+    elseif key == "name" then
+        return row._sortName or tostring(row.name or ""):lower()
+    elseif key == "faction" then
+        return row._sortFaction or tostring(row.faction or ""):lower()
+    elseif key == "version" then
+        return row._sortVersion or tostring(row.version or ""):lower()
     elseif key == "achievements" then
-        return tonumber(row.points) or 0
+        return row._sortAchievements or tonumber(row.points) or 0
     elseif key == "selfFound" then
-        return row.selfFound and 1 or 0
+        return row._sortSelfFound or (row.selfFound and 1 or 0)
     end
     return tonumber(row[key]) or 0
 end
@@ -194,28 +285,52 @@ local function SortRows(rows, sortState)
         if (a.level or 0) ~= (b.level or 0) then
             return (a.level or 0) > (b.level or 0)
         end
-        return tostring(a.name or ""):lower() < tostring(b.name or ""):lower()
+        return (a._sortName or tostring(a.name or ""):lower()) < (b._sortName or tostring(b.name or ""):lower())
     end)
 end
 
-function Data:GetRows(sortState)
-    PruneStaleLeaderboardRows()
+local function UpdateRelativeTimes(rows, now)
+    if not rows then
+        return
+    end
+    for i = 1, #rows do
+        local row = rows[i]
+        local lastSeenSec = math.max(0, now - (tonumber(row.updatedAt) or 0))
+        row.lastSeenSec = lastSeenSec
+        row.lastSeenText = FormatAgo(lastSeenSec)
+        row.online = (row.offline ~= true) and (lastSeenSec <= RECENT_SECONDS)
+        row._sortUpdated = lastSeenSec
+    end
+end
 
-    local db = Leaderboard:GetDB()
-    local scope = Leaderboard:GetScope()
-    local rows = {}
+local function BuildBaseRows(scope, scopeSignature, context)
+    if cachedBaseRows and cachedBaseVersion == dataVersion and cachedBaseScopeSignature == scopeSignature then
+        UpdateRelativeTimes(cachedBaseRows, Now())
+        return cachedBaseRows
+    end
+
     local now = Now()
+    local db = Leaderboard:GetDB()
+    local rows = {}
 
     for key, row in pairs(db.rows or {}) do
-        if type(row) == "table" and InScope(row, scope) then
+        if type(row) == "table" and InScope(row, scope, context) then
             local updatedAt = tonumber(row.updatedAt) or 0
             local lastSeenSec = math.max(0, now - updatedAt)
+            local classLabel = row.class or "Unknown"
+            if Leaderboard.GetEnglishClassName then
+                classLabel = Leaderboard.GetEnglishClassName(row.classId, classLabel)
+            end
+            local name = row.name or key
+            local faction = row.faction or ""
+            local version = row.version or "0.0.0"
+            local selfFound = row.selfFound == true or row.label == "Self Found"
             rows[#rows + 1] = {
                 key = key,
-                name = row.name or key,
+                name = name,
                 realm = row.realm or "",
                 guild = row.guild or "",
-                faction = row.faction or "",
+                faction = faction,
                 class = row.class or "Unknown",
                 classId = tonumber(row.classId),
                 level = tonumber(row.level) or 0,
@@ -225,19 +340,83 @@ function Data:GetRows(sortState)
                 label = row.label or "",
                 raceId = tonumber(row.raceId),
                 sex = tonumber(row.sex),
-                selfFound = row.selfFound == true or row.label == "Self Found",
+                selfFound = selfFound,
                 dead = row.dead == true,
                 offline = row.offline == true,
-                version = row.version or "0.0.0",
+                version = version,
                 updatedAt = updatedAt,
                 lastSeenSec = lastSeenSec,
                 lastSeenText = FormatAgo(lastSeenSec),
                 online = (row.offline ~= true) and (lastSeenSec <= RECENT_SECONDS),
+                _sortName = tostring(name):lower(),
+                _sortClass = tostring(classLabel):lower(),
+                _sortFaction = tostring(faction):lower(),
+                _sortVersion = tostring(version):lower(),
+                _sortAchievements = tonumber(row.points) or 0,
+                _sortSelfFound = selfFound and 1 or 0,
+                _sortUpdated = lastSeenSec,
+
+                -- Pre-computed display strings to eliminate repeated string.format + path work in the UI layer.
+                _displayClassPortrait = FormatClassPortrait(classLabel, row.raceId, row.sex),
+                _displayAchievementColor = GetLeaderboardAchievementColorCode(tonumber(row.completed) or 0, tonumber(row.total) or 0),
             }
         end
     end
 
+    cachedBaseRows = rows
+    cachedBaseVersion = dataVersion
+    cachedBaseScopeSignature = scopeSignature
+    cachedSortedRows = nil
+    cachedRankLabel = nil
+    return rows
+end
+
+local function SortSignature(sortState, scopeSignature)
+    sortState = sortState or {}
+    return scopeSignature .. "|" .. tostring(sortState.key or "") .. "|" .. tostring(sortState.asc and 1 or 0)
+end
+
+function Data:GetRows(sortState, opts)
+    opts = opts or {}
+    -- Hot paths (e.g. periodic time-only refresh) can skip prune to avoid even the cheap cooldown check.
+    -- PruneStaleLeaderboardRows already has its own 120s internal cooldown, so this is only for micro-optimization.
+    if not opts.skipPrune then
+        PruneStaleLeaderboardRows()
+    end
+
+    local scope = Leaderboard:GetScope()
+    local context = BuildScopeContext()
+    local scopeSignature = ScopeSignature(scope, context)
+    local baseRows = BuildBaseRows(scope, scopeSignature, context)
+    local sortSignature = SortSignature(sortState, scopeSignature)
+    local sortKey = sortState and sortState.key
+
+    if sortKey and sortKey ~= "updated" and cachedSortedRows and cachedBaseVersion == dataVersion and cachedSortSignature == sortSignature then
+        UpdateRelativeTimes(cachedSortedRows, Now())
+        return cachedSortedRows
+    end
+
+    local rows = {}
+    for i = 1, #baseRows do
+        rows[i] = baseRows[i]
+    end
     SortRows(rows, sortState)
+
+    -- Apply display cap AFTER accurate full sort. This keeps top-N correct for any column
+    -- while bounding UI work and memory for huge scopes. The total is attached so the
+    -- footer can show "Top 500 of 1,234".
+    local total = #rows
+    if LEADERBOARD_MAX_DISPLAY_ROWS > 0 and total > LEADERBOARD_MAX_DISPLAY_ROWS then
+        for i = LEADERBOARD_MAX_DISPLAY_ROWS + 1, total do
+            rows[i] = nil
+        end
+        rows.totalUntruncated = total
+    else
+        rows.totalUntruncated = nil
+    end
+
+    cachedSortedRows = rows
+    cachedSortSignature = sortSignature
     return rows
 end
 
@@ -276,23 +455,23 @@ end
 function Data:GetPointsRankLabel()
     PruneStaleLeaderboardRows()
 
-    local db = Leaderboard:GetDB()
     local scope = Leaderboard:GetScope()
-    local entries = {}
+    local context = BuildScopeContext()
+    local scopeSignature = ScopeSignature(scope, context)
+    if cachedRankLabel and cachedRankVersion == dataVersion and cachedRankScopeSignature == scopeSignature then
+        return cachedRankLabel
+    end
 
-    for key, row in pairs(db.rows or {}) do
-        if type(row) == "table" and InScope(row, scope) then
-            entries[#entries + 1] = {
-                key = key,
-                points = tonumber(row.points) or 0,
-                completed = tonumber(row.completed) or 0,
-                total = tonumber(row.total) or 0,
-                name = tostring(row.name or key),
-            }
-        end
+    local baseRows = BuildBaseRows(scope, scopeSignature, context)
+    local entries = {}
+    for i = 1, #baseRows do
+        entries[i] = baseRows[i]
     end
 
     if #entries == 0 then
+        cachedRankLabel = "—"
+        cachedRankVersion = dataVersion
+        cachedRankScopeSignature = scopeSignature
         return "—"
     end
 
@@ -313,7 +492,7 @@ function Data:GetPointsRankLabel()
         elseif tb > 0 then
             return false
         end
-        return string.lower(a.name) < string.lower(b.name)
+        return (a._sortName or tostring(a.name or ""):lower()) < (b._sortName or tostring(b.name or ""):lower())
     end)
 
     entries[1].rank = 1
@@ -333,18 +512,28 @@ function Data:GetPointsRankLabel()
 
     local myKey = GetLocalCharacterKey()
     if not myKey then
+        cachedRankLabel = "—"
+        cachedRankVersion = dataVersion
+        cachedRankScopeSignature = scopeSignature
         return "—"
     end
 
     for i = 1, #entries do
         if entries[i].key == myKey then
             local r = entries[i].rank
+            cachedRankVersion = dataVersion
+            cachedRankScopeSignature = scopeSignature
             if (countAtRank[r] or 0) >= 2 then
-                return "#T" .. r
+                cachedRankLabel = "#T" .. r
+                return cachedRankLabel
             end
-            return "#" .. r
+            cachedRankLabel = "#" .. r
+            return cachedRankLabel
         end
     end
 
+    cachedRankLabel = "—"
+    cachedRankVersion = dataVersion
+    cachedRankScopeSignature = scopeSignature
     return "—"
 end

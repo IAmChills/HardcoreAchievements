@@ -1097,12 +1097,59 @@ end
 local function SetLeaderboardCell(row, index, text, color)
   local cell = row and row.cells and row.cells[index]
   if not cell then return end
-  cell:SetText(text or "")
-  if color then
-    cell:SetTextColor(color[1], color[2], color[3])
-  else
-    cell:SetTextColor(1, 1, 1)
+  text = text or ""
+  row._hcaLbCellText = row._hcaLbCellText or {}
+  row._hcaLbCellColor = row._hcaLbCellColor or {}
+  local colorKey = color and string_format("%.3f:%.3f:%.3f", color[1] or 1, color[2] or 1, color[3] or 1) or "1:1:1"
+  if row._hcaLbCellText[index] ~= text then
+    row._hcaLbCellText[index] = text
+    cell:SetText(text)
   end
+  if row._hcaLbCellColor[index] ~= colorKey then
+    row._hcaLbCellColor[index] = colorKey
+    if color then
+      cell:SetTextColor(color[1], color[2], color[3])
+    else
+      cell:SetTextColor(1, 1, 1)
+    end
+  end
+end
+
+local function ClearLeaderboardRowRenderCache(row)
+  if not row then return end
+  row._hcaLbCellText = nil
+  row._hcaLbCellColor = nil
+  row._hcaLbFaction = nil
+  row._hcaLbAlpha = nil
+end
+
+local function RefreshDashboardLeaderboardTimes()
+  if not DashboardFrame or not DashboardFrame:IsShown() or not IsLeaderboardTab() then
+    return false
+  end
+  if not DASHBOARD or not DASHBOARD.leaderboardRows then
+    return false
+  end
+  if leaderboardSortState.key == nil or leaderboardSortState.key == "updated" then
+    return false
+  end
+
+  local lb = addon and addon.Leaderboard
+  -- Skip prune on this hot time-only refresh path; prune has its own cooldown and is not needed for "last seen" text updates.
+  local data = lb and lb.Data and lb.Data.GetRows and lb.Data:GetRows(leaderboardSortState, { skipPrune = true }) or {}
+  for i, rowData in ipairs(data) do
+    local row = DASHBOARD.leaderboardRows[i]
+    if not row or not row:IsShown() or row.rowData ~= rowData then
+      return false
+    end
+    local isOffline = not rowData.online
+    if row.isOffline ~= isOffline then
+      return false
+    end
+    local cellColor = isOffline and LEADERBOARD_OFFLINE_COLOR or nil
+    SetLeaderboardCell(row, 7, rowData.lastSeenText or "?", cellColor)
+  end
+  return true
 end
 
 local function UpdateLeaderboardHeaderText()
@@ -1350,10 +1397,27 @@ local function HideAchievementDashboardContent()
   end
 end
 
-local function UpdateLeaderboardPlayersText(count)
+local function UpdateLeaderboardPlayersText(dataOrCount)
   if not DashboardFrame or not DashboardFrame.UseCharacterPanelLabel then return end
   if IsLeaderboardTab() then
-    DashboardFrame.UseCharacterPanelLabel:SetText(string_format("Players: %d", tonumber(count) or 0))
+    local displayed = 0
+    local total = 0
+    if type(dataOrCount) == "table" then
+      displayed = #dataOrCount
+      total = dataOrCount.totalUntruncated or displayed
+    else
+      displayed = tonumber(dataOrCount) or 0
+      total = displayed
+    end
+
+    local label
+    if total > displayed then
+      label = string_format("Top %d of %d", displayed, total)
+    else
+      label = string_format("Players: %d", displayed)
+    end
+    DashboardFrame.UseCharacterPanelLabel:SetText(label)
+
     if DashboardFrame.UseCharacterPanelCheckbox then
       DashboardFrame.UseCharacterPanelCheckbox:Hide()
     end
@@ -1412,17 +1476,26 @@ local function BuildDashboardLeaderboardRows()
       DASHBOARD.leaderboardRows[i] = row
     end
 
-    row:ClearAllPoints()
-    row:SetPoint("TOPLEFT", container, "TOPLEFT", inset, -((i - 1) * (LEADERBOARD_ROW_HEIGHT + 3)) - LEADERBOARD_HEADER_HEIGHT - 8)
-    row:SetWidth(width)
+    local y = -((i - 1) * (LEADERBOARD_ROW_HEIGHT + 3)) - LEADERBOARD_HEADER_HEIGHT - 8
+    if row._hcaLbIndex ~= i or row._hcaLbAnchorY ~= y or row._hcaLbAnchorInset ~= inset then
+      row._hcaLbIndex = i
+      row._hcaLbAnchorY = y
+      row._hcaLbAnchorInset = inset
+      row:ClearAllPoints()
+      row:SetPoint("TOPLEFT", container, "TOPLEFT", inset, y)
+    end
+    if row._hcaLbWidth ~= width then
+      row._hcaLbWidth = width
+      row:SetWidth(width)
+    end
     if row._hcaLbLayW ~= width then
       row._hcaLbLayW = width
       LayoutLeaderboardColumns(row, row.cells, width)
+      row.FactionGlow:ClearAllPoints()
+      row.FactionGlow:SetPoint("CENTER", row.cells[4], "CENTER")
+      row.FactionLogo:ClearAllPoints()
+      row.FactionLogo:SetPoint("CENTER", row.cells[4], "CENTER")
     end
-    row.FactionGlow:ClearAllPoints()
-    row.FactionGlow:SetPoint("CENTER", row.cells[4], "CENTER")
-    row.FactionLogo:ClearAllPoints()
-    row.FactionLogo:SetPoint("CENTER", row.cells[4], "CENTER")
 
     local isOffline = not rowData.online
     local isGuildMember = IsLeaderboardGuildMember(rowData, viewerGuildCached)
@@ -1432,7 +1505,11 @@ local function BuildDashboardLeaderboardRows()
     row.rowData = rowData
     row.playerName = rowData.name
     row.isOffline = isOffline
-    row:SetAlpha(isOffline and 0.75 or 1)
+    local alpha = isOffline and 0.75 or 1
+    if row._hcaLbAlpha ~= alpha then
+      row._hcaLbAlpha = alpha
+      row:SetAlpha(alpha)
+    end
     row.tooltipTitle = rowData.name
     row.tooltipLines = {}
     if rowData.guild ~= "" then
@@ -1465,11 +1542,16 @@ local function BuildDashboardLeaderboardRows()
 
     SetLeaderboardCell(row, 1, name, nameColor)
     SetLeaderboardCell(row, 2, tostring(rowData.level or 0), cellColor)
-    SetLeaderboardCell(row, 3, LeaderboardClassCellWithPortrait(
-      lb and lb.GetEnglishClassName and lb.GetEnglishClassName(rowData.classId, rowData.class) or rowData.class,
-      rowData.raceId,
-      rowData.sex
-    ), cellColor)
+    -- Use pre-computed portrait string from the model when available (avoids repeated path concat + string.format).
+    local classPortrait = rowData._displayClassPortrait
+    if not classPortrait then
+      classPortrait = LeaderboardClassCellWithPortrait(
+        lb and lb.GetEnglishClassName and lb.GetEnglishClassName(rowData.classId, rowData.class) or rowData.class,
+        rowData.raceId,
+        rowData.sex
+      )
+    end
+    SetLeaderboardCell(row, 3, classPortrait, cellColor)
     SetLeaderboardCell(row, 4, "", cellColor)
 
     local factionLogo, factionGlow = GetLeaderboardFactionTextures(rowData.faction)
@@ -1488,10 +1570,13 @@ local function BuildDashboardLeaderboardRows()
       row.FactionLogo:Hide()
     end
     SetLeaderboardCell(row, 5, rowData.selfFound and "|TInterface\\RAIDFRAME\\ReadyCheck-Ready.blp:16:16:0:0|t" or "", cellColor)
-    local colorCode = GetLeaderboardAchievementColor(rowData.completed, rowData.total)
-    local achievementText = string_format("%d pts |cff%s[%d/%d]|r", rowData.points or 0, colorCode, rowData.completed or 0, rowData.total or 0)
+    -- Use cached color code from the model row when present. Falls back to the old color function.
+    local colorCode = rowData._displayAchievementColor or GetLeaderboardAchievementColor(rowData.completed, rowData.total)
+    local achievementText
     if isOffline then
       achievementText = string_format("%d pts [%d/%d]", rowData.points or 0, rowData.completed or 0, rowData.total or 0)
+    else
+      achievementText = string_format("%d pts |cff%s[%d/%d]|r", rowData.points or 0, colorCode, rowData.completed or 0, rowData.total or 0)
     end
     SetLeaderboardCell(row, 6, achievementText, cellColor)
     SetLeaderboardCell(row, 7, rowData.lastSeenText or "?", cellColor)
@@ -1502,6 +1587,7 @@ local function BuildDashboardLeaderboardRows()
   for i = #data + 1, #DASHBOARD.leaderboardRows do
     local row = DASHBOARD.leaderboardRows[i]
     row:Hide()
+    ClearLeaderboardRowRenderCache(row)
     if row.FactionGlow then row.FactionGlow:Hide() end
     if row.FactionLogo then row.FactionLogo:Hide() end
   end
@@ -1511,7 +1597,7 @@ local function BuildDashboardLeaderboardRows()
     DashboardFrame.Scroll:UpdateScrollChildRect()
   end
   SetDashboardFooterControlsForLeaderboard(true, #data)
-  UpdateLeaderboardPlayersText(#data)
+  UpdateLeaderboardPlayersText(data)
 end
 
 SetDashboardFooterControlsForLeaderboard = function(enabled, playerCount)
@@ -1560,9 +1646,6 @@ SetDashboardFooterControlsForLeaderboard = function(enabled, playerCount)
       checkbox:SetScript("OnClick", function(self)
         if lb and lb.SetScopeValue then
           lb:SetScopeValue(key, self:GetChecked())
-        end
-        if DASHBOARD and DASHBOARD.Rebuild then
-          DASHBOARD:Rebuild()
         end
       end)
       if checkbox.text then
@@ -4172,7 +4255,9 @@ local function BuildDashboardFrame()
         DASHBOARD.Content = DashboardFrame.Content
       end
       SyncContentWidth()
-      ApplyFilter()
+      if not IsLeaderboardTab() then
+        ApplyFilter()
+      end
       UpdateDashboardMultiplierText() -- Update multiplier text when frame is shown
       -- Sync UseCharacterPanel checkbox with current setting (in case it was changed elsewhere)
       if DashboardFrame.UseCharacterPanelCheckbox and (addon and addon.GetSetting) then
@@ -4184,8 +4269,16 @@ local function BuildDashboardFrame()
     if DashboardFrame.Scroll then
       DashboardFrame.Scroll:SetScript("OnSizeChanged", function(self)
         self:UpdateScrollChildRect()
+        local oldWidth = DashboardFrame and DashboardFrame.Content and DashboardFrame.Content:GetWidth()
         SyncContentWidth()
-        ApplyFilter()
+        if IsLeaderboardTab() then
+          local newWidth = DashboardFrame and DashboardFrame.Content and DashboardFrame.Content:GetWidth()
+          if oldWidth ~= newWidth and DASHBOARD and DASHBOARD.Rebuild then
+            DASHBOARD:Rebuild()
+          end
+        else
+          ApplyFilter()
+        end
       end)
     end
     
@@ -4399,6 +4492,12 @@ if addon then
   function addon.RefreshDashboard(force)
     if not (DashboardFrame and DashboardFrame:IsShown() and DASHBOARD and DASHBOARD.Rebuild) then
       return
+    end
+    if force == "leaderboardTimes" then
+      if RefreshDashboardLeaderboardTimes() then
+        return
+      end
+      force = true
     end
     if force ~= true and PauseDashboardRebuildWhileLeaderboardTabVisible() then
       return
