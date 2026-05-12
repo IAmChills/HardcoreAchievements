@@ -250,12 +250,11 @@ local function CreateInitialOptionsFrame()
     doneBtn:SetPoint("BOTTOM", frame, "BOTTOM", 0, 16)
     doneBtn:SetText("Save and Close")
     doneBtn:SetScript("OnClick", function()
-        if type(GetCharDB) == "function" then
-            local _, cdb = GetCharDB()
-            if cdb then
-                cdb.settings = cdb.settings or {}
-                cdb.settings.initialSetupDone = true
-            end
+        -- Mark initial setup as done account-wide (one-time per account)
+        local db = HardcoreAchievementsDB
+        if db then
+            db.settings = db.settings or {}
+            db.settings.initialSetupDone = true
         end
         frame:Hide()
         local opts = addon and addon.OptionsPanel
@@ -269,11 +268,11 @@ local function CreateInitialOptionsFrame()
 end
 
 local function ShowInitialOptionsIfNeeded()
-    if type(GetCharDB) ~= "function" then return end
-    local _, cdb = GetCharDB()
-    if not cdb then return end
-    cdb.settings = cdb.settings or {}
-    if cdb.settings.initialSetupDone == true then return end
+    -- Check account-wide flag (db.settings) so the initial setup only shows once per account
+    local db = HardcoreAchievementsDB
+    if db and db.settings and db.settings.initialSetupDone == true then
+        return
+    end
     local frame = CreateInitialOptionsFrame()
     frame:Show()
 end
