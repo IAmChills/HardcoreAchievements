@@ -154,8 +154,10 @@ local function StoreRow(key, row)
     if Leaderboard.Data and Leaderboard.Data.Invalidate then
         Leaderboard.Data:Invalidate()
     end
-    if Leaderboard.Refresh then
-        Leaderboard:Refresh()
+    -- Option A: mark dirty for incremental update instead of full refresh.
+    -- Full rebuilds still happen on user actions (scope/search/sort) and safety ticker.
+    if Leaderboard.MarkDirty then
+        Leaderboard:MarkDirty(key)
     end
 end
 

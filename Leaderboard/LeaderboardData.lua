@@ -582,3 +582,9 @@ function Data:GetPointsRankLabel()
     cachedRankScopeSignature = rankSignature
     return "—"
 end
+
+-- Lightweight alias for callers that expect a cached variant (minimap tooltip, etc.).
+-- GetPointsRankLabel is already internally cached and safe to call frequently.
+function Data:GetPointsRankLabelCached()
+    return Data:GetPointsRankLabel()
+end

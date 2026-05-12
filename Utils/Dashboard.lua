@@ -1432,6 +1432,10 @@ local function HideLeaderboardUI()
     end
     DashboardFrame.LeaderboardSearchBox:Hide()
   end
+  -- Option A: clear any pending dirty updates when leaving the tab
+  if addon and addon.Leaderboard and addon.Leaderboard.ClearDirty then
+    addon.Leaderboard:ClearDirty()
+  end
   if DASHBOARD and DASHBOARD.leaderboardRows then
     for _, row in ipairs(DASHBOARD.leaderboardRows) do
       row:Hide()
@@ -1489,6 +1493,162 @@ end
 
 local SetDashboardFooterControlsForLeaderboard
 
+-- =============================================================================
+-- BindLeaderboardRowData: shared data-binding logic for a single leaderboard row.
+-- Used by both the full rebuild path and the Option A incremental UpdateLeaderboardRow.
+-- Does NOT handle positioning, width, or layout (those stay in the full rebuild).
+-- =============================================================================
+local function BindLeaderboardRowData(row, rowData, localCharacterKey, viewerGuildCached, lb)
+  if not row or not rowData then return end
+
+  local isOffline = not rowData.online
+  local isGuildMember = IsLeaderboardGuildMember(rowData, viewerGuildCached)
+  local cellColor = isOffline and LEADERBOARD_OFFLINE_COLOR or nil
+  local nameColor = cellColor
+
+  row.rowData = rowData
+  row.playerName = rowData.name
+  row.isOffline = isOffline
+  local alpha = isOffline and 0.75 or 1
+  if row._hcaLbAlpha ~= alpha then
+    row._hcaLbAlpha = alpha
+    row:SetAlpha(alpha)
+  end
+
+  row.tooltipTitle = rowData.name
+  row.tooltipLines = {}
+  if rowData.guild ~= "" then
+    row.tooltipLines[#row.tooltipLines + 1] = GetLeaderboardTooltipLine("Guild", rowData.guild)
+  end
+  if rowData.realm ~= "" then
+    row.tooltipLines[#row.tooltipLines + 1] = GetLeaderboardTooltipLine("Realm", rowData.realm)
+  end
+  local ver = rowData.version
+  if (not ver or ver == "" or ver == "0.0.0") and localCharacterKey and rowData.key == localCharacterKey then
+    ver = (lb and lb.GetAddOnVersionString and lb.GetAddOnVersionString()) or "?"
+  elseif not ver or ver == "" or ver == "0.0.0" then
+    ver = "?"
+  end
+  row.tooltipLines[#row.tooltipLines + 1] = " "
+  row.tooltipLines[#row.tooltipLines + 1] = GetLeaderboardTooltipLine("Version", ver)
+
+  local name = rowData.name
+  if rowData.dead then
+    name = "|TInterface\\TargetingFrame\\UI-RaidTargetingIcon_8:12:12:0:0|t " .. name
+    nameColor = LEADERBOARD_DEAD_COLOR
+  elseif isOffline then
+    nameColor = LEADERBOARD_OFFLINE_COLOR
+  elseif localCharacterKey and rowData.key == localCharacterKey then
+    local r, g, b = GetPlayerClassColor()
+    nameColor = { r, g, b }
+  elseif isGuildMember then
+    nameColor = LEADERBOARD_GUILD_BRIGHT_GREEN
+  end
+
+  SetLeaderboardCell(row, 1, name, nameColor)
+  SetLeaderboardCell(row, 2, tostring(rowData.level or 0), cellColor)
+
+  -- Use pre-computed portrait string from the model when available.
+  local classPortrait = rowData._displayClassPortrait
+  if not classPortrait then
+    classPortrait = LeaderboardClassCellWithPortrait(
+      lb and lb.GetEnglishClassName and lb.GetEnglishClassName(rowData.classId, rowData.class) or rowData.class,
+      rowData.raceId,
+      rowData.sex
+    )
+  end
+  SetLeaderboardCell(row, 3, classPortrait, cellColor)
+  SetLeaderboardCell(row, 4, "", cellColor)
+
+  local factionLogo, factionGlow = GetLeaderboardFactionTextures(rowData.faction)
+  local fs = rowData.faction or ""
+  if factionLogo and factionGlow then
+    if fs ~= row._hcaLbFaction then
+      row._hcaLbFaction = fs
+      row.FactionGlow:SetTexture(factionGlow)
+      row.FactionLogo:SetTexture(factionLogo)
+    end
+    row.FactionGlow:Show()
+    row.FactionLogo:Show()
+  else
+    row._hcaLbFaction = fs
+    row.FactionGlow:Hide()
+    row.FactionLogo:Hide()
+  end
+
+  SetLeaderboardCell(row, 5, rowData.selfFound and "|TInterface\\RAIDFRAME\\ReadyCheck-Ready.blp:16:16:0:0|t" or "", cellColor)
+
+  -- Use cached color code from the model row when present.
+  local colorCode = rowData._displayAchievementColor or GetLeaderboardAchievementColor(rowData.completed, rowData.total)
+  local achievementText
+  if isOffline then
+    achievementText = string_format("%d pts [%d/%d]", rowData.points or 0, rowData.completed or 0, rowData.total or 0)
+  else
+    achievementText = string_format("%d pts |cff%s[%d/%d]|r", rowData.points or 0, colorCode, rowData.completed or 0, rowData.total or 0)
+  end
+  SetLeaderboardCell(row, 6, achievementText, cellColor)
+  SetLeaderboardCell(row, 7, rowData.lastSeenText or "?", cellColor)
+
+  row:Show()
+end
+
+-- =============================================================================
+-- Option A incremental update helpers
+-- =============================================================================
+local function UpdateLeaderboardRow(playerKey)
+  if not playerKey then return false end
+  local map = DASHBOARD.leaderboardRowByKey
+  local row = map and map[playerKey]
+  if not row or not row:IsShown() then return false end
+
+  local lb = addon and addon.Leaderboard
+  -- Prefer a dedicated lookup if added to Data later; fallback to scanning cached base rows.
+  local data = nil
+  if lb and lb.Data and lb.Data.GetRowByKey then
+    data = lb.Data:GetRowByKey(playerKey)
+  end
+
+  if not data then
+    return false -- Row no longer matches current filter/scope → need full rebuild
+  end
+
+  local localCharacterKey = GetLeaderboardLocalCharacterKey()
+  local viewerGuildCached = select(1, GetGuildInfo("player"))
+  viewerGuildCached = (type(viewerGuildCached) == "string" and viewerGuildCached ~= "") and viewerGuildCached or ""
+
+  BindLeaderboardRowData(row, data, localCharacterKey, viewerGuildCached, lb)
+  return true
+end
+
+function DASHBOARD.ApplyPendingLeaderboardUpdates()
+  local lb = addon and addon.Leaderboard
+  if not lb or not lb.HasDirty or not lb:HasDirty() then return end
+
+  local dirtyCount = lb.GetDirtyCount and lb:GetDirtyCount() or 0
+  -- Safety valve: too many dirty rows or no reverse map → full rebuild
+  if dirtyCount > 50 or not DASHBOARD.leaderboardRowByKey then
+    if lb.ClearDirty then lb:ClearDirty() end
+    if addon.RefreshDashboard then addon.RefreshDashboard(true) end
+    return
+  end
+
+  local anyFailed = false
+  for key in lb:IterateDirty() do
+    if not UpdateLeaderboardRow(key) then
+      anyFailed = true
+      break
+    end
+  end
+
+  if lb.ClearDirty then lb:ClearDirty() end
+
+  if anyFailed then
+    if addon.RefreshDashboard then addon.RefreshDashboard(true) end
+  else
+    QueueLeaderboardRankCaptionUpdate()
+  end
+end
+
 local function BuildDashboardLeaderboardRows()
   if not DashboardFrame or not DashboardFrame.Content then return end
   EnsureDashboardLeaderboardUI()
@@ -1544,6 +1704,9 @@ local function BuildDashboardLeaderboardRows()
   local viewerGuildCached = select(1, GetGuildInfo("player"))
   viewerGuildCached = (type(viewerGuildCached) == "string" and viewerGuildCached ~= "") and viewerGuildCached or ""
 
+  -- Build the reverse map for Option A incremental updates (key -> row frame).
+  DASHBOARD.leaderboardRowByKey = DASHBOARD.leaderboardRowByKey or {}
+
   for i, rowData in ipairs(data) do
     local row = DASHBOARD.leaderboardRows[i]
     if not row then
@@ -1572,91 +1735,12 @@ local function BuildDashboardLeaderboardRows()
       row.FactionLogo:SetPoint("CENTER", row.cells[4], "CENTER")
     end
 
-    local isOffline = not rowData.online
-    local isGuildMember = IsLeaderboardGuildMember(rowData, viewerGuildCached)
-    local cellColor = isOffline and LEADERBOARD_OFFLINE_COLOR or nil
-    local nameColor = cellColor
-
-    row.rowData = rowData
-    row.playerName = rowData.name
-    row.isOffline = isOffline
-    local alpha = isOffline and 0.75 or 1
-    if row._hcaLbAlpha ~= alpha then
-      row._hcaLbAlpha = alpha
-      row:SetAlpha(alpha)
-    end
-    row.tooltipTitle = rowData.name
-    row.tooltipLines = {}
-    if rowData.guild ~= "" then
-      row.tooltipLines[#row.tooltipLines + 1] = GetLeaderboardTooltipLine("Guild", rowData.guild)
-    end
-    if rowData.realm ~= "" then
-      row.tooltipLines[#row.tooltipLines + 1] = GetLeaderboardTooltipLine("Realm", rowData.realm)
-    end
-    local ver = rowData.version
-    if (not ver or ver == "" or ver == "0.0.0") and localCharacterKey and rowData.key == localCharacterKey then
-      ver = (lb and lb.GetAddOnVersionString and lb.GetAddOnVersionString()) or "?"
-    elseif not ver or ver == "" or ver == "0.0.0" then
-      ver = "?"
-    end
-    row.tooltipLines[#row.tooltipLines + 1] = " "
-    row.tooltipLines[#row.tooltipLines + 1] = GetLeaderboardTooltipLine("Version", ver)
-
-    local name = rowData.name
-    if rowData.dead then
-      name = "|TInterface\\TargetingFrame\\UI-RaidTargetingIcon_8:12:12:0:0|t " .. name
-      nameColor = LEADERBOARD_DEAD_COLOR
-    elseif isOffline then
-      nameColor = LEADERBOARD_OFFLINE_COLOR
-    elseif localCharacterKey and rowData.key == localCharacterKey then
-      local r, g, b = GetPlayerClassColor()
-      nameColor = { r, g, b }
-    elseif isGuildMember then
-      nameColor = LEADERBOARD_GUILD_BRIGHT_GREEN
+    -- Populate reverse map for dirty-row updates (Option A)
+    if rowData and rowData.key then
+      DASHBOARD.leaderboardRowByKey[rowData.key] = row
     end
 
-    SetLeaderboardCell(row, 1, name, nameColor)
-    SetLeaderboardCell(row, 2, tostring(rowData.level or 0), cellColor)
-    -- Use pre-computed portrait string from the model when available (avoids repeated path concat + string.format).
-    local classPortrait = rowData._displayClassPortrait
-    if not classPortrait then
-      classPortrait = LeaderboardClassCellWithPortrait(
-        lb and lb.GetEnglishClassName and lb.GetEnglishClassName(rowData.classId, rowData.class) or rowData.class,
-        rowData.raceId,
-        rowData.sex
-      )
-    end
-    SetLeaderboardCell(row, 3, classPortrait, cellColor)
-    SetLeaderboardCell(row, 4, "", cellColor)
-
-    local factionLogo, factionGlow = GetLeaderboardFactionTextures(rowData.faction)
-    local fs = rowData.faction or ""
-    if factionLogo and factionGlow then
-      if fs ~= row._hcaLbFaction then
-        row._hcaLbFaction = fs
-        row.FactionGlow:SetTexture(factionGlow)
-        row.FactionLogo:SetTexture(factionLogo)
-      end
-      row.FactionGlow:Show()
-      row.FactionLogo:Show()
-    else
-      row._hcaLbFaction = fs
-      row.FactionGlow:Hide()
-      row.FactionLogo:Hide()
-    end
-    SetLeaderboardCell(row, 5, rowData.selfFound and "|TInterface\\RAIDFRAME\\ReadyCheck-Ready.blp:16:16:0:0|t" or "", cellColor)
-    -- Use cached color code from the model row when present. Falls back to the old color function.
-    local colorCode = rowData._displayAchievementColor or GetLeaderboardAchievementColor(rowData.completed, rowData.total)
-    local achievementText
-    if isOffline then
-      achievementText = string_format("%d pts [%d/%d]", rowData.points or 0, rowData.completed or 0, rowData.total or 0)
-    else
-      achievementText = string_format("%d pts |cff%s[%d/%d]|r", rowData.points or 0, colorCode, rowData.completed or 0, rowData.total or 0)
-    end
-    SetLeaderboardCell(row, 6, achievementText, cellColor)
-    SetLeaderboardCell(row, 7, rowData.lastSeenText or "?", cellColor)
-
-    row:Show()
+    BindLeaderboardRowData(row, rowData, localCharacterKey, viewerGuildCached, lb)
   end
 
   for i = #data + 1, #DASHBOARD.leaderboardRows do

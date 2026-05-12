@@ -168,6 +168,7 @@ function Leaderboard:SetSearchTerm(term)
   if Leaderboard.Data and Leaderboard.Data.Invalidate then
     Leaderboard.Data:Invalidate()
   end
+  Leaderboard:ClearDirty()
   if addon and addon.RefreshDashboard then
     addon.RefreshDashboard(true)
   end
@@ -175,6 +176,53 @@ end
 
 function Leaderboard:GetSearchTerm()
   return Leaderboard.searchTerm or ""
+end
+
+-- =============================================================================
+-- OPTION A: DIRTY TRACKING (incremental row updates)
+-- =============================================================================
+local dirtyLeaderboardKeys = {}
+
+function Leaderboard:MarkDirty(key)
+  if key then
+    dirtyLeaderboardKeys[key] = true
+  end
+end
+
+function Leaderboard:ClearDirty()
+  dirtyLeaderboardKeys = {}
+end
+
+function Leaderboard:GetDirtyCount()
+  local n = 0
+  for _ in pairs(dirtyLeaderboardKeys) do n = n + 1 end
+  return n
+end
+
+function Leaderboard:HasDirty()
+  for _ in pairs(dirtyLeaderboardKeys) do return true end
+  return false
+end
+
+function Leaderboard:IterateDirty()
+  return pairs(dirtyLeaderboardKeys)
+end
+
+function Leaderboard:ApplyPendingUpdates()
+  -- Only meaningful while the leaderboard tab is visible.
+  local df = addon and addon.DashboardFrame
+  if not df or not df:IsShown() or df.SelectedTabKey ~= "leaderboard" then
+    Leaderboard:ClearDirty()
+    return
+  end
+
+  if DASHBOARD and DASHBOARD.ApplyPendingLeaderboardUpdates then
+    DASHBOARD.ApplyPendingLeaderboardUpdates()
+  else
+    -- Safe fallback
+    Leaderboard:ClearDirty()
+    if addon.RefreshDashboard then addon.RefreshDashboard(true) end
+  end
 end
 
 -- English display + sync — derived from Blizzard class index (UnitClass third return) when known.
@@ -283,6 +331,7 @@ function Leaderboard:SetScopeValue(key, enabled)
     if self.Data and self.Data.Invalidate then
         self.Data:Invalidate()
     end
+    self:ClearDirty()
     if self.UI and self.UI.Refresh then
         self.UI:Refresh()
     end
@@ -393,10 +442,13 @@ function Leaderboard:Initialize()
     end
     self.leaderboardUIViewTicker = C_Timer.NewTicker(LEADERBOARD_VIEW_UI_REFRESH_SEC, function()
         local df = addon.DashboardFrame
-        if df and df:IsShown() and df.SelectedTabKey == "leaderboard" and addon.RefreshDashboard then
-            -- Full rebuild every 60s while viewing (batch refresh for Option B).
-            -- Accepts one periodic hitch instead of many small ones from peer updates.
-            addon.RefreshDashboard(true)
+        if df and df:IsShown() and df.SelectedTabKey == "leaderboard" then
+            if Leaderboard.ApplyPendingUpdates then
+                -- Option A: cheap incremental pass over dirty rows.
+                Leaderboard:ApplyPendingUpdates()
+            elseif addon.RefreshDashboard then
+                addon.RefreshDashboard(true)
+            end
         end
     end)
 end
