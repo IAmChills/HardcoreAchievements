@@ -2357,8 +2357,8 @@ end)
 
 -- Function to show welcome message popup on first login or when version changes
 function addon:ShowWelcomeMessage()
-    local Disabled = true
-    local WELCOME_MESSAGE_NUMBER = 4
+    local Disabled = false
+    local WELCOME_MESSAGE_NUMBER = 5
     local db = EnsureDB()
     db.settings = db.settings or {}
     
@@ -2377,7 +2377,7 @@ end
 
 -- Define the welcome message popup
 StaticPopupDialogs["Hardcore Achievements Vanilla"] = {
-    text = "|cff008066Hardcore Achievements|r\n\nThis addon has had a major code refactor to improve performance, stability, and load times.\n\nOf course, this means some things may be broken. Please report any issues you encounter.",
+    text = "|cff008066Hardcore Achievements|r\n\nLeaderboard performance issues have been |cff00ff00resolved|r. I have optimized the code and added a row limit to prevent lag and frame drops.\n\nPlease report any issues or feedback on Discord.",
     button1 = "Okay",
     --button2 = "Show Me!",
     timeout = 0,
@@ -2393,7 +2393,7 @@ StaticPopupDialogs["Hardcore Achievements Vanilla"] = {
 }
 
 StaticPopupDialogs["Hardcore Achievements TBC"] = {
-    text = "|cff008066Hardcore Achievements|r\n\nThis addon has had a major code refactor to improve performance, stability, and load times.\n\nOf course, this means some things may be broken. Please report any issues you encounter.",
+    text = "|cff008066Hardcore Achievements|r\n\nLeaderboard performance issues have been |cff00ff00resolved|r. I have optimized the code and added a row limit to prevent lag and frame drops.\n\nPlease report any issues or feedback on Discord.",
     button1 = "Okay",
     --button2 = "Show Me!",
     timeout = 0,
@@ -5129,23 +5129,21 @@ do
                     local rows = QuestTrackedRows[removedQuestId]
                     local needsRefresh = false
                     local clearedProgress = false
-                    local playerLevel = UnitLevel("player") or 1
                     for i = #rows, 1, -1 do
                         local row = rows[i]
                         if not row or row.completed then
                             table_remove(rows, i)
                         else
                             needsRefresh = true
-                            local shouldClearProgress = false
-                            if row.maxLevel and playerLevel > row.maxLevel then
-                                shouldClearProgress = true
-                            end
-                            if shouldClearProgress then
-                                local achId = row.id or row.achId or (row.Title and row.Title:GetText())
-                                if achId then
-                                    ClearProgress(achId)
-                                    clearedProgress = true
-                                end
+                            -- Hard reset on quest abandon: clear all progress for this specific
+                            -- non-completed quest-tracked achievement. This gives players a clean
+                            -- slate if they abandon and re-accept. Completed achievements are never
+                            -- touched (filtered above). The previous overlevel-only clear is now
+                            -- subsumed by the general abandon reset.
+                            local achId = row.id or row.achId or (row.Title and row.Title:GetText())
+                            if achId then
+                                ClearProgress(achId)
+                                clearedProgress = true
                             end
                         end
                     end
