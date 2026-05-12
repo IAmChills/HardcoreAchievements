@@ -21,7 +21,7 @@ local LibP2PDB = LibStub and LibStub("LibP2PDB", true)
 
 local RECENT_SECONDS = 5 * 60
 -- Drop other players' rows with no heartbeat for this long (UI + saved DB cleanup).
-local STALE_ROW_SECONDS = 7 * 86400
+local STALE_ROW_SECONDS = 3 * 86400
 -- Avoid pruning work on every GetRows refresh.
 local PRUNE_COOLDOWN_SECONDS = 120
 local lastPruneAt = 0
