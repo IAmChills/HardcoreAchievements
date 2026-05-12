@@ -1238,11 +1238,68 @@ local function EnsureDashboardLeaderboardUI()
   EnsureLeaderboardContextMenu()
 
   local scopeText = DashboardFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-  scopeText:SetPoint("BOTTOM", DashboardFrame.Scroll, "TOP", 0, 10)
+  scopeText:SetPoint("BOTTOM", DashboardFrame.Scroll, "TOP", 0, 5)
   scopeText:SetJustifyH("CENTER")
   scopeText:SetTextColor(0.922, 0.871, 0.761)
   scopeText:Hide()
   DashboardFrame.LeaderboardScopeText = scopeText
+
+  -- Search box: top-right, same vertical line as scope label, right-aligned to scroll/table.
+  local searchBox = CreateFrame("EditBox", nil, DashboardFrame, "InputBoxTemplate")
+  searchBox:SetAutoFocus(false)
+  searchBox:SetWidth(140)
+  searchBox:SetHeight(22)
+  searchBox:SetPoint("BOTTOMRIGHT", DashboardFrame.Scroll, "TOPRIGHT", 0, 0)
+
+  -- Placeholder (light gray hint text) shown only when empty and not focused.
+  local searchPlaceholder = searchBox:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+  searchPlaceholder:SetPoint("LEFT", searchBox, "LEFT", 0, 0)
+  searchPlaceholder:SetText("Search name, class, level...")
+  searchPlaceholder:Hide()
+  searchBox.placeholder = searchPlaceholder
+
+  local function UpdateSearchPlaceholder()
+    if not searchBox:IsShown() then
+      searchPlaceholder:Hide()
+      return
+    end
+    local hasText = (searchBox:GetText() or "") ~= ""
+    local hasFocus = searchBox:HasFocus()
+    if hasText or hasFocus then
+      searchPlaceholder:Hide()
+    else
+      searchPlaceholder:Show()
+    end
+  end
+  searchBox.UpdatePlaceholder = UpdateSearchPlaceholder
+
+  searchBox:SetScript("OnTextChanged", function(self)
+    local term = self:GetText() or ""
+    if addon and addon.Leaderboard and addon.Leaderboard.SetSearchTerm then
+      addon.Leaderboard:SetSearchTerm(term)
+    end
+    UpdateSearchPlaceholder()
+  end)
+  searchBox:SetScript("OnEscapePressed", function(self)
+    self:SetText("")
+    self:ClearFocus()
+    if addon and addon.Leaderboard and addon.Leaderboard.SetSearchTerm then
+      addon.Leaderboard:SetSearchTerm("")
+    end
+    UpdateSearchPlaceholder()
+  end)
+  searchBox:SetScript("OnEnterPressed", function(self)
+    self:ClearFocus()
+  end)
+  searchBox:SetScript("OnEditFocusGained", function(self)
+    if self.placeholder then self.placeholder:Hide() end
+  end)
+  searchBox:SetScript("OnEditFocusLost", function(self)
+    UpdateSearchPlaceholder()
+  end)
+
+  searchBox:Hide()
+  DashboardFrame.LeaderboardSearchBox = searchBox
 
   local header = CreateFrame("Frame", nil, DashboardFrame)
   -- Match BorderClip TOP y-inset (+2 vs Scroll TOP): anchoring slightly up covers the viewport band
@@ -1288,7 +1345,7 @@ local function EnsureDashboardLeaderboardRankText()
   if not DashboardFrame or not DashboardFrame.Scroll then return end
   if DashboardFrame.LeaderboardRankText then return end
   local rankText = DashboardFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-  rankText:SetPoint("BOTTOMLEFT", DashboardFrame.Scroll, "TOPLEFT", 4, 10)
+  rankText:SetPoint("BOTTOMLEFT", DashboardFrame.Scroll, "TOPLEFT", 4, 5)
   rankText:SetJustifyH("LEFT")
   rankText:SetTextColor(0.922, 0.871, 0.761)
   rankText:Hide()
@@ -1369,6 +1426,12 @@ local function HideLeaderboardUI()
   if DashboardFrame and DashboardFrame.LeaderboardHeader then
     DashboardFrame.LeaderboardHeader:Hide()
   end
+  if DashboardFrame and DashboardFrame.LeaderboardSearchBox then
+    if DashboardFrame.LeaderboardSearchBox.placeholder then
+      DashboardFrame.LeaderboardSearchBox.placeholder:Hide()
+    end
+    DashboardFrame.LeaderboardSearchBox:Hide()
+  end
   if DASHBOARD and DASHBOARD.leaderboardRows then
     for _, row in ipairs(DASHBOARD.leaderboardRows) do
       row:Hide()
@@ -1444,6 +1507,18 @@ local function BuildDashboardLeaderboardRows()
   end
   if DashboardFrame.LeaderboardScopeText then
     DashboardFrame.LeaderboardScopeText:Show()
+  end
+  if DashboardFrame.LeaderboardSearchBox then
+    DashboardFrame.LeaderboardSearchBox:Show()
+    if DashboardFrame.LeaderboardSearchBox.UpdatePlaceholder then
+      DashboardFrame.LeaderboardSearchBox:UpdatePlaceholder()
+    elseif DashboardFrame.LeaderboardSearchBox.placeholder then
+      -- Fallback: initial state when empty
+      local sb = DashboardFrame.LeaderboardSearchBox
+      if (sb:GetText() or "") == "" and not sb:HasFocus() then
+        sb.placeholder:Show()
+      end
+    end
   end
   if DashboardFrame.LeaderboardRankText then
     DashboardFrame.LeaderboardRankText:Show()

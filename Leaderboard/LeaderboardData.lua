@@ -26,6 +26,19 @@ local STALE_ROW_SECONDS = 7 * 86400
 local PRUNE_COOLDOWN_SECONDS = 120
 local lastPruneAt = 0
 
+local function MatchesSearch(row, term)
+  if not term or term == "" then return true end
+  local t = term
+  local name = tostring(row.name or ""):lower()
+  local class = tostring(row.class or ""):lower()
+  local faction = tostring(row.faction or ""):lower()
+  local level = tostring(row.level or ""):lower()
+  return name:find(t, 1, true) ~= nil
+      or class:find(t, 1, true) ~= nil
+      or level:find(t, 1, true) ~= nil
+      or faction:find(t, 1, true) ~= nil
+end
+
 -- Hard cap on displayed leaderboard rows after accurate sorting.
 -- Keeps memory/CPU bounded for very large scopes (World) while still showing
 -- the true top N for any sort column. Guild/Realm scopes usually stay under this.
@@ -396,9 +409,13 @@ function Data:GetRows(sortState, opts)
         return cachedSortedRows
     end
 
+    local searchTerm = Leaderboard.GetSearchTerm and Leaderboard:GetSearchTerm() or ""
     local rows = {}
     for i = 1, #baseRows do
-        rows[i] = baseRows[i]
+        local row = baseRows[i]
+        if MatchesSearch(row, searchTerm) then
+            rows[#rows + 1] = row
+        end
     end
     SortRows(rows, sortState)
 
@@ -422,21 +439,26 @@ end
 
 function Data:GetScopeLabel()
     local scope = Leaderboard:GetScope()
+    local base
     if not ScopeHasFilters(scope) then
-        return "World"
+        base = "World"
+    else
+        local labels = {}
+        if scope.guild and GetPlayerGuildNameForScope() then
+            labels[#labels + 1] = "Guild"
+        end
+        if scope.realm then labels[#labels + 1] = "Realm" end
+        if scope.faction then labels[#labels + 1] = "Faction" end
+        if scope.dead then labels[#labels + 1] = "Dead" end
+        base = (#labels == 0) and "World" or table.concat(labels, " + ")
     end
 
-    local labels = {}
-    if scope.guild and GetPlayerGuildNameForScope() then
-        labels[#labels + 1] = "Guild"
+    -- Append (filtered) when a search term is active so the user knows the view is narrowed.
+    local term = (Leaderboard.GetSearchTerm and Leaderboard:GetSearchTerm()) or ""
+    if term ~= "" then
+        base = base .. " (filtered)"
     end
-    if scope.realm then labels[#labels + 1] = "Realm" end
-    if scope.faction then labels[#labels + 1] = "Faction" end
-    if scope.dead then labels[#labels + 1] = "Dead" end
-    if #labels == 0 then
-        return "World"
-    end
-    return table.concat(labels, " + ")
+    return base
 end
 
 local function SamePointsRankingTier(a, b)
@@ -452,13 +474,17 @@ local function SamePointsRankingTier(a, b)
 end
 
 --- Rank label for the local player in the current leaderboard scope (#1 / #T11 / —).
+-- When a search filter is active, ranks are computed relative to the filtered set only.
 function Data:GetPointsRankLabel()
     PruneStaleLeaderboardRows()
 
     local scope = Leaderboard:GetScope()
     local context = BuildScopeContext()
     local scopeSignature = ScopeSignature(scope, context)
-    if cachedRankLabel and cachedRankVersion == dataVersion and cachedRankScopeSignature == scopeSignature then
+    local searchTerm = (Leaderboard.GetSearchTerm and Leaderboard:GetSearchTerm()) or ""
+    local rankSignature = scopeSignature .. "|" .. searchTerm
+
+    if cachedRankLabel and cachedRankVersion == dataVersion and cachedRankScopeSignature == rankSignature then
         return cachedRankLabel
     end
 
@@ -471,7 +497,7 @@ function Data:GetPointsRankLabel()
     if #entries == 0 then
         cachedRankLabel = "—"
         cachedRankVersion = dataVersion
-        cachedRankScopeSignature = scopeSignature
+        cachedRankScopeSignature = rankSignature
         return "—"
     end
 
@@ -495,6 +521,25 @@ function Data:GetPointsRankLabel()
         return (a._sortName or tostring(a.name or ""):lower()) < (b._sortName or tostring(b.name or ""):lower())
     end)
 
+    -- If a search term is active, keep only matching rows for ranking purposes.
+    -- This makes the displayed rank relative to the filtered leaderboard view.
+    if searchTerm ~= "" then
+        local filtered = {}
+        for i = 1, #entries do
+            if MatchesSearch(entries[i], searchTerm) then
+                filtered[#filtered + 1] = entries[i]
+            end
+        end
+        entries = filtered
+    end
+
+    if #entries == 0 then
+        cachedRankLabel = "—"
+        cachedRankVersion = dataVersion
+        cachedRankScopeSignature = rankSignature
+        return "—"
+    end
+
     entries[1].rank = 1
     for i = 2, #entries do
         if SamePointsRankingTier(entries[i], entries[i - 1]) then
@@ -514,7 +559,7 @@ function Data:GetPointsRankLabel()
     if not myKey then
         cachedRankLabel = "—"
         cachedRankVersion = dataVersion
-        cachedRankScopeSignature = scopeSignature
+        cachedRankScopeSignature = rankSignature
         return "—"
     end
 
@@ -522,7 +567,7 @@ function Data:GetPointsRankLabel()
         if entries[i].key == myKey then
             local r = entries[i].rank
             cachedRankVersion = dataVersion
-            cachedRankScopeSignature = scopeSignature
+            cachedRankScopeSignature = rankSignature
             if (countAtRank[r] or 0) >= 2 then
                 cachedRankLabel = "#T" .. r
                 return cachedRankLabel
@@ -534,6 +579,6 @@ function Data:GetPointsRankLabel()
 
     cachedRankLabel = "—"
     cachedRankVersion = dataVersion
-    cachedRankScopeSignature = scopeSignature
+    cachedRankScopeSignature = rankSignature
     return "—"
 end

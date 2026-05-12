@@ -158,6 +158,25 @@ local dashboardRefreshToken = 0
 -- strings, render caching, 500 cap) is already done.
 -- =============================================================================
 
+-- Search state for the leaderboard name/class/faction filter (Option A compatible).
+Leaderboard.searchTerm = ""
+
+function Leaderboard:SetSearchTerm(term)
+  local t = tostring(term or ""):lower():match("^%s*(.-)%s*$") or ""
+  if Leaderboard.searchTerm == t then return end
+  Leaderboard.searchTerm = t
+  if Leaderboard.Data and Leaderboard.Data.Invalidate then
+    Leaderboard.Data:Invalidate()
+  end
+  if addon and addon.RefreshDashboard then
+    addon.RefreshDashboard(true)
+  end
+end
+
+function Leaderboard:GetSearchTerm()
+  return Leaderboard.searchTerm or ""
+end
+
 -- English display + sync — derived from Blizzard class index (UnitClass third return) when known.
 local CLASS_ID_TO_ENGLISH = {
     [1] = "Warrior",
