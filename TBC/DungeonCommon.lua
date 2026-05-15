@@ -687,6 +687,8 @@ dungeonEventFrame:SetScript("OnEvent", function(self, event, unitIndex)
 end)
 
 -- Variation definitions
+local MAX_DUNGEON_VARIATION_LEVEL = 70
+
 local VARIATIONS = {
   {
     suffix = "_Trio",
@@ -710,6 +712,10 @@ local VARIATIONS = {
     maxPartySize = 1,
   },
 }
+
+local function IsVariationWithinLevelCap(baseDef, variation)
+    return (baseDef.level + variation.levelOffset) <= MAX_DUNGEON_VARIATION_LEVEL
+end
 
 -- Generate a variation achievement from a base dungeon achievement
 local function CreateVariation(baseDef, variation)
@@ -1623,22 +1629,14 @@ end
 ---------------------------------------
 
 -- Function to register dungeon variations
--- Note: Variations are always registered, but filtered in ApplyFilter based on checkbox states
+-- Note: Eligible variations are always registered, but filtered in ApplyFilter based on checkbox states
 function DungeonCommon.registerDungeonVariations(baseDef)
-  -- Only create variations for dungeons up to 70
-  if baseDef.level > 67 then
-    return
+  for _, variation in ipairs(VARIATIONS) do
+    if IsVariationWithinLevelCap(baseDef, variation) then
+      local variationDef = CreateVariation(baseDef, variation)
+      DungeonCommon.registerDungeonAchievement(variationDef)
+    end
   end
-  
-  -- Always register all variations (they will be filtered in display logic based on checkbox states)
-  local trioDef = CreateVariation(baseDef, VARIATIONS[1])
-  DungeonCommon.registerDungeonAchievement(trioDef)
-  
-  local duoDef = CreateVariation(baseDef, VARIATIONS[2])
-  DungeonCommon.registerDungeonAchievement(duoDef)
-  
-  local soloDef = CreateVariation(baseDef, VARIATIONS[3])
-  DungeonCommon.registerDungeonAchievement(soloDef)
 end
 
 -- Function to refresh variation registrations (for when checkboxes change)
