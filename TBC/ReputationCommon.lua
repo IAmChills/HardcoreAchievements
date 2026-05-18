@@ -136,7 +136,7 @@ function ReputationCommon.registerReputationAchievement(def)
           GameTooltip:AddLine(baseTooltip, nil, nil, nil, true)
           
           -- Hint for linking the achievement in chat
-          GameTooltip:AddLine("\nShift click to link in chat\nor add to tracking list", 0.5, 0.5, 0.5)
+          GameTooltip:AddLine("\nShift click to link in chat or add to tracking list", 0.5, 0.5, 0.5)
           
           GameTooltip:Show()
         end
