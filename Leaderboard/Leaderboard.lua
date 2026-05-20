@@ -368,6 +368,10 @@ end
 local function SchedulerPulse()
     local now = NowSeconds()
 
+    if Leaderboard.Data and Leaderboard.Data.ProcessTombstoneQueue then
+        Leaderboard.Data:ProcessTombstoneQueue()
+    end
+
     if pendingPublishAt and now >= pendingPublishAt then
         local reason = pendingPublishReason or "queued"
         pendingPublishAt = nil
@@ -538,6 +542,10 @@ end
 
 function Leaderboard:OnLeaderboardHidden()
     StopVisibleSyncLoop()
+end
+
+function Leaderboard:EnsureScheduler()
+    EnsureScheduler()
 end
 
 function Leaderboard:IsPruneGraceActive()

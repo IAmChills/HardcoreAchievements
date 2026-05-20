@@ -336,6 +336,30 @@ function Sync:GetPresenceTableName()
     return PRESENCE_TABLE_NAME
 end
 
+function Sync:TombstoneKey(key)
+    if not LibP2PDB or not self.db or not key then
+        return false
+    end
+
+    local ok, success = pcall(function()
+        return LibP2PDB:DeleteKey(self.db, TABLE_NAME, key)
+    end)
+    if ok and success then
+        pcall(function()
+            LibP2PDB:BroadcastKey(self.db, TABLE_NAME, key)
+        end)
+    end
+
+    pcall(function()
+        if LibP2PDB:HasKey(self.db, PRESENCE_TABLE_NAME, key) then
+            LibP2PDB:DeleteKey(self.db, PRESENCE_TABLE_NAME, key)
+            LibP2PDB:BroadcastKey(self.db, PRESENCE_TABLE_NAME, key)
+        end
+    end)
+
+    return ok and success
+end
+
 function Sync:Initialize()
     if self.initialized then
         return

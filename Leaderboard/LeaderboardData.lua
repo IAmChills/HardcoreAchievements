@@ -24,7 +24,12 @@ local RECENT_SECONDS = 10 * 60
 local STALE_ROW_SECONDS = 3 * 86400
 -- Avoid pruning work on every GetRows refresh.
 local PRUNE_COOLDOWN_SECONDS = 120
+local TOMBSTONE_BATCH_SIZE = 25
+local TOMBSTONE_BATCH_INTERVAL_SECONDS = 2
 local lastPruneAt = 0
+local tombstoneQueue = {}
+local tombstoneQueuedKeys = {}
+local nextTombstoneBatchAt = 0
 
 local function MatchesSearch(row, term)
   if not term or term == "" then return true end
@@ -106,6 +111,44 @@ local function Now()
     return (GetServerTime and GetServerTime()) or time()
 end
 
+local function QueueTombstone(key)
+    if not key or tombstoneQueuedKeys[key] then
+        return
+    end
+    tombstoneQueuedKeys[key] = true
+    tombstoneQueue[#tombstoneQueue + 1] = key
+    if Leaderboard.EnsureScheduler then
+        Leaderboard:EnsureScheduler()
+    end
+end
+
+function Data:ProcessTombstoneQueue()
+    if #tombstoneQueue == 0 then
+        return
+    end
+
+    local now = Now()
+    if nextTombstoneBatchAt > 0 and now < nextTombstoneBatchAt then
+        return
+    end
+    nextTombstoneBatchAt = now + TOMBSTONE_BATCH_INTERVAL_SECONDS
+
+    local sync = Leaderboard.Sync
+    local sent = 0
+    while sent < TOMBSTONE_BATCH_SIZE and #tombstoneQueue > 0 do
+        local key = table.remove(tombstoneQueue, 1)
+        tombstoneQueuedKeys[key] = nil
+        if sync and sync.TombstoneKey then
+            sync:TombstoneKey(key)
+        end
+        sent = sent + 1
+    end
+
+    if #tombstoneQueue > 0 and Leaderboard.EnsureScheduler then
+        Leaderboard:EnsureScheduler()
+    end
+end
+
 function Data:Invalidate()
     dataVersion = dataVersion + 1
     cachedBaseRows = nil
@@ -154,11 +197,6 @@ local function PruneStaleLeaderboardRows()
         return
     end
 
-    local sync = Leaderboard.Sync
-    local pdb = sync and sync.GetDatabase and sync:GetDatabase()
-    local tableName = sync and sync.GetTableName and sync:GetTableName()
-    local presenceTableName = sync and sync.GetPresenceTableName and sync:GetPresenceTableName()
-
     local toDrop = {}
     for key, row in pairs(rows) do
         if type(row) == "table" and key ~= localKey then
@@ -183,24 +221,11 @@ local function PruneStaleLeaderboardRows()
     end
 
     for _, key in ipairs(toDrop) do
-        if LibP2PDB and pdb and tableName then
-            pcall(function()
-                LibP2PDB:DeleteKey(pdb, tableName, key)
-                LibP2PDB:BroadcastKey(pdb, tableName, key)
-                if presenceTableName then
-                    local hasPresence = LibP2PDB:HasKey(pdb, presenceTableName, key)
-                    if hasPresence then
-                        LibP2PDB:DeleteKey(pdb, presenceTableName, key)
-                        LibP2PDB:BroadcastKey(pdb, presenceTableName, key)
-                    end
-                end
-            end)
-        else
-            rows[key] = nil
-            if root.presence then
-                root.presence[key] = nil
-            end
+        rows[key] = nil
+        if root.presence then
+            root.presence[key] = nil
         end
+        QueueTombstone(key)
     end
 
     if sync and sync.Persist then
