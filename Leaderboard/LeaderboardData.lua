@@ -19,7 +19,7 @@ local time = time
 local LibStub = LibStub
 local LibP2PDB = LibStub and LibStub("LibP2PDB", true)
 
-local RECENT_SECONDS = 5 * 60
+local RECENT_SECONDS = 10 * 60
 -- Drop other players' rows with no heartbeat for this long (UI + saved DB cleanup).
 local STALE_ROW_SECONDS = 3 * 86400
 -- Avoid pruning work on every GetRows refresh.
@@ -115,12 +115,12 @@ end
 
 local function FormatAgo(seconds)
     if not seconds or seconds < 0 then return "?" end
-    if seconds < 5 then return "now" end
-    if seconds < 60 then return ("%ds"):format(math_floor(seconds)) end
+    if seconds < 60 then return "now" end
     local minutes = math_floor(seconds / 60)
-    if minutes < 60 then return ("%dm"):format(minutes) end
+    if seconds < RECENT_SECONDS then return ("%dm"):format(minutes) end
     local hours = math_floor(seconds / 3600)
-    if hours < 48 then return ("%dh"):format(hours) end
+    if hours < 1 then return "<1h" end
+    if hours < 24 then return ("%dh"):format(hours) end
     return ("%dd"):format(math_floor(seconds / 86400))
 end
 
@@ -157,11 +157,15 @@ local function PruneStaleLeaderboardRows()
     local sync = Leaderboard.Sync
     local pdb = sync and sync.GetDatabase and sync:GetDatabase()
     local tableName = sync and sync.GetTableName and sync:GetTableName()
+    local presenceTableName = sync and sync.GetPresenceTableName and sync:GetPresenceTableName()
 
     local toDrop = {}
     for key, row in pairs(rows) do
         if type(row) == "table" and key ~= localKey then
-            local updatedAt = tonumber(row.updatedAt) or 0
+            local presence = root.presence and root.presence[key]
+            local rowUpdatedAt = tonumber(row.updatedAt) or 0
+            local presenceUpdatedAt = type(presence) == "table" and (tonumber(presence.updatedAt) or 0) or 0
+            local updatedAt = math.max(rowUpdatedAt, presenceUpdatedAt)
             if updatedAt > 0 and (now - updatedAt) > STALE_ROW_SECONDS then
                 toDrop[#toDrop + 1] = key
             end
@@ -172,14 +176,30 @@ local function PruneStaleLeaderboardRows()
         return
     end
 
+    if Leaderboard.IsPruneGraceActive and Leaderboard:IsPruneGraceActive() then
+        -- After login, local saved data can be days old while gossip catch-up is still in flight.
+        -- Do not hide or tombstone rows until peers had a chance to refresh them.
+        return
+    end
+
     for _, key in ipairs(toDrop) do
         if LibP2PDB and pdb and tableName then
             pcall(function()
                 LibP2PDB:DeleteKey(pdb, tableName, key)
                 LibP2PDB:BroadcastKey(pdb, tableName, key)
+                if presenceTableName then
+                    local hasPresence = LibP2PDB:HasKey(pdb, presenceTableName, key)
+                    if hasPresence then
+                        LibP2PDB:DeleteKey(pdb, presenceTableName, key)
+                        LibP2PDB:BroadcastKey(pdb, presenceTableName, key)
+                    end
+                end
             end)
         else
             rows[key] = nil
+            if root.presence then
+                root.presence[key] = nil
+            end
         end
     end
 
@@ -316,6 +336,58 @@ local function UpdateRelativeTimes(rows, now)
     end
 end
 
+local function BuildDisplayRow(key, row, now, presence)
+    local rowUpdatedAt = tonumber(row.updatedAt) or 0
+    local presenceUpdatedAt = type(presence) == "table" and (tonumber(presence.updatedAt) or 0) or 0
+    local updatedAt = math.max(rowUpdatedAt, presenceUpdatedAt)
+    local lastSeenSec = math.max(0, now - updatedAt)
+    local offline = row.offline == true
+    if type(presence) == "table" and presenceUpdatedAt >= rowUpdatedAt then
+        offline = presence.offline == true
+    end
+    local classLabel = row.class or "Unknown"
+    if Leaderboard.GetEnglishClassName then
+        classLabel = Leaderboard.GetEnglishClassName(row.classId, classLabel)
+    end
+    local name = row.name or key
+    local faction = row.faction or ""
+    local version = row.version or "0.0.0"
+    local selfFound = row.selfFound == true or row.label == "Self Found"
+    return {
+        key = key,
+        name = name,
+        realm = row.realm or "",
+        guild = row.guild or "",
+        faction = faction,
+        class = row.class or "Unknown",
+        classId = tonumber(row.classId),
+        level = tonumber(row.level) or 0,
+        completed = tonumber(row.completed) or 0,
+        total = tonumber(row.total) or 0,
+        points = tonumber(row.points) or 0,
+        label = row.label or "",
+        raceId = tonumber(row.raceId),
+        sex = tonumber(row.sex),
+        selfFound = selfFound,
+        dead = row.dead == true,
+        offline = offline,
+        version = version,
+        updatedAt = updatedAt,
+        lastSeenSec = lastSeenSec,
+        lastSeenText = FormatAgo(lastSeenSec),
+        online = not offline and (lastSeenSec <= RECENT_SECONDS),
+        _sortName = tostring(name):lower(),
+        _sortClass = tostring(classLabel):lower(),
+        _sortFaction = tostring(faction):lower(),
+        _sortVersion = tostring(version):lower(),
+        _sortAchievements = tonumber(row.points) or 0,
+        _sortSelfFound = selfFound and 1 or 0,
+        _sortUpdated = lastSeenSec,
+        _displayClassPortrait = FormatClassPortrait(classLabel, row.raceId, row.sex),
+        _displayAchievementColor = GetLeaderboardAchievementColorCode(tonumber(row.completed) or 0, tonumber(row.total) or 0),
+    }
+end
+
 local function BuildBaseRows(scope, scopeSignature, context)
     if cachedBaseRows and cachedBaseVersion == dataVersion and cachedBaseScopeSignature == scopeSignature then
         UpdateRelativeTimes(cachedBaseRows, Now())
@@ -328,51 +400,7 @@ local function BuildBaseRows(scope, scopeSignature, context)
 
     for key, row in pairs(db.rows or {}) do
         if type(row) == "table" and InScope(row, scope, context) then
-            local updatedAt = tonumber(row.updatedAt) or 0
-            local lastSeenSec = math.max(0, now - updatedAt)
-            local classLabel = row.class or "Unknown"
-            if Leaderboard.GetEnglishClassName then
-                classLabel = Leaderboard.GetEnglishClassName(row.classId, classLabel)
-            end
-            local name = row.name or key
-            local faction = row.faction or ""
-            local version = row.version or "0.0.0"
-            local selfFound = row.selfFound == true or row.label == "Self Found"
-            rows[#rows + 1] = {
-                key = key,
-                name = name,
-                realm = row.realm or "",
-                guild = row.guild or "",
-                faction = faction,
-                class = row.class or "Unknown",
-                classId = tonumber(row.classId),
-                level = tonumber(row.level) or 0,
-                completed = tonumber(row.completed) or 0,
-                total = tonumber(row.total) or 0,
-                points = tonumber(row.points) or 0,
-                label = row.label or "",
-                raceId = tonumber(row.raceId),
-                sex = tonumber(row.sex),
-                selfFound = selfFound,
-                dead = row.dead == true,
-                offline = row.offline == true,
-                version = version,
-                updatedAt = updatedAt,
-                lastSeenSec = lastSeenSec,
-                lastSeenText = FormatAgo(lastSeenSec),
-                online = (row.offline ~= true) and (lastSeenSec <= RECENT_SECONDS),
-                _sortName = tostring(name):lower(),
-                _sortClass = tostring(classLabel):lower(),
-                _sortFaction = tostring(faction):lower(),
-                _sortVersion = tostring(version):lower(),
-                _sortAchievements = tonumber(row.points) or 0,
-                _sortSelfFound = selfFound and 1 or 0,
-                _sortUpdated = lastSeenSec,
-
-                -- Pre-computed display strings to eliminate repeated string.format + path work in the UI layer.
-                _displayClassPortrait = FormatClassPortrait(classLabel, row.raceId, row.sex),
-                _displayAchievementColor = GetLeaderboardAchievementColorCode(tonumber(row.completed) or 0, tonumber(row.total) or 0),
-            }
+            rows[#rows + 1] = BuildDisplayRow(key, row, now, db.presence and db.presence[key])
         end
     end
 
@@ -382,6 +410,31 @@ local function BuildBaseRows(scope, scopeSignature, context)
     cachedSortedRows = nil
     cachedRankLabel = nil
     return rows
+end
+
+function Data:GetRowByKey(key)
+    if not key then
+        return nil
+    end
+
+    local db = Leaderboard:GetDB()
+    local raw = db.rows and db.rows[key]
+    if type(raw) ~= "table" then
+        return nil
+    end
+
+    local scope = Leaderboard:GetScope()
+    local context = BuildScopeContext()
+    if not InScope(raw, scope, context) then
+        return nil
+    end
+
+    local row = BuildDisplayRow(key, raw, Now(), db.presence and db.presence[key])
+    local searchTerm = Leaderboard.GetSearchTerm and Leaderboard:GetSearchTerm() or ""
+    if not MatchesSearch(row, searchTerm) then
+        return nil
+    end
+    return row
 end
 
 local function SortSignature(sortState, scopeSignature)

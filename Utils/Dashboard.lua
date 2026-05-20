@@ -1436,6 +1436,12 @@ local function HideLeaderboardUI()
   if addon and addon.Leaderboard and addon.Leaderboard.ClearDirty then
     addon.Leaderboard:ClearDirty()
   end
+  if addon and addon.Leaderboard and addon.Leaderboard.OnLeaderboardHidden then
+    addon.Leaderboard:OnLeaderboardHidden()
+  end
+  if DASHBOARD then
+    DASHBOARD.leaderboardRowByKey = nil
+  end
   if DASHBOARD and DASHBOARD.leaderboardRows then
     for _, row in ipairs(DASHBOARD.leaderboardRows) do
       row:Hide()
@@ -1612,6 +1618,36 @@ local function UpdateLeaderboardRow(playerKey)
     return false -- Row no longer matches current filter/scope → need full rebuild
   end
 
+  local oldData = row.rowData
+  if oldData then
+    local sortKey = leaderboardSortState.key
+    if sortKey == nil then
+      if oldData.online ~= data.online
+          or oldData.points ~= data.points
+          or oldData.completed ~= data.completed
+          or oldData.level ~= data.level
+          or oldData.name ~= data.name then
+        return false
+      end
+    elseif sortKey == "achievements" then
+      if oldData.points ~= data.points then return false end
+    elseif sortKey == "updated" then
+      if oldData.updatedAt ~= data.updatedAt or oldData.online ~= data.online then return false end
+    elseif sortKey == "level" then
+      if oldData.level ~= data.level then return false end
+    elseif sortKey == "name" then
+      if oldData.name ~= data.name then return false end
+    elseif sortKey == "class" then
+      if oldData.class ~= data.class or oldData.classId ~= data.classId then return false end
+    elseif sortKey == "faction" then
+      if oldData.faction ~= data.faction then return false end
+    elseif sortKey == "selfFound" then
+      if oldData.selfFound ~= data.selfFound then return false end
+    elseif sortKey == "version" then
+      if oldData.version ~= data.version then return false end
+    end
+  end
+
   local localCharacterKey = GetLeaderboardLocalCharacterKey()
   local viewerGuildCached = select(1, GetGuildInfo("player"))
   viewerGuildCached = (type(viewerGuildCached) == "string" and viewerGuildCached ~= "") and viewerGuildCached or ""
@@ -1705,7 +1741,7 @@ local function BuildDashboardLeaderboardRows()
   viewerGuildCached = (type(viewerGuildCached) == "string" and viewerGuildCached ~= "") and viewerGuildCached or ""
 
   -- Build the reverse map for Option A incremental updates (key -> row frame).
-  DASHBOARD.leaderboardRowByKey = DASHBOARD.leaderboardRowByKey or {}
+  DASHBOARD.leaderboardRowByKey = {}
 
   for i, rowData in ipairs(data) do
     local row = DASHBOARD.leaderboardRows[i]

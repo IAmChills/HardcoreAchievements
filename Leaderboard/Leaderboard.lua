@@ -7,6 +7,8 @@ local UnitClass = UnitClass
 local UnitGUID = UnitGUID
 local UnitName = UnitName
 local GetRealmName = GetRealmName
+local GetTime = GetTime
+local math_random = math.random
 
 local Leaderboard = addon.Leaderboard or {}
 addon.Leaderboard = Leaderboard
@@ -17,6 +19,24 @@ addon.Leaderboard = Leaderboard
 local LEADERBOARD_VIEW_UI_REFRESH_SEC = 60
 local LEADERBOARD_DASHBOARD_REFRESH_DEBOUNCE_SEC = 0.35
 local dashboardRefreshToken = 0
+local PUBLISH_DEBOUNCE_SEC = 3
+local PRESENCE_INTERVAL_SEC = 5 * 60
+local LIGHTWEIGHT_SYNC_INTERVAL_SEC = 120
+local OPEN_SYNC_COOLDOWN_SEC = 60
+local LOGIN_SYNC_RETRY_COOLDOWN_SEC = 20
+local SCHEDULER_TICK_SEC = 1
+local LOGIN_PRUNE_GRACE_SEC = 10 * 60
+local pendingPublishReason
+local pendingPublishAt
+local pendingPresenceAt
+local pendingPresenceOffline
+local pendingFullSyncQueue = {}
+local lastFullSyncAt = 0
+local nextPresenceAt = 0
+local nextLightweightSyncAt = 0
+local initialLoginSyncDone = false
+local schedulerTicker
+local loginPruneGraceUntil = 0
 
 -- =============================================================================
 -- OPTION A: INCREMENTAL / DIRTY-ROW UPDATE PLAN (FUTURE WORK)
@@ -298,6 +318,151 @@ local function QueueDashboardLeaderboardRefresh()
     return
 end
 
+local function JitteredDelay(baseSeconds, jitterSeconds)
+    baseSeconds = tonumber(baseSeconds) or 0
+    jitterSeconds = tonumber(jitterSeconds) or 0
+    if jitterSeconds <= 0 then
+        return baseSeconds
+    end
+    return baseSeconds + math_random(0, jitterSeconds)
+end
+
+local function IsLeaderboardVisible()
+    local df = addon and addon.DashboardFrame
+    return df and df:IsShown() and df.SelectedTabKey == "leaderboard"
+end
+
+local function PublishNow(reason)
+    if Leaderboard.Sync and Leaderboard.Sync.PublishLocal then
+        return Leaderboard.Sync:PublishLocal(reason)
+    end
+    return false
+end
+
+local function NowSeconds()
+    return (GetTime and GetTime()) or 0
+end
+
+local function BroadcastPresenceNow()
+    if Leaderboard.Sync and Leaderboard.Sync.BroadcastPresence then
+        Leaderboard.Sync:BroadcastPresence()
+    end
+    if Leaderboard.Sync and Leaderboard.Sync.PublishPresence then
+        Leaderboard.Sync:PublishPresence(false)
+    end
+end
+
+local function RunFullSyncNow(cooldownSeconds)
+    local now = NowSeconds()
+    cooldownSeconds = tonumber(cooldownSeconds) or 0
+    if cooldownSeconds > 0 and lastFullSyncAt > 0 and (now - lastFullSyncAt) < cooldownSeconds then
+        return
+    end
+    lastFullSyncAt = now
+    BroadcastPresenceNow()
+    if Leaderboard.Sync and Leaderboard.Sync.SyncDatabase then
+        Leaderboard.Sync:SyncDatabase()
+    end
+end
+
+local function SchedulerPulse()
+    local now = NowSeconds()
+
+    if pendingPublishAt and now >= pendingPublishAt then
+        local reason = pendingPublishReason or "queued"
+        pendingPublishAt = nil
+        pendingPublishReason = nil
+        PublishNow(reason)
+    end
+
+    if pendingPresenceAt and now >= pendingPresenceAt then
+        local offline = pendingPresenceOffline == true
+        pendingPresenceAt = nil
+        pendingPresenceOffline = nil
+        if Leaderboard.Sync and Leaderboard.Sync.PublishPresence then
+            Leaderboard.Sync:PublishPresence(offline)
+        end
+    end
+
+    for i = #pendingFullSyncQueue, 1, -1 do
+        local item = pendingFullSyncQueue[i]
+        if item and now >= item.dueAt then
+            table.remove(pendingFullSyncQueue, i)
+            RunFullSyncNow(item.cooldown)
+        end
+    end
+
+    if nextPresenceAt <= 0 then
+        nextPresenceAt = now + PRESENCE_INTERVAL_SEC
+    elseif now >= nextPresenceAt then
+        pendingPresenceAt = pendingPresenceAt and math.min(pendingPresenceAt, now) or now
+        pendingPresenceOffline = false
+        nextPresenceAt = now + PRESENCE_INTERVAL_SEC
+    end
+
+    if nextLightweightSyncAt <= 0 then
+        nextLightweightSyncAt = now + LIGHTWEIGHT_SYNC_INTERVAL_SEC
+    elseif now >= nextLightweightSyncAt then
+        RunFullSyncNow(0)
+        nextLightweightSyncAt = now + LIGHTWEIGHT_SYNC_INTERVAL_SEC
+    end
+end
+
+local function EnsureScheduler()
+    if schedulerTicker or not (C_Timer and C_Timer.NewTicker) then
+        return
+    end
+    schedulerTicker = C_Timer.NewTicker(SCHEDULER_TICK_SEC, SchedulerPulse)
+end
+
+local function QueueLocalPublish(reason, immediate, delaySeconds)
+    if immediate or not C_Timer then
+        pendingPublishAt = nil
+        pendingPublishReason = nil
+        return PublishNow(reason)
+    end
+
+    local dueAt = NowSeconds() + (tonumber(delaySeconds) or PUBLISH_DEBOUNCE_SEC)
+    pendingPublishReason = reason or pendingPublishReason or "queued"
+    pendingPublishAt = pendingPublishAt and math.min(pendingPublishAt, dueAt) or dueAt
+    EnsureScheduler()
+    return true
+end
+
+local function QueuePresence(delaySeconds, offline)
+    local dueAt = NowSeconds() + (tonumber(delaySeconds) or 0)
+    pendingPresenceAt = pendingPresenceAt and math.min(pendingPresenceAt, dueAt) or dueAt
+    pendingPresenceOffline = offline == true
+    EnsureScheduler()
+end
+
+local function QueueFullSync(delaySeconds, cooldownSeconds)
+    local dueAt = NowSeconds() + (tonumber(delaySeconds) or 0)
+    pendingFullSyncQueue[#pendingFullSyncQueue + 1] = {
+        dueAt = dueAt,
+        cooldown = tonumber(cooldownSeconds) or 0,
+    }
+    EnsureScheduler()
+end
+
+local function StopVisibleSyncLoop()
+    -- Visible sync is intentionally one-shot on open; keep this hook for tab cleanup.
+end
+
+local function QueueLeaderboardOpenSync()
+    if not C_Timer then
+        QueueLocalPublish("leaderboard_open", true)
+        BroadcastPresenceNow()
+        RunFullSyncNow(OPEN_SYNC_COOLDOWN_SEC)
+        return
+    end
+
+    QueueLocalPublish("leaderboard_open", false, 0.5)
+    QueuePresence(1)
+    QueueFullSync(2, OPEN_SYNC_COOLDOWN_SEC)
+    EnsureScheduler()
+end
+
 local function EnsureRootDB()
     if type(HardcoreAchievementsDB) ~= "table" then
         HardcoreAchievementsDB = {}
@@ -350,6 +515,7 @@ end
 function Leaderboard:Toggle()
     local dashboardFrame = addon and addon.DashboardFrame
     if dashboardFrame and dashboardFrame:IsShown() and dashboardFrame.SelectedTabKey == "leaderboard" then
+        StopVisibleSyncLoop()
         if addon.Dashboard and addon.Dashboard.Hide then
             addon.Dashboard:Hide()
         else
@@ -367,6 +533,15 @@ function Leaderboard:Show()
     elseif self.UI and self.UI.Show then
         self.UI:Show()
     end
+    QueueLeaderboardOpenSync()
+end
+
+function Leaderboard:OnLeaderboardHidden()
+    StopVisibleSyncLoop()
+end
+
+function Leaderboard:IsPruneGraceActive()
+    return loginPruneGraceUntil > 0 and NowSeconds() < loginPruneGraceUntil
 end
 
 function Leaderboard:Initialize()
@@ -383,15 +558,9 @@ function Leaderboard:Initialize()
         self.UI:Initialize()
     end
 
-    local function publish(reason)
-        if Leaderboard.Sync and Leaderboard.Sync.PublishLocal then
-            Leaderboard.Sync:PublishLocal(reason)
-        end
-    end
-
     if addon.Hooks and addon.Hooks.HookScript then
         addon.Hooks:HookScript("OnAchievement", function()
-            publish("achievement")
+            QueueLocalPublish("achievement", IsLeaderboardVisible())
         end)
     end
 
@@ -407,35 +576,40 @@ function Leaderboard:Initialize()
     eventFrame:RegisterEvent("PLAYER_GUILD_UPDATE")
     eventFrame:SetScript("OnEvent", function(_, event)
         if event == "PLAYER_ENTERING_WORLD" then
-            C_Timer.After(2, function()
-                publish("login")
-                if Leaderboard.Sync and Leaderboard.Sync.SyncPeers then
-                    Leaderboard.Sync:SyncPeers()
-                end
-            end)
+            if initialLoginSyncDone then
+                return
+            end
+            initialLoginSyncDone = true
+            loginPruneGraceUntil = NowSeconds() + LOGIN_PRUNE_GRACE_SEC
+            local loginDelay = JitteredDelay(3, 3)
+            QueueLocalPublish("login", false, loginDelay)
+            QueuePresence(loginDelay)
+            QueueFullSync(loginDelay + 2, LOGIN_SYNC_RETRY_COOLDOWN_SEC)
+            QueueFullSync(loginDelay + 25, LOGIN_SYNC_RETRY_COOLDOWN_SEC)
+            QueueFullSync(loginDelay + 55, 5 * 60)
+        elseif event == "PLAYER_LOGOUT" then
+            QueueLocalPublish("PLAYER_LOGOUT", true)
+            if Leaderboard.Sync and Leaderboard.Sync.PublishPresence then
+                Leaderboard.Sync:PublishPresence(true)
+            end
         elseif event == "PLAYER_DEAD" then
             -- Publish immediately so a fast logout does not write offline=false before dead=true is stored.
-            publish("PLAYER_DEAD")
+            QueueLocalPublish("PLAYER_DEAD", true)
         elseif event == "PLAYER_GUILD_UPDATE" then
             if Leaderboard.Sync and Leaderboard.Sync.ClearGuildLastKnown then
                 Leaderboard.Sync:ClearGuildLastKnown()
             end
-            publish("PLAYER_GUILD_UPDATE")
+            QueueLocalPublish("PLAYER_GUILD_UPDATE", IsLeaderboardVisible())
         else
-            publish(event)
+            QueueLocalPublish(event, IsLeaderboardVisible())
         end
     end)
 
     if self.refreshTicker then
         self.refreshTicker:Cancel()
+        self.refreshTicker = nil
     end
-    -- Heartbeat: must run sooner than RECENT_SECONDS in LeaderboardData (offline threshold).
-    self.refreshTicker = C_Timer.NewTicker(90, function()
-        publish("periodic")
-        if Leaderboard.Sync and Leaderboard.Sync.SyncPeers then
-            Leaderboard.Sync:SyncPeers()
-        end
-    end)
+    EnsureScheduler()
 
     if self.leaderboardUIViewTicker then
         self.leaderboardUIViewTicker:Cancel()
@@ -449,6 +623,8 @@ function Leaderboard:Initialize()
             elseif addon.RefreshDashboard then
                 addon.RefreshDashboard(true)
             end
+        else
+            StopVisibleSyncLoop()
         end
     end)
 end

@@ -44,7 +44,8 @@ end
 
 local DB_PREFIX = "HCA_LB"
 local TABLE_NAME = "players"
-local PERSIST_DEBOUNCE_SECONDS = 3
+local PRESENCE_TABLE_NAME = "presence"
+local PERSIST_DEBOUNCE_SECONDS = 45
 
 local LibP2PDB = LibStub and LibStub("LibP2PDB", true)
 local persistDebounceToken = 0
@@ -145,6 +146,13 @@ end
 local function StoreRow(key, row)
     local db = Leaderboard:GetDB()
     db.rows = db.rows or {}
+    local current = db.rows[key]
+    if row and current and ShallowEqual(current, row) then
+        return false
+    elseif not row and current == nil then
+        return false
+    end
+
     if row then
         db.rows[key] = row
     else
@@ -159,6 +167,32 @@ local function StoreRow(key, row)
     if Leaderboard.MarkDirty then
         Leaderboard:MarkDirty(key)
     end
+    return true
+end
+
+local function StorePresence(key, presence)
+    local db = Leaderboard:GetDB()
+    db.presence = db.presence or {}
+    local current = db.presence[key]
+    if presence and current and ShallowEqual(current, presence) then
+        return false
+    elseif not presence and current == nil then
+        return false
+    end
+
+    if presence then
+        db.presence[key] = presence
+    else
+        db.presence[key] = nil
+    end
+    db.updatedAt = Now()
+    if Leaderboard.Data and Leaderboard.Data.Invalidate then
+        Leaderboard.Data:Invalidate()
+    end
+    if Leaderboard.MarkDirty then
+        Leaderboard:MarkDirty(key)
+    end
+    return true
 end
 
 local function PlayerIsDead()
@@ -206,8 +240,36 @@ local function SchedulePersistState(immediate)
 end
 
 local function OnTableChanged(key, newData)
-    StoreRow(key, newData)
-    SchedulePersistState(false)
+    if StoreRow(key, newData) then
+        SchedulePersistState(false)
+    end
+end
+
+local function OnPresenceChanged(key, newData)
+    if StorePresence(key, newData) then
+        SchedulePersistState(false)
+    end
+end
+
+local function ValidatePeerOwnedKey(key, context)
+    if not context or not context.peerID then
+        return true
+    end
+    if not LibP2PDB or type(LibP2PDB.PlayerGUIDToPeerID) ~= "function" then
+        return true
+    end
+    local ok, peerID = pcall(function()
+        return LibP2PDB:PlayerGUIDToPeerID(key)
+    end)
+    return ok and peerID == context.peerID
+end
+
+local function OnPlayerRowValidate(key, data, context)
+    return type(data) == "table" and ValidatePeerOwnedKey(key, context)
+end
+
+local function OnPresenceValidate(key, data, context)
+    return type(data) == "table" and ValidatePeerOwnedKey(key, context)
 end
 
 --- Old "Name-Realm" row key used before switching to UnitGUID; migrate once to the GUID key.
@@ -270,6 +332,10 @@ function Sync:GetTableName()
     return TABLE_NAME
 end
 
+function Sync:GetPresenceTableName()
+    return PRESENCE_TABLE_NAME
+end
+
 function Sync:Initialize()
     if self.initialized then
         return
@@ -281,20 +347,18 @@ function Sync:Initialize()
     end
 
     local db = LibP2PDB:GetDatabase(DB_PREFIX)
-    local created = false
     if not db then
         db = LibP2PDB:NewDatabase({
             prefix = DB_PREFIX,
         })
-        created = true
     end
     self.db = db
 
-    if created then
+    pcall(function()
         LibP2PDB:NewTable(db, {
             name = TABLE_NAME,
             keyType = "string",
-            exclusive = true,
+            exclusive = false,
             rowsPerChunk = 96,
             schema = {
                 name = "string",
@@ -316,12 +380,24 @@ function Sync:Initialize()
                 version = "string",
                 updatedAt = "number",
             },
+            onValidate = OnPlayerRowValidate,
             onChange = OnTableChanged,
         })
-    end
+    end)
 
     pcall(function()
-        LibP2PDB:RegisterTableChange(db, TABLE_NAME, self, OnTableChanged)
+        LibP2PDB:NewTable(db, {
+            name = PRESENCE_TABLE_NAME,
+            keyType = "string",
+            exclusive = false,
+            rowsPerChunk = 128,
+            schema = {
+                updatedAt = "number",
+                offline = { "boolean", "nil" },
+            },
+            onValidate = OnPresenceValidate,
+            onChange = OnPresenceChanged,
+        })
     end)
 
     local root = Leaderboard:GetDB()
@@ -333,15 +409,6 @@ function Sync:Initialize()
     end
 
     MigrateLegacyLeaderboardKey()
-
-    -- Immediate publish on init (reverted from delayed version for testing).
-    -- Safety is provided by skipHeavyStats in PublishLocal/BuildLocalRow when Initializing is true.
-    self:PublishLocal("init")
-    C_Timer.After(5, function()
-        if Sync.SyncPeers then
-            Sync:SyncPeers()
-        end
-    end)
 end
 
 function Sync:BuildLocalRow(options)
@@ -419,11 +486,10 @@ function Sync:PublishLocal(reason)
         offline = (reason == "PLAYER_LOGOUT"),
         publishReason = reason,
         currentRow = current,
-        -- Init/login publishes are lightweight presence beacons only.
-        -- They must never call AchievementCount/GetTotalPoints because those
-        -- can exceed the script time limit during/after PLAYER_LOGIN on large catalogs.
-        -- The 90-second periodic ticker will publish a full-stats row later.
-        skipHeavyStats = (reason == "init" or reason == "login"),
+        -- Init publishes are lightweight only; login is delayed by Leaderboard.lua
+        -- so it can safely establish a full row after addon startup.
+        -- Achievement/level events publish full-stat rows later when meaningful data changes.
+        skipHeavyStats = (reason == "init"),
     }
     if reason == "PLAYER_DEAD" then
         buildOpts.dead = true
@@ -437,15 +503,43 @@ function Sync:PublishLocal(reason)
     if current and ShallowEqual(current, row) then
         return true
     end
-
     local ok, success = pcall(function()
         return LibP2PDB:SetKey(self.db, TABLE_NAME, key, row)
     end)
     if ok and success then
-        StoreRow(key, row)
+        local changed = StoreRow(key, row)
         SchedulePersistState(reason == "PLAYER_LOGOUT" or reason == "PLAYER_DEAD")
         pcall(function()
             LibP2PDB:BroadcastKey(self.db, TABLE_NAME, key)
+        end)
+        return changed or true
+    end
+    return false
+end
+
+function Sync:PublishPresence(offline)
+    if not LibP2PDB or not self.db then
+        return false
+    end
+
+    local key = GetCharacterKey()
+    if not key then
+        return false
+    end
+
+    local presence = {
+        updatedAt = Now(),
+        offline = offline == true,
+    }
+
+    local ok, success = pcall(function()
+        return LibP2PDB:SetKey(self.db, PRESENCE_TABLE_NAME, key, presence)
+    end)
+    if ok and success then
+        StorePresence(key, presence)
+        SchedulePersistState(offline == true)
+        pcall(function()
+            LibP2PDB:BroadcastKey(self.db, PRESENCE_TABLE_NAME, key)
         end)
         return true
     end
@@ -456,16 +550,27 @@ function Sync:ClearGuildLastKnown()
     ClearGuildCacheForPlayer()
 end
 
-function Sync:SyncPeers()
+function Sync:BroadcastPresence()
     if not LibP2PDB or not self.db then
         return
     end
     pcall(function()
         LibP2PDB:BroadcastPresence(self.db)
     end)
+end
+
+function Sync:SyncDatabase()
+    if not LibP2PDB or not self.db then
+        return
+    end
     pcall(function()
         LibP2PDB:SyncDatabase(self.db)
     end)
+end
+
+function Sync:SyncPeers()
+    self:BroadcastPresence()
+    self:SyncDatabase()
 end
 
 function Sync:Persist()
