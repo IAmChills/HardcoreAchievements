@@ -2184,15 +2184,23 @@ BINDING_NAME_HCA_TOGGLE = "Toggle Achievements"
 local LDB, LDBIcon, minimapDataObject
 local minimapRegistered = false
 
+local function EnsureMinimapDB()
+    local db = EnsureDB()
+    if not db then return nil end
+    db.minimap = db.minimap or { hide = false, position = 45 }
+    if db.minimap.hide == nil then
+        db.minimap.hide = false
+    end
+    return db, db.minimap
+end
+
 -- Register the minimap icon
 local function InitializeMinimapButton()
-    local db = EnsureDB()
-    if not db.minimap then
-        db.minimap = { hide = false, position = 45 }
-    end
+    local db, minimapDB = EnsureMinimapDB()
+    if not db or not minimapDB then return end
 
     -- If the user has it hidden, don't create/register anything yet.
-    if db.minimap.hide then
+    if minimapDB.hide then
         return
     end
 
@@ -2261,6 +2269,33 @@ local function InitializeMinimapButton()
         minimapRegistered = true
     end
     LDBIcon:Show("HardcoreAchievements")
+end
+
+local function SetMinimapButtonShown(shown)
+    local db, minimapDB = EnsureMinimapDB()
+    if not db or not minimapDB then return end
+
+    local hide = not shown
+    minimapDB.hide = hide
+    db.hide = hide
+
+    if hide then
+        if LDBIcon then
+            LDBIcon:Hide("HardcoreAchievements")
+        end
+    else
+        InitializeMinimapButton()
+    end
+end
+
+local function IsMinimapButtonShown()
+    local _, minimapDB = EnsureMinimapDB()
+    return not (minimapDB and minimapDB.hide)
+end
+
+if addon then
+    addon.SetMinimapButtonShown = SetMinimapButtonShown
+    addon.IsMinimapButtonShown = IsMinimapButtonShown
 end
 
 -- =========================================================
