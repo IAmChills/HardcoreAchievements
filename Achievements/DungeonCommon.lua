@@ -1391,6 +1391,39 @@ local function registerDungeonAchievement(def)
     return true
   end
 
+  local function IsOutleveledForCurrentRun()
+    local inInstance, instanceType = IsInInstance()
+    local rawMapId = inInstance and GetCurrentInstanceMapID()
+    local entryData = ResolveDungeonEntryLevelsForInstance(rawMapId)
+    local useEntryLevels = inInstance and instanceType == "party"
+      and DungeonMapIdsMatch(rawMapId, requiredMapId)
+      and entryData ~= nil
+
+    local playerLevel = useEntryLevels and entryData.playerLevel or UnitLevel("player")
+    if IsOverLeveled(playerLevel) then
+      return true
+    end
+
+    if GetNumGroupMembers() > 1 then
+      for i = 1, 4 do
+        local unit = "party"..i
+        if UnitExists(unit) then
+          local partyLevel
+          if useEntryLevels then
+            local guid = UnitGUID(unit)
+            partyLevel = guid and entryData.partyLevels and entryData.partyLevels[guid]
+          end
+          partyLevel = partyLevel or UnitLevel(unit)
+          if IsOverLeveled(partyLevel) then
+            return true
+          end
+        end
+      end
+    end
+
+    return false
+  end
+
   ---------------------------------------
   -- Tracker Function
   ---------------------------------------
@@ -1427,7 +1460,8 @@ local function registerDungeonAchievement(def)
 
       local progress = addon and addon.GetProgress and addon.GetProgress(achId)
       local isStillAvailable = not state.completed and not (progress and progress.failed)
-      if not skipWrongPartySizeNoise and isStillAvailable and addon and addon.DungeonKillPrintedForGUID ~= destGUID then
+      local skipOutleveledVariantNoise = IsOutleveledForCurrentRun()
+      if not skipWrongPartySizeNoise and not skipOutleveledVariantNoise and isStillAvailable and addon and addon.DungeonKillPrintedForGUID ~= destGUID then
         addon.DungeonKillPrintedForGUID = destGUID
         print("|cff008066[Hardcore Achievements]|r |cffffd100" .. GetBossName(npcId) .. " killed but group is ineligible - kill not counted for achievement: " .. title .. "|r")
         if addon.EventLogAdd then
