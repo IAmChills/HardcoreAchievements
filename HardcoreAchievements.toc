@@ -1,7 +1,7 @@
 ﻿## Interface: 11508, 20505
 ## Title: HardcoreAchievements
 ## Author: Chills
-## Version: 1.8.3
+## Version: 1.8.9
 ## Notes: Hardcore achievements system
 ## OptionalDeps: Ace3, CallbackHandler-1.0, LibDataBroker-1.1, LibDBIcon-1.0, LibStub, LibUIDropDownMenu
 ## SavedVariables: HardcoreAchievementsDB
@@ -36,10 +36,10 @@ Utils\FilterDropdown.lua
 Utils\AchievementTracker.lua
 HardcoreAchievements.lua
 Utils\GuildFirst.lua
+
 Leaderboard\Leaderboard.lua
 Leaderboard\LeaderboardSync.lua
 Leaderboard\LeaderboardData.lua
-Leaderboard\LeaderboardUI.lua
 
 Achievements\Common.lua
 Achievements\DungeonCommon.lua [AllowLoadGameType vanilla]
@@ -84,6 +84,3 @@ Utils\AchievementLinks.lua
 Utils\OptionsPanel.lua
 Utils\InitialOptionsFrame.lua
 Utils\CharacterInspection.lua
-
-Admin\AdminPanel.lua
-Admin\AdminPanelTest.lua

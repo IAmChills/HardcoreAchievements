@@ -707,6 +707,8 @@ dungeonEventFrame:SetScript("OnEvent", function(self, event, unitIndex)
 end)
 
 -- Variation definitions
+local MAX_DUNGEON_VARIATION_LEVEL = 60
+
 local VARIATIONS = {
   {
     suffix = "_Trio",
@@ -730,6 +732,10 @@ local VARIATIONS = {
     maxPartySize = 1,
   },
 }
+
+local function IsVariationWithinLevelCap(baseDef, variation)
+    return (baseDef.level + variation.levelOffset) <= MAX_DUNGEON_VARIATION_LEVEL
+end
 
 -- Generate a variation achievement from a base dungeon achievement
 local function CreateVariation(baseDef, variation)
@@ -1274,7 +1280,7 @@ local function registerDungeonAchievement(def)
             end
           end
           -- Hint for linking the achievement in chat
-          GameTooltip:AddLine("\nShift click to link in chat\nor add to tracking list", 0.5, 0.5, 0.5)
+          GameTooltip:AddLine("\nShift click to link in chat or add to tracking list", 0.5, 0.5, 0.5)
           
           GameTooltip:Show()
         end
@@ -1385,6 +1391,39 @@ local function registerDungeonAchievement(def)
     return true
   end
 
+  local function IsOutleveledForCurrentRun()
+    local inInstance, instanceType = IsInInstance()
+    local rawMapId = inInstance and GetCurrentInstanceMapID()
+    local entryData = ResolveDungeonEntryLevelsForInstance(rawMapId)
+    local useEntryLevels = inInstance and instanceType == "party"
+      and DungeonMapIdsMatch(rawMapId, requiredMapId)
+      and entryData ~= nil
+
+    local playerLevel = useEntryLevels and entryData.playerLevel or UnitLevel("player")
+    if IsOverLeveled(playerLevel) then
+      return true
+    end
+
+    if GetNumGroupMembers() > 1 then
+      for i = 1, 4 do
+        local unit = "party"..i
+        if UnitExists(unit) then
+          local partyLevel
+          if useEntryLevels then
+            local guid = UnitGUID(unit)
+            partyLevel = guid and entryData.partyLevels and entryData.partyLevels[guid]
+          end
+          partyLevel = partyLevel or UnitLevel(unit)
+          if IsOverLeveled(partyLevel) then
+            return true
+          end
+        end
+      end
+    end
+
+    return false
+  end
+
   ---------------------------------------
   -- Tracker Function
   ---------------------------------------
@@ -1421,7 +1460,8 @@ local function registerDungeonAchievement(def)
 
       local progress = addon and addon.GetProgress and addon.GetProgress(achId)
       local isStillAvailable = not state.completed and not (progress and progress.failed)
-      if not skipWrongPartySizeNoise and isStillAvailable and addon and addon.DungeonKillPrintedForGUID ~= destGUID then
+      local skipOutleveledVariantNoise = IsOutleveledForCurrentRun()
+      if not skipWrongPartySizeNoise and not skipOutleveledVariantNoise and isStillAvailable and addon and addon.DungeonKillPrintedForGUID ~= destGUID then
         addon.DungeonKillPrintedForGUID = destGUID
         print("|cff008066[Hardcore Achievements]|r |cffffd100" .. GetBossName(npcId) .. " killed but group is ineligible - kill not counted for achievement: " .. title .. "|r")
         if addon.EventLogAdd then
@@ -1592,22 +1632,14 @@ end
 ---------------------------------------
 
 -- Function to register dungeon variations
--- Note: Variations are always registered, but filtered in ApplyFilter based on checkbox states
+-- Note: Eligible variations are always registered, but filtered in ApplyFilter based on checkbox states
 local function registerDungeonVariations(baseDef)
-  -- Only create variations for dungeons up to 60
-  if baseDef.level > 57 then
-    return
+  for _, variation in ipairs(VARIATIONS) do
+    if IsVariationWithinLevelCap(baseDef, variation) then
+      local variationDef = CreateVariation(baseDef, variation)
+      registerDungeonAchievement(variationDef)
+    end
   end
-  
-  -- Always register all variations (they will be filtered in display logic based on checkbox states)
-  local trioDef = CreateVariation(baseDef, VARIATIONS[1])
-  registerDungeonAchievement(trioDef)
-  
-  local duoDef = CreateVariation(baseDef, VARIATIONS[2])
-  registerDungeonAchievement(duoDef)
-  
-  local soloDef = CreateVariation(baseDef, VARIATIONS[3])
-  registerDungeonAchievement(soloDef)
 end
 
 -- Function to refresh variation registrations (for when checkboxes change)

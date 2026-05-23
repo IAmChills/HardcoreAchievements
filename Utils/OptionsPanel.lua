@@ -32,6 +32,39 @@ local function SetSetting(settingName, value)
     end
 end
 
+local function GetAccountDB()
+    if addon and type(addon.HardcoreAchievementsDB) == "table" then
+        return addon.HardcoreAchievementsDB
+    end
+    if type(HardcoreAchievementsDB) ~= "table" then
+        HardcoreAchievementsDB = {}
+    end
+    if addon then
+        addon.HardcoreAchievementsDB = HardcoreAchievementsDB
+    end
+    return HardcoreAchievementsDB
+end
+
+local function IsMinimapButtonShown()
+    if addon and type(addon.IsMinimapButtonShown) == "function" then
+        return addon.IsMinimapButtonShown()
+    end
+    local db = GetAccountDB()
+    db.minimap = db.minimap or { hide = false, position = 45 }
+    return db.minimap.hide ~= true
+end
+
+local function SetMinimapButtonShown(shown)
+    if addon and type(addon.SetMinimapButtonShown) == "function" then
+        addon.SetMinimapButtonShown(shown)
+        return
+    end
+    local db = GetAccountDB()
+    db.minimap = db.minimap or { hide = false, position = 45 }
+    db.minimap.hide = not shown
+    db.hide = not shown
+end
+
 -- Helper function to check if screenshots are disabled (called before Screenshot in HardcoreAchievements.lua)
 local function ShouldTakeScreenshot()
     if type(GetCharDB) == "function" then
@@ -649,10 +682,20 @@ local function CreateOptionsPanel()
     local uiCategoryTitle = panel:CreateFontString(nil, "ARTWORK", "GameFontNormalLarge")
     uiCategoryTitle:SetPoint("TOPLEFT", announceInGuildChatCB, "BOTTOMLEFT", 0, -15)
     uiCategoryTitle:SetText("|cff008066User Interface|r")
+
+    -- Show Minimap Button checkbox (account-wide)
+    local showMinimapButtonCB = CreateFrame("CheckButton", nil, panel, "InterfaceOptionsCheckButtonTemplate")
+    showMinimapButtonCB:SetPoint("TOPLEFT", uiCategoryTitle, "BOTTOMLEFT", 0, -8)
+    showMinimapButtonCB.Text:SetText("Show Minimap Button")
+    showMinimapButtonCB:SetChecked(IsMinimapButtonShown())
+    showMinimapButtonCB:SetScript("OnClick", function(self)
+        SetMinimapButtonShown(self:GetChecked())
+    end)
+    AddTooltipToCheckbox(showMinimapButtonCB, "Show or hide the Hardcore Achievements minimap button. This setting is account-wide.")
     
     -- Reset Achievements Tab button
     local resetTabButton = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
-    resetTabButton:SetPoint("TOPLEFT", uiCategoryTitle, "BOTTOMLEFT", 0, -8)
+    resetTabButton:SetPoint("TOPLEFT", showMinimapButtonCB, "BOTTOMLEFT", 0, -8)
     resetTabButton:SetText("Reset Achievements Tab Position")
     resetTabButton:SetWidth(220)
     resetTabButton:SetHeight(25)
@@ -746,6 +789,7 @@ local function CreateOptionsPanel()
         disableScreenshots = disableScreenshotsCB,
         awardOnKill = awardOnKillCB,
         announceInGuildChat = announceInGuildChatCB,
+        showMinimapButton = showMinimapButtonCB,
         modernRows = modernRowsCB,
     }
     panel.modernRows = modernRowsCB
@@ -766,6 +810,9 @@ local function CreateOptionsPanel()
         end
         if announceInGuildChatCB then
             announceInGuildChatCB:SetChecked(GetSetting("announceInGuildChat", true))
+        end
+        if showMinimapButtonCB then
+            showMinimapButtonCB:SetChecked(IsMinimapButtonShown())
         end
         if modernRowsCB then
             modernRowsCB:SetChecked(GetSetting("modernRows", true))

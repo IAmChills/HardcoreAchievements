@@ -486,9 +486,9 @@ function M.registerQuestAchievement(cfg)
 		-- Check both state and progress table for kill/quest completion
 		local progressTable = GetProgress()
 		
-		-- Check if there's an ineligible kill flag - achievement was done when group was ineligible
-		-- The ineligibleKill flag can be cleared by getting a new eligible kill of the same NPC,
-		-- but if it's still set when checking completion, it should block completion
+		-- Check if there's an ineligible kill flag - achievement was done when group was ineligible.
+		-- The flag is cleared by a new eligible kill of the same NPC, or by abandoning the quest
+		-- (QUEST_REMOVED performs a full progress reset for the achievement).
 		if progressTable and progressTable.ineligibleKill then
 			return false -- Kill was done when group was ineligible - do not allow completion
 		end
@@ -838,10 +838,10 @@ function M.registerQuestAchievement(cfg)
                     return false
                 end
                 
-                -- Only print message if the achievement is visible (not filtered out)
-                if isAchievementVisible(ACH_ID) then
-                    print("|cff008066[Hardcore Achievements]|r |cffffd100Achievement " .. (ACH_ID or "Unknown") .. " cannot be fulfilled: An ineligible player contributed.|r")
-                end
+                -- Always warn in chat when an ineligible player blocks completion.
+                -- This is a critical one-time notification; do not gate behind row visibility.
+                print("|cff008066[Hardcore Achievements]|r |cffffd100Achievement " .. (ACH_ID or "Unknown") .. " cannot be fulfilled: An ineligible player contributed.|r")
+                print("|cff008066[Hardcore Achievements]|r |cffffd100You can kill the NPC again to update your status. Or abandon the quest to reset all progress|r")
                 if addon.EventLogAdd then
                     addon.EventLogAdd("NPC kill not counted (ineligible group / external help): achievement " .. tostring(ACH_ID) .. ", npcId " .. tostring(destId))
                 end
@@ -1162,8 +1162,9 @@ function M.registerQuestAchievement(cfg)
                     
                     return false -- Group is not eligible, cannot fulfill achievement
                 end
-                -- Note: We don't clear ineligibleKill here in the quest handler
-                -- The flag can only be cleared by getting a new eligible kill of the same NPC (via the kill handler)
+                -- Note: We don't clear ineligibleKill here in the quest handler.
+                -- It is cleared either by a subsequent eligible kill (kill handler) or by
+                -- abandoning the quest (QUEST_REMOVED performs a full progress reset).
             end
             
             state.quest = true

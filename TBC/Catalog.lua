@@ -330,7 +330,11 @@ local Achievements = {
     icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Spell_Hunter_Adaptation.png", -- 1036119
     points = 10,
     requiredQuestId = 247, -- Quest available at level 20
-    targetNpcId = {12676, 12677, 12678}, -- Sharptalon, Shadumbra, Ursangous level 25, 28, 31
+    requiredKills = {
+      [12676] = 1, -- Sharptalon level 25
+      [12677] = 1, -- Shadumbra level 28
+      [12678] = 1, -- Ursangous level 31
+    },
     faction = FACTION_HORDE,
     zone = "Ashenvale"
 }, {

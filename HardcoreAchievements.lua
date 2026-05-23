@@ -1418,7 +1418,8 @@ local function MarkRowCompleted(row, cdbParam)
         end
     end
 
-    if restorationsComplete and not skipBroadcastForRetroactive then
+    -- Match SetProgress: do not prompt for reload during addon init / retroactive login pass
+    if restorationsComplete and not skipBroadcastForRetroactive and not (addon and addon.Initializing) then
         MarkUnsavedAchievementProgress()
     end
     
@@ -2105,7 +2106,10 @@ local function SetProgress(achId, key, value)
     end
     cdb.progress[achId] = p
 
-    if restorationsComplete and shouldSetLevelAt then
+    -- Same gates as MarkRowCompleted: CheckPendingCompletions runs IsCompleted during init, which
+    -- can call topUpFromServer/setProg (quest/soloQuest/pointsAtKill) — that must not imply a new
+    -- user-visible "unsaved" state until init finishes and we are past the retroactive pass.
+    if restorationsComplete and shouldSetLevelAt and not skipBroadcastForRetroactive and not (addon and addon.Initializing) then
         MarkUnsavedAchievementProgress()
     end
 
@@ -2180,15 +2184,23 @@ BINDING_NAME_HCA_TOGGLE = "Toggle Achievements"
 local LDB, LDBIcon, minimapDataObject
 local minimapRegistered = false
 
+local function EnsureMinimapDB()
+    local db = EnsureDB()
+    if not db then return nil end
+    db.minimap = db.minimap or { hide = false, position = 45 }
+    if db.minimap.hide == nil then
+        db.minimap.hide = false
+    end
+    return db, db.minimap
+end
+
 -- Register the minimap icon
 local function InitializeMinimapButton()
-    local db = EnsureDB()
-    if not db.minimap then
-        db.minimap = { hide = false, position = 45 }
-    end
+    local db, minimapDB = EnsureMinimapDB()
+    if not db or not minimapDB then return end
 
     -- If the user has it hidden, don't create/register anything yet.
-    if db.minimap.hide then
+    if minimapDB.hide then
         return
     end
 
@@ -2240,6 +2252,13 @@ local function InitializeMinimapButton()
                 tooltip:AddLine(" ")
                 local countStr = string_format("%d/%d", completedCount, totalCount)
                 tooltip:AddLine(string_format(ACHIEVEMENT_META_COMPLETED_DATE, countStr), 0.6, 0.9, 0.6)
+
+                local lbData = addon and addon.Leaderboard and addon.Leaderboard.Data
+                local rankLbl = lbData and lbData.GetPointsRankLabelCached and lbData:GetPointsRankLabelCached()
+                if rankLbl then
+                    tooltip:AddLine("Rank: " .. rankLbl, 0.85, 0.85, 0.92)
+                    tooltip:AddLine("(current leaderboard filters)", 0.45, 0.45, 0.45)
+                end
             end,
         })
     end
@@ -2250,6 +2269,33 @@ local function InitializeMinimapButton()
         minimapRegistered = true
     end
     LDBIcon:Show("HardcoreAchievements")
+end
+
+local function SetMinimapButtonShown(shown)
+    local db, minimapDB = EnsureMinimapDB()
+    if not db or not minimapDB then return end
+
+    local hide = not shown
+    minimapDB.hide = hide
+    db.hide = hide
+
+    if hide then
+        if LDBIcon then
+            LDBIcon:Hide("HardcoreAchievements")
+        end
+    else
+        InitializeMinimapButton()
+    end
+end
+
+local function IsMinimapButtonShown()
+    local _, minimapDB = EnsureMinimapDB()
+    return not (minimapDB and minimapDB.hide)
+end
+
+if addon then
+    addon.SetMinimapButtonShown = SetMinimapButtonShown
+    addon.IsMinimapButtonShown = IsMinimapButtonShown
 end
 
 -- =========================================================
@@ -2346,8 +2392,8 @@ end)
 
 -- Function to show welcome message popup on first login or when version changes
 function addon:ShowWelcomeMessage()
-    local Disabled = true
-    local WELCOME_MESSAGE_NUMBER = 4
+    local Disabled = false
+    local WELCOME_MESSAGE_NUMBER = 5
     local db = EnsureDB()
     db.settings = db.settings or {}
     
@@ -2366,7 +2412,7 @@ end
 
 -- Define the welcome message popup
 StaticPopupDialogs["Hardcore Achievements Vanilla"] = {
-    text = "|cff008066Hardcore Achievements|r\n\nThis addon has had a major code refactor to improve performance, stability, and load times.\n\nOf course, this means some things may be broken. Please report any issues you encounter.",
+    text = "|cff008066Hardcore Achievements|r\n\nLeaderboard performance issues have been |cff00ff00resolved|r. I have optimized the code and added a row limit to prevent lag and frame drops.\n\nPlease report any issues or feedback on Discord.",
     button1 = "Okay",
     --button2 = "Show Me!",
     timeout = 0,
@@ -2382,7 +2428,7 @@ StaticPopupDialogs["Hardcore Achievements Vanilla"] = {
 }
 
 StaticPopupDialogs["Hardcore Achievements TBC"] = {
-    text = "|cff008066Hardcore Achievements|r\n\nThis addon has had a major code refactor to improve performance, stability, and load times.\n\nOf course, this means some things may be broken. Please report any issues you encounter.",
+    text = "|cff008066Hardcore Achievements|r\n\nLeaderboard performance issues have been |cff00ff00resolved|r. I have optimized the code and added a row limit to prevent lag and frame drops.\n\nPlease report any issues or feedback on Discord.",
     button1 = "Okay",
     --button2 = "Show Me!",
     timeout = 0,
@@ -5118,23 +5164,21 @@ do
                     local rows = QuestTrackedRows[removedQuestId]
                     local needsRefresh = false
                     local clearedProgress = false
-                    local playerLevel = UnitLevel("player") or 1
                     for i = #rows, 1, -1 do
                         local row = rows[i]
                         if not row or row.completed then
                             table_remove(rows, i)
                         else
                             needsRefresh = true
-                            local shouldClearProgress = false
-                            if row.maxLevel and playerLevel > row.maxLevel then
-                                shouldClearProgress = true
-                            end
-                            if shouldClearProgress then
-                                local achId = row.id or row.achId or (row.Title and row.Title:GetText())
-                                if achId then
-                                    ClearProgress(achId)
-                                    clearedProgress = true
-                                end
+                            -- Hard reset on quest abandon: clear all progress for this specific
+                            -- non-completed quest-tracked achievement. This gives players a clean
+                            -- slate if they abandon and re-accept. Completed achievements are never
+                            -- touched (filtered above). The previous overlevel-only clear is now
+                            -- subsumed by the general abandon reset.
+                            local achId = row.id or row.achId or (row.Title and row.Title:GetText())
+                            if achId then
+                                ClearProgress(achId)
+                                clearedProgress = true
                             end
                         end
                     end

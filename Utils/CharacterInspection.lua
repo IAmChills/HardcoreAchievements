@@ -16,6 +16,7 @@
 
 local AceComm = LibStub("AceComm-3.0")
 local AceSerialize = LibStub("AceSerializer-3.0")
+local LibDeflate = LibStub("LibDeflate", true)
 
 local INSPECTION_COMM_PREFIX = "HCA_Inspect" -- AceComm prefix for inspection requests
 local INSPECTION_RESPONSE_PREFIX = "HCA_InspectResp" -- AceComm prefix for inspection responses
@@ -54,8 +55,11 @@ local inspectionAchievementTab = nil  -- tab button reference for ShowInspection
 local achievementDefinitionCache = {}
 local panelIndexed = false
 local HANDSHAKE_TIMEOUT = 3
+local DATA_TIMEOUT = 20
 local handshakeTimer = nil
 local handshakeTarget = nil
+local dataTimer = nil
+local dataTarget = nil
 
 local function NormalizeAchievementId(achId)
     if achId == nil then
@@ -65,6 +69,26 @@ local function NormalizeAchievementId(achId)
         return tostring(achId)
     end
     return achId
+end
+
+local function SerializeInspectionPayload(payload)
+    local serialized = AceSerialize:Serialize(payload)
+    local compressed = LibDeflate and LibDeflate:CompressDeflate(serialized)
+    return compressed and LibDeflate:EncodeForWoWAddonChannel(compressed)
+end
+
+local function DeserializeInspectionPayload(message)
+    if not LibDeflate then
+        return false, nil
+    end
+
+    local decoded = LibDeflate:DecodeForWoWAddonChannel(message)
+    local decompressed = decoded and LibDeflate:DecompressDeflate(decoded)
+    if not decompressed then
+        return false, nil
+    end
+
+    return AceSerialize:Deserialize(decompressed)
 end
 
 local function InspectStripColorCodes(text)
@@ -330,8 +354,17 @@ local function CancelInspectionHandshakeTimer()
     handshakeTarget = nil
 end
 
+local function CancelInspectionDataTimer()
+    if dataTimer and dataTimer.Cancel then
+        dataTimer:Cancel()
+    end
+    dataTimer = nil
+    dataTarget = nil
+end
+
 local function StartInspectionHandshakeTimer(targetName)
     CancelInspectionHandshakeTimer()
+    CancelInspectionDataTimer()
     handshakeTarget = targetName
     if C_Timer and C_Timer.NewTimer then
         handshakeTimer = C_Timer.NewTimer(HANDSHAKE_TIMEOUT, function()
@@ -339,6 +372,19 @@ local function StartInspectionHandshakeTimer(targetName)
                 ClearInspectionAchievementRows("No response from " .. targetName .. ". They may not have HardcoreAchievements installed.", {1, 0.5, 0.5})
             end
             CancelInspectionHandshakeTimer()
+        end)
+    end
+end
+
+local function StartInspectionDataTimer(targetName)
+    CancelInspectionDataTimer()
+    dataTarget = targetName
+    if C_Timer and C_Timer.NewTimer then
+        dataTimer = C_Timer.NewTimer(DATA_TIMEOUT, function()
+            if currentInspectionTarget == targetName then
+                ClearInspectionAchievementRows("Timed out receiving achievement data from " .. targetName .. ".", {1, 0.5, 0.5})
+            end
+            CancelInspectionDataTimer()
         end)
     end
 end
@@ -539,7 +585,8 @@ local function RequestAchievementData(targetName)
     local cachedData = inspectionCache[cacheKey]
     if cachedData and (time() - cachedData.timestamp) < CACHE_DURATION then
         CancelInspectionHandshakeTimer()
-        DisplayAchievementData(cachedData.data)
+        CancelInspectionDataTimer()
+        addon.DisplayAchievementData(cachedData.data)
         return
     end
     
@@ -554,7 +601,7 @@ local function RequestAchievementData(targetName)
         requester = UnitName("player")
     }
     
-    local serializedRequest = AceSerialize:Serialize(requestPayload)
+    local serializedRequest = SerializeInspectionPayload(requestPayload)
     if serializedRequest then
         AceComm:SendCommMessage(INSPECTION_COMM_PREFIX, serializedRequest, "WHISPER", targetName)
     end
@@ -639,13 +686,12 @@ local function SetupInspectionTab()
     PanelTemplates_SetTab(InspectFrame, 1)
     inspectionAchievementPanel:Hide()
 end
-if addon then addon.SetupInspectionTab = SetupInspectionTab end
 
 -- Handle incoming inspection requests
 local function OnInspectionRequest(prefix, message, distribution, sender)
     if prefix ~= INSPECTION_COMM_PREFIX then return end
     
-    local success, payload = AceSerialize:Deserialize(message)
+    local success, payload = DeserializeInspectionPayload(message)
     if not success or not payload or payload.type ~= "achievement_request" then return end
     
     -- Send response indicating we have the addon
@@ -656,20 +702,20 @@ local function OnInspectionRequest(prefix, message, distribution, sender)
         requester = payload.requester
     }
     
-    local serializedResponse = AceSerialize:Serialize(responsePayload)
+    local serializedResponse = SerializeInspectionPayload(responsePayload)
     if serializedResponse then
         AceComm:SendCommMessage(INSPECTION_RESPONSE_PREFIX, serializedResponse, "WHISPER", sender)
     end
     
     -- Send achievement data
-    SendAchievementData(sender)
+    addon.SendAchievementData(sender)
 end
 
 -- Handle incoming inspection responses
 local function OnInspectionResponse(prefix, message, distribution, sender)
     if prefix ~= INSPECTION_RESPONSE_PREFIX then return end
     
-    local success, payload = AceSerialize:Deserialize(message)
+    local success, payload = DeserializeInspectionPayload(message)
     if not success or not payload or payload.type ~= "achievement_response" then return end
     if payload.requester and payload.requester ~= UnitName("player") then return end
     if sender ~= currentInspectionTarget then return end
@@ -687,6 +733,7 @@ local function OnInspectionResponse(prefix, message, distribution, sender)
 
     if wasPending then
         ClearInspectionAchievementRows("Receiving achievement data from " .. sender .. "...", {0.6, 0.9, 0.6})
+        StartInspectionDataTimer(sender)
     end
     -- If they have the addon, we'll receive the data via OnInspectionData
 end
@@ -695,11 +742,12 @@ end
 local function OnInspectionData(prefix, message, distribution, sender)
     if prefix ~= INSPECTION_DATA_PREFIX then return end
     
-    local success, payload = AceSerialize:Deserialize(message)
+    local success, payload = DeserializeInspectionPayload(message)
     if not success or not payload or payload.type ~= "achievement_data" then return end
     
     if sender == currentInspectionTarget then
         CancelInspectionHandshakeTimer()
+        CancelInspectionDataTimer()
     end
     
     -- Cache the data
@@ -710,7 +758,7 @@ local function OnInspectionData(prefix, message, distribution, sender)
     }
     
     -- Display the data
-    DisplayAchievementData(payload.data)
+    addon.DisplayAchievementData(payload.data)
 end
 
 -- Send achievement data to requester
@@ -768,7 +816,7 @@ local function SendAchievementData(targetName)
         data = achievementData
     }
     
-    local serializedData = AceSerialize:Serialize(dataPayload)
+    local serializedData = SerializeInspectionPayload(dataPayload)
     if serializedData then
         AceComm:SendCommMessage(INSPECTION_DATA_PREFIX, serializedData, "WHISPER", targetName)
     end
@@ -817,7 +865,7 @@ local function DisplayAchievementData(data)
         end
         local points = achievementData.points or (definition and definition.points) or 0
         
-        local inspectionRow = CreateInspectionAchievementRow(
+        local inspectionRow = addon.CreateInspectionAchievementRow(
             inspectionAchievementPanel.Content,
             achId,
             title,
@@ -855,7 +903,7 @@ local function DisplayAchievementData(data)
     end
     
     -- Sort and position rows
-    SortInspectionAchievementRows()
+    addon.SortInspectionAchievementRows()
 end
 
 -- Create an achievement row for inspection display
@@ -1210,3 +1258,11 @@ initFrame:SetScript("OnEvent", function(self, event)
         self:UnregisterAllEvents()
     end
 end)
+
+if addon then
+    addon.SetupInspectionTab = SetupInspectionTab
+    addon.SendAchievementData = SendAchievementData
+    addon.DisplayAchievementData = DisplayAchievementData
+    addon.CreateInspectionAchievementRow = CreateInspectionAchievementRow
+    addon.SortInspectionAchievementRows = SortInspectionAchievementRows
+end
