@@ -21,7 +21,7 @@ local LibP2PDB = LibStub and LibStub("LibP2PDB", true)
 
 local RECENT_SECONDS = 10 * 60
 -- Drop other players' rows with no heartbeat for this long (UI + saved DB cleanup).
-local STALE_ROW_SECONDS = 3 * 86400
+local STALE_ROW_SECONDS = 7 * 86400
 -- Avoid pruning work on every GetRows refresh.
 local PRUNE_COOLDOWN_SECONDS = 120
 local TOMBSTONE_BATCH_SIZE = 25
@@ -135,13 +135,20 @@ function Data:ProcessTombstoneQueue()
 
     local sync = Leaderboard.Sync
     local sent = 0
+    local changed = false
     while sent < TOMBSTONE_BATCH_SIZE and #tombstoneQueue > 0 do
         local key = table.remove(tombstoneQueue, 1)
         tombstoneQueuedKeys[key] = nil
         if sync and sync.TombstoneKey then
-            sync:TombstoneKey(key)
+            if sync:TombstoneKey(key) then
+                changed = true
+            end
         end
         sent = sent + 1
+    end
+
+    if changed and sync and sync.Persist then
+        sync:Persist()
     end
 
     if #tombstoneQueue > 0 and Leaderboard.EnsureScheduler then
@@ -228,6 +235,7 @@ local function PruneStaleLeaderboardRows()
         QueueTombstone(key)
     end
 
+    local sync = Leaderboard.Sync
     if sync and sync.Persist then
         sync:Persist()
     end

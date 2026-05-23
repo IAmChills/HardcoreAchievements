@@ -1,5 +1,6 @@
 local addonName, addon = ...
 local ClassColor = (addon and addon.GetClassColor())
+local CheckMapDiscoveryByLocation = (addon and addon.CheckMapDiscoveryByLocation)
 local CheckZoneDiscovery = (addon and addon.CheckZoneDiscovery)
 local UnitName = UnitName
 local UnitLevel = UnitLevel
@@ -119,7 +120,7 @@ local ExplorationAchievements = {
   points = 0,
   explorationZone = "Orgrimmar",
   customIsCompleted = function()
-      return CheckZoneDiscovery(1411)
+      return CheckMapDiscoveryByLocation("Durotar", "Orgrimmar")
   end,
   faction = FACTION_ALLIANCE,
   staticPoints = true,
@@ -132,7 +133,7 @@ local ExplorationAchievements = {
   points = 0,
   explorationZone = "Stormwind City",
   customIsCompleted = function()
-      return CheckZoneDiscovery(1429)
+      return CheckMapDiscoveryByLocation("Elwynn Forest", "Stormwind City")
   end,
   faction = FACTION_HORDE,
   staticPoints = true,

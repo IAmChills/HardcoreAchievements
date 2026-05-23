@@ -916,6 +916,9 @@ function M.registerQuestAchievement(cfg)
                 
                 -- Check if all kills are already satisfied BEFORE this kill (to determine if we should update levelAtKill)
                 local allKillsAlreadySatisfied = countsSatisfied()
+                local requiredForNpc = tonumber(REQUIRED_KILLS[idNum] or REQUIRED_KILLS[destId]) or 1
+                local eligibleCountBefore = tonumber(state.eligibleCounts[idNum]) or 0
+                local killContributesToRequirement = eligibleCountBefore < requiredForNpc
                 
                 -- Increment both total counts and eligible counts for this NPC (ensure numeric key for consistency)
                 state.counts[idNum] = (state.counts[idNum] or 0) + 1
@@ -923,7 +926,9 @@ function M.registerQuestAchievement(cfg)
                 -- Save progress after each kill
                 setProg("counts", state.counts)
                 setProg("eligibleCounts", state.eligibleCounts)
-                maybeLogKillProgress(destGUID, "NPC kill counted toward achievement " .. tostring(ACH_ID) .. ": npcId " .. tostring(idNum) .. " (kill requirements satisfied=" .. tostring(countsSatisfied()) .. ")")
+                if killContributesToRequirement then
+                    maybeLogKillProgress(destGUID, "NPC kill counted toward achievement " .. tostring(ACH_ID) .. ": npcId " .. tostring(idNum) .. " (kill requirements satisfied=" .. tostring(countsSatisfied()) .. ")")
+                end
                 
                 -- Store player's level at time of THIS kill
                 -- Always update levelAtKill while kills are not all satisfied (tracks current level, even if player levels up)
@@ -980,13 +985,16 @@ function M.registerQuestAchievement(cfg)
                 -- Use stored solo status from combat tracking (more accurate than checking at kill time)
                 local isSoloKill = GetSoloStatusForKill(destGUID)
                 
+                local killAlreadySatisfied = state.killed or (progressTable and progressTable.killed) or false
                 state.killed = true
                 setProg("killed", true)
                 
                 -- Store player's level at time of kill (primary source for validation)
                 local killLevel = UnitLevel("player") or 1
                 setProg("levelAtKill", killLevel)
-                maybeLogKillProgress(destGUID, "NPC kill counted toward achievement " .. tostring(ACH_ID) .. ": npcId " .. tostring(destId) .. " (target kill registered)")
+                if not killAlreadySatisfied then
+                    maybeLogKillProgress(destGUID, "NPC kill counted toward achievement " .. tostring(ACH_ID) .. ": npcId " .. tostring(destId) .. " (target kill registered)")
+                end
                 
                 -- Store points and solo status (use model row when panel not built)
                 local row = FindAchievementRow()

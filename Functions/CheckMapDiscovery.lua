@@ -1225,5 +1225,8 @@ local function CheckZoneDiscovery(zone, threshold)
     return isDiscovered, message, discoveredCount, totalCount
 end
 
+addon.CheckMapDiscovery = CheckMapDiscovery
+addon.CheckMapDiscoveryByLocation = CheckMapDiscoveryByLocation
+addon.CheckMapDiscoveryByCoords = CheckMapDiscoveryByCoords
 addon.CheckZoneDiscovery = CheckZoneDiscovery
 addon.GetZoneDiscoveryDetails = GetZoneDiscoveryDetails
