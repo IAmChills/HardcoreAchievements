@@ -261,7 +261,16 @@ local function ValidatePeerOwnedKey(key, context)
     local ok, peerID = pcall(function()
         return LibP2PDB:PlayerGUIDToPeerID(key)
     end)
-    return ok and peerID == context.peerID
+    if not ok then
+        return false
+    end
+
+    -- Direct broadcasts should only write the sender's own row. Gossip sync arrives
+    -- by WHISPER from a relay peer, so the sender can differ from the row owner there.
+    if peerID == context.peerID then
+        return true
+    end
+    return context.channel == "WHISPER"
 end
 
 local function OnPlayerRowValidate(key, data, context)
