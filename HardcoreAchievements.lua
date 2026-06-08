@@ -2109,20 +2109,21 @@ local function SetProgress(achId, key, value)
     -- Same gates as MarkRowCompleted: CheckPendingCompletions runs IsCompleted during init, which
     -- can call topUpFromServer/setProg (quest/soloQuest/pointsAtKill) — that must not imply a new
     -- user-visible "unsaved" state until init finishes and we are past the retroactive pass.
-    if restorationsComplete and shouldSetLevelAt and not skipBroadcastForRetroactive and not (addon and addon.Initializing) then
+    local isLiveProgressUpdate = restorationsComplete and not skipBroadcastForRetroactive and not (addon and addon.Initializing)
+    if isLiveProgressUpdate and shouldSetLevelAt then
         MarkUnsavedAchievementProgress()
     end
 
-    C_Timer.After(0, function()
-        -- Only check if restorations are complete (this is called during gameplay, not initial login)
-        -- During initial login, the RunHeavyOperations flow will handle completion checks
-        if restorationsComplete then
+    if isLiveProgressUpdate then
+        C_Timer.After(0, function()
+            -- Only live gameplay progress should queue follow-up completion checks.
+            -- Initial login/retroactive passes run their own synchronous completion sweep.
             addon.CheckPendingCompletions()
             RefreshOutleveledAll()
             -- Full refresh so character panel, dashboard, tracker all get correct status (Pending Turn-in, solo, etc.)
             if addon.RefreshAllAchievementPoints then addon.RefreshAllAchievementPoints() end
-        end
-    end)
+        end)
+    end
 end
 
 -- Export API on addon for achievement modules and other addon files
