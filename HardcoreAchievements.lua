@@ -5048,10 +5048,11 @@ do
                     -- Clear state after the first bag update following unlock, regardless of outcome.
                     addon.Precious_DeleteState = nil
                 end
+                local currentLevel = UnitLevel("player") or 1
                 for _, row in ipairs(addon.AchievementRowModel or {}) do
                     -- Check both row.completed and database to prevent re-completion
                     if not IsAchievementAlreadyCompleted(row) and type(row.itemTracker) == "function" then
-                        local ok, shouldComplete = pcall(row.itemTracker)
+                        local ok, shouldComplete = pcall(row.itemTracker, currentLevel)
                         if ok and shouldComplete == true then
                             MarkRowCompleted(row)
                             local iconTex = (row.frame and row.frame.Icon and row.frame.Icon.GetTexture and row.frame.Icon:GetTexture()) or row.icon or 136116
