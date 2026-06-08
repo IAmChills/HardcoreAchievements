@@ -1309,8 +1309,9 @@ local function IsAchievementAlreadyCompleted(row)
     return false
 end
 
--- Small utility: mark a UI row as completed visually + persist in DB
-local function MarkRowCompleted(row, cdbParam)
+-- Internal: perform all completion work (DB write, UI, hooks, etc.) without banner logic.
+-- Restoration paths call this directly. Gameplay paths call MarkRowCompleted which wraps this + arms banner.
+local function CompleteRow(row, cdbParam)
     if IsAchievementAlreadyCompleted(row) then 
         return 
     end
@@ -1417,11 +1418,6 @@ local function MarkRowCompleted(row, cdbParam)
             addon.Hooks:FireEvent("OnAchievement", achievementData)
         end
     end
-
-    -- Match SetProgress: do not prompt for reload during addon init / retroactive login pass
-    if restorationsComplete and not skipBroadcastForRetroactive and not (addon and addon.Initializing) then
-        MarkUnsavedAchievementProgress()
-    end
     
     -- Set Sub text with "Solo" indicator if achievement was completed solo
     -- Solo indicators show based on hardcore status:
@@ -1475,26 +1471,26 @@ local function MarkRowCompleted(row, cdbParam)
         Profession.NotifyRowCompleted(row)
     end
     
-	-- Broadcast achievement completion (skip for retroactive completions on first load to avoid guild spam)
-	if not skipBroadcastForRetroactive then
-		local playerName = UnitName("player")
-		local achievementTitle = (row.Title and row.Title.GetText and row.Title:GetText()) or row.title or "Unknown Achievement"
-		local broadcastMessage = string_format(ACHIEVEMENT_BROADCAST, "", achievementTitle)
-		broadcastMessage = broadcastMessage:gsub("^%s+", "")
-		SendChatMessage(broadcastMessage, "EMOTE")
+    -- Broadcast achievement completion (skip for retroactive completions on first load to avoid guild spam)
+    if not skipBroadcastForRetroactive then
+        local playerName = UnitName("player")
+        local achievementTitle = (row.Title and row.Title.GetText and row.Title:GetText()) or row.title or "Unknown Achievement"
+        local broadcastMessage = string_format(ACHIEVEMENT_BROADCAST, "", achievementTitle)
+        broadcastMessage = broadcastMessage:gsub("^%s+", "")
+        SendChatMessage(broadcastMessage, "EMOTE")
 
-		if (addon and addon.ShouldAnnounceInGuildChat) and addon.ShouldAnnounceInGuildChat() and IsInGuild() then
-			local link = nil
-			local achIdForLink = row.achId or row.id
-			local getBracket = addon and addon.GetAchievementBracket
-			if achIdForLink and type(getBracket) == "function" then
-				link = getBracket(achIdForLink)
-			end
-			local guildMessage = string_format(ACHIEVEMENT_BROADCAST, "", link or achievementTitle)
-			guildMessage = guildMessage:gsub("^%s+", "")
-			SendChatMessage(guildMessage, "GUILD")
-		end
-	end
+        if (addon and addon.ShouldAnnounceInGuildChat) and addon.ShouldAnnounceInGuildChat() and IsInGuild() then
+            local link = nil
+            local achIdForLink = row.achId or row.id
+            local getBracket = addon and addon.GetAchievementBracket
+            if achIdForLink and type(getBracket) == "function" then
+                link = getBracket(achIdForLink)
+            end
+            local guildMessage = string_format(ACHIEVEMENT_BROADCAST, "", link or achievementTitle)
+            guildMessage = guildMessage:gsub("^%s+", "")
+            SendChatMessage(guildMessage, "GUILD")
+        end
+    end
     
     -- Ensure hidden-until-complete rows become visible now
     if row.hiddenUntilComplete then
@@ -1523,8 +1519,15 @@ local function MarkRowCompleted(row, cdbParam)
     end
 end
 
--- Standard live-award path: complete the achievement if needed, then show the
--- normal achievement toast using frame data when available and model data otherwise.
+-- Public: mark a row completed as a result of gameplay. Arms the unsaved reminder banner (subject to guards).
+local function MarkRowCompleted(row, cdbParam)
+    CompleteRow(row, cdbParam)
+    if restorationsComplete and not skipBroadcastForRetroactive and not (addon and addon.Initializing) then
+        MarkUnsavedAchievementProgress()
+    end
+end
+
+-- Complete the achievement if needed, then show the normal achievement toast.
 local function CompleteAchievementWithToast(row)
     if not row or IsAchievementAlreadyCompleted(row) then
         return false
@@ -1538,7 +1541,12 @@ local function CompleteAchievementWithToast(row)
     CreateAchToast(iconTex, titleText, row.points or 0, frame)
     return true
 end
-if addon then addon.CompleteAchievementWithToast = CompleteAchievementWithToast end
+
+if addon then
+    addon.CompleteAchievementWithToast = CompleteAchievementWithToast
+    addon.MarkRowCompleted = MarkRowCompleted
+    addon.CompleteRow = CompleteRow
+end
 
 local function CheckPendingCompletions()
     local rows = (addon and addon.AchievementRowModel) or {}
@@ -2106,15 +2114,7 @@ local function SetProgress(achId, key, value)
     end
     cdb.progress[achId] = p
 
-    -- Same gates as MarkRowCompleted: CheckPendingCompletions runs IsCompleted during init, which
-    -- can call topUpFromServer/setProg (quest/soloQuest/pointsAtKill) — that must not imply a new
-    -- user-visible "unsaved" state until init finishes and we are past the retroactive pass.
-    local isLiveProgressUpdate = restorationsComplete and not skipBroadcastForRetroactive and not (addon and addon.Initializing)
-    if isLiveProgressUpdate and shouldSetLevelAt then
-        MarkUnsavedAchievementProgress()
-    end
-
-    if isLiveProgressUpdate then
+    if restorationsComplete and not skipBroadcastForRetroactive and not (addon and addon.Initializing) then
         C_Timer.After(0, function()
             -- Only live gameplay progress should queue follow-up completion checks.
             -- Initial login/retroactive passes run their own synchronous completion sweep.
@@ -4054,7 +4054,7 @@ EvaluateCustomCompletions = function(newLevel)
                 if ok and result == true then
                     MarkRowCompleted(row)
                     local iconTex = (row.frame and row.frame.Icon and row.frame.Icon.GetTexture and row.frame.Icon:GetTexture()) or row.icon or 136116
-                    local titleText = (row.frame and row.frame.Title and row.frame.Title.GetText and row.frame.Title:GetText()) or row.title or "Achievement"
+                    local titleText = (row.frame and row.frame.Title and row.frame.Title:GetText and row.frame.Title:GetText()) or row.title or "Achievement"
                     CreateAchToast(iconTex, titleText, row.points, row.frame or row)
                     anyCompleted = true
                 end
@@ -4635,7 +4635,7 @@ do
         achEvt:RegisterEvent("UPDATE_FACTION")
         achEvt:RegisterEvent("UNIT_AURA")
         achEvt:RegisterEvent("MAP_EXPLORATION_UPDATED")
-        achEvt:SetScript("OnEvent", function(_, event, ...)
+        local function HandleAchievementEvent(_, event, ...)
             -- Clean up external player tracking on zone loads
             if event == "PLAYER_ENTERING_WORLD" then
                 externalPlayersByNPC = {}
@@ -5232,7 +5232,9 @@ do
                     end
                 end
             end
-        end)
+        end
+
+        achEvt:SetScript("OnEvent", HandleAchievementEvent)
     end
 end
 

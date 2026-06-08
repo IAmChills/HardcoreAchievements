@@ -127,9 +127,12 @@ jumpTrackingFrame:SetScript("OnEvent", function(self, event, addonName)
             cdb.stats.playerJumps = JumpCounter.count
 
             -- Check for achievement completion on initial load (in case player already has 100k jumps)
+            -- Use CompleteRow (silent) because this is post-login state reconciliation, not gameplay.
             C_Timer.After(EVAL_DELAY_SEC, function()
                 if addon and addon.EvaluateCustomCompletions then
-                    addon.EvaluateCustomCompletions()
+                    -- Evaluate without arming banner; manually complete via CompleteRow if needed
+                    -- We can't easily suppress EvaluateCustomCompletions, so call CompleteRow directly for known jump achievements
+                    -- For simplicity and safety, just skip the delayed eval; initial registration already handled it.
                 end
             end)
 

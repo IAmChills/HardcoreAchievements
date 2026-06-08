@@ -160,8 +160,10 @@ function ReputationCommon.registerReputationAchievement(def)
 
     if showToast and addon and addon.CompleteAchievementWithToast then
       addon.CompleteAchievementWithToast(row)
+    elseif addon.CompleteRow then
+      addon.CompleteRow(row)
     else
-      addon.MarkRowCompleted(row)
+      row.completed = true
     end
   end
 
