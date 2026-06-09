@@ -271,9 +271,9 @@ local function GetCompletionFunction(completeAchievement)
     if type(completeAchievement) == "function" then
         return completeAchievement
     end
-    -- Default to CompleteRow (silent) for restoration/reconciliation paths.
-    -- Callers must explicitly pass CompleteAchievementWithToast for live gameplay.
-    return (addon and addon.CompleteRow) or (addon and addon.MarkRowCompleted)
+    -- Default to MarkRowCompleted (guarded) for restoration paths.
+    -- Live gameplay callers should pass CompleteAchievementWithToast explicitly.
+    return (addon and addon.MarkRowCompleted) or (addon and addon.CompleteAchievementWithToast)
 end
 
 local function EvaluateCompletions(skillID, completeAchievement)

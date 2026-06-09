@@ -1309,9 +1309,9 @@ local function IsAchievementAlreadyCompleted(row)
     return false
 end
 
--- Internal: perform all completion work (DB write, UI, hooks, etc.) without banner logic.
--- Restoration paths call this directly. Gameplay paths call MarkRowCompleted which wraps this + arms banner.
-local function CompleteRow(row, cdbParam)
+-- Mark a row as completed (DB write, UI, hooks, broadcast, etc.) and arm the unsaved reminder banner.
+-- Restoration paths are protected by the three guards below; only live gameplay arms the banner.
+local function MarkRowCompleted(row, cdbParam)
     if IsAchievementAlreadyCompleted(row) then 
         return 
     end
@@ -1344,15 +1344,9 @@ local function CompleteRow(row, cdbParam)
         rec.wasSolo = wasSolo
         -- Check if we have pointsAtKill value in progress to use those points
         local finalPoints = tonumber(row.points) or 0
-
-        local usePointsAtKill = false
         if progress and progress.pointsAtKill then
             -- Use the points that were stored at the time of kill/quest (without self-found bonus)
             finalPoints = tonumber(progress.pointsAtKill) or 0
-            usePointsAtKill = true
-
-            -- Add self-found bonus if applicable (pointsAtKill doesn't include it)
-            -- Simplified rule: 0-point achievements remain 0 (bonus computes to 0).
             if IsSelfFound() then
                 local baseForBonus = row.originalPoints or row.revealPointsBase or 0
                 local bonus = GetSelfFoundBonus(baseForBonus)
@@ -1418,12 +1412,15 @@ local function CompleteRow(row, cdbParam)
             addon.Hooks:FireEvent("OnAchievement", achievementData)
         end
     end
-    
     -- Set Sub text with "Solo" indicator if achievement was completed solo
     -- Solo indicators show based on hardcore status:
     --   If hardcore is active: requires self-found
     --   If hardcore is not active: solo achievements allowed without self-found
     -- Completed achievements always show "Solo", never "Solo bonus"
+    if restorationsComplete and not skipBroadcastForRetroactive and not (addon and addon.Initializing) then
+        MarkUnsavedAchievementProgress()
+    end
+    
     local isHardcoreActive = C_GameRules and C_GameRules.IsHardcoreActive and C_GameRules.IsHardcoreActive() or false
     if row.Sub then
         local shouldShowSolo = wasSolo and (isHardcoreActive and IsSelfFound() or not isHardcoreActive)
@@ -1519,14 +1516,6 @@ local function CompleteRow(row, cdbParam)
     end
 end
 
--- Public: mark a row completed as a result of gameplay. Arms the unsaved reminder banner (subject to guards).
-local function MarkRowCompleted(row, cdbParam)
-    CompleteRow(row, cdbParam)
-    if restorationsComplete and not skipBroadcastForRetroactive and not (addon and addon.Initializing) then
-        MarkUnsavedAchievementProgress()
-    end
-end
-
 -- Complete the achievement if needed, then show the normal achievement toast.
 local function CompleteAchievementWithToast(row)
     if not row or IsAchievementAlreadyCompleted(row) then
@@ -1545,7 +1534,6 @@ end
 if addon then
     addon.CompleteAchievementWithToast = CompleteAchievementWithToast
     addon.MarkRowCompleted = MarkRowCompleted
-    addon.CompleteRow = CompleteRow
 end
 
 local function CheckPendingCompletions()
@@ -2115,6 +2103,7 @@ local function SetProgress(achId, key, value)
     cdb.progress[achId] = p
 
     if restorationsComplete and not skipBroadcastForRetroactive and not (addon and addon.Initializing) then
+        MarkUnsavedAchievementProgress()
         C_Timer.After(0, function()
             -- Only live gameplay progress should queue follow-up completion checks.
             -- Initial login/retroactive passes run their own synchronous completion sweep.

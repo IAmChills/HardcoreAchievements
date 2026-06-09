@@ -593,8 +593,8 @@ local function registerRaidAchievement(def)
     -- Load completion status from database on registration
     -- If the achievement was previously completed, mark the row as completed without showing toast
     if state.completed then
-      if addon and addon.CompleteRow then
-        addon.CompleteRow(addon[rowVarName])
+      if addon and addon.MarkRowCompleted then
+        addon.MarkRowCompleted(addon[rowVarName])
       else
         addon[rowVarName].completed = true
       end
