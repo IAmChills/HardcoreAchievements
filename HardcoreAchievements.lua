@@ -4043,7 +4043,7 @@ EvaluateCustomCompletions = function(newLevel)
                 if ok and result == true then
                     MarkRowCompleted(row)
                     local iconTex = (row.frame and row.frame.Icon and row.frame.Icon.GetTexture and row.frame.Icon:GetTexture()) or row.icon or 136116
-                    local titleText = (row.frame and row.frame.Title and row.frame.Title:GetText and row.frame.Title:GetText()) or row.title or "Achievement"
+                    local titleText = (row.frame and row.frame.Title and row.frame.Title.GetText and row.frame.Title:GetText()) or row.title or "Achievement"
                     CreateAchToast(iconTex, titleText, row.points, row.frame or row)
                     anyCompleted = true
                 end
