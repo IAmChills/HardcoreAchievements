@@ -4104,6 +4104,9 @@ do
         -- externalPlayersByNPC[destGUID] = { [playerGUID] = { lastSeen = time, threat = nil } }
         local externalPlayersByNPC = {}
         local EXTERNAL_PLAYER_TIMEOUT = 15  -- seconds to remember external players after last damage event
+
+        -- Throttle UnitDetailedThreatSituation checks to at most once per 0.5s per NPC
+        local _threatCheckTime = {}
         
         -- Cache recent level-ups to handle event ordering issues with quest turn-ins
         -- Stores the previous level when player levels up, so we can use it if a quest turn-in happens shortly after
@@ -4460,13 +4463,8 @@ do
             end
         end
         
-        -- Update threat data for tracked external players when possible
-        local function updateExternalPlayerThreat(destGUID)
-            if not externalPlayersByNPC[destGUID] then
-                return
-            end
-            
-            -- Only update threat if the NPC is currently our target
+        -- Core threat sampling logic shared by throttled and forced variants.
+        local function doThreatSample(destGUID)
             if not UnitExists("target") or UnitGUID("target") ~= destGUID then
                 return
             end
@@ -4502,12 +4500,37 @@ do
             end
         end
 
+        -- Throttled variant: called on every damage event (SWING/SPELL/RANGE_DAMAGE).
+        -- Skips sampling if the same NPC was checked within the last 0.5 seconds.
+        local function updateExternalPlayerThreat(destGUID)
+            if not externalPlayersByNPC[destGUID] then
+                return
+            end
+            local now = GetTime()
+            if now - (_threatCheckTime[destGUID] or 0) < 0.5 then
+                return
+            end
+            _threatCheckTime[destGUID] = now
+            doThreatSample(destGUID)
+        end
+
+        -- Unthrottled variant: called immediately before processing a kill (overkill path)
+        -- to ensure the freshest threat data is available for solo-kill determination.
+        local function updateExternalPlayerThreatForce(destGUID)
+            if not externalPlayersByNPC[destGUID] then
+                return
+            end
+            _threatCheckTime[destGUID] = GetTime()
+            doThreatSample(destGUID)
+        end
+
         local function clearCombatTrackingForGUID(destGUID)
             if not destGUID then
                 return
             end
             npcsInCombat[destGUID] = nil
             npcTapDenied[destGUID] = nil
+            _threatCheckTime[destGUID] = nil
         end
 
         local function isPlayerPartyOrPetSource(sourceGUID)
@@ -4577,20 +4600,21 @@ do
             end
         end
 
-        local function processKill(destGUID, npcId)
-            if not destGUID or recentKills[destGUID] then
+        -- Heavy award logic deferred to the next frame to keep the CLEU handler lean.
+        -- Called via C_Timer.After(0) with a snapshot of the data needed at kill time.
+        local function awardKill(destGUID, npcId)
+            -- If another path already awarded this kill in the same frame, bail out.
+            if recentKills[destGUID] == true then
                 return
-            end
-
-            -- Update solo status for this GUID before processing the kill so GetSoloStatusForKill has
-            -- current state (critical for one-shot kills where we had no prior damage event to set it)
-            if PlayerIsSolo_UpdateStatusForGUID then
-                PlayerIsSolo_UpdateStatusForGUID(destGUID)
             end
 
             local rowsWithTracker = collectKillCandidatesForNpc(npcId)
             if not rowsWithTracker or #rowsWithTracker == 0 then
                 externalPlayersByNPC[destGUID] = nil
+                -- Reset pending sentinel so UNIT_DIED or other paths can retry if needed.
+                if recentKills[destGUID] == "pending" then
+                    recentKills[destGUID] = nil
+                end
                 return
             end
 
@@ -4623,7 +4647,7 @@ do
             end
             cleanupExternalPlayers()
             if UnitExists("target") and UnitGUID("target") == destGUID and UnitCanAttack("player", "target") then
-                updateExternalPlayerThreat(destGUID)
+                updateExternalPlayerThreatForce(destGUID)
             end
             return externalPlayersByNPC[destGUID] or {}
         end
@@ -4770,10 +4794,10 @@ do
                         -- This catches kills that don't trigger PARTY_KILL (e.g., pet kills, DoT kills)
                         local overkill = subevent == "SWING_DAMAGE" and param13 or param16
                         if overkill and overkill >= 0 then
-                            -- Update threat for external players RIGHT BEFORE processing kill
-                            -- This ensures we have the most recent threat data when checking eligibility
+                            -- Force-update threat immediately before processing the kill to guarantee
+                            -- the freshest data is used for solo-kill eligibility, bypassing the throttle.
                             if npcsInCombat[destGUID] then
-                                updateExternalPlayerThreat(destGUID)
+                                updateExternalPlayerThreatForce(destGUID)
                             end
                             
                             -- Check if player tagged the enemy (prevents credit for killing untagged mobs when awardOnKill is enabled)
