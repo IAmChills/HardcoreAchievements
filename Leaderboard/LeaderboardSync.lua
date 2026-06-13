@@ -45,7 +45,7 @@ end
 local DB_PREFIX = "HCA_LB"
 local TABLE_NAME = "players"
 local PRESENCE_TABLE_NAME = "presence"
-local PERSIST_DEBOUNCE_SECONDS = 45
+local PERSIST_DEBOUNCE_SECONDS = 90
 
 local LibP2PDB = LibStub and LibStub("LibP2PDB", true)
 local persistDebounceToken = 0
@@ -239,16 +239,39 @@ local function SchedulePersistState(immediate)
     end)
 end
 
-local function OnTableChanged(key, newData)
-    if StoreRow(key, newData) then
+-- Pending-change buffers for leaderboard and presence data.
+-- Incoming network messages are accumulated here and applied once per drain tick (0.5s),
+-- coalescing burst deliveries (e.g. guild login) into a single StoreRow/StorePresence pass.
+-- "Last write wins" semantics are correct because updatedAt ordering makes the latest message
+-- authoritative. false is used as a nil-sentinel to represent explicit deletions.
+local _pendingRowChanges = {}
+local _pendingPresenceChanges = {}
+
+local function DrainPendingChanges()
+    local any = false
+    for key, newData in pairs(_pendingRowChanges) do
+        if StoreRow(key, newData ~= false and newData or nil) then
+            any = true
+        end
+        _pendingRowChanges[key] = nil
+    end
+    for key, newData in pairs(_pendingPresenceChanges) do
+        if StorePresence(key, newData ~= false and newData or nil) then
+            any = true
+        end
+        _pendingPresenceChanges[key] = nil
+    end
+    if any then
         SchedulePersistState(false)
     end
 end
 
+local function OnTableChanged(key, newData)
+    _pendingRowChanges[key] = newData or false
+end
+
 local function OnPresenceChanged(key, newData)
-    if StorePresence(key, newData) then
-        SchedulePersistState(false)
-    end
+    _pendingPresenceChanges[key] = newData or false
 end
 
 local function ValidatePeerOwnedKey(key, context)
@@ -442,6 +465,11 @@ function Sync:Initialize()
     end
 
     MigrateLegacyLeaderboardKey()
+
+    -- Single drain ticker: coalesces burst network deliveries into one apply pass per 0.5 seconds.
+    if C_Timer and C_Timer.NewTicker then
+        C_Timer.NewTicker(0.5, DrainPendingChanges)
+    end
 end
 
 function Sync:BuildLocalRow(options)
@@ -457,12 +485,18 @@ function Sync:BuildLocalRow(options)
     end
     local completed, total, points = GetCachedLeaderboardStats(current)
     local allowHeavyStats = not options.skipHeavyStats and not (addon and addon.Initializing)
-    if allowHeavyStats and addon.AchievementCount then
-        completed, total = addon.AchievementCount()
-    end
-
-    if allowHeavyStats and addon.GetTotalPoints then
-        points = addon.GetTotalPoints()
+    if allowHeavyStats and addon.GetCachedAchievementStats then
+        local stats = addon.GetCachedAchievementStats()
+        if stats then
+            completed, total, points = stats.completed, stats.total, stats.points
+        end
+    elseif allowHeavyStats then
+        if addon.AchievementCount then
+            completed, total = addon.AchievementCount()
+        end
+        if addon.GetTotalPoints then
+            points = addon.GetTotalPoints()
+        end
     end
 
     local label = ""

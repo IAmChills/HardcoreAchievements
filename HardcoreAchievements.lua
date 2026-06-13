@@ -35,6 +35,12 @@ local RefreshOutleveledAll
 local LoadTabPosition
 local InvalidateAchievementRuntimeIndex
 local EnsureAchievementRuntimeIndex
+-- Persistent cache for IsRowOutleveled results.
+-- Invalidated on level change, zone change, and quest state changes.
+local _outleveledCache = {}
+local function InvalidateOutleveledCache()
+    _outleveledCache = {}
+end
 local QuestTrackedRows = {}
 local ACHIEVEMENT_SOUND_FILE = "Interface\\AddOns\\HardcoreAchievements\\Sounds\\AchievementSound1.ogg"
 local ACHIEVEMENT_SOUND_COOLDOWN = 0.35
@@ -567,7 +573,7 @@ local function GetQuestLogState(questID)
     return false, false
 end
 
-local function IsRowOutleveled(row)
+local function IsRowOutleveledImpl(row)
     if not row or row.completed then return false end
     
     -- Additional safeguard: check database to ensure completed achievements are never marked as failed
@@ -690,6 +696,14 @@ local function IsRowOutleveled(row)
     end
     
     return isOverLevel
+end
+
+local function IsRowOutleveled(row)
+    local cached = _outleveledCache[row]
+    if cached ~= nil then return cached end
+    local result = IsRowOutleveledImpl(row)
+    _outleveledCache[row] = result
+    return result
 end
 
 -- Function to update row border color based on state
@@ -923,6 +937,23 @@ local function AchievementCount()
     return completed, total
 end
 
+-- Cached (completed, total, points) tuple for leaderboard. Invalidated on achievement state change.
+local _achievementStatsCache = nil
+
+local function InvalidateCachedAchievementStats()
+    _achievementStatsCache = nil
+end
+
+local function GetCachedAchievementStats()
+    if _achievementStatsCache then
+        return _achievementStatsCache
+    end
+    local completed, total = AchievementCount()
+    local points = GetTotalPoints()
+    _achievementStatsCache = { completed = completed, total = total, points = points }
+    return _achievementStatsCache
+end
+
 local function UpdateTotalPoints()
     local total = GetTotalPoints()
     if AchievementPanel and AchievementPanel.TotalPoints then
@@ -951,17 +982,10 @@ local function SortAchievementRows()
             and type(row.id) == "string" and row.id:match("^Level%d+$") ~= nil
     end
 
-    -- Cache expensive computations used by the comparator.
-    -- `IsRowOutleveled` can be relatively heavy (db lookups, quest log checks, etc.),
-    -- and the sort comparator is called many times. Cache per-row results for this sort pass.
-    local failedCache = setmetatable({}, { __mode = "k" })
+    -- IsRowOutleveled results are cached at module level (_outleveledCache) so the
+    -- per-sort cache is no longer needed. Keep the isFailed wrapper for call-site clarity.
     local function isFailed(row)
-        local v = failedCache[row]
-        if v == nil then
-            v = IsRowOutleveled(row) and true or false
-            failedCache[row] = v
-        end
-        return v
+        return IsRowOutleveled(row)
     end
 
     table_sort(AchievementPanel.achievements, function(a, b)
@@ -1312,10 +1336,12 @@ end
 -- Mark a row as completed (DB write, UI, hooks, broadcast, etc.) and arm the unsaved reminder banner.
 -- Restoration paths are protected by the three guards below; only live gameplay arms the banner.
 local function MarkRowCompleted(row, cdbParam)
-    if IsAchievementAlreadyCompleted(row) then 
-        return 
+    if IsAchievementAlreadyCompleted(row) then
+        return
     end
     row.completed = true
+    _outleveledCache[row] = false  -- completed rows are never outleveled
+    InvalidateCachedAchievementStats()
     if InvalidateAchievementRuntimeIndex then
         InvalidateAchievementRuntimeIndex()
     end
@@ -2109,8 +2135,18 @@ local function SetProgress(achId, key, value)
             -- Initial login/retroactive passes run their own synchronous completion sweep.
             addon.CheckPendingCompletions()
             RefreshOutleveledAll()
-            -- Full refresh so character panel, dashboard, tracker all get correct status (Pending Turn-in, solo, etc.)
-            if addon.RefreshAllAchievementPoints then addon.RefreshAllAchievementPoints() end
+            -- Partial refresh: only recalculate the row whose progress just changed
+            -- instead of looping all achievements on every kill/quest event.
+            if addon.RefreshAllAchievementPoints then
+                local dirtyRow = nil
+                for _, r in ipairs(addon.AchievementRowModel or {}) do
+                    if (r.id == achId or r.achId == achId) then
+                        dirtyRow = r
+                        break
+                    end
+                end
+                addon.RefreshAllAchievementPoints(dirtyRow and {dirtyRow} or nil)
+            end
         end)
     end
 end
@@ -2140,6 +2176,8 @@ if addon then
     addon.GetTotalPoints = GetTotalPoints
     addon.AchievementCount = AchievementCount
     addon.UpdateTotalPoints = UpdateTotalPoints
+    addon.GetCachedAchievementStats = GetCachedAchievementStats
+    addon.InvalidateCachedAchievementStats = InvalidateCachedAchievementStats
     addon.GetAchievementRows = GetAchievementRows
     addon.GetAchievementRow = GetAchievementRow
     addon.CreateAchToast = CreateAchToast
@@ -4104,6 +4142,9 @@ do
         -- externalPlayersByNPC[destGUID] = { [playerGUID] = { lastSeen = time, threat = nil } }
         local externalPlayersByNPC = {}
         local EXTERNAL_PLAYER_TIMEOUT = 15  -- seconds to remember external players after last damage event
+
+        -- Throttle UnitDetailedThreatSituation checks to at most once per 0.5s per NPC
+        local _threatCheckTime = {}
         
         -- Cache recent level-ups to handle event ordering issues with quest turn-ins
         -- Stores the previous level when player levels up, so we can use it if a quest turn-in happens shortly after
@@ -4126,12 +4167,20 @@ do
             RANGE_DAMAGE = true,
         }
 
+        local _lastGuid = nil
+        local _lastNpcId = nil
         local function getNpcIdFromGUID(guid)
             if not guid then
                 return nil
             end
+            if guid == _lastGuid then
+                return _lastNpcId
+            end
             local _, _, _, _, _, npcId = strsplit("-", guid)
-            return npcId and tonumber(npcId) or nil
+            local result = npcId and tonumber(npcId) or nil
+            _lastGuid = guid
+            _lastNpcId = result
+            return result
         end
 
         -- Check if a GUID belongs to a pet and return the owner's GUID if it's the player's or party member's pet
@@ -4300,6 +4349,7 @@ do
                 genericKillRowsSorted = {},
                 npcIdToKillRows = {},
                 npcIdToWarnRows = {},
+                npcIdToKillRowsMerged = {},
             }
             local rows = (addon and addon.AchievementRowModel) or {}
             for _, row in ipairs(rows) do
@@ -4334,6 +4384,35 @@ do
                     table_insert(index.genericKillRowsSorted, row)
                 end
             end
+
+            -- Pre-merge npcId-specific rows with generic rows using a two-pointer merge.
+            -- Both sources are already sorted by _runtimeKillSortIndex, so we can merge in O(n)
+            -- instead of re-sorting at call time on every kill event.
+            local generic = index.genericKillRowsSorted
+            for npcId, specific in pairs(index.npcIdToKillRows) do
+                local merged = {}
+                local si, gi = 1, 1
+                local sn, gn = #specific, #generic
+                while si <= sn and gi <= gn do
+                    if (specific[si]._runtimeKillSortIndex or 0) <= (generic[gi]._runtimeKillSortIndex or 0) then
+                        table_insert(merged, specific[si])
+                        si = si + 1
+                    else
+                        table_insert(merged, generic[gi])
+                        gi = gi + 1
+                    end
+                end
+                while si <= sn do
+                    table_insert(merged, specific[si])
+                    si = si + 1
+                end
+                while gi <= gn do
+                    table_insert(merged, generic[gi])
+                    gi = gi + 1
+                end
+                index.npcIdToKillRowsMerged[npcId] = merged
+            end
+
             return index
         end
 
@@ -4387,34 +4466,29 @@ do
             return tracked
         end
 
+        -- Module-level table reused across calls to avoid per-call allocation and GC pressure.
+        -- Safe because callers iterate the result synchronously before the next CLEU event fires.
+        local _killCandidates = {}
+
         local function collectKillCandidatesForNpc(npcId)
             local runtimeIndex = EnsureAchievementRuntimeIndex and EnsureAchievementRuntimeIndex()
-            local merged = {}
-            local seen = {}
+            -- Clear without allocating a new table
+            for i = #_killCandidates, 1, -1 do _killCandidates[i] = nil end
 
-            local function appendActiveRows(rows)
-                if not rows then
-                    return
-                end
-                for _, row in ipairs(rows) do
-                    if not seen[row] and isRuntimeKillRowActive(row) then
-                        seen[row] = true
-                        table_insert(merged, row)
+            if runtimeIndex then
+                -- Use the pre-merged+sorted list built at index time (eliminates runtime table.sort).
+                -- Falls back to genericKillRowsSorted for NPCs with no specific rows.
+                local source = runtimeIndex.npcIdToKillRowsMerged[npcId] or runtimeIndex.genericKillRowsSorted
+                if source then
+                    for _, row in ipairs(source) do
+                        if isRuntimeKillRowActive(row) then
+                            table_insert(_killCandidates, row)
+                        end
                     end
                 end
             end
 
-            if runtimeIndex then
-                appendActiveRows(runtimeIndex.npcIdToKillRows[npcId])
-                appendActiveRows(runtimeIndex.genericKillRowsSorted)
-            end
-
-            if #merged > 1 then
-                table_sort(merged, function(a, b)
-                    return (a._runtimeKillSortIndex or 0) < (b._runtimeKillSortIndex or 0)
-                end)
-            end
-            return merged
+            return _killCandidates
         end
 
         -- Cleanup old external player tracking entries
@@ -4435,13 +4509,8 @@ do
             end
         end
         
-        -- Update threat data for tracked external players when possible
-        local function updateExternalPlayerThreat(destGUID)
-            if not externalPlayersByNPC[destGUID] then
-                return
-            end
-            
-            -- Only update threat if the NPC is currently our target
+        -- Core threat sampling logic shared by throttled and forced variants.
+        local function doThreatSample(destGUID)
             if not UnitExists("target") or UnitGUID("target") ~= destGUID then
                 return
             end
@@ -4477,12 +4546,37 @@ do
             end
         end
 
+        -- Throttled variant: called on every damage event (SWING/SPELL/RANGE_DAMAGE).
+        -- Skips sampling if the same NPC was checked within the last 0.5 seconds.
+        local function updateExternalPlayerThreat(destGUID)
+            if not externalPlayersByNPC[destGUID] then
+                return
+            end
+            local now = GetTime()
+            if now - (_threatCheckTime[destGUID] or 0) < 0.5 then
+                return
+            end
+            _threatCheckTime[destGUID] = now
+            doThreatSample(destGUID)
+        end
+
+        -- Unthrottled variant: called immediately before processing a kill (overkill path)
+        -- to ensure the freshest threat data is available for solo-kill determination.
+        local function updateExternalPlayerThreatForce(destGUID)
+            if not externalPlayersByNPC[destGUID] then
+                return
+            end
+            _threatCheckTime[destGUID] = GetTime()
+            doThreatSample(destGUID)
+        end
+
         local function clearCombatTrackingForGUID(destGUID)
             if not destGUID then
                 return
             end
             npcsInCombat[destGUID] = nil
             npcTapDenied[destGUID] = nil
+            _threatCheckTime[destGUID] = nil
         end
 
         local function isPlayerPartyOrPetSource(sourceGUID)
@@ -4552,20 +4646,21 @@ do
             end
         end
 
-        local function processKill(destGUID, npcId)
-            if not destGUID or recentKills[destGUID] then
+        -- Heavy award logic deferred to the next frame to keep the CLEU handler lean.
+        -- Called via C_Timer.After(0) with a snapshot of the data needed at kill time.
+        local function awardKill(destGUID, npcId)
+            -- If another path already awarded this kill in the same frame, bail out.
+            if recentKills[destGUID] == true then
                 return
-            end
-
-            -- Update solo status for this GUID before processing the kill so GetSoloStatusForKill has
-            -- current state (critical for one-shot kills where we had no prior damage event to set it)
-            if PlayerIsSolo_UpdateStatusForGUID then
-                PlayerIsSolo_UpdateStatusForGUID(destGUID)
             end
 
             local rowsWithTracker = collectKillCandidatesForNpc(npcId)
             if not rowsWithTracker or #rowsWithTracker == 0 then
                 externalPlayersByNPC[destGUID] = nil
+                -- Reset pending sentinel so UNIT_DIED or other paths can retry if needed.
+                if recentKills[destGUID] == "pending" then
+                    recentKills[destGUID] = nil
+                end
                 return
             end
 
@@ -4580,15 +4675,38 @@ do
                 end
             end
 
-            -- Only mark as processed when we actually awarded; otherwise UNIT_DIED (or another event) can retry
-            -- (e.g. when PARTY_KILL/damage path ran first but no credit was given due to tap/eligibility)
             if anyAwarded then
                 recentKills[destGUID] = true
                 clearRecentKill(destGUID)
+            else
+                -- No credit given; reset pending so UNIT_DIED can retry.
+                if recentKills[destGUID] == "pending" then
+                    recentKills[destGUID] = nil
+                end
             end
 
-            -- Clean up external player tracking for this NPC after kill
+            -- Clean up external player tracking for this NPC after kill attempt.
             externalPlayersByNPC[destGUID] = nil
+        end
+
+        local function processKill(destGUID, npcId)
+            if not destGUID or recentKills[destGUID] then
+                return
+            end
+
+            -- Capture solo status synchronously while game state is current
+            -- (critical for one-shot kills with no prior damage event).
+            if PlayerIsSolo_UpdateStatusForGUID then
+                PlayerIsSolo_UpdateStatusForGUID(destGUID)
+            end
+
+            -- Mark as pending immediately to block duplicate events in the same frame
+            -- before the deferred awardKill runs. "pending" is truthy so the guard above blocks re-entry.
+            recentKills[destGUID] = "pending"
+
+            C_Timer.After(0, function()
+                awardKill(destGUID, npcId)
+            end)
         end
         
         -- Define and expose for IsGroupEligibleForAchievement and other callers
@@ -4598,7 +4716,7 @@ do
             end
             cleanupExternalPlayers()
             if UnitExists("target") and UnitGUID("target") == destGUID and UnitCanAttack("player", "target") then
-                updateExternalPlayerThreat(destGUID)
+                updateExternalPlayerThreatForce(destGUID)
             end
             return externalPlayersByNPC[destGUID] or {}
         end
@@ -4630,6 +4748,8 @@ do
                 externalPlayersByNPC = {}
                 npcsInCombat = {}
                 npcTapDenied = {}
+                _threatCheckTime = {}
+                InvalidateOutleveledCache()
                 if InvalidateAchievementRuntimeIndex then
                     InvalidateAchievementRuntimeIndex()
                 end
@@ -4745,10 +4865,10 @@ do
                         -- This catches kills that don't trigger PARTY_KILL (e.g., pet kills, DoT kills)
                         local overkill = subevent == "SWING_DAMAGE" and param13 or param16
                         if overkill and overkill >= 0 then
-                            -- Update threat for external players RIGHT BEFORE processing kill
-                            -- This ensures we have the most recent threat data when checking eligibility
+                            -- Force-update threat immediately before processing the kill to guarantee
+                            -- the freshest data is used for solo-kill eligibility, bypassing the throttle.
                             if npcsInCombat[destGUID] then
-                                updateExternalPlayerThreat(destGUID)
+                                updateExternalPlayerThreatForce(destGUID)
                             end
                             
                             -- Check if player tagged the enemy (prevents credit for killing untagged mobs when awardOnKill is enabled)
@@ -4839,6 +4959,7 @@ do
                     end
                 end
             elseif event == "QUEST_TURNED_IN" then
+                InvalidateOutleveledCache()
                 if InvalidateAchievementRuntimeIndex then
                     InvalidateAchievementRuntimeIndex()
                 end
@@ -5086,6 +5207,7 @@ do
                     end
                 end
             elseif event == "PLAYER_LEVEL_CHANGED" then
+                InvalidateOutleveledCache()
                 if InvalidateAchievementRuntimeIndex then
                     InvalidateAchievementRuntimeIndex()
                 end
@@ -5146,6 +5268,7 @@ do
                     end
                 end
             elseif event == "QUEST_REMOVED" then
+                InvalidateOutleveledCache()
                 if InvalidateAchievementRuntimeIndex then
                     InvalidateAchievementRuntimeIndex()
                 end
