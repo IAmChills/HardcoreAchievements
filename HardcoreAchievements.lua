@@ -937,6 +937,23 @@ local function AchievementCount()
     return completed, total
 end
 
+-- Cached (completed, total, points) tuple for leaderboard. Invalidated on achievement state change.
+local _achievementStatsCache = nil
+
+local function InvalidateCachedAchievementStats()
+    _achievementStatsCache = nil
+end
+
+local function GetCachedAchievementStats()
+    if _achievementStatsCache then
+        return _achievementStatsCache
+    end
+    local completed, total = AchievementCount()
+    local points = GetTotalPoints()
+    _achievementStatsCache = { completed = completed, total = total, points = points }
+    return _achievementStatsCache
+end
+
 local function UpdateTotalPoints()
     local total = GetTotalPoints()
     if AchievementPanel and AchievementPanel.TotalPoints then
@@ -2118,8 +2135,18 @@ local function SetProgress(achId, key, value)
             -- Initial login/retroactive passes run their own synchronous completion sweep.
             addon.CheckPendingCompletions()
             RefreshOutleveledAll()
-            -- Full refresh so character panel, dashboard, tracker all get correct status (Pending Turn-in, solo, etc.)
-            if addon.RefreshAllAchievementPoints then addon.RefreshAllAchievementPoints() end
+            -- Partial refresh: only recalculate the row whose progress just changed
+            -- instead of looping all achievements on every kill/quest event.
+            if addon.RefreshAllAchievementPoints then
+                local dirtyRow = nil
+                for _, r in ipairs(addon.AchievementRowModel or {}) do
+                    if (r.id == achId or r.achId == achId) then
+                        dirtyRow = r
+                        break
+                    end
+                end
+                addon.RefreshAllAchievementPoints(dirtyRow and {dirtyRow} or nil)
+            end
         end)
     end
 end
@@ -2149,6 +2176,8 @@ if addon then
     addon.GetTotalPoints = GetTotalPoints
     addon.AchievementCount = AchievementCount
     addon.UpdateTotalPoints = UpdateTotalPoints
+    addon.GetCachedAchievementStats = GetCachedAchievementStats
+    addon.InvalidateCachedAchievementStats = InvalidateCachedAchievementStats
     addon.GetAchievementRows = GetAchievementRows
     addon.GetAchievementRow = GetAchievementRow
     addon.CreateAchToast = CreateAchToast
@@ -4138,12 +4167,20 @@ do
             RANGE_DAMAGE = true,
         }
 
+        local _lastGuid = nil
+        local _lastNpcId = nil
         local function getNpcIdFromGUID(guid)
             if not guid then
                 return nil
             end
+            if guid == _lastGuid then
+                return _lastNpcId
+            end
             local _, _, _, _, _, npcId = strsplit("-", guid)
-            return npcId and tonumber(npcId) or nil
+            local result = npcId and tonumber(npcId) or nil
+            _lastGuid = guid
+            _lastNpcId = result
+            return result
         end
 
         -- Check if a GUID belongs to a pet and return the owner's GUID if it's the player's or party member's pet
@@ -4638,15 +4675,38 @@ do
                 end
             end
 
-            -- Only mark as processed when we actually awarded; otherwise UNIT_DIED (or another event) can retry
-            -- (e.g. when PARTY_KILL/damage path ran first but no credit was given due to tap/eligibility)
             if anyAwarded then
                 recentKills[destGUID] = true
                 clearRecentKill(destGUID)
+            else
+                -- No credit given; reset pending so UNIT_DIED can retry.
+                if recentKills[destGUID] == "pending" then
+                    recentKills[destGUID] = nil
+                end
             end
 
-            -- Clean up external player tracking for this NPC after kill
+            -- Clean up external player tracking for this NPC after kill attempt.
             externalPlayersByNPC[destGUID] = nil
+        end
+
+        local function processKill(destGUID, npcId)
+            if not destGUID or recentKills[destGUID] then
+                return
+            end
+
+            -- Capture solo status synchronously while game state is current
+            -- (critical for one-shot kills with no prior damage event).
+            if PlayerIsSolo_UpdateStatusForGUID then
+                PlayerIsSolo_UpdateStatusForGUID(destGUID)
+            end
+
+            -- Mark as pending immediately to block duplicate events in the same frame
+            -- before the deferred awardKill runs. "pending" is truthy so the guard above blocks re-entry.
+            recentKills[destGUID] = "pending"
+
+            C_Timer.After(0, function()
+                awardKill(destGUID, npcId)
+            end)
         end
         
         -- Define and expose for IsGroupEligibleForAchievement and other callers
