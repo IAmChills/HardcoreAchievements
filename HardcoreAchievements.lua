@@ -35,6 +35,12 @@ local RefreshOutleveledAll
 local LoadTabPosition
 local InvalidateAchievementRuntimeIndex
 local EnsureAchievementRuntimeIndex
+-- Persistent cache for IsRowOutleveled results.
+-- Invalidated on level change, zone change, and quest state changes.
+local _outleveledCache = {}
+local function InvalidateOutleveledCache()
+    _outleveledCache = {}
+end
 local QuestTrackedRows = {}
 local ACHIEVEMENT_SOUND_FILE = "Interface\\AddOns\\HardcoreAchievements\\Sounds\\AchievementSound1.ogg"
 local ACHIEVEMENT_SOUND_COOLDOWN = 0.35
@@ -567,7 +573,7 @@ local function GetQuestLogState(questID)
     return false, false
 end
 
-local function IsRowOutleveled(row)
+local function IsRowOutleveledImpl(row)
     if not row or row.completed then return false end
     
     -- Additional safeguard: check database to ensure completed achievements are never marked as failed
@@ -690,6 +696,14 @@ local function IsRowOutleveled(row)
     end
     
     return isOverLevel
+end
+
+local function IsRowOutleveled(row)
+    local cached = _outleveledCache[row]
+    if cached ~= nil then return cached end
+    local result = IsRowOutleveledImpl(row)
+    _outleveledCache[row] = result
+    return result
 end
 
 -- Function to update row border color based on state
@@ -951,17 +965,10 @@ local function SortAchievementRows()
             and type(row.id) == "string" and row.id:match("^Level%d+$") ~= nil
     end
 
-    -- Cache expensive computations used by the comparator.
-    -- `IsRowOutleveled` can be relatively heavy (db lookups, quest log checks, etc.),
-    -- and the sort comparator is called many times. Cache per-row results for this sort pass.
-    local failedCache = setmetatable({}, { __mode = "k" })
+    -- IsRowOutleveled results are cached at module level (_outleveledCache) so the
+    -- per-sort cache is no longer needed. Keep the isFailed wrapper for call-site clarity.
     local function isFailed(row)
-        local v = failedCache[row]
-        if v == nil then
-            v = IsRowOutleveled(row) and true or false
-            failedCache[row] = v
-        end
-        return v
+        return IsRowOutleveled(row)
     end
 
     table_sort(AchievementPanel.achievements, function(a, b)
@@ -1312,10 +1319,12 @@ end
 -- Mark a row as completed (DB write, UI, hooks, broadcast, etc.) and arm the unsaved reminder banner.
 -- Restoration paths are protected by the three guards below; only live gameplay arms the banner.
 local function MarkRowCompleted(row, cdbParam)
-    if IsAchievementAlreadyCompleted(row) then 
-        return 
+    if IsAchievementAlreadyCompleted(row) then
+        return
     end
     row.completed = true
+    _outleveledCache[row] = false  -- completed rows are never outleveled
+    InvalidateCachedAchievementStats()
     if InvalidateAchievementRuntimeIndex then
         InvalidateAchievementRuntimeIndex()
     end
@@ -4679,6 +4688,8 @@ do
                 externalPlayersByNPC = {}
                 npcsInCombat = {}
                 npcTapDenied = {}
+                _threatCheckTime = {}
+                InvalidateOutleveledCache()
                 if InvalidateAchievementRuntimeIndex then
                     InvalidateAchievementRuntimeIndex()
                 end
@@ -4888,6 +4899,7 @@ do
                     end
                 end
             elseif event == "QUEST_TURNED_IN" then
+                InvalidateOutleveledCache()
                 if InvalidateAchievementRuntimeIndex then
                     InvalidateAchievementRuntimeIndex()
                 end
@@ -5135,6 +5147,7 @@ do
                     end
                 end
             elseif event == "PLAYER_LEVEL_CHANGED" then
+                InvalidateOutleveledCache()
                 if InvalidateAchievementRuntimeIndex then
                     InvalidateAchievementRuntimeIndex()
                 end
@@ -5195,6 +5208,7 @@ do
                     end
                 end
             elseif event == "QUEST_REMOVED" then
+                InvalidateOutleveledCache()
                 if InvalidateAchievementRuntimeIndex then
                     InvalidateAchievementRuntimeIndex()
                 end
