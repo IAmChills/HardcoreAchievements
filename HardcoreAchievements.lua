@@ -4300,6 +4300,7 @@ do
                 genericKillRowsSorted = {},
                 npcIdToKillRows = {},
                 npcIdToWarnRows = {},
+                npcIdToKillRowsMerged = {},
             }
             local rows = (addon and addon.AchievementRowModel) or {}
             for _, row in ipairs(rows) do
@@ -4334,6 +4335,35 @@ do
                     table_insert(index.genericKillRowsSorted, row)
                 end
             end
+
+            -- Pre-merge npcId-specific rows with generic rows using a two-pointer merge.
+            -- Both sources are already sorted by _runtimeKillSortIndex, so we can merge in O(n)
+            -- instead of re-sorting at call time on every kill event.
+            local generic = index.genericKillRowsSorted
+            for npcId, specific in pairs(index.npcIdToKillRows) do
+                local merged = {}
+                local si, gi = 1, 1
+                local sn, gn = #specific, #generic
+                while si <= sn and gi <= gn do
+                    if (specific[si]._runtimeKillSortIndex or 0) <= (generic[gi]._runtimeKillSortIndex or 0) then
+                        table_insert(merged, specific[si])
+                        si = si + 1
+                    else
+                        table_insert(merged, generic[gi])
+                        gi = gi + 1
+                    end
+                end
+                while si <= sn do
+                    table_insert(merged, specific[si])
+                    si = si + 1
+                end
+                while gi <= gn do
+                    table_insert(merged, generic[gi])
+                    gi = gi + 1
+                end
+                index.npcIdToKillRowsMerged[npcId] = merged
+            end
+
             return index
         end
 
@@ -4387,34 +4417,29 @@ do
             return tracked
         end
 
+        -- Module-level table reused across calls to avoid per-call allocation and GC pressure.
+        -- Safe because callers iterate the result synchronously before the next CLEU event fires.
+        local _killCandidates = {}
+
         local function collectKillCandidatesForNpc(npcId)
             local runtimeIndex = EnsureAchievementRuntimeIndex and EnsureAchievementRuntimeIndex()
-            local merged = {}
-            local seen = {}
+            -- Clear without allocating a new table
+            for i = #_killCandidates, 1, -1 do _killCandidates[i] = nil end
 
-            local function appendActiveRows(rows)
-                if not rows then
-                    return
-                end
-                for _, row in ipairs(rows) do
-                    if not seen[row] and isRuntimeKillRowActive(row) then
-                        seen[row] = true
-                        table_insert(merged, row)
+            if runtimeIndex then
+                -- Use the pre-merged+sorted list built at index time (eliminates runtime table.sort).
+                -- Falls back to genericKillRowsSorted for NPCs with no specific rows.
+                local source = runtimeIndex.npcIdToKillRowsMerged[npcId] or runtimeIndex.genericKillRowsSorted
+                if source then
+                    for _, row in ipairs(source) do
+                        if isRuntimeKillRowActive(row) then
+                            table_insert(_killCandidates, row)
+                        end
                     end
                 end
             end
 
-            if runtimeIndex then
-                appendActiveRows(runtimeIndex.npcIdToKillRows[npcId])
-                appendActiveRows(runtimeIndex.genericKillRowsSorted)
-            end
-
-            if #merged > 1 then
-                table_sort(merged, function(a, b)
-                    return (a._runtimeKillSortIndex or 0) < (b._runtimeKillSortIndex or 0)
-                end)
-            end
-            return merged
+            return _killCandidates
         end
 
         -- Cleanup old external player tracking entries
