@@ -209,10 +209,28 @@ local function GetCachedLeaderboardStats(current)
     return 0, 0, 0
 end
 
+-- Guard: at most one combat-deferred persist pending at a time.
+local _persistCombatPending = false
+
 local function PersistState()
     if not LibP2PDB or not Sync.db then
+        _persistCombatPending = false
         return
     end
+    -- Avoid running ExportDatabase (O(n) over all leaderboard rows) during active combat.
+    -- A single retry fires 8s later; if still in combat another retry is scheduled, but
+    -- _persistCombatPending ensures at most one is ever queued at once.
+    if UnitAffectingCombat and UnitAffectingCombat("player") then
+        if C_Timer and C_Timer.After and not _persistCombatPending then
+            _persistCombatPending = true
+            C_Timer.After(8, function()
+                _persistCombatPending = false
+                PersistState()
+            end)
+        end
+        return
+    end
+    _persistCombatPending = false
     local db = Leaderboard:GetDB()
     local ok, state = pcall(function()
         return LibP2PDB:ExportDatabase(Sync.db)

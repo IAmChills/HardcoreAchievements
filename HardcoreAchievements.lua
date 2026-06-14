@@ -19,6 +19,7 @@ local IsShiftKeyDown = IsShiftKeyDown
 local InCombatLockdown = InCombatLockdown
 local GetPresetMultiplier = (addon and addon.GetPresetMultiplier)
 local PlayerIsSolo_UpdateStatusForGUID = (addon and addon.PlayerIsSolo_UpdateStatusForGUID)
+local PlayerIsSolo_OnCombatLogEvent = (addon and addon.PlayerIsSolo_OnCombatLogEvent)
 local Profession = (addon and addon.Profession)
 local RefreshAllAchievementPoints = (addon and addon.RefreshAllAchievementPoints)
 local ShowAchievementTooltip = (addon and addon.ShowAchievementTooltip)
@@ -4145,7 +4146,50 @@ do
 
         -- Throttle UnitDetailedThreatSituation checks to at most once per 0.5s per NPC
         local _threatCheckTime = {}
-        
+
+        -- Per-NPC solo status throttle: max once per 0.25s to cap CheckSoloStatusForGUID calls.
+        local _soloUpdateThrottle = {}
+
+        -- Quest log state cache (questID -> bool). Cleared on quest events.
+        local _questLogCache = {}
+
+        -- Debounce flags for events that burst (multiple fires per frame).
+        local _pendingExplorationCheck = false
+        local _pendingAuraCheck = false
+
+        -- Party/pet GUID cache — rebuilt on GROUP_ROSTER_UPDATE/PLAYER_ENTERING_WORLD/UNIT_PET.
+        -- Eliminates 20-30 UnitExists/UnitGUID calls per damage event in isPlayerPartyOrPetSource.
+        local _cachedPlayerGUID = nil
+        local _cachedPartyGUIDs = {}
+        local _cachedPetOwnerByGUID = {}
+
+        local function RebuildPartyGUIDCache()
+            _cachedPlayerGUID = UnitGUID("player")
+            for k in pairs(_cachedPartyGUIDs) do _cachedPartyGUIDs[k] = nil end
+            for k in pairs(_cachedPetOwnerByGUID) do _cachedPetOwnerByGUID[k] = nil end
+            if _cachedPlayerGUID then _cachedPartyGUIDs[_cachedPlayerGUID] = true end
+            if UnitExists("pet") then
+                local g = UnitGUID("pet")
+                if g then _cachedPetOwnerByGUID[g] = _cachedPlayerGUID end
+            end
+            if GetNumGroupMembers() > 1 then
+                for i = 1, 4 do
+                    local u = "party" .. i
+                    if UnitExists(u) then
+                        local g = UnitGUID(u)
+                        if g then
+                            _cachedPartyGUIDs[g] = true
+                            local pu = "party" .. i .. "pet"
+                            if UnitExists(pu) then
+                                local pg = UnitGUID(pu)
+                                if pg then _cachedPetOwnerByGUID[pg] = g end
+                            end
+                        end
+                    end
+                end
+            end
+        end
+
         -- Cache recent level-ups to handle event ordering issues with quest turn-ins
         -- Stores the previous level when player levels up, so we can use it if a quest turn-in happens shortly after
         local recentLevelUpCache = nil  -- { previousLevel = number, timestamp = number }
@@ -4183,62 +4227,14 @@ do
             return result
         end
 
-        -- Check if a GUID belongs to a pet and return the owner's GUID if it's the player's or party member's pet
-        -- In Classic WoW, pet GUIDs are "Creature-" and change each summon, so we check pet units directly
         local function getPetOwnerGUID(sourceGUID)
-            if not sourceGUID then
-                return nil
-            end
-            
-            -- Check if it's the player's pet
-            if UnitExists("pet") then
-                local playerPetGUID = UnitGUID("pet")
-                if playerPetGUID and playerPetGUID == sourceGUID then
-                    return UnitGUID("player")
-                end
-            end
-            
-            -- Check if it's a party member's pet
-            if GetNumGroupMembers() > 1 then
-                for i = 1, 4 do
-                    local unit = "party" .. i
-                    if UnitExists(unit) then
-                        local partyPetUnit = unit .. "pet"
-                        if UnitExists(partyPetUnit) then
-                            local partyPetGUID = UnitGUID(partyPetUnit)
-                            if partyPetGUID and partyPetGUID == sourceGUID then
-                                return UnitGUID(unit)
-                            end
-                        end
-                    end
-                end
-            end
-            
-            return nil
+            if not sourceGUID then return nil end
+            return _cachedPetOwnerByGUID[sourceGUID]
         end
 
-        -- Helper function to check if a GUID belongs to player or party member
         local function isPlayerOrPartyMember(guid)
-            if not guid then
-                return false
-            end
-            local playerGUID = UnitGUID("player")
-            if guid == playerGUID then
-                return true
-            end
-            -- Check party members
-            if GetNumGroupMembers() > 1 then
-                for i = 1, 4 do
-                    local unit = "party" .. i
-                    if UnitExists(unit) then
-                        local partyMemberGUID = UnitGUID(unit)
-                        if partyMemberGUID and guid == partyMemberGUID then
-                            return true
-                        end
-                    end
-                end
-            end
-            return false
+            if not guid then return false end
+            return _cachedPartyGUIDs[guid] == true
         end
         
         local function isSecretAchievementRow(row)
@@ -4291,11 +4287,13 @@ do
 
         local function hasRelevantQuestInLog(row)
             local questID = row and (row.requiredQuestId or (row._def and row._def.requiredQuestId))
-            if not questID then
-                return true
-            end
+            if not questID then return true end
+            local cached = _questLogCache[questID]
+            if cached ~= nil then return cached end
             local questInLog, questReadyForTurnIn = GetQuestLogState(questID)
-            return questInLog or questReadyForTurnIn
+            local result = questInLog or questReadyForTurnIn or false
+            _questLogCache[questID] = result
+            return result
         end
 
         -- Order for dungeon kill print: base first, then Trio, Duo, Solo (so only first eligible variation prints)
@@ -4338,11 +4336,6 @@ do
             end
             return false
         end
-
-        InvalidateAchievementRuntimeIndex = function()
-            achievementRuntimeIndex = nil
-        end
-
         local function buildAchievementRuntimeIndex()
             local index = {
                 killTrackerRowsSorted = {},
@@ -4415,6 +4408,21 @@ do
 
             return index
         end
+        InvalidateAchievementRuntimeIndex = function()
+            achievementRuntimeIndex = nil
+            -- Proactively rebuild on the next frame so the index is ready before the next kill
+            -- event. Without this, the first CLEU after any quest/level/zone change blocks while
+            -- buildAchievementRuntimeIndex() runs synchronously (O(n) + sort + merge passes).
+            if C_Timer and C_Timer.After then
+                C_Timer.After(0, function()
+                    if not achievementRuntimeIndex then
+                        achievementRuntimeIndex = buildAchievementRuntimeIndex()
+                    end
+                end)
+            end
+        end
+
+      
 
         EnsureAchievementRuntimeIndex = function()
             if not achievementRuntimeIndex then
@@ -4571,36 +4579,24 @@ do
         end
 
         local function clearCombatTrackingForGUID(destGUID)
-            if not destGUID then
-                return
-            end
+            if not destGUID then return end
             npcsInCombat[destGUID] = nil
             npcTapDenied[destGUID] = nil
             _threatCheckTime[destGUID] = nil
+            _soloUpdateThrottle[destGUID] = nil
         end
 
         local function isPlayerPartyOrPetSource(sourceGUID)
-            local playerGUID = UnitGUID("player")
-            if playerGUID and sourceGUID == playerGUID then
-                return true
-            end
-            if sourceGUID and GetNumGroupMembers() > 1 then
-                for i = 1, 4 do
-                    local unit = "party" .. i
-                    if UnitExists(unit) then
-                        local partyMemberGUID = UnitGUID(unit)
-                        if partyMemberGUID and sourceGUID == partyMemberGUID then
-                            return true
-                        end
-                    end
-                end
-            end
-            return getPetOwnerGUID(sourceGUID) ~= nil
+            if not sourceGUID then return false end
+            return _cachedPartyGUIDs[sourceGUID] == true
+                or _cachedPetOwnerByGUID[sourceGUID] ~= nil
         end
 
         local function isExternalPlayerSource(sourceGUID)
-            local guidType = sourceGUID and select(1, strsplit("-", sourceGUID))
-            return guidType == "Player" and not isPlayerOrPartyMember(sourceGUID)
+            -- sub(1,7) prefix check avoids strsplit allocation on every damage event.
+            return sourceGUID ~= nil
+                and sourceGUID:sub(1, 7) == "Player-"
+                and not isPlayerOrPartyMember(sourceGUID)
         end
 
         local function trackExternalPlayerForNpc(destGUID, sourceGUID)
@@ -4623,21 +4619,22 @@ do
         end
 
         local function updateSoloStatusForTrackedNpc(destGUID, sourceGUID)
-            if not destGUID then
-                return
-            end
+            if not destGUID then return end
+            -- Source check first: GUID comparison is cheaper than getNpcIdFromGUID + isNpcTrackedForAchievement.
+            -- NPC-vs-NPC events (the majority in busy zones) exit here with no index lookups.
+            local isPlayerDamage = sourceGUID == _cachedPlayerGUID
+            local isExternalPlayerDamage = not isPlayerDamage and isExternalPlayerSource(sourceGUID)
+            if not (isPlayerDamage or isExternalPlayerDamage) then return end
+
             local npcId = getNpcIdFromGUID(destGUID)
             local npcTracked = npcId and isNpcTrackedForAchievement(npcId)
-            if not npcTracked then
-                return
-            end
+            if not npcTracked then return end
 
-            local playerGUID = UnitGUID("player")
-            local isPlayerDamage = sourceGUID == playerGUID
-            local isExternalPlayerDamage = not isPlayerDamage and isExternalPlayerSource(sourceGUID)
-            if not (isPlayerDamage or isExternalPlayerDamage) or not UnitAffectingCombat("player") then
-                return
-            end
+            local now = GetTime()
+            if now - (_soloUpdateThrottle[destGUID] or 0) < 0.25 then return end
+            _soloUpdateThrottle[destGUID] = now
+
+            if not UnitAffectingCombat("player") then return end
             if UnitExists("target") and UnitGUID("target") == destGUID then
                 if isExternalPlayerDamage then
                     updateExternalPlayerThreat(destGUID)
@@ -4721,6 +4718,8 @@ do
             return externalPlayersByNPC[destGUID] or {}
         end
         
+        achEvt:RegisterEvent("GROUP_ROSTER_UPDATE")
+        achEvt:RegisterEvent("UNIT_PET")
         achEvt:RegisterEvent("COMBAT_LOG_EVENT_UNFILTERED")
         achEvt:RegisterEvent("BOSS_KILL")
         achEvt:RegisterEvent("QUEST_ACCEPTED")
@@ -4749,6 +4748,9 @@ do
                 npcsInCombat = {}
                 npcTapDenied = {}
                 _threatCheckTime = {}
+                _soloUpdateThrottle = {}
+                for k in pairs(_questLogCache) do _questLogCache[k] = nil end
+                RebuildPartyGUIDCache()
                 InvalidateOutleveledCache()
                 if InvalidateAchievementRuntimeIndex then
                     InvalidateAchievementRuntimeIndex()
@@ -4791,13 +4793,15 @@ do
                         cleanupExternalPlayers()
                     end
                 end)
+            elseif event == "GROUP_ROSTER_UPDATE" or event == "UNIT_PET" then
+                RebuildPartyGUIDCache()
             elseif event == "COMBAT_LOG_EVENT_UNFILTERED" then
-                --DevTools_Dump(COMBAT_LOG_EVENT_UNFILTERED)
-                local cleu = { CombatLogGetCurrentEventInfo() }
-                local subevent = cleu[2]
-                local sourceGUID, sourceName = cleu[4], cleu[5]
-                local destGUID, destName = cleu[8], cleu[9]
-                local param12, param13, param14, param15, param16 = cleu[12], cleu[13], cleu[14], cleu[15], cleu[16]
+                -- PlayerIsSolo external-helper tracking runs here (single CLEU frame instead of two).
+                if PlayerIsSolo_OnCombatLogEvent then
+                    PlayerIsSolo_OnCombatLogEvent()
+                end
+                -- Multi-return avoids allocating a table on every CLEU event (fires hundreds/sec in AoE).
+                local _, subevent, _, sourceGUID, sourceName, _, _, destGUID, destName, _, _, param12, param13, param14, param15, param16 = CombatLogGetCurrentEventInfo()
                 
                 if subevent == "PARTY_KILL" then
                     -- PARTY_KILL fires when the player/party gets credit for a kill.
@@ -4811,8 +4815,7 @@ do
                     end
                     if inInstance and destGUID then
                         -- Instance: process party kill if it's a tracked creature (same filter as UNIT_DIED)
-                        local guidType = select(1, strsplit("-", destGUID))
-                        if guidType == "Creature" then
+                        if destGUID:sub(1, 9) == "Creature-" then
                             local npcId = getNpcIdFromGUID(destGUID)
                             if npcId and isNpcTrackedForAchievement(npcId) then
                                 processKill(destGUID, npcId)
@@ -4832,8 +4835,7 @@ do
                     local instanceName, instanceType = GetInstanceInfo()
                     if instanceType == "party" or instanceType == "raid" then
                         if destGUID then
-                            local guidType = select(1, strsplit("-", destGUID))
-                            if guidType == "Creature" then
+                            if destGUID:sub(1, 9) == "Creature-" then
                                 local npcId = getNpcIdFromGUID(destGUID)
                                 if npcId and isNpcTrackedForAchievement(npcId) then
                                     processKill(destGUID, npcId)
@@ -4850,8 +4852,11 @@ do
                         local npcId = getNpcIdFromGUID(destGUID)
                         local npcTracked, npcTapDeniedWarn = npcKillTrackContext(npcId)
                         if npcTracked then
-                            -- Check tap denial status whenever we can (not just when first engaging)
-                            local isTapDenied = checkAndStoreTapDenied(destGUID)
+                            -- Use cached tap denial when known; only query the API on the first hit.
+                            local isTapDenied = npcTapDenied[destGUID]
+                            if isTapDenied == nil then
+                                isTapDenied = checkAndStoreTapDenied(destGUID)
+                            end
                             if isTapDenied == true then
                                 npcsInCombat[destGUID] = nil
                                 npcTapDenied[destGUID] = true
@@ -4935,6 +4940,7 @@ do
                     updateSoloStatusForTrackedNpc(destGUID, sourceGUID)
                 end
             elseif event == "QUEST_ACCEPTED" then
+                for k in pairs(_questLogCache) do _questLogCache[k] = nil end
                 if InvalidateAchievementRuntimeIndex then
                     InvalidateAchievementRuntimeIndex()
                 end
@@ -4959,6 +4965,7 @@ do
                     end
                 end
             elseif event == "QUEST_TURNED_IN" then
+                for k in pairs(_questLogCache) do _questLogCache[k] = nil end
                 InvalidateOutleveledCache()
                 if InvalidateAchievementRuntimeIndex then
                     InvalidateAchievementRuntimeIndex()
@@ -5031,59 +5038,57 @@ do
             elseif event == "UNIT_AURA" then
                 local unit = ...
                 if unit ~= "player" then return end
-                for _, row in ipairs(addon.AchievementRowModel or {}) do
-                    -- Check both row.completed and database to prevent re-completion
-                    if not IsAchievementAlreadyCompleted(row) and type(row.auraTracker) == "function" then
-                        local ok, shouldComplete = pcall(row.auraTracker)
-                        if ok and shouldComplete == true then
-                            MarkRowCompleted(row)
-                            local iconTex = (row.frame and row.frame.Icon and row.frame.Icon.GetTexture and row.frame.Icon:GetTexture()) or row.icon or 136116
-                            local titleText = (row.frame and row.frame.Title and row.frame.Title.GetText and row.frame.Title:GetText()) or row.title or "Achievement"
-                            CreateAchToast(iconTex, titleText, row.points, row.frame or row)
-                            break -- Achievement completed, no need to check others
-                        end
-                    end
-                end
-            elseif event == "UNIT_INVENTORY_CHANGED" then
-                local unit = ...
-                if unit ~= "player" then return end
-                
-                -- Handle DefiasMask achievement (specific item check)
-                local _, classFile = UnitClass("player")
-                if classFile == "ROGUE" then
-                    local headSlotItemId = GetInventoryItemID("player", 1)
-                    if headSlotItemId == 7997 then
+                -- Debounce: UNIT_AURA can fire many times per frame on zone entry (buffs, mounts, env auras).
+                -- Defer to next frame so all rapid-fire aura changes are collapsed into one evaluation.
+                if not _pendingAuraCheck then
+                    _pendingAuraCheck = true
+                    C_Timer.After(0, function()
+                        _pendingAuraCheck = false
                         for _, row in ipairs(addon.AchievementRowModel or {}) do
-                            -- Check both row.completed and database to prevent re-completion
-                            if not IsAchievementAlreadyCompleted(row) and (row.id == "DefiasMask" or row.achId == "DefiasMask") then
-                                MarkRowCompleted(row)
-                                local iconTex = (row.frame and row.frame.Icon and row.frame.Icon.GetTexture and row.frame.Icon:GetTexture()) or row.icon or 136116
-                                local titleText = (row.frame and row.frame.Title and row.frame.Title.GetText and row.frame.Title:GetText()) or row.title or "Achievement"
-                                CreateAchToast(iconTex, titleText, row.points, row.frame or row)
-                            end
-                        end
-                    end
-                end
-                
-                -- Call item tracker functions for dungeon set achievements
-                -- The tracker checks if ALL required items are owned, so we call it for all incomplete sets
-                -- This is efficient because GetItemCount is fast and the tracker only completes when ALL items are owned
-                for _, row in ipairs(addon.AchievementRowModel or {}) do
-                    -- Check both row.completed and database to prevent re-completion
-                    if not IsAchievementAlreadyCompleted(row) and row._def and row._def.isDungeonSet then
-                        local achId = row.achId or row.id
-                        if achId then
-                            -- Check if this achievement has an item tracker function (dungeon sets)
-                            local trackerFn = (addon and addon.GetAchievementFunction and addon.GetAchievementFunction(achId, "IsCompleted")) or (addon and addon[achId])
-                            if type(trackerFn) == "function" then
-                                -- The tracker function checks all required items and only returns true
-                                -- when ALL items are owned, so it's safe to call on every inventory change
-                                local ok, shouldComplete = pcall(trackerFn)
+                            if not IsAchievementAlreadyCompleted(row) and type(row.auraTracker) == "function" then
+                                local ok, shouldComplete = pcall(row.auraTracker)
                                 if ok and shouldComplete == true then
                                     MarkRowCompleted(row)
                                     local iconTex = (row.frame and row.frame.Icon and row.frame.Icon.GetTexture and row.frame.Icon:GetTexture()) or row.icon or 136116
                                     local titleText = (row.frame and row.frame.Title and row.frame.Title.GetText and row.frame.Title:GetText()) or row.title or "Achievement"
                                     CreateAchToast(iconTex, titleText, row.points, row.frame or row)
+                                    break
+                                end
+                            end
+                        end
+                    end)
+                end
+            elseif event == "UNIT_INVENTORY_CHANGED" then
+                local unit = ...
+                if unit ~= "player" then return end
+
+                -- Single pass: evaluate DefiasMask (Rogue only) and dungeon set achievements together.
+                local _, classFile = UnitClass("player")
+                local isRogue = (classFile == "ROGUE")
+                local headSlotItemId = isRogue and GetInventoryItemID("player", 1) or nil
+
+                for _, row in ipairs(addon.AchievementRowModel or {}) do
+                    if not IsAchievementAlreadyCompleted(row) then
+                        -- DefiasMask: Rogue wearing the head item
+                        if isRogue and headSlotItemId == 7997 and (row.id == "DefiasMask" or row.achId == "DefiasMask") then
+                            MarkRowCompleted(row)
+                            local iconTex = (row.frame and row.frame.Icon and row.frame.Icon.GetTexture and row.frame.Icon:GetTexture()) or row.icon or 136116
+                            local titleText = (row.frame and row.frame.Title and row.frame.Title.GetText and row.frame.Title:GetText()) or row.title or "Achievement"
+                            CreateAchToast(iconTex, titleText, row.points, row.frame or row)
+                        end
+                        -- Dungeon set achievements (tracker checks all required items internally)
+                        if row._def and row._def.isDungeonSet then
+                            local achId = row.achId or row.id
+                            if achId then
+                                local trackerFn = (addon and addon.GetAchievementFunction and addon.GetAchievementFunction(achId, "IsCompleted")) or (addon and addon[achId])
+                                if type(trackerFn) == "function" then
+                                    local ok, shouldComplete = pcall(trackerFn)
+                                    if ok and shouldComplete == true then
+                                        MarkRowCompleted(row)
+                                        local iconTex = (row.frame and row.frame.Icon and row.frame.Icon.GetTexture and row.frame.Icon:GetTexture()) or row.icon or 136116
+                                        local titleText = (row.frame and row.frame.Title and row.frame.Title.GetText and row.frame.Title:GetText()) or row.title or "Achievement"
+                                        CreateAchToast(iconTex, titleText, row.points, row.frame or row)
+                                    end
                                 end
                             end
                         end
@@ -5268,6 +5273,7 @@ do
                     end
                 end
             elseif event == "QUEST_REMOVED" then
+                for k in pairs(_questLogCache) do _questLogCache[k] = nil end
                 InvalidateOutleveledCache()
                 if InvalidateAchievementRuntimeIndex then
                     InvalidateAchievementRuntimeIndex()
@@ -5310,28 +5316,34 @@ do
                     end
                 end
             elseif event == "MAP_EXPLORATION_UPDATED" then
-                -- Exploration updates must re-run custom completion checks (all zone/continent paths),
-                -- not just special one-off achievements.
-                if EvaluateCustomCompletions then
-                    EvaluateCustomCompletions(UnitLevel("player") or 1)
-                end
-                local playerFaction = select(2, UnitFactionGroup("player"))
-                for _, row in ipairs(addon.AchievementRowModel or {}) do
-                    if not row.completed and row.id == "OrgA" and playerFaction == FACTION_ALLIANCE then
-                        if addon and addon.CheckZoneDiscovery and addon.CheckZoneDiscovery(1411) then
-                            MarkRowCompleted(row)
-                            local iconTex = (row.frame and row.frame.Icon and row.frame.Icon.GetTexture and row.frame.Icon:GetTexture()) or row.icon or 136116
-                            local titleText = (row.frame and row.frame.Title and row.frame.Title.GetText and row.frame.Title:GetText()) or row.title or "Achievement"
-                            CreateAchToast(iconTex, titleText, row.points, row.frame or row)
+                -- Debounce: multiple tiles can fire in the same frame when moving through unexplored areas.
+                -- Consolidate into a single deferred evaluation 0.5s after the last event.
+                if not _pendingExplorationCheck then
+                    _pendingExplorationCheck = true
+                    C_Timer.After(0.5, function()
+                        _pendingExplorationCheck = false
+                        if EvaluateCustomCompletions then
+                            EvaluateCustomCompletions(UnitLevel("player") or 1)
                         end
-                    elseif not row.completed and row.id == "StormH" and playerFaction == FACTION_HORDE then
-                        if addon and addon.CheckZoneDiscovery and addon.CheckZoneDiscovery(1429) then
-                            MarkRowCompleted(row)
-                            local iconTex = (row.frame and row.frame.Icon and row.frame.Icon.GetTexture and row.frame.Icon:GetTexture()) or row.icon or 136116
-                            local titleText = (row.frame and row.frame.Title and row.frame.Title.GetText and row.frame.Title:GetText()) or row.title or "Achievement"
-                            CreateAchToast(iconTex, titleText, row.points, row.frame or row)
+                        local playerFaction = select(2, UnitFactionGroup("player"))
+                        for _, row in ipairs(addon.AchievementRowModel or {}) do
+                            if not row.completed and row.id == "OrgA" and playerFaction == FACTION_ALLIANCE then
+                                if addon and addon.CheckZoneDiscovery and addon.CheckZoneDiscovery(1411) then
+                                    MarkRowCompleted(row)
+                                    local iconTex = (row.frame and row.frame.Icon and row.frame.Icon.GetTexture and row.frame.Icon:GetTexture()) or row.icon or 136116
+                                    local titleText = (row.frame and row.frame.Title and row.frame.Title.GetText and row.frame.Title:GetText()) or row.title or "Achievement"
+                                    CreateAchToast(iconTex, titleText, row.points, row.frame or row)
+                                end
+                            elseif not row.completed and row.id == "StormH" and playerFaction == FACTION_HORDE then
+                                if addon and addon.CheckZoneDiscovery and addon.CheckZoneDiscovery(1429) then
+                                    MarkRowCompleted(row)
+                                    local iconTex = (row.frame and row.frame.Icon and row.frame.Icon.GetTexture and row.frame.Icon:GetTexture()) or row.icon or 136116
+                                    local titleText = (row.frame and row.frame.Title and row.frame.Title.GetText and row.frame.Title:GetText()) or row.title or "Achievement"
+                                    CreateAchToast(iconTex, titleText, row.points, row.frame or row)
+                                end
+                            end
                         end
-                    end
+                    end)
                 end
             elseif event == "PLAYER_DEAD" then
                 for _, row in ipairs(addon.AchievementRowModel or {}) do
