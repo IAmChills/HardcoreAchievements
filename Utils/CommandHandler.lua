@@ -578,6 +578,47 @@ local function ProcessAdminCommand(payload, sender)
         SendResponseToAdmin(sender, "|cffff0000[Hardcore Achievements]|r Admin command rejected: " .. reason)
         return false
     end
+
+    -- Helper: parse mm/dd/yy and merge with existing failure time if present
+    local function CalculateBackdatedTimestamp(achievementId, dateStr)
+        if not dateStr or dateStr == "" then return nil end
+
+        local month, day, year = dateStr:match("^(%d%d?)/(%d%d?)/(%d%d)$")
+        if not month or not day or not year then
+            return nil
+        end
+
+        month = tonumber(month)
+        day   = tonumber(day)
+        year  = tonumber(year)
+        if year < 100 then year = 2000 + year end
+
+        -- Try to get original failure/progress time for this achievement
+        local GetCharDB = addon and addon.GetCharDB
+        local _, cdb = type(GetCharDB) == "function" and GetCharDB() or nil
+        local originalTime = nil
+        if cdb and cdb.progress and cdb.progress[achievementId] then
+            local p = cdb.progress[achievementId]
+            if p.failedAt then
+                originalTime = p.failedAt
+            elseif p.updatedAt then
+                originalTime = p.updatedAt
+            end
+        end
+
+        local hour, min, sec = 0, 0, 0
+        if originalTime then
+            local d = date("*t", originalTime)
+            if d then
+                hour = d.hour or 0
+                min  = d.min  or 0
+                sec  = d.sec  or 0
+            end
+        end
+
+        local ts = time({ year = year, month = month, day = day, hour = hour, min = min, sec = sec })
+        return ts
+    end
     
     -- Check if target character matches current player
     local currentCharacter = UnitName("player")
@@ -604,8 +645,13 @@ local function ProcessAdminCommand(payload, sender)
 				local id = achievementRow.id
 				local rec = cdb.achievements[id] or {}
 				rec.completed = true
-				-- Preserve existing completion timestamp if present; otherwise set now
-				if not rec.completedAt then
+				-- Admin-provided date string (mm/dd/yy) — combine with original failure time if available
+				if payload.completedAtDate then
+					local ts = CalculateBackdatedTimestamp(payload.achievementId, payload.completedAtDate)
+					if ts then
+						rec.completedAt = ts
+					end
+				elseif not rec.completedAt then
 					rec.completedAt = time()
 				end
 				
@@ -735,6 +781,13 @@ local function ProcessAdminCommand(payload, sender)
 		local id = achievementRow.id
 		local rec = cdb.achievements[id]
 		if rec then
+			-- Admin-provided back-date date string (mm/dd/yy)
+			if payload.completedAtDate then
+				local ts = CalculateBackdatedTimestamp(payload.achievementId, payload.completedAtDate)
+				if ts then
+					rec.completedAt = ts
+				end
+			end
 			rec.failed = nil
 			rec.failedAt = nil
 		end
