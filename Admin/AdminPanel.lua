@@ -106,6 +106,7 @@ local function CreateSecurePayload(achievementId, targetCharacter, opts)
 		if opts.overrideLevel ~= nil then payload.overrideLevel = tonumber(opts.overrideLevel) end
 		if opts.commandType ~= nil then payload.commandType = opts.commandType end
 		if opts.solo ~= nil then payload.solo = opts.solo and true or false end
+		if opts.completedAtDate ~= nil then payload.completedAtDate = tostring(opts.completedAtDate) end
 	end
     
     -- Create secure hash using secret key
@@ -274,7 +275,7 @@ local function AddResponseMessage(character, message)
     print(message)
 end
 
-local function SendAdminCommand(achievementId, targetCharacter, forceUpdate, overridePoints, overrideLevel, solo)
+local function SendAdminCommand(achievementId, targetCharacter, forceUpdate, overridePoints, overrideLevel, solo, completedAtDate)
     if not achievementId or not targetCharacter then
         print("|cffff0000[HardcoreAchievements Admin]|r Invalid achievement ID or character name")
         return
@@ -289,12 +290,13 @@ local function SendAdminCommand(achievementId, targetCharacter, forceUpdate, ove
         return
     end
     
-    -- Create secure payload
+    -- Create secure payload (completedAtDate is a mm/dd/yy string)
     local success, payload = pcall(CreateSecurePayload, achievementId, targetCharacter, { 
         forceUpdate = forceUpdate, 
         overridePoints = overridePoints, 
         overrideLevel = overrideLevel,
-        solo = solo
+        solo = solo,
+        completedAtDate = completedAtDate
     })
     
     if not success or not payload then
@@ -317,6 +319,7 @@ local function SendAdminCommand(achievementId, targetCharacter, forceUpdate, ove
 	if solo then suffix = suffix .. " [Solo]" end
 	if overridePoints and tonumber(overridePoints) then suffix = suffix .. " [Override Points: " .. tostring(overridePoints) .. "]" end
 	if overrideLevel and tonumber(overrideLevel) then suffix = suffix .. " [Override Level: " .. tostring(overrideLevel) .. "]" end
+	if completedAtDate then suffix = suffix .. " [Completed Date: " .. tostring(completedAtDate) .. "]" end
 	print("|cff00ff00[HardcoreAchievements Admin]|r Sent achievement command for '" .. achievementId .. "' to " .. targetCharacter .. suffix)
     
     -- Log the admin action
@@ -333,6 +336,7 @@ local function SendAdminCommand(achievementId, targetCharacter, forceUpdate, ove
 		solo = solo and true or false,
 		overridePoints = overridePoints and tonumber(overridePoints) or nil,
 		overrideLevel = overrideLevel and tonumber(overrideLevel) or nil,
+		completedAtDate = completedAtDate or nil,
         nonce = payload.nonce,
         payloadHash = payload.validationHash
     })
@@ -604,6 +608,19 @@ local function CreateAdminPanel()
 	levelInput:SetAutoFocus(false)
 	levelInput:SetNumeric(true)
 	levelInput:SetText("")
+
+	-- Completed At (back-date) input - mm/dd/yy format
+	local completedAtLabel = adminFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+	completedAtLabel:SetPoint("BOTTOM", levelLabel, "TOP", 0, 35)
+	completedAtLabel:SetText("Completed Date (mm/dd/yy)")
+
+	local completedAtInput = CreateFrame("EditBox", nil, adminFrame, "InputBoxTemplate")
+	completedAtInput:SetPoint("TOP", completedAtLabel, "BOTTOM", 0, -5)
+	completedAtInput:SetSize(80, 28)
+	completedAtInput:SetAutoFocus(false)
+	completedAtInput:SetNumeric(false)
+	completedAtInput:SetText("")
+	completedAtInput.tooltip = "Enter date as mm/dd/yy (e.g. 06/21/26). Time of day will be preserved from the player's original progress/failure time."
     
     -- Send button
     local sendButton = CreateFrame("Button", nil, adminFrame, "UIPanelButtonTemplate")
@@ -917,8 +934,10 @@ local function CreateAdminPanel()
             local solo = soloCheck:GetChecked() and true or false
             local overridePoints = tonumber(pointsInput:GetText())
             local overrideLevel = tonumber(levelInput:GetText())
+            local completedAt = (completedAtInput:GetText() or ""):trim()
+            if completedAt == "" then completedAt = nil end
 
-            SendAdminCommand(selectedAchievement.achId, characterName, forceUpdate, overridePoints, overrideLevel, solo)
+            SendAdminCommand(selectedAchievement.achId, characterName, forceUpdate, overridePoints, overrideLevel, solo, completedAt)
         end)
         
         -- Delete Achievement button handler
