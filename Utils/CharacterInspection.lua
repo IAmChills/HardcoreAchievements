@@ -15,7 +15,7 @@
 -- - HCA_InspectData: Actual achievement data transmission
 
 local AceComm = LibStub("AceComm-3.0")
-local AceSerialize = LibStub("AceSerializer-3.0")
+local LibSerialize = LibStub("LibSerialize")
 local LibDeflate = LibStub("LibDeflate", true)
 
 local INSPECTION_COMM_PREFIX = "HCA_Inspect" -- AceComm prefix for inspection requests
@@ -72,7 +72,7 @@ local function NormalizeAchievementId(achId)
 end
 
 local function SerializeInspectionPayload(payload)
-    local serialized = AceSerialize:Serialize(payload)
+    local serialized = LibSerialize:SerializeEx({errorOnUnserializableType = false}, payload)
     local compressed = LibDeflate and LibDeflate:CompressDeflate(serialized)
     return compressed and LibDeflate:EncodeForWoWAddonChannel(compressed)
 end
@@ -88,7 +88,7 @@ local function DeserializeInspectionPayload(message)
         return false, nil
     end
 
-    return AceSerialize:Deserialize(decompressed)
+    return LibSerialize:Deserialize(decompressed)
 end
 
 local function InspectStripColorCodes(text)

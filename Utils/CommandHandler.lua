@@ -3,7 +3,7 @@
 -- This file should be included in all versions of the addon
 
 local AceComm = LibStub("AceComm-3.0")
-local AceSerialize = LibStub("AceSerializer-3.0")
+local LibSerialize = LibStub("LibSerialize")
 
 local addonName, addon = ...
 local C_GameRules = C_GameRules
@@ -198,7 +198,7 @@ local function SendResponseToAdmin(sender, message)
         targetCharacter = UnitName("player")
     }
     
-    local serializedResponse = AceSerialize:Serialize(responsePayload)
+    local serializedResponse = LibSerialize:SerializeEx({errorOnUnserializableType = false}, responsePayload)
     if serializedResponse then
         AceComm:SendCommMessage(RESPONSE_PREFIX, serializedResponse, "WHISPER", sender)
     end
@@ -800,7 +800,7 @@ local function OnCommReceived(prefix, message, distribution, sender)
     if prefix ~= COMM_PREFIX then return end
     
     -- Deserialize the payload
-    local success, payload = AceSerialize:Deserialize(message)
+    local success, payload = LibSerialize:Deserialize(message)
     if not success then
         SendResponseToAdmin(sender, "|cffff0000[Hardcore Achievements]|r Failed to deserialize admin command")
         return
@@ -813,7 +813,7 @@ end
 -- AceComm handler for Precious completion messages
 local function OnPreciousCompletedMessage(prefix, message, distribution, sender)
     -- Deserialize the message
-    local success, payload = AceSerialize:Deserialize(message)
+    local success, payload = LibSerialize:Deserialize(message)
     if not success or not payload or payload.type ~= "precious_completed" then
         return
     end
@@ -839,7 +839,7 @@ local function OnPreciousCompletedMessage(prefix, message, distribution, sender)
 end
 
 local function OnDungeonBossCreditMessage(prefix, message, distribution, sender)
-    local success, payload = AceSerialize:Deserialize(message)
+    local success, payload = LibSerialize:Deserialize(message)
     if not success or not payload or payload.type ~= "dungeon_boss_credit" then
         return
     end
@@ -1070,7 +1070,7 @@ local function SendPreciousCompletionMessage()
         playerName = UnitName("player")
     }
     
-    local serializedMessage = AceSerialize:Serialize(messagePayload)
+    local serializedMessage = LibSerialize:SerializeEx({errorOnUnserializableType = false}, messagePayload)
     if serializedMessage then
         AceComm:SendCommMessage(PRECIOUS_COMPLETE_PREFIX, serializedMessage, "SAY")
         if DebugPrint then DebugPrint("Precious completion message sent") end
@@ -1112,7 +1112,7 @@ local function SendDungeonBossCreditMessage(achievementId, mapId, npcId, killTok
         senderName = UnitName("player"),
     }
 
-    local serializedMessage = AceSerialize:Serialize(messagePayload)
+    local serializedMessage = LibSerialize:SerializeEx({errorOnUnserializableType = false}, messagePayload)
     if not serializedMessage then
         return false
     end
