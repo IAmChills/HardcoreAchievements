@@ -595,6 +595,8 @@ local function registerRaidAchievement(def)
     if state.completed then
       if addon and addon.MarkRowCompleted then
         addon.MarkRowCompleted(addon[rowVarName])
+      else
+        addon[rowVarName].completed = true
       end
     end
     

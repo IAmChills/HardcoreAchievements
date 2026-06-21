@@ -270,7 +270,16 @@ local function UpdateAllProfessionRowVisibility()
     end
 end
 
-local function EvaluateCompletions(skillID)
+local function GetCompletionFunction(completeAchievement)
+    if type(completeAchievement) == "function" then
+        return completeAchievement
+    end
+    -- Default to MarkRowCompleted (guarded) for restoration paths.
+    -- Live gameplay callers should pass CompleteAchievementWithToast explicitly.
+    return (addon and addon.MarkRowCompleted) or (addon and addon.CompleteAchievementWithToast)
+end
+
+local function EvaluateCompletions(skillID, completeAchievement)
     local rows = ProfessionRows[skillID]
     if not rows then return end
 
@@ -279,15 +288,14 @@ local function EvaluateCompletions(skillID)
         return
     end
 
+    local complete = GetCompletionFunction(completeAchievement)
     local anyCompleted = false
     for _, row in ipairs(rows) do
         local completionFn = row.customIsCompleted
-        if not IsRowCompleted(row, cdb) and type(completionFn) == "function" then
+        if complete and not IsRowCompleted(row, cdb) and type(completionFn) == "function" then
             local ok, result = pcall(completionFn)
             if ok and result == true then
-                if addon and addon.CompleteAchievementWithToast then
-                    anyCompleted = addon.CompleteAchievementWithToast(row) or anyCompleted
-                end
+                anyCompleted = complete(row) or anyCompleted
             end
         end
     end
@@ -325,7 +333,7 @@ end
 -- Skill scanning
 -- =========================================================
 
-local function NotifySkillChanged(skillID, newRank, oldRank, localizedName)
+local function NotifySkillChanged(skillID, newRank, oldRank, localizedName, completeAchievement)
     local state = EnsureState(skillID)
     state.rank = newRank or state.rank or 0
     state.known = CalculateKnownState(state.rank, state.maxRank)
@@ -333,11 +341,11 @@ local function NotifySkillChanged(skillID, newRank, oldRank, localizedName)
         state.localizedName = localizedName
     end
 
-    EvaluateCompletions(skillID)
+    EvaluateCompletions(skillID, completeAchievement)
     UpdateProfessionRowVisibility(skillID)
 end
 
-local function ScanSkills()
+local function ScanSkills(completeAchievement)
     if not GetNumSkillLines or not GetSkillLineInfo then
         return
     end
@@ -363,7 +371,7 @@ local function ScanSkills()
                 end
 
                 if state.known ~= oldKnown or state.rank ~= oldRank then
-                    NotifySkillChanged(skillID, state.rank, oldRank, state.localizedName)
+                    NotifySkillChanged(skillID, state.rank, oldRank, state.localizedName, completeAchievement)
                 end
             end
         end
@@ -376,14 +384,14 @@ local function ScanSkills()
             state.rank = 0
             state.maxRank = 0
             state.known = false
-            NotifySkillChanged(skillID, 0, oldRank)
+            NotifySkillChanged(skillID, 0, oldRank, nil, completeAchievement)
         end
     end
 
     UpdateAllProfessionRowVisibility()
 end
 
-local function HandleConsoleSkillMessage(message)
+local function HandleConsoleSkillMessage(message, completeAchievement)
     if type(message) ~= "string" then
         return false
     end
@@ -401,7 +409,7 @@ local function HandleConsoleSkillMessage(message)
     state.rank = newRank
     state.known = true
 
-    NotifySkillChanged(skillID, newRank, oldRank)
+    NotifySkillChanged(skillID, newRank, oldRank, nil, completeAchievement)
     return true
 end
 
@@ -419,11 +427,12 @@ eventFrame:SetScript("OnEvent", function(_, event, ...)
         -- Delay initial scan slightly to ensure skills are loaded
         C_Timer.After(1, ScanSkills)
     elseif event == "SKILL_LINES_CHANGED" or event == "CHAT_MSG_SKILL" then
-        ScanSkills()
+        ScanSkills(addon and addon.CompleteAchievementWithToast)
     elseif event == "CONSOLE_MESSAGE" then
         local message = ...
-        if not HandleConsoleSkillMessage(message) then
-            ScanSkills()
+        local completeAchievement = addon and addon.CompleteAchievementWithToast
+        if not HandleConsoleSkillMessage(message, completeAchievement) then
+            ScanSkills(completeAchievement)
         end
     end
 end)

@@ -126,12 +126,8 @@ jumpTrackingFrame:SetScript("OnEvent", function(self, event, addonName)
             }
             cdb.stats.playerJumps = JumpCounter.count
 
-            -- Check for achievement completion on initial load (in case player already has 100k jumps)
-            C_Timer.After(EVAL_DELAY_SEC, function()
-                if addon and addon.EvaluateCustomCompletions then
-                    addon.EvaluateCustomCompletions()
-                end
-            end)
+            -- Check for achievement completion on initial load (in case player already has 100k jumps).
+            -- Initial registration already handled it; skip the delayed eval to avoid redundant work.
 
             -- Function to call when a jump is detected
             function JumpCounter:OnJump()

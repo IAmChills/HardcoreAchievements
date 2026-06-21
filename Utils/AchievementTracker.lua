@@ -940,6 +940,9 @@ local function GetAchievementDescription(achievementId)
     local achievementOrder = nil
     local isContinentExploration = false
     local isRaid = false
+    local isDungeon = false
+    local isHeroicDungeon = false
+    local isDungeonSet = false
     local achDef = nil
     local explorationZone = nil
     
@@ -976,102 +979,60 @@ local function GetAchievementDescription(achievementId)
     -- Try AchievementDefs (for dungeon/other achievements)
     if addon and addon.AchievementDefs and addon.AchievementDefs[tostring(achievementId)] then
         achDef = addon.AchievementDefs[tostring(achievementId)]
-        if achDef.explorationZone then
-            explorationZone = achDef.explorationZone
-        end
+        if achDef.explorationZone then explorationZone = achDef.explorationZone end
         if not baseTooltip then
-            -- Check if it's a secret achievement and not completed
             if achDef.secret and achDef.isGuildFirst ~= true and not achievementCompleted and achDef.secretTooltip then
                 baseTooltip = achDef.secretTooltip
             else
                 baseTooltip = achDef.tooltip
             end
         end
-        if achDef.requiredKills then
-            requiredKills = achDef.requiredKills
-        end
-        if achDef.bossOrder then
-            bossOrder = achDef.bossOrder
-        end
-        if achDef.requiredItems then
-            requiredItems = achDef.requiredItems
-        end
-        if achDef.itemOrder then
-            itemOrder = achDef.itemOrder
-        end
-        if achDef.isRaid then
-            isRaid = true
-        end
-        if achDef.requiredAchievements then
-            requiredAchievements = achDef.requiredAchievements
-        end
-        if achDef.achievementOrder then
-            achievementOrder = achDef.achievementOrder
-        end
-        if achDef.isContinentExploration then
-            isContinentExploration = true
+        if achDef.requiredKills then requiredKills = achDef.requiredKills end
+        if achDef.bossOrder then bossOrder = achDef.bossOrder end
+        if achDef.requiredItems then requiredItems = achDef.requiredItems end
+        if achDef.itemOrder then itemOrder = achDef.itemOrder end
+        if achDef.isRaid then isRaid = true end
+        if achDef.isDungeon then isDungeon = true end
+        if achDef.isHeroicDungeon then isHeroicDungeon = true end
+        if achDef.isDungeonSet then isDungeonSet = true end
+        if achDef.requiredAchievements then requiredAchievements = achDef.requiredAchievements end
+        if achDef.achievementOrder then achievementOrder = achDef.achievementOrder end
+        if achDef.isContinentExploration then isContinentExploration = true end
+    end
+
+    -- Enrich from the row model (single fetch). Tooltip enrichment only if still needed.
+    if addon and addon.GetAchievementRow then
+        local row = addon.GetAchievementRow(achievementId)
+        if row then
+            if not baseTooltip then
+                local rowIsSecret = (row.isSecretAchievement or (row._def and row._def.secret)) and not (row._def and row._def.isGuildFirst)
+                local rowCompleted = row.completed or achievementCompleted
+                if rowIsSecret and not rowCompleted and row.secretTooltip then
+                    baseTooltip = row.secretTooltip
+                else
+                    baseTooltip = row.tooltip or row._tooltip
+                end
+            end
+            -- Merge scalar fields preferring first non-nil source
+            if not requiredKills then requiredKills = row.requiredKills or (row._def and row._def.requiredKills) end
+            if not requiredItems then requiredItems = row.requiredItems or (row._def and row._def.requiredItems) end
+            if not itemOrder then itemOrder = row.itemOrder or (row._def and row._def.itemOrder) end
+            if not requiredAchievements then requiredAchievements = row.requiredAchievements or (row._def and row._def.requiredAchievements) end
+            if not achievementOrder then achievementOrder = row.achievementOrder or (row._def and row._def.achievementOrder) end
+            if not bossOrder then bossOrder = row._def and row._def.bossOrder end
+            if not explorationZone then explorationZone = row._def and row._def.explorationZone end
+            if not isContinentExploration and row._def and row._def.isContinentExploration then isContinentExploration = true end
+            -- Boolean flags (any source wins)
+            if not isRaid and ((row._def and row._def.isRaid) or row.isRaid) then isRaid = true end
+            if not isDungeon and ((row._def and row._def.isDungeon) or row.isDungeon) then isDungeon = true end
+            if not isHeroicDungeon and ((row._def and row._def.isHeroicDungeon) or row.isHeroicDungeon) then isHeroicDungeon = true end
+            if not isDungeonSet and ((row._def and row._def.isDungeonSet) or row.isDungeonSet) then isDungeonSet = true end
         end
     end
     
-    -- Try addon's single source (model or UI)
-    if not baseTooltip and addon and addon.GetAchievementRow then
-        local row = addon.GetAchievementRow(achievementId)
-        if row then
-            local rowIsSecret = (row.isSecretAchievement or (row._def and row._def.secret)) and not (row._def and row._def.isGuildFirst)
-            local rowCompleted = row.completed or achievementCompleted
-            if rowIsSecret and not rowCompleted and row.secretTooltip then
-                baseTooltip = row.secretTooltip
-            else
-                baseTooltip = row.tooltip or row._tooltip
-            end
-            if not requiredKills and row.requiredKills then requiredKills = row.requiredKills end
-            if not requiredItems and row.requiredItems then requiredItems = row.requiredItems end
-            if not itemOrder and row.itemOrder then itemOrder = row.itemOrder end
-            if not requiredAchievements and row.requiredAchievements then requiredAchievements = row.requiredAchievements end
-            if not achievementOrder and row.achievementOrder then achievementOrder = row.achievementOrder end
-            if row._def and row._def.isRaid then isRaid = true end
-            if row._def and row._def.requiredKills and not requiredKills then requiredKills = row._def.requiredKills end
-            if row._def and row._def.bossOrder and not bossOrder then bossOrder = row._def.bossOrder end
-            if row._def and row._def.explorationZone and not explorationZone then
-                explorationZone = row._def.explorationZone
-            end
-            if row._def and row._def.requiredAchievements and not requiredAchievements then
-                requiredAchievements = row._def.requiredAchievements
-            end
-            if row._def and row._def.achievementOrder and not achievementOrder then
-                achievementOrder = row._def.achievementOrder
-            end
-            if row._def and row._def.isContinentExploration then
-                isContinentExploration = true
-            end
-        end
-    elseif addon and addon.GetAchievementRow then
-        -- Catalog may have supplied tooltip text already; still merge def-driven fields from the row model.
-        local row = addon.GetAchievementRow(achievementId)
-        if row then
-            if row._def and row._def.explorationZone and not explorationZone then
-                explorationZone = row._def.explorationZone
-            end
-            if row._def and row._def.requiredAchievements and not requiredAchievements then
-                requiredAchievements = row._def.requiredAchievements
-            end
-            if row._def and row._def.achievementOrder and not achievementOrder then
-                achievementOrder = row._def.achievementOrder
-            end
-            if row._def and row._def.isContinentExploration then
-                isContinentExploration = true
-            end
-            if not requiredAchievements and row.requiredAchievements then
-                requiredAchievements = row.requiredAchievements
-            end
-            if not achievementOrder and row.achievementOrder then
-                achievementOrder = row.achievementOrder
-            end
-        end
-    end
-    
-    -- Check if this is a dungeon/raid achievement (has requiredKills or requiredItems)
-    local isDungeonOrRaidAchievement = (requiredKills and next(requiredKills) ~= nil) or (requiredItems and type(requiredItems) == "table" and #requiredItems > 0)
+    -- Check if this is a dungeon/raid achievement (has requiredKills/requiredItems AND is explicitly a dungeon or raid achievement)
+    local isDungeonOrRaidAchievement = ((requiredKills and next(requiredKills) ~= nil) or (requiredItems and type(requiredItems) == "table" and #requiredItems > 0))
+        and (isRaid or isDungeon or isHeroicDungeon or isDungeonSet)
 
     local explorationDetails, explorationErr, _, explorationTotal = nil, nil, 0, 0
     if explorationZone and addon and type(addon.GetZoneDiscoveryDetails) == "function" then
@@ -1104,8 +1065,8 @@ local function GetAchievementDescription(achievementId)
         description = baseTooltip
     end
     
-    -- Add required bosses section if available
-    if requiredKills and next(requiredKills) ~= nil then
+    -- Add required bosses section if available (only for actual dungeon/raid achievements)
+    if isDungeonOrRaidAchievement and requiredKills and next(requiredKills) ~= nil then
         -- Only add newline before if there's already content, otherwise start directly with the header
         if description ~= "" then
             description = description .. "\n\n|cff00ff00Required Bosses:|r"
@@ -1179,7 +1140,7 @@ local function GetAchievementDescription(achievementId)
     end
     
     -- Add required items section if available (for dungeon sets)
-    if requiredItems and type(requiredItems) == "table" and #requiredItems > 0 then
+    if isDungeonOrRaidAchievement and requiredItems and type(requiredItems) == "table" and #requiredItems > 0 then
         -- Only add newline before if there's already content, otherwise start directly with the header
         if description ~= "" then
             description = description .. "\n\n|cff00ff00Required Items:|r"

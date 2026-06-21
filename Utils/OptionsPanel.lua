@@ -1,9 +1,6 @@
 local addonName, addon = ...
 local GetCharDB = addon and addon.GetCharDB
 
--- Load AceSerializer (still needed for old format fallback)
-local AceSerialize = LibStub("AceSerializer-3.0")
-
 -- Use the standalone encoding functions from DataEncoding.lua
 -- EncodeData and DecodeData are available globally after DataEncoding.lua loads
 
@@ -496,57 +493,28 @@ local function CreateBackupRestoreFrame()
             return
         end
         
-        -- Try to decode and deserialize
+        -- Decode and deserialize (DecodeData handles both new and legacy formats)
         local success, data = addon.DecodeData(text)
         if not success then
-            -- Fallback: try old format (non-encoded) for backward compatibility
-            local oldSuccess, oldData = AceSerialize:Deserialize(text)
-            if oldSuccess then
-                success = true
-                data = oldData
-                print("|cffffd100Hardcore Achievements:|r Using old format (non-encoded) backup.")
-            else
-                print("|cffff0000Hardcore Achievements:|r Failed to import database. Invalid backup string.")
-                return
-            end
+            print("|cffff0000Hardcore Achievements:|r Failed to import database. Invalid backup string.")
+            return
         end
         
-        -- Validate that it looks like the full database structure
+        -- Validate full database structure
         if type(data) ~= "table" or not data.chars or type(data.chars) ~= "table" then
             print("|cffff0000Hardcore Achievements:|r Invalid backup data format. Expected full database structure with 'chars' table.")
             return
         end
         
-        -- Import the entire database structure
+        -- Replace the entire database (write to SavedVariables global so it persists)
         if addon and addon.HardcoreAchievementsDB then
-            -- Deep copy function
-            local function DeepCopy(orig)
-                local orig_type = type(orig)
-                local copy
-                if orig_type == 'table' then
-                    copy = {}
-                    for orig_key, orig_value in next, orig, nil do
-                        copy[DeepCopy(orig_key)] = DeepCopy(orig_value)
-                    end
-                    setmetatable(copy, DeepCopy(getmetatable(orig)))
-                else
-                    copy = orig
-                end
-                return copy
-            end
-            
-            -- Replace the entire database with imported data (write to SavedVariables global so it persists)
-            local imported = DeepCopy(data)
-            HardcoreAchievementsDB = imported
+            HardcoreAchievementsDB = data
             if addon then addon.HardcoreAchievementsDB = HardcoreAchievementsDB end
             
-            print("|cff00ff00Hardcore Achievements:|r Database imported successfully! All characters and settings have been restored.")
+            print("|cff00ff00Hardcore Achievements:|r Full database imported successfully! All characters and settings have been restored.")
             print("|cffffd100Hardcore Achievements:|r Reloading UI...")
             
-            -- Close the frame
             frame:Hide()
-            
-            -- Reload UI to ensure everything is properly refreshed
             ReloadUI()
         else
             print("|cffff0000Hardcore Achievements:|r Database not available.")
@@ -561,42 +529,43 @@ local function CreateBackupRestoreFrame()
     return frame
 end
 
--- Function to export database
+-- Function to export full account database
 local function ExportDatabase()
-    -- Access the full database structure
     if not addon or not addon.HardcoreAchievementsDB then
         print("|cffff0000Hardcore Achievements:|r No database found.")
         return
     end
-    
-    -- Create a deep copy of the entire database structure
-    local function DeepCopy(orig)
-        local orig_type = type(orig)
-        local copy
-        if orig_type == 'table' then
-            copy = {}
-            for orig_key, orig_value in next, orig, nil do
-                copy[DeepCopy(orig_key)] = DeepCopy(orig_value)
-            end
-            setmetatable(copy, DeepCopy(getmetatable(orig)))
-        else
-            copy = orig
-        end
-        return copy
-    end
-    
-    local exportData = DeepCopy(addon.HardcoreAchievementsDB)
-    
-    -- Serialize, compress, and encode the data
-    local encoded = addon.EncodeData(exportData)
-    
-    -- Show the unified backup/restore frame with Backup tab active
+
     local frame = CreateBackupRestoreFrame()
     SwitchTab("Backup")
-    frame.backupPanel.editBox:SetText(encoded)
-    frame.backupPanel.editBox.originalText = encoded
-    frame.backupPanel.editBox:HighlightText() -- Select all text for easy copying
+
+    local editBox = frame.backupPanel.editBox
+    editBox:SetText("Generating backup, please wait...\n(This may take several seconds on large accounts)")
+    editBox.originalText = nil
     frame:Show()
+
+    -- Do the expensive serialization off the main UI thread using a coroutine + C_Timer
+    local co = coroutine.create(function()
+        local encoded = addon.EncodeData(addon.HardcoreAchievementsDB)
+
+        -- Yield back to UI thread so we can update the edit box safely
+        coroutine.yield(encoded)
+    end)
+
+    local function ContinueGeneration()
+        local success, result = coroutine.resume(co)
+        if success and result then
+            -- Generation complete
+            editBox:SetText(result)
+            editBox.originalText = result
+            editBox:HighlightText()
+        elseif coroutine.status(co) ~= "dead" then
+            -- Still working, schedule next slice
+            C_Timer.After(0, ContinueGeneration)
+        end
+    end
+
+    C_Timer.After(0, ContinueGeneration)
 end
 
 -- Create the main options panel

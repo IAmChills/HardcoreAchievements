@@ -550,7 +550,7 @@ local Achievements = {
     end,
     allowSoloDouble = true,
     customIsCompleted = function() return false end,
-    customItem = function() return GetItemCount(9240, true) > 0 end,
+    customItem = function(level) return level <= 49 and GetItemCount(9240, true) > 0 end,
     zone = "Hinterlands"
 }, {
     achId = "Mukla",

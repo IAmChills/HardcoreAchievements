@@ -46,7 +46,6 @@ local presets = {
         disableNameplateHealth = true,
         showDazedEffect = true,
         hideGroupHealth = true,
-        hideMinimap = true,
     },
     { -- Extreme
         hidePlayerFrame = true,
@@ -85,7 +84,7 @@ local presets = {
         completelyRemovePlayerFrame = true,
         completelyRemoveTargetFrame = true,
         hidePlayerCastBar = true,
-        showWildAllyHealthIndicator = true,
+        --showWildAllyHealthIndicator = true,
     }
 }
 
