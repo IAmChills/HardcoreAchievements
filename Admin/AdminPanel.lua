@@ -4,7 +4,7 @@
 
 local addonName, addon = ...
 local AceComm = LibStub("AceComm-3.0")
-local AceSerialize = LibStub("AceSerializer-3.0")
+local LibSerialize = LibStub("LibSerialize")
 local LibP2PDB = LibStub("LibP2PDB", true)
 
 local AdminPanel = {}
@@ -184,7 +184,7 @@ local function SendClearDeletedByAdminCommand(achievementId, targetCharacter)
         print("|cffff0000[HardcoreAchievements Admin]|r Failed to create unban payload: " .. tostring(payload))
         return
     end
-    local serializedPayload = AceSerialize:Serialize(payload)
+    local serializedPayload = LibSerialize:SerializeEx({errorOnUnserializableType = false}, payload)
     if not serializedPayload then
         print("|cffff0000[HardcoreAchievements Admin]|r Failed to serialize payload")
         return
@@ -230,7 +230,7 @@ local function SendGuildFirstRelayCommand(relayCharacter, achievementId, winnerN
         return false
     end
 
-    local serializedPayload = AceSerialize:Serialize(payload)
+    local serializedPayload = LibSerialize:SerializeEx({errorOnUnserializableType = false}, payload)
     if not serializedPayload then
         print("|cffff0000[HardcoreAchievements Admin]|r Failed to serialize GuildFirst relay payload")
         return false
@@ -302,7 +302,7 @@ local function SendAdminCommand(achievementId, targetCharacter, forceUpdate, ove
         return
     end
     
-    local serializedPayload = AceSerialize:Serialize(payload)
+    local serializedPayload = LibSerialize:SerializeEx({errorOnUnserializableType = false}, payload)
     
     if not serializedPayload then
         print("|cffff0000[HardcoreAchievements Admin]|r Failed to serialize payload")
@@ -367,7 +367,7 @@ local function SendDeleteAchievementCommand(achievementId, targetCharacter, perm
         return
     end
     
-    local serializedPayload = AceSerialize:Serialize(payload)
+    local serializedPayload = LibSerialize:SerializeEx({errorOnUnserializableType = false}, payload)
     
     if not serializedPayload then
         print("|cffff0000[HardcoreAchievements Admin]|r Failed to serialize payload")
@@ -426,7 +426,7 @@ local function SendClearSecretKeyCommand(targetCharacter)
         return
     end
     
-    local serializedPayload = AceSerialize:Serialize(payload)
+    local serializedPayload = LibSerialize:SerializeEx({errorOnUnserializableType = false}, payload)
     
     if not serializedPayload then
         print("|cffff0000[HardcoreAchievements Admin]|r Failed to serialize payload")
@@ -1028,7 +1028,7 @@ local function OnResponseReceived(prefix, message, distribution, sender)
     if prefix ~= RESPONSE_PREFIX then return end
     
     -- Deserialize the response payload
-    local success, payload = AceSerialize:Deserialize(message)
+    local success, payload = LibSerialize:Deserialize(message)
     if not success then
         print("|cffff0000[HardcoreAchievements Admin]|r Failed to deserialize response")
         return
