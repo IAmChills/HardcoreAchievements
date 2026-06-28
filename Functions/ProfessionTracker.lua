@@ -417,6 +417,7 @@ end
 -- Event handling
 -- =========================================================
 
+local _skillScanPending = false
 local eventFrame = CreateFrame("Frame")
 eventFrame:RegisterEvent("PLAYER_LOGIN")
 eventFrame:RegisterEvent("SKILL_LINES_CHANGED")
@@ -427,12 +428,25 @@ eventFrame:SetScript("OnEvent", function(_, event, ...)
         -- Delay initial scan slightly to ensure skills are loaded
         C_Timer.After(1, ScanSkills)
     elseif event == "SKILL_LINES_CHANGED" or event == "CHAT_MSG_SKILL" then
-        ScanSkills(addon and addon.CompleteAchievementWithToast)
+        -- Debounce: both events fire in bursts on profession skill-ups.
+        if not _skillScanPending then
+            _skillScanPending = true
+            C_Timer.After(0.1, function()
+                _skillScanPending = false
+                ScanSkills(addon and addon.CompleteAchievementWithToast)
+            end)
+        end
     elseif event == "CONSOLE_MESSAGE" then
         local message = ...
         local completeAchievement = addon and addon.CompleteAchievementWithToast
         if not HandleConsoleSkillMessage(message, completeAchievement) then
-            ScanSkills(completeAchievement)
+            if not _skillScanPending then
+                _skillScanPending = true
+                C_Timer.After(0.1, function()
+                    _skillScanPending = false
+                    ScanSkills(completeAchievement)
+                end)
+            end
         end
     end
 end)
