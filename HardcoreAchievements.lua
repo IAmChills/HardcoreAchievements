@@ -37,10 +37,35 @@ local LoadTabPosition
 local InvalidateAchievementRuntimeIndex
 local EnsureAchievementRuntimeIndex
 -- Persistent cache for IsRowOutleveled results.
--- Invalidated on level change, zone change, and quest state changes.
+-- Full wipe on level change, zone change, and quest state changes.
+-- Per-row clear on progress updates so failed/available status stays snappy.
 local _outleveledCache = {}
 local function InvalidateOutleveledCache()
     _outleveledCache = {}
+end
+
+-- Model entries and panel frames are distinct objects; clear both so UI and
+-- runtime consumers recompute after progress that can flip failed/available.
+local function InvalidateOutleveledCacheForAchId(achId)
+    if not achId then return nil end
+    local dirtyFrame, dirtyModel = nil, nil
+    if addon and addon.AchievementRowModel then
+        for _, r in ipairs(addon.AchievementRowModel) do
+            if r.id == achId or r.achId == achId then
+                _outleveledCache[r] = nil
+                dirtyModel = r
+            end
+        end
+    end
+    if AchievementPanel and AchievementPanel.achievements then
+        for _, r in ipairs(AchievementPanel.achievements) do
+            if r.id == achId or r.achId == achId then
+                _outleveledCache[r] = nil
+                dirtyFrame = r
+            end
+        end
+    end
+    return dirtyFrame or dirtyModel
 end
 local QuestTrackedRows = {}
 local ACHIEVEMENT_SOUND_FILE = "Interface\\AddOns\\HardcoreAchievements\\Sounds\\AchievementSound1.ogg"
@@ -2135,7 +2160,17 @@ local function SetProgress(achId, key, value)
             -- Only live gameplay progress should queue follow-up completion checks.
             -- Initial login/retroactive passes run their own synchronous completion sweep.
             addon.CheckPendingCompletions()
-            RefreshOutleveledAll()
+
+            -- Progress can flip failed ↔ available (e.g. kills done, quest still in log).
+            -- Clear only this achievement's cached rows so other results stay hot.
+            local dirtyUiRow = InvalidateOutleveledCacheForAchId(achId)
+            if dirtyUiRow then
+                ApplyOutleveledStyle(dirtyUiRow)
+                RefreshAuxiliaryViews()
+            else
+                RefreshOutleveledAll()
+            end
+
             -- Partial refresh: only recalculate the row whose progress just changed
             -- instead of looping all achievements on every kill/quest event.
             if addon.RefreshAllAchievementPoints then
