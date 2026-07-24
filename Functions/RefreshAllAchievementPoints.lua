@@ -79,8 +79,11 @@ end
 -- Main Function
 ---------------------------------------
 
--- Function to refresh all achievement points from scratch
-local function RefreshAllAchievementPoints()
+-- Function to refresh achievement points.
+-- Optional dirtyRows: when provided (non-empty table), only those rows are recalculated.
+-- Full refresh (all rows) is used for global state changes (preset, level, solo toggle, login).
+-- Partial refresh (single row) is used for per-kill/per-quest progress updates.
+local function RefreshAllAchievementPoints(dirtyRows)
     local rows = (addon and addon.AchievementRowModel) or {}
     if #rows == 0 then return end
 
@@ -92,7 +95,7 @@ local function RefreshAllAchievementPoints()
         return
     end
     if addon then addon.RefreshingPoints = true end
-    
+
     -- Calculate shared values once at the top
     local preset = (addon and addon.GetPlayerPresetFromSettings and addon.GetPlayerPresetFromSettings()) or nil
     local isSoloMode = (addon and addon.IsSoloModeEnabled and addon.IsSoloModeEnabled()) or false
@@ -110,8 +113,12 @@ local function RefreshAllAchievementPoints()
             end
         end
     end
-    
-    for _, row in ipairs(rows) do
+
+    -- Partial refresh: only update the rows that actually changed.
+    -- Falls back to full iteration when dirtyRows is nil or empty.
+    local targetRows = (type(dirtyRows) == "table" and #dirtyRows > 0) and dirtyRows or rows
+
+    for _, row in ipairs(targetRows) do
         -- Check both row.id and row.achId (dungeon achievements use achId)
         local rowId = row.id or row.achId
         if rowId and not row.completed then

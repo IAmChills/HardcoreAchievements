@@ -33,6 +33,9 @@ local HELPER_TIMEOUT_SEC            = 8   -- seconds to remember recent player h
 ---------------------------------------
 local helpersByTarget = {}
 local playerGUID = UnitGUID("player")
+local _lastCleuSoloTime = 0
+local _lastThreatEventCheck = 0
+local THREAT_EVENT_THROTTLE_SEC = 0.15
 
 ---------------------------------------
 -- Tracked NPCs and their solo status during combat
@@ -84,12 +87,13 @@ local bit_band = bit.band
 local OBJ_PLAYER = COMBATLOG_OBJECT_TYPE_PLAYER
 
 local function OnCombatLogEvent()
-    local now = GetTime()
-    CleanupHelpers(now)
-
-    -- We only care about events hitting your current target at the time we receive them.
+    -- Early-exit first: most CLEU events arrive when the player has no target.
+    -- CleanupHelpers iterates helpersByTarget and must not run on every event needlessly.
     local currentTargetGUID = UnitGUID("target")
     if not currentTargetGUID then return end
+
+    local now = GetTime()
+    CleanupHelpers(now)
 
     local _, subEvent, _, srcGUID, _, srcFlags, _, destGUID = CombatLogGetCurrentEventInfo()
     if not damageEvents[subEvent] then return end
@@ -398,30 +402,30 @@ local function UpdateSoloStatusForCurrentTarget()
 end
 
 ---------------------------------------
--- Event frame: register handlers
+-- Event frame: CLEU is handled by the main achEvt frame (HardcoreAchievements.lua)
+-- to avoid double dispatch. PlayerIsSolo_OnCombatLogEvent is exported so achEvt
+-- can call it within its own CLEU handler.
 ---------------------------------------
 local PlayerIsSolo_EventFrame = PlayerIsSolo_EventFrame or CreateFrame("Frame")
-PlayerIsSolo_EventFrame:UnregisterAllEvents() -- avoid duplicates on reloads
-PlayerIsSolo_EventFrame:RegisterEvent("COMBAT_LOG_EVENT_UNFILTERED")
+PlayerIsSolo_EventFrame:UnregisterAllEvents()
+-- CLEU intentionally NOT registered here — achEvt calls PlayerIsSolo_OnCombatLogEvent directly.
 PlayerIsSolo_EventFrame:RegisterEvent("UNIT_THREAT_SITUATION_UPDATE")
 PlayerIsSolo_EventFrame:RegisterEvent("UNIT_THREAT_LIST_UPDATE")
-PlayerIsSolo_EventFrame:RegisterEvent("PLAYER_REGEN_ENABLED")  -- leave combat
-PlayerIsSolo_EventFrame:RegisterEvent("PLAYER_ENTERING_WORLD") -- zone loads
+PlayerIsSolo_EventFrame:RegisterEvent("PLAYER_REGEN_ENABLED")
+PlayerIsSolo_EventFrame:RegisterEvent("PLAYER_ENTERING_WORLD")
 
 PlayerIsSolo_EventFrame:SetScript("OnEvent", function(_, event, ...)
-    if event == "COMBAT_LOG_EVENT_UNFILTERED" then
-        OnCombatLogEvent()
-        UpdateSoloStatusForCurrentTarget()
-    elseif event == "UNIT_THREAT_SITUATION_UPDATE" or event == "UNIT_THREAT_LIST_UPDATE" then
-        -- Update solo status when threat changes during combat
+    if event == "UNIT_THREAT_SITUATION_UPDATE" or event == "UNIT_THREAT_LIST_UPDATE" then
         local unit = ...
         if unit == "player" or unit == "target" then
-            UpdateSoloStatusForCurrentTarget()
+            local now = GetTime()
+            if now - _lastThreatEventCheck >= THREAT_EVENT_THROTTLE_SEC then
+                _lastThreatEventCheck = now
+                UpdateSoloStatusForCurrentTarget()
+            end
         end
     elseif event == "PLAYER_REGEN_ENABLED" then
-        -- Clear memory when combat ends to avoid stale helpers
         wipeTable(helpersByTarget)
-        -- Clean up old solo status entries
         local now = GetTime()
         for guid, status in pairs(soloStatusByGUID) do
             if now - status.lastChecked > SOLO_STATUS_TIMEOUT then
@@ -429,14 +433,25 @@ PlayerIsSolo_EventFrame:SetScript("OnEvent", function(_, event, ...)
             end
         end
     elseif event == "PLAYER_ENTERING_WORLD" then
-        -- Also clear on reloads/teleports/loads
         wipeTable(helpersByTarget)
         wipeTable(soloStatusByGUID)
     end
 end)
 
+-- Called by achEvt's CLEU handler so external-player helper tracking still works
+-- without needing a second registered frame.
+local function PlayerIsSolo_OnCombatLogEvent()
+    OnCombatLogEvent()
+    local now = GetTime()
+    if now - _lastCleuSoloTime >= 0.25 then
+        _lastCleuSoloTime = now
+        UpdateSoloStatusForCurrentTarget()
+    end
+end
+
 if addon then
     addon.PlayerIsSolo = PlayerIsSolo
     addon.PlayerIsSoloForGUID = PlayerIsSoloForGUID
     addon.PlayerIsSolo_UpdateStatusForGUID = PlayerIsSolo_UpdateStatusForGUID
+    addon.PlayerIsSolo_OnCombatLogEvent = PlayerIsSolo_OnCombatLogEvent
 end
