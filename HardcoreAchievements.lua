@@ -25,6 +25,7 @@ local RefreshAllAchievementPoints = (addon and addon.RefreshAllAchievementPoints
 local ShowAchievementTooltip = (addon and addon.ShowAchievementTooltip)
 local GetAchievementBracket = (addon and addon.GetAchievementBracket)
 local IsSelfFound = (addon and addon.IsSelfFound)
+local PlayerFactionMatches = (addon and addon.PlayerFactionMatches)
 local ShowAchievementTab = (addon and addon.ShowAchievementTab)
 local GetClassColor = (addon and addon.GetClassColor())
 local table_insert = table.insert
@@ -1382,9 +1383,19 @@ local function MarkRowCompleted(row, cdbParam)
         cdb.progress = cdb.progress or {}
         local progress = cdb.progress[id]
         
-        -- Check if achievement was completed solo before clearing progress
-        if progress and (progress.soloKill or progress.soloQuest) then
-            wasSolo = true
+        -- Solo status: kill/quest trackers write soloKill/soloQuest into progress.
+        -- Item completions with allowSoloDouble never do, so sample PlayerIsSolo() only when
+        -- no tracked solo flag exists yet (do not override an explicit soloKill=false).
+        local hasTrackedSoloFlag = progress and (progress.soloKill ~= nil or progress.soloQuest ~= nil)
+        if hasTrackedSoloFlag then
+            wasSolo = (progress.soloKill or progress.soloQuest) and true or false
+        elseif row.allowSoloDouble then
+            local isHardcoreActive = C_GameRules and C_GameRules.IsHardcoreActive and C_GameRules.IsHardcoreActive() or false
+            local allowSoloBonus = IsSelfFound() or not isHardcoreActive
+            if allowSoloBonus then
+                local PlayerIsSolo = addon and addon.PlayerIsSolo
+                wasSolo = type(PlayerIsSolo) == "function" and PlayerIsSolo() or false
+            end
         end
         
         cdb.achievements[id] = cdb.achievements[id] or {}
@@ -1408,6 +1419,23 @@ local function MarkRowCompleted(row, cdbParam)
                     rec.SFMod = true
                 end
             end
+        elseif row.allowSoloDouble and not row.isSecretAchievement then
+            -- No kill/quest pointsAtKill (e.g. customItem). Recompute from originalPoints so
+            -- we don't lock in Solo-mode *preview* doubling, and so actual solo gets *2 + label.
+            local basePoints = tonumber(row.originalPoints) or tonumber(row.revealPointsBase) or 0
+            if not row.staticPoints and basePoints > 0 then
+                local preset = addon and addon.GetPlayerPresetFromSettings and addon.GetPlayerPresetFromSettings() or nil
+                local multiplier = GetPresetMultiplier(preset) or 1.0
+                basePoints = basePoints + math.floor((basePoints) * (multiplier - 1) + 0.5)
+            end
+            finalPoints = wasSolo and (basePoints * 2) or basePoints
+            if IsSelfFound() then
+                local bonus = GetSelfFoundBonus(tonumber(row.originalPoints) or tonumber(row.revealPointsBase) or 0)
+                if bonus > 0 and finalPoints > 0 then
+                    finalPoints = finalPoints + bonus
+                    rec.SFMod = true
+                end
+            end
         end
 
         -- Secret achievements: compute real points from reveal base + multiplier (placeholder points are static).
@@ -1418,6 +1446,9 @@ local function MarkRowCompleted(row, cdbParam)
                 local preset = addon and addon.GetPlayerPresetFromSettings and addon.GetPlayerPresetFromSettings() or nil
                 local multiplier = GetPresetMultiplier(preset) or 1.0
                 computed = base + math.floor((base) * (multiplier - 1) + 0.5)
+            end
+            if row.allowSoloDouble and wasSolo then
+                computed = computed * 2
             end
             finalPoints = computed
 
@@ -1568,6 +1599,40 @@ local function MarkRowCompleted(row, cdbParam)
     end
 end
 
+-- Resolve toast title/icon from stable row/def fields first.
+-- UI frames often lack .title/.icon, and Icon:GetTexture() can return nil for fileIDs.
+local function GetAchievementToastDisplay(row)
+    if not row then
+        return 136116, "Achievement", nil
+    end
+
+    local frame = row.frame or row
+    local def = row._def or row.def
+    local achId = row.achId or row.id
+    local achDef = nil
+    if achId and addon and addon.AchievementDefs then
+        achDef = addon.AchievementDefs[tostring(achId)]
+    end
+
+    local title = row.title or (def and def.title) or (achDef and achDef.title)
+    if (not title or title == "") and frame.Title and frame.Title.GetText then
+        title = frame.Title:GetText()
+    end
+    if not title or title == "" then
+        title = "Achievement"
+    end
+
+    local icon = row.icon or (def and def.icon) or (achDef and achDef.icon)
+    if not icon and frame.Icon and frame.Icon.GetTexture then
+        icon = frame.Icon:GetTexture()
+    end
+    if not icon then
+        icon = 136116
+    end
+
+    return icon, title, frame
+end
+
 -- Complete the achievement if needed, then show the normal achievement toast.
 local function CompleteAchievementWithToast(row)
     if not row or IsAchievementAlreadyCompleted(row) then
@@ -1576,10 +1641,8 @@ local function CompleteAchievementWithToast(row)
 
     MarkRowCompleted(row)
 
-    local frame = row.frame or row
-    local iconTex = (frame.Icon and frame.Icon.GetTexture and frame.Icon:GetTexture()) or row.icon or 136116
-    local titleText = (frame.Title and frame.Title.GetText and frame.Title:GetText()) or row.title or "Achievement"
-    CreateAchToast(iconTex, titleText, row.points or 0, frame)
+    local iconTex, titleText, frame = GetAchievementToastDisplay(row)
+    CreateAchToast(iconTex, titleText, row.points or 0, frame or row)
     return true
 end
 
@@ -1619,9 +1682,8 @@ local function CheckPendingCompletions()
                 local ok, result = pcall(fn, currentLevel)
                 if ok and result == true then
                     MarkRowCompleted(row)
-                    local iconTex = (row.frame and row.frame.Icon and row.frame.Icon.GetTexture and row.frame.Icon:GetTexture()) or row.icon or 136116
-                    local titleText = (row.frame and row.frame.Title and row.frame.Title.GetText and row.frame.Title:GetText()) or row.title or "Achievement"
-                    CreateAchToast(iconTex, titleText, row.points or 0, row.frame or row)
+                    local iconTex, titleText, frame = GetAchievementToastDisplay(row)
+                    CreateAchToast(iconTex, titleText, row.points or 0, frame or row)
                 end
             end
         end
@@ -3823,6 +3885,8 @@ local function CreateAchievementRowFromData(data, index)
     row.staticPoints = staticPoints or false  -- Store static points flag
     row.points = (points or 0)
     row.completed = false
+    row.title = title
+    row.icon = icon or 136116
     do
         local capNum = tonumber(level)
         row.maxLevel = (capNum and capNum > 0) and capNum or nil
@@ -3888,9 +3952,9 @@ local function CreateAchievementRowFromData(data, index)
             row.Sub:SetText("")
             row._defaultSubText = ""
         end
-    end
-    if def and def.requireProfessionSkillID then
-        Profession.RegisterRow(row, def)
+        -- Do not Profession.RegisterRow here: the model entry was already registered in
+        -- CreateAchievementRow. Re-registering the UI frame duplicates completions and
+        -- toast paths that lack .title/.icon string fields.
     end
 
     -- Secret/hidden achievement support (optional via def)
@@ -5360,21 +5424,18 @@ do
                         if EvaluateCustomCompletions then
                             EvaluateCustomCompletions(UnitLevel("player") or 1)
                         end
-                        local playerFaction = select(2, UnitFactionGroup("player"))
                         for _, row in ipairs(addon.AchievementRowModel or {}) do
-                            if not row.completed and row.id == "OrgA" and playerFaction == FACTION_ALLIANCE then
+                            if not row.completed and row.id == "OrgA" and PlayerFactionMatches and PlayerFactionMatches(FACTION_ALLIANCE) then
                                 if addon and addon.CheckZoneDiscovery and addon.CheckZoneDiscovery(1411) then
                                     MarkRowCompleted(row)
-                                    local iconTex = (row.frame and row.frame.Icon and row.frame.Icon.GetTexture and row.frame.Icon:GetTexture()) or row.icon or 136116
-                                    local titleText = (row.frame and row.frame.Title and row.frame.Title.GetText and row.frame.Title:GetText()) or row.title or "Achievement"
-                                    CreateAchToast(iconTex, titleText, row.points, row.frame or row)
+                                    local iconTex, titleText, frame = GetAchievementToastDisplay(row)
+                                    CreateAchToast(iconTex, titleText, row.points, frame or row)
                                 end
-                            elseif not row.completed and row.id == "StormH" and playerFaction == FACTION_HORDE then
+                            elseif not row.completed and row.id == "StormH" and PlayerFactionMatches and PlayerFactionMatches(FACTION_HORDE) then
                                 if addon and addon.CheckZoneDiscovery and addon.CheckZoneDiscovery(1429) then
                                     MarkRowCompleted(row)
-                                    local iconTex = (row.frame and row.frame.Icon and row.frame.Icon.GetTexture and row.frame.Icon:GetTexture()) or row.icon or 136116
-                                    local titleText = (row.frame and row.frame.Title and row.frame.Title.GetText and row.frame.Title:GetText()) or row.title or "Achievement"
-                                    CreateAchToast(iconTex, titleText, row.points, row.frame or row)
+                                    local iconTex, titleText, frame = GetAchievementToastDisplay(row)
+                                    CreateAchToast(iconTex, titleText, row.points, frame or row)
                                 end
                             end
                         end

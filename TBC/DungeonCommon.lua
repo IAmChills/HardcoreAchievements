@@ -142,8 +142,12 @@ local function CheckAchievementEligibility(mapId, achDef, entryData)
     
     -- Check faction
     if achDef.faction then
-        local playerFaction = select(2, UnitFactionGroup("player"))
-        if playerFaction ~= achDef.faction then return false end
+        local matches = addon and addon.PlayerFactionMatches and addon.PlayerFactionMatches(achDef.faction)
+        if matches == nil then
+            local factionTag, factionLocalized = UnitFactionGroup("player")
+            matches = achDef.faction == factionTag or achDef.faction == factionLocalized
+        end
+        if not matches then return false end
     end
     
     -- Check player level
@@ -1572,9 +1576,13 @@ function DungeonCommon.registerDungeonAchievement(def)
 
   -- Check faction eligibility
   local function IsEligible()
-    -- Faction: "Alliance" / "Horde"
-    if faction and select(2, UnitFactionGroup("player")) ~= faction then
+    if faction and addon.PlayerFactionMatches and not addon.PlayerFactionMatches(faction) then
       return false
+    elseif faction and not addon.PlayerFactionMatches then
+      local factionTag, factionLocalized = UnitFactionGroup("player")
+      if faction ~= factionTag and faction ~= factionLocalized then
+        return false
+      end
     end
     return true
   end

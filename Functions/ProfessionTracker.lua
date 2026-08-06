@@ -310,7 +310,17 @@ local function RegisterRow(row, def)
     local skillID = def.requireProfessionSkillID
     if not skillID then return end
 
+    local achId = row.id or row.achId or def.achId
     ProfessionRows[skillID] = ProfessionRows[skillID] or {}
+    if achId then
+        for _, existing in ipairs(ProfessionRows[skillID]) do
+            if existing and (existing.id == achId or existing.achId == achId) then
+                -- Already tracking this achievement (prefer the first/model registration).
+                row._professionSkillID = skillID
+                return
+            end
+        end
+    end
     table_insert(ProfessionRows[skillID], row)
 
     row._professionSkillID = skillID

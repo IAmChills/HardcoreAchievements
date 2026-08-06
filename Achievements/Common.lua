@@ -20,6 +20,7 @@ local PlayerIsSoloForGUID = (addon and addon.PlayerIsSoloForGUID)
 local PlayerIsSolo = (addon and addon.PlayerIsSolo)
 local RefreshAllAchievementPoints = (addon and addon.RefreshAllAchievementPoints)
 local IsSelfFound = (addon and addon.IsSelfFound)
+local PlayerFactionMatches = (addon and addon.PlayerFactionMatches)
 local select = select
 
 ---------------------------------------
@@ -241,7 +242,15 @@ function M.registerQuestAchievement(cfg)
     ---------------------------------------
 
     local function gate()
-        if FACTION and UnitFactionGroup("player") ~= FACTION then return false end
+        -- FACTION comes from FACTION_ALLIANCE/FACTION_HORDE (localized). Match english tag or localized name.
+        if FACTION then
+            if PlayerFactionMatches then
+                if not PlayerFactionMatches(FACTION) then return false end
+            else
+                local factionTag, factionLocalized = UnitFactionGroup("player")
+                if FACTION ~= factionTag and FACTION ~= factionLocalized then return false end
+            end
+        end
         if RACE then
             local _, raceFile = UnitRace("player")
             if raceFile ~= RACE then return false end

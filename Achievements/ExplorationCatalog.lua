@@ -223,8 +223,13 @@ table_insert(ExplorationAchievements, CreateContinentExplorationAchievement("Eas
 -- Defer registration until PLAYER_LOGIN to prevent load timeouts
 -- Check faction eligibility (same pattern as Catalog.lua and SecretCatalog.lua)
 local function IsEligible(def)
-  if def.faction and select(2, UnitFactionGroup("player")) ~= def.faction then
+  if def.faction and addon.PlayerFactionMatches and not addon.PlayerFactionMatches(def.faction) then
     return false
+  elseif def.faction and not addon.PlayerFactionMatches then
+    local factionTag, factionLocalized = UnitFactionGroup("player")
+    if def.faction ~= factionTag and def.faction ~= factionLocalized then
+      return false
+    end
   end
   return true
 end

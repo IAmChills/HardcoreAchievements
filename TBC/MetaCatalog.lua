@@ -12,8 +12,9 @@ local table_insert = table.insert
 
 -- Get player faction to filter faction-specific achievements
 local function GetPlayerFaction()
-  local _, faction = UnitFactionGroup("player")
-  return faction  -- "Alliance" or "Horde"
+  -- Prefer localized name so it matches FACTION_ALLIANCE / FACTION_HORDE globals.
+  local factionTag, factionLocalized = UnitFactionGroup("player")
+  return factionLocalized or factionTag
 end
 
 ---------------------------------------

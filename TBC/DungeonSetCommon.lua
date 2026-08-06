@@ -576,9 +576,13 @@ function DungeonSetCommon.registerDungeonSetAchievement(def)
   
   -- Check eligibility
   local function IsEligible()
-    -- Faction: "Alliance" / "Horde"
-    if faction and select(2, UnitFactionGroup("player")) ~= faction then
+    if faction and addon.PlayerFactionMatches and not addon.PlayerFactionMatches(faction) then
       return false
+    elseif faction and not addon.PlayerFactionMatches then
+      local factionTag, factionLocalized = UnitFactionGroup("player")
+      if faction ~= factionTag and faction ~= factionLocalized then
+        return false
+      end
     end
     
     -- Class: use class file tokens ("MAGE","WARRIOR",...)

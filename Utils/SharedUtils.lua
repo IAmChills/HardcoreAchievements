@@ -1,6 +1,7 @@
 local addonName, addon = ...
 local UnitBuff = UnitBuff
 local UnitClass = UnitClass
+local UnitFactionGroup = UnitFactionGroup
 local GetClassColor = GetClassColor
 local CreateFrame = CreateFrame
 
@@ -31,6 +32,20 @@ local function SetSetting(settingName, value)
             cdb.settings[settingName] = value
         end
     end
+end
+
+-- =========================================================
+-- Faction Helpers
+-- =========================================================
+
+-- UnitFactionGroup returns (englishTag, localizedName). Catalog defs use FACTION_ALLIANCE /
+-- FACTION_HORDE (localized globals). Match either so English and non-English clients both work.
+local function PlayerFactionMatches(requiredFaction)
+    if not requiredFaction then
+        return true
+    end
+    local factionTag, factionLocalized = UnitFactionGroup("player")
+    return requiredFaction == factionTag or requiredFaction == factionLocalized
 end
 
 -- =========================================================
@@ -290,4 +305,5 @@ if addon then
     addon.SetUseCharacterPanel = SetUseCharacterPanel
     addon.RegisterAchievementDef = RegisterAchievementDef
     addon.IsSelfFound = IsSelfFound
+    addon.PlayerFactionMatches = PlayerFactionMatches
 end
