@@ -128,6 +128,28 @@ function DungeonCommon.DefMatchesInstanceDifficulty(achDef)
     return DungeonCommon.IsNormalDungeonDifficulty()
 end
 
+-- Average level of player + party at dungeon entry (for tooltip self-policing).
+local function ComputeAverageEntryLevel(entryData)
+    if not entryData then return nil, 0 end
+    local sum, count = 0, 0
+    local playerLevel = tonumber(entryData.playerLevel)
+    if playerLevel and playerLevel > 0 then
+        sum = sum + playerLevel
+        count = count + 1
+    end
+    if type(entryData.partyLevels) == "table" then
+        for _, lvl in pairs(entryData.partyLevels) do
+            local n = tonumber(lvl)
+            if n and n > 0 then
+                sum = sum + n
+                count = count + 1
+            end
+        end
+    end
+    if count == 0 then return nil, 0 end
+    return math.floor(sum / count + 0.5), count
+end
+
 -- Helper function to check if a group is eligible for a dungeon achievement
 local function CheckAchievementEligibility(mapId, achDef, entryData)
     if not mapId or not achDef or not entryData then return false end
@@ -150,12 +172,13 @@ local function CheckAchievementEligibility(mapId, achDef, entryData)
         if not matches then return false end
     end
     
-    -- Check player level
+    -- Check player level (always)
     local playerLevel = entryData.playerLevel or UnitLevel("player") or 1
     if playerLevel > maxLevel then return false end
     
-    -- Check party member levels
-    if members > 1 then
+    -- Variations (Trio/Duo/Solo) still require every party member under the cap.
+    -- Base dungeon achievements only require the player under the cap.
+    if achDef.isVariation and members > 1 then
         for i = 1, 4 do
             local unit = "party" .. i
             if UnitExists(unit) then
@@ -261,14 +284,22 @@ local function CheckAndPrintEligibilityMessages(mapId, entryData)
 
     local title = c.achDef.title or c.achDef.mapName or "Unknown"
     if isEligible then
-      print("|cff008066[Hardcore Achievements]|r |cff00ff00Group is eligible for achievement: " .. title .. "|r. If any player levels beyond the achievement's allowed level while inside the dungeon, they must remain inside the dungeon to remain eligible.")
+        if c.achDef.isVariation then
+            print("|cff008066[Hardcore Achievements]|r |cff00ff00Group is eligible for achievement: " .. title .. "|r. If any player levels beyond the achievement's allowed level while inside the dungeon, they must remain inside the dungeon to remain eligible.")
+        else
+            print("|cff008066[Hardcore Achievements]|r |cff00ff00You are eligible for achievement: " .. title .. "|r. If you level beyond the achievement's allowed level while inside the dungeon, you must stay inside the dungeon to remain eligible. Party member levels are not required for this achievement.")
+        end
         if addon.EventLogAdd then
-            addon.EventLogAdd("Dungeon entered: group is |cff00ff00eligible|r for achievement: " .. title)
+            addon.EventLogAdd("Dungeon entered: |cff00ff00eligible|r for achievement: " .. title)
         end
     else
-        print("|cff008066[Hardcore Achievements]|r |cffff0000Group is not eligible for achievement: " .. title .. "|r")
+        if c.achDef.isVariation then
+            print("|cff008066[Hardcore Achievements]|r |cffff0000Group is not eligible for achievement: " .. title .. "|r")
+        else
+            print("|cff008066[Hardcore Achievements]|r |cffff0000You are not eligible for achievement: " .. title .. "|r")
+        end
         if addon.EventLogAdd then
-            addon.EventLogAdd("Dungeon entered: group is |cffff0000not eligible|r for achievement: " .. title)
+            addon.EventLogAdd("Dungeon entered: |cffff0000not eligible|r for achievement: " .. title)
         end
     end
 end
@@ -742,8 +773,7 @@ local function CreateVariation(baseDef, variation)
     -- Update tooltip to reflect variation (clean, without "Variation" suffix)
     local partySizeText = variation.maxPartySize == 1 and "yourself only" or 
                           (variation.maxPartySize == 2 and "up to 2 party members" or "up to 3 party members")
-    variationDef.tooltip = "Defeat the bosses of " .. ClassColor .. baseDef.title .. "|r before level " .. (variationDef.level + 1) .. 
-                          " (" .. partySizeText .. ")"
+    variationDef.tooltip = "Defeat the bosses of " .. ClassColor .. baseDef.title .. "|r with every party member at level " .. variationDef.level .. " or lower upon entering the dungeon" .. " (" .. partySizeText .. ")"
     
     -- Mark as variation
     variationDef.isVariation = true
@@ -973,6 +1003,23 @@ function DungeonCommon.registerDungeonAchievement(def)
     if addon and addon.SetProgress then addon.SetProgress(achId, "pointsAtKill", pointsToStore) end
   end
 
+  local function StoreEntryLevelSnapshot()
+    local rawMapId = GetCurrentInstanceMapID()
+    local entryData = ResolveDungeonEntryLevelsForInstance(rawMapId)
+    if not entryData then return end
+    -- Keep recording party levels for average display even when base achievements
+    -- do not enforce party level requirements.
+    UpdatePartyMemberLevels(rawMapId, entryData)
+    local avg, partySize = ComputeAverageEntryLevel(entryData)
+    if entryData.playerLevel and addon and addon.SetProgress then
+      addon.SetProgress(achId, "entryPlayerLevel", entryData.playerLevel)
+    end
+    if avg and addon and addon.SetProgress then
+      addon.SetProgress(achId, "avgPartyLevel", avg)
+      addon.SetProgress(achId, "entryPartySize", partySize)
+    end
+  end
+
   local function ApplyBossKillCredit(npcId, killToken)
     if not npcId or not IsRequiredBoss(npcId) then
       return false
@@ -984,6 +1031,7 @@ function DungeonCommon.registerDungeonAchievement(def)
     IncrementBossKill(npcId)
     MarkKillTokenProcessed(killToken)
     StorePointsAtKill()
+    StoreEntryLevelSnapshot()
     SaveProgress()
     UpdateTooltip()
 
@@ -1353,6 +1401,11 @@ function DungeonCommon.registerDungeonAchievement(def)
               end
             end
           end
+          local progress = addon and addon.GetProgress and addon.GetProgress(achId)
+          if progress and progress.avgPartyLevel then
+            local sizeText = progress.entryPartySize and (" (" .. tostring(progress.entryPartySize) .. " players)") or ""
+            GameTooltip:AddLine("Avg party level on entry: " .. tostring(progress.avgPartyLevel) .. sizeText, 0.75, 0.75, 0.75)
+          end
           -- Hint for linking the achievement in chat
           GameTooltip:AddLine("\nShift click to link in chat or add to tracking list", 0.5, 0.5, 0.5)
           
@@ -1393,6 +1446,7 @@ function DungeonCommon.registerDungeonAchievement(def)
     local maxPartySize = def.maxPartySize or 5
     if members > maxPartySize then return false end
 
+    local requirePartyLevels = def.isVariation == true
     local inInstance, instanceType = IsInInstance()
     local rawMapId = inInstance and GetCurrentInstanceMapID()
     local entryData = ResolveDungeonEntryLevelsForInstance(rawMapId)
@@ -1402,6 +1456,7 @@ function DungeonCommon.registerDungeonAchievement(def)
 
     if useEntryLevels then
       local dirty = false
+      -- Always track party levels for avgPartyLevel tooltip, even on base achievements.
       if UpdatePartyMemberLevels(rawMapId, entryData) then
         dirty = true
       end
@@ -1417,7 +1472,7 @@ function DungeonCommon.registerDungeonAchievement(def)
       end
       if not playerLevel or IsOverLeveled(playerLevel) then return false end
       
-      if members > 1 then
+      if requirePartyLevels and members > 1 then
         for i = 1, 4 do
           local u = "party"..i
           if UnitExists(u) then
@@ -1426,7 +1481,7 @@ function DungeonCommon.registerDungeonAchievement(def)
               local partyLevel = entryData.partyLevels and entryData.partyLevels[guid]
               if not partyLevel then
                 local live = UnitLevel(u) or 0
-                if live > 0 and not IsOverLeveled(live) then
+                if live > 0 then
                   if not entryData.partyLevels then entryData.partyLevels = {} end
                   entryData.partyLevels[guid] = live
                   partyLevel = live
@@ -1450,7 +1505,7 @@ function DungeonCommon.registerDungeonAchievement(def)
       local playerLevel = UnitLevel("player")
       if IsOverLeveled(playerLevel) then return false end
       
-      if members > 1 then
+      if requirePartyLevels and members > 1 then
         for i = 1, 4 do
           local u = "party"..i
           if UnitExists(u) and IsOverLeveled(UnitLevel(u)) then
@@ -1475,7 +1530,8 @@ function DungeonCommon.registerDungeonAchievement(def)
       return true
     end
 
-    if GetNumGroupMembers() > 1 then
+    -- Base achievements ignore party overlevel; variations still enforce it.
+    if def.isVariation and GetNumGroupMembers() > 1 then
       for i = 1, 4 do
         local unit = "party"..i
         if UnitExists(unit) then
@@ -1532,14 +1588,15 @@ function DungeonCommon.registerDungeonAchievement(def)
       local skipOutleveledVariantNoise = IsOutleveledForCurrentRun()
       if not skipWrongPartySizeNoise and not skipOutleveledVariantNoise and isStillAvailable and addon and addon.DungeonKillPrintedForGUID ~= destGUID then
         addon.DungeonKillPrintedForGUID = destGUID
-        print("|cff008066[Hardcore Achievements]|r |cffffd100" .. GetBossName(npcId) .. " killed but group is ineligible - kill not counted for achievement: " .. title .. "|r")
+        local reason = def.isVariation and "group is ineligible" or "you are ineligible"
+        print("|cff008066[Hardcore Achievements]|r |cffffd100" .. GetBossName(npcId) .. " killed but " .. reason .. " - kill not counted for achievement: " .. title .. "|r")
         if addon.EventLogAdd then
-          addon.EventLogAdd("Boss kill not counted (group ineligible): " .. GetBossName(npcId) .. " (npc " .. tostring(npcId) .. ") — " .. title)
+          addon.EventLogAdd("Boss kill not counted (" .. reason .. "): " .. GetBossName(npcId) .. " (npc " .. tostring(npcId) .. ") — " .. title)
         end
       end
       return false
     end
-    
+
     -- Group is eligible - count this kill
     local killToken = BuildKillToken(destGUID, npcId)
     local applied = ApplyBossKillCredit(npcId, killToken)

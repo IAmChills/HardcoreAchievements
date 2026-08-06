@@ -24,7 +24,7 @@ local Dungeons = {
   {
     achId = "RFC",
     title = DUNGEON_FLOOR_RAGEFIRE1,
-    tooltip = "Defeat the bosses of " .. ClassColor .. ""..DUNGEON_FLOOR_RAGEFIRE1.."|r with every party member at level 14 or lower upon entering the dungeon",
+    tooltip = "Defeat the bosses of " .. ClassColor .. ""..DUNGEON_FLOOR_RAGEFIRE1.."|r at level 14 or lower upon entering the dungeon",
     icon = 136216,
     level = 14,
     points = 10,
@@ -44,7 +44,7 @@ local Dungeons = {
   {
     achId = "VC",
     title = DUNGEON_FLOOR_THEDEADMINES1,
-    tooltip = "Defeat the bosses of " .. ClassColor .. ""..DUNGEON_FLOOR_THEDEADMINES1.."|r with every party member at level 19 or lower upon entering the dungeon",
+    tooltip = "Defeat the bosses of " .. ClassColor .. ""..DUNGEON_FLOOR_THEDEADMINES1.."|r at level 19 or lower upon entering the dungeon",
     icon = 236409,
     level = 19,
     points = 10,
@@ -65,7 +65,7 @@ local Dungeons = {
   {
     achId = "WC",
     title = DUNGEON_FLOOR_WAILINGCAVERNS1,
-    tooltip = "Defeat the bosses of " .. ClassColor .. ""..DUNGEON_FLOOR_WAILINGCAVERNS1.."|r with every party member at level 20 or lower upon entering the dungeon",
+    tooltip = "Defeat the bosses of " .. ClassColor .. ""..DUNGEON_FLOOR_WAILINGCAVERNS1.."|r at level 20 or lower upon entering the dungeon",
     icon = 236425,
     level = 20,
     points = 10,
@@ -88,7 +88,7 @@ local Dungeons = {
   {
     achId = "SFK",
     title = "Shadowfang Keep",
-    tooltip = "Defeat the bosses of " .. ClassColor .. "Shadowfang Keep|r with every party member at level 24 or lower upon entering the dungeon",
+    tooltip = "Defeat the bosses of " .. ClassColor .. "Shadowfang Keep|r at level 24 or lower upon entering the dungeon",
     icon = 254646,
     level = 24,
     points = 10,
@@ -112,7 +112,7 @@ local Dungeons = {
   {
     achId = "BFD",
     title = "Blackfathom Deeps",
-    tooltip = "Defeat the bosses of " .. ClassColor .. "Blackfathom Deeps|r with every party member at level 26 or lower upon entering the dungeon",
+    tooltip = "Defeat the bosses of " .. ClassColor .. "Blackfathom Deeps|r at level 26 or lower upon entering the dungeon",
     icon = 236403,
     level = 26,
     points = 10,
@@ -135,7 +135,7 @@ local Dungeons = {
   {
     achId = "STOCK",
     title = DUNGEON_FLOOR_THESTOCKADE1,
-    tooltip = "Defeat the bosses of " .. ClassColor .. ""..DUNGEON_FLOOR_THESTOCKADE1.."|r with every party member at level 27 or lower upon entering the dungeon",
+    tooltip = "Defeat the bosses of " .. ClassColor .. ""..DUNGEON_FLOOR_THESTOCKADE1.."|r at level 27 or lower upon entering the dungeon",
     icon = 236404,
     level = 27,
     points = 10,
@@ -156,7 +156,7 @@ local Dungeons = {
   {
     achId = "RFK",
     title = DUNGEON_FLOOR_RAZORFENKRAUL1,
-    tooltip = "Defeat the bosses of " .. ClassColor .. ""..DUNGEON_FLOOR_RAZORFENKRAUL1.."|r with every party member at level 31 or lower upon entering the dungeon",
+    tooltip = "Defeat the bosses of " .. ClassColor .. ""..DUNGEON_FLOOR_RAZORFENKRAUL1.."|r at level 31 or lower upon entering the dungeon",
     icon = 236405,
     level = 31,
     points = 10,
@@ -177,7 +177,7 @@ local Dungeons = {
   {
     achId = "GNOM",
     title = DUNGEON_FLOOR_DUNMOROGH10,
-    tooltip = "Defeat the bosses of " .. ClassColor .. ""..DUNGEON_FLOOR_DUNMOROGH10.."|r with every party member at level 32 or lower upon entering the dungeon",
+    tooltip = "Defeat the bosses of " .. ClassColor .. ""..DUNGEON_FLOOR_DUNMOROGH10.."|r at level 32 or lower upon entering the dungeon",
     icon = 236424,
     level = 32,
     points = 10,
@@ -198,7 +198,7 @@ local Dungeons = {
   --  {
   --   achId = "CurseOfDuskwood",
   --   title = "The Curse of Duskwood",
-  --   tooltip = "Defeat the enemies of " .. ClassColor .. "Duskwood|r with every party member at level 35 or lower upon entering the dungeon",
+  --   tooltip = "Defeat the enemies of " .. ClassColor .. "Duskwood|r at level 35 or lower upon entering the dungeon",
   --   icon = 236757,
   --   level = 35,
   --   points = 10,
@@ -218,7 +218,7 @@ local Dungeons = {
   {
     achId = "SM",
     title = "Scarlet Monastery",
-    tooltip = "Defeat the bosses of " .. ClassColor .. "Scarlet Monastery|r with every party member at level 40 or lower upon entering the dungeon",
+    tooltip = "Defeat the bosses of " .. ClassColor .. "Scarlet Monastery|r at level 40 or lower upon entering the dungeon",
     icon = 133154,
     level = 40,
     points = 10,
@@ -241,7 +241,7 @@ local Dungeons = {
   {
     achId = "RFD",
     title = DUNGEON_FLOOR_RAZORFENDOWNS1,
-    tooltip = "Defeat the bosses of " .. ClassColor .. ""..DUNGEON_FLOOR_RAZORFENDOWNS1.."|r with every party member at level 39 or lower upon entering the dungeon",
+    tooltip = "Defeat the bosses of " .. ClassColor .. ""..DUNGEON_FLOOR_RAZORFENDOWNS1.."|r at level 39 or lower upon entering the dungeon",
     icon = 236400,
     level = 39,
     points = 10,
@@ -262,7 +262,7 @@ local Dungeons = {
   {
     achId = "ULD",
     title = "Uldaman",
-    tooltip = "Defeat the bosses of " .. ClassColor .. "Uldaman|r with every party member at level 45 or lower upon entering the dungeon",
+    tooltip = "Defeat the bosses of " .. ClassColor .. "Uldaman|r at level 45 or lower upon entering the dungeon",
     icon = 236401, --254106 also looks good
     level = 45,
     points = 10,
@@ -289,7 +289,7 @@ local Dungeons = {
   {
     achId = "ZF",
     title = DUNGEON_FLOOR_ZULFARRAK,
-    tooltip = "Defeat the bosses of " .. ClassColor .. ""..DUNGEON_FLOOR_ZULFARRAK.."|r with every party member at level 46 or lower upon entering the dungeon",
+    tooltip = "Defeat the bosses of " .. ClassColor .. ""..DUNGEON_FLOOR_ZULFARRAK.."|r at level 46 or lower upon entering the dungeon",
     icon = 236406,
     level = 46,
     points = 10,
@@ -313,7 +313,7 @@ local Dungeons = {
   {
     achId = "MARA",
     title = "Maraudon",
-    tooltip = "Defeat the bosses of " .. ClassColor .. "Maraudon|r with every party member at level 50 or lower upon entering the dungeon",
+    tooltip = "Defeat the bosses of " .. ClassColor .. "Maraudon|r at level 50 or lower upon entering the dungeon",
     icon = 236432,
     level = 50,
     points = 10,
@@ -336,7 +336,7 @@ local Dungeons = {
   {
     achId = "ST",
     title = DUNGEON_FLOOR_THETEMPLEOFATALHAKKAR1,
-    tooltip = "Defeat the bosses of " .. ClassColor .. ""..DUNGEON_FLOOR_THETEMPLEOFATALHAKKAR1.."|r with every party member at level 54 or lower upon entering the dungeon",
+    tooltip = "Defeat the bosses of " .. ClassColor .. ""..DUNGEON_FLOOR_THETEMPLEOFATALHAKKAR1.."|r at level 54 or lower upon entering the dungeon",
     icon = 236434,
     level = 54,
     points = 10,
@@ -360,7 +360,7 @@ local Dungeons = {
   {
     achId = "BRD",
     title = DUNGEON_FLOOR_BURNINGSTEPPES16,
-    tooltip = "Defeat the bosses of " .. ClassColor .. ""..DUNGEON_FLOOR_BURNINGSTEPPES16.."|r with every party member at level 58 or lower upon entering the dungeon",
+    tooltip = "Defeat the bosses of " .. ClassColor .. ""..DUNGEON_FLOOR_BURNINGSTEPPES16.."|r at level 58 or lower upon entering the dungeon",
     icon = 236410,
     level = 58,
     points = 10,
@@ -391,7 +391,7 @@ local Dungeons = {
   {
     achId = "BRS",
     title = "Lower Blackrock Spire",
-    tooltip = "Defeat the bosses of " .. ClassColor .. "Lower Blackrock Spire|r with every party member at level 59 or lower upon entering the dungeon",
+    tooltip = "Defeat the bosses of " .. ClassColor .. "Lower Blackrock Spire|r at level 59 or lower upon entering the dungeon",
     icon = 236429,
     level = 59,
     points = 10,

@@ -177,6 +177,12 @@ local function ShowBossRequirements(achId, requiredKills, bossOrder, achievement
             processBossEntry(npcId, need)
         end
     end
+
+    -- Self-policing: show average party level recorded at dungeon entry
+    if progress and progress.avgPartyLevel then
+        local sizeText = progress.entryPartySize and (" (" .. tostring(progress.entryPartySize) .. " players)") or ""
+        GameTooltip:AddLine("Avg party level on entry: " .. tostring(progress.avgPartyLevel) .. sizeText, 0.75, 0.75, 0.75)
+    end
 end
 
 -- Show item requirements in tooltip
