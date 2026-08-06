@@ -749,6 +749,31 @@ local function CreateVariation(baseDef, variation)
     variationDef.isVariation = true
     variationDef.baseAchId = baseDef.achId
     variationDef.variationType = variation.label
+
+    -- Drop bosses that require a larger party than this variation allows
+    -- (e.g. Archaedas needs 3 people — omit from Duo/Solo).
+    local minByBoss = baseDef.minPartySizeForBoss
+    if type(minByBoss) == "table" and type(baseDef.requiredKills) == "table" then
+      local filteredKills = {}
+      for npcId, need in pairs(baseDef.requiredKills) do
+        local minSize = minByBoss[npcId]
+        if not minSize or variation.maxPartySize >= minSize then
+          filteredKills[npcId] = need
+        end
+      end
+      variationDef.requiredKills = filteredKills
+
+      if type(baseDef.bossOrder) == "table" then
+        local filteredOrder = {}
+        for _, npcId in ipairs(baseDef.bossOrder) do
+          local minSize = minByBoss[npcId]
+          if not minSize or variation.maxPartySize >= minSize then
+            table_insert(filteredOrder, npcId)
+          end
+        end
+        variationDef.bossOrder = filteredOrder
+      end
+    end
     
     return variationDef
 end
@@ -844,6 +869,18 @@ function DungeonCommon.registerDungeonAchievement(def)
     return DungeonMapIdsMatch(GetCurrentInstanceMapID(), requiredMapId)
   end
 
+  local function GetKillCount(id)
+    if id == nil then return 0 end
+    local n = state.counts[id]
+    if n then return n end
+    local asNum = tonumber(id)
+    if asNum ~= nil then
+      n = state.counts[asNum]
+      if n then return n end
+    end
+    return state.counts[tostring(id)] or 0
+  end
+
   local function CountsSatisfied()
     for npcId, need in pairs(requiredKills) do
       -- Support both single NPC IDs and arrays of NPC IDs
@@ -851,14 +888,14 @@ function DungeonCommon.registerDungeonAchievement(def)
       if type(need) == "table" then
         -- Array of NPC IDs - check if any of them has been killed
         for _, id in pairs(need) do
-          if (state.counts[id] or 0) >= 1 then
+          if GetKillCount(id) >= 1 then
             isSatisfied = true
             break
           end
         end
       else
         -- Single NPC ID
-        if (state.counts[npcId] or 0) >= need then
+        if GetKillCount(npcId) >= need then
           isSatisfied = true
         end
       end
@@ -872,6 +909,7 @@ function DungeonCommon.registerDungeonAchievement(def)
   -- Check if an NPC ID is a required boss for this achievement
   local function IsRequiredBoss(npcId)
     if not npcId then return false end
+    npcId = tonumber(npcId) or npcId
     -- Direct lookup
     if requiredKills[npcId] then
       return true
@@ -880,7 +918,7 @@ function DungeonCommon.registerDungeonAchievement(def)
     for key, value in pairs(requiredKills) do
       if type(value) == "table" then
         for _, id in pairs(value) do
-          if id == npcId then
+          if (tonumber(id) or id) == npcId then
             return true
           end
         end
@@ -1599,6 +1637,13 @@ function DungeonCommon.registerDungeonAchievement(def)
 
     -- Load progress from database
     LoadProgress()
+
+    -- If requirements were reduced (e.g. Duo/Solo omitting Archaedas) and existing
+    -- kills already satisfy the list, complete without needing another kill.
+    if not state.completed and next(requiredKills) ~= nil and CountsSatisfied() then
+      state.completed = true
+      if addon and addon.SetProgress then addon.SetProgress(achId, "completed", true) end
+    end
 
     -- Ensure dungeons never have allowSoloDouble enabled
     local dungeonDef = def or {}

@@ -278,6 +278,10 @@ local Dungeons = {
       [4854] = 1,  -- Grimlok
       [2748] = 1,  -- Archaedas
     },
+    -- Archaedas pedestals need 3 players; omit from Duo/Solo variations
+    minPartySizeForBoss = {
+      [2748] = 3,
+    },
     bossOrder = {6910, 7228, 7023, 7206, 7291, 4854, 2748}
   },
 

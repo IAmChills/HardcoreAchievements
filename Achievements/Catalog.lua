@@ -616,6 +616,16 @@ local Achievements = {
     targetNpcId = 2755,
     zone = "Badlands"
 }, {
+    achId = "MatterOfTime",
+    title = "A Matter of Time",
+    level = 55,
+    tooltip = "Complete " .. ClassColor .. "A Matter of Time|r before level 56",
+    icon = 133879,
+    points = 10,
+    requiredQuestId = 4971,
+    targetNpcId = nil,
+    zone = "Western Plaguelands"
+}, {
     achId = "GorishiHiveQueen",
     title = "Queen’s Gambit",
     level = 56,

@@ -350,6 +350,18 @@ function RaidCommon.registerRaidAchievement(def)
     return mapId == requiredMapId
   end
 
+  local function GetKillCount(id)
+    if id == nil then return 0 end
+    local n = state.counts[id]
+    if n then return n end
+    local asNum = tonumber(id)
+    if asNum ~= nil then
+      n = state.counts[asNum]
+      if n then return n end
+    end
+    return state.counts[tostring(id)] or 0
+  end
+
   local function CountsSatisfied()
     for npcId, need in pairs(requiredKills) do
       -- Support both single NPC IDs and arrays of NPC IDs
@@ -357,14 +369,14 @@ function RaidCommon.registerRaidAchievement(def)
       if type(need) == "table" then
         -- Array of NPC IDs - check if any of them has been killed
         for _, id in pairs(need) do
-          if (state.counts[id] or 0) >= 1 then
+          if GetKillCount(id) >= 1 then
             isSatisfied = true
             break
           end
         end
       else
         -- Single NPC ID
-        if (state.counts[npcId] or 0) >= need then
+        if GetKillCount(npcId) >= need then
           isSatisfied = true
         end
       end
@@ -378,6 +390,7 @@ function RaidCommon.registerRaidAchievement(def)
   -- Check if an NPC ID is a required boss for this achievement
   local function IsRequiredBoss(npcId)
     if not npcId then return false end
+    npcId = tonumber(npcId) or npcId
     -- Direct lookup
     if requiredKills[npcId] then
       return true
@@ -386,7 +399,7 @@ function RaidCommon.registerRaidAchievement(def)
     for key, value in pairs(requiredKills) do
       if type(value) == "table" then
         for _, id in pairs(value) do
-          if id == npcId then
+          if (tonumber(id) or id) == npcId then
             return true
           end
         end

@@ -27,7 +27,7 @@ local QUEST_ALLIANCE_ORDERED = {
   "MorLadim", "ForsakenCourier", "StinkysEscapeA", "GetMeOutOfHere",
   "ThogrunAlliance", "Kurzen", "KingBangalash", "LordShalzaru", "OOX",
   "Mokk", "MalletZF", "Mukla", "KimJaelIndeed", "StonesThatBindUs",
-  "Hakkar", "ShadowLordFeldan", "SummoningThePrincess", "GorishiHiveQueen",
+  "ShadowLordFeldan", "MatterOfTime", "SummoningThePrincess", "GorishiHiveQueen",
   "OverseerMaltorius", "DragonkinMenace", "MercutioFilthgorger",
   "HighChiefWinterfall", "Deathclasp"
 }
@@ -37,7 +37,7 @@ local QUEST_HORDE_ORDERED = {
   "TheHunt", "Gizmo", "Grenka", "Ironhill", "StinkysEscapeH", "GalensEscape",
   "GetMeOutOfHere", "ThogrunHorde", "NothingButTruth", "KingBangalash",
   "Mugthol", "OOX", "Mokk", "Hatetalon", "MalletZF", "Mukla", "Kromgrul",
-  "KimJaelIndeed", "StonesThatBindUs", "Hakkar", "ShadowLordFeldan",
+  "KimJaelIndeed", "StonesThatBindUs", "ShadowLordFeldan", "MatterOfTime",
   "SummoningThePrincess", "GorishiHiveQueen", "OverseerMaltorius",
   "MercutioFilthgorger", "HighChiefWinterfall", "Deathclasp"
 }

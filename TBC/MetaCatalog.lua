@@ -28,10 +28,10 @@ local QUEST_ALLIANCE_ORDERED = {
   "Foulborne", "Fangore", "Nekrosh", "Eliza", "MorLadim", "Morbent",
   "ForsakenCourier", "StinkysEscapeA", "OttoFalcon", "Kurzen", "GalensEscape",
   "GetMeOutOfHere", "KingBangalash", "Mokk", "SummoningThePrincess",
-  "LordShalzaru", "OOX", "MalletZF", "OverseerMaltorius", "Hakkar",
+  "LordShalzaru", "OOX", "MalletZF", "OverseerMaltorius",
   "KimJaelIndeed", "GorishiHiveQueen", "StonesThatBindUs", "MercutioFilthgorger",
-  "ShadowLordFeldan", "HighChiefWinterfall", "Deathclasp", "Overlord", "RingOfBlood",
-  "FelReaverA"
+  "ShadowLordFeldan", "MatterOfTime", "HighChiefWinterfall", "Deathclasp",
+  "Overlord", "RingOfBlood", "FelReaverA"
 }
 
 local QUEST_HORDE_ORDERED = {
@@ -39,10 +39,10 @@ local QUEST_HORDE_ORDERED = {
   "Ataeric", "Drathir", "LuzKnuck", "TheHunt", "Gizmo", "Grenka",
   "Ironhill", "StinkysEscapeH", "GalensEscape", "NothingButTruth",
   "GetMeOutOfHere", "Mugthol", "KingBangalash", "Mokk", "SummoningThePrincess",
-  "OOX", "Hatetalon", "MalletZF", "OverseerMaltorius", "Hakkar",
+  "OOX", "Hatetalon", "MalletZF", "OverseerMaltorius",
   "KimJaelIndeed", "Kromgrul", "GorishiHiveQueen", "StonesThatBindUs",
-  "MercutioFilthgorger", "ShadowLordFeldan", "HighChiefWinterfall", "Deathclasp",
-  "Cruel", "RingOfBlood", "FelReaverH"
+  "MercutioFilthgorger", "ShadowLordFeldan", "MatterOfTime", "HighChiefWinterfall",
+  "Deathclasp", "Cruel", "RingOfBlood", "FelReaverH"
 }
 
 ---------------------------------------

@@ -4376,8 +4376,16 @@ do
             end
 
             if type(rk) == "table" then
-                for key in pairs(rk) do
-                    addNpcId(key)
+                for key, need in pairs(rk) do
+                    -- Any-of groups (e.g. "Ring Of Law", "Edge of Madness") store NPC IDs
+                    -- as the value table; index those IDs, not the string alias key.
+                    if type(need) == "table" then
+                        for _, id in pairs(need) do
+                            addNpcId(id)
+                        end
+                    else
+                        addNpcId(key)
+                    end
                 end
             end
 
