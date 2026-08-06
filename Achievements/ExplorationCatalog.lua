@@ -102,16 +102,6 @@ local ExplorationAchievements = {
   customIsCompleted = function() return false end,
   staticPoints = true,
 }, {
-  achId = "MessageToKarazhan",
-  title = "Urgent Message to Karazhan",
-  level = nil,
-  tooltip = "Discover all of " .. ClassColor .. "Deadwind Pass|r and speak to " .. ClassColor .. "Archmage Leryda|r at the entrance of " .. ClassColor .. "Karazhan|r at or before level 25",
-  icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_Raid_Karazhan.png",
-  points = 0,
-  explorationZone = "Deadwind Pass",
-  customIsCompleted = function() return CheckZoneDiscovery(1430, 0.5) and UnitName("npc") == "Archmage Leryda" and UnitLevel("player") <= 25 end,
-  staticPoints = true,
-}, {
   achId = "OrgA",
   title = "Discover Orgrimmar",
   level = nil,
