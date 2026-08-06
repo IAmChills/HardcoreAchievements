@@ -381,7 +381,7 @@ local Dungeons = {
       [9042] = 1,  -- Verek
       [9156] = 1,  -- Ambassador Flamelash
       [9938] = 1,  -- Magmus
-      [8929] = 1,  -- Princess Moira Bronzebeard
+      --[8929] = 1,  -- Princess Moira Bronzebeard (Removed as saving the princess is almost required pre 60)
       [9019] = 1,  -- Emperor Dagran Thaurissan
     },
     bossOrder = {9025, 9016, 9319, 9018, "Ring Of Law", 9024, 9033, 8983, 9017, 9056, 9041, 9042, 9156, 9938, 8929, 9019}
