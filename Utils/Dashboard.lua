@@ -2521,7 +2521,13 @@ local function CreateDashboardModernRow(parent, srow)
     row.maxLevel = level > 0 and level or nil
     row.tooltip = tooltip
     row.zone = zone
-    row.allowSoloDouble = (def and def.allowSoloDouble ~= nil) and def.allowSoloDouble or (srow.allowSoloDouble ~= nil and srow.allowSoloDouble)
+    if def and def.allowSoloDouble ~= nil then
+        row.allowSoloDouble = def.allowSoloDouble and true or false
+    elseif srow.allowSoloDouble ~= nil then
+        row.allowSoloDouble = srow.allowSoloDouble and true or false
+    else
+        row.allowSoloDouble = false
+    end
     row.isSecretAchievement = (def and (def.secret or def.isSecretAchievement)) or (srow.isSecretAchievement)
     
     -- Store trackers from source row
@@ -2596,7 +2602,13 @@ local function UpdateDashboardModernRow(row, srow)
     -- Store trackers from source row
     row.killTracker = srow.killTracker
     row.questTracker = srow.questTracker
-    row.allowSoloDouble = (def and def.allowSoloDouble ~= nil) and def.allowSoloDouble or (srow.allowSoloDouble ~= nil and srow.allowSoloDouble)
+    if def and def.allowSoloDouble ~= nil then
+        row.allowSoloDouble = def.allowSoloDouble and true or false
+    elseif srow.allowSoloDouble ~= nil then
+        row.allowSoloDouble = srow.allowSoloDouble and true or false
+    else
+        row.allowSoloDouble = false
+    end
     
     -- Update timestamp display based on completion or failure state
     if row.TS then

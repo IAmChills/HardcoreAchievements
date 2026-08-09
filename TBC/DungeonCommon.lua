@@ -843,6 +843,7 @@ function DungeonCommon.registerDungeonAchievement(def)
     isHeroicDungeon = def.isHeroicDungeon or false,
     isVariation = def.isVariation,
     baseAchId = def.baseAchId,
+    allowSoloDouble = false,
   })
 
   ---------------------------------------

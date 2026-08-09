@@ -883,13 +883,19 @@ local function GetAchievementRow(achId)
                 local hasKill = def.targetNpcId ~= nil or (def.requiredKills and next(def.requiredKills) ~= nil)
                 if hasQuest and hasKill then
                     local capNum = tonumber(def.level)
+                    local allowSoloDouble
+                    if def.allowSoloDouble ~= nil then
+                        allowSoloDouble = def.allowSoloDouble and true or false
+                    else
+                        allowSoloDouble = def.targetNpcId ~= nil or (def.requiredKills and next(def.requiredKills) ~= nil) or false
+                    end
                     return {
                         achId = def.achId, id = def.achId,
                         killTracker = (def.targetNpcId or def.requiredKills) and true or nil,
                         questTracker = hasQuest and true or nil,
                         requiredKills = def.requiredKills, requiredQuestId = def.requiredQuestId, _def = def,
                         maxLevel = (capNum and capNum > 0) and capNum or nil,
-                        allowSoloDouble = (def.allowSoloDouble ~= nil) and def.allowSoloDouble or (def.targetNpcId ~= nil or (def.requiredKills and next(def.requiredKills) ~= nil)),
+                        allowSoloDouble = allowSoloDouble,
                     }
                 end
                 break
@@ -902,13 +908,19 @@ local function GetAchievementRow(achId)
         local hasKill = def.targetNpcId ~= nil or (def.requiredKills and next(def.requiredKills) ~= nil)
         if hasQuest and hasKill then
             local capNum = tonumber(def.level)
+            local allowSoloDouble
+            if def.allowSoloDouble ~= nil then
+                allowSoloDouble = def.allowSoloDouble and true or false
+            else
+                allowSoloDouble = true
+            end
             return {
                 achId = achId, id = achId,
                 killTracker = (def.targetNpcId or def.requiredKills) and true or nil,
                 questTracker = hasQuest and true or nil,
                 requiredKills = def.requiredKills, requiredQuestId = def.requiredQuestId, _def = def,
                 maxLevel = (capNum and capNum > 0) and capNum or nil,
-                allowSoloDouble = (def.allowSoloDouble ~= nil) and def.allowSoloDouble or true,
+                allowSoloDouble = allowSoloDouble,
             }
         end
     end
@@ -4026,13 +4038,20 @@ local function CreateAchievementRow(parent, achId, title, tooltip, icon, level, 
     local isSecretDef = def and (def.secret or def.isSecretAchievement or def.secretTitle or def.secretTooltip or def.secretIcon or def.secretPoints)
     local skipSecretPlaceholders = def and def.isGuildFirst
     local supportsSoloDoubleByDefault = not (def and (def.isMetaAchievement or def.isMeta or def.requiredAchievements ~= nil))
+    -- Honor explicit false: `x and false or fallback` would ignore false in Lua.
+    local allowSoloDouble
+    if def and def.allowSoloDouble ~= nil then
+        allowSoloDouble = def.allowSoloDouble and true or false
+    else
+        allowSoloDouble = (supportsSoloDoubleByDefault and killTracker ~= nil) and true or false
+    end
     local data = {
         achId = achId, id = achId, title = title, tooltip = tooltip, icon = icon, level = level,
         points = points or 0, killTracker = killTracker, questTracker = questTracker, staticPoints = staticPoints,
         zone = zone, def = def, _def = def,
         completed = false, originalPoints = points or 0,
         maxLevel = (capNum and capNum > 0) and capNum or nil,
-        allowSoloDouble = (def and def.allowSoloDouble ~= nil) and def.allowSoloDouble or (supportsSoloDoubleByDefault and (killTracker ~= nil)),
+        allowSoloDouble = allowSoloDouble,
         staticPoints = staticPoints or false,
     }
 

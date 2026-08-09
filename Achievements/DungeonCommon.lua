@@ -863,6 +863,7 @@ local function registerDungeonAchievement(def)
     faction = faction,
     isVariation = def.isVariation,
     baseAchId = def.baseAchId,
+    allowSoloDouble = false,
   })
   end
 
