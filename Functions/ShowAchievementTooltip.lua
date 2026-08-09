@@ -51,9 +51,15 @@ local function ExtractAchievementData(data)
         result.achId = data.achId or data.id or data._achId
         result.maxLevel = data.maxLevel
         result.points = data.points
-        result.allowSoloDouble = data.allowSoloDouble or false
-        result.isSecretAchievement = data.isSecretAchievement or (data._def and data._def.secret) or data.secret or false
         result.def = data._def
+        if data.allowSoloDouble ~= nil then
+            result.allowSoloDouble = data.allowSoloDouble and true or false
+        elseif result.def and result.def.allowSoloDouble ~= nil then
+            result.allowSoloDouble = result.def.allowSoloDouble and true or false
+        else
+            result.allowSoloDouble = (data.killTracker ~= nil) and true or false
+        end
+        result.isSecretAchievement = data.isSecretAchievement or (data._def and data._def.secret) or data.secret or false
         result.secretPoints = data.secretPoints
         if data.requireProfessionSkillID or (result.def and result.def.requireProfessionSkillID) then
             result.isProfessionAchievement = true
@@ -68,7 +74,14 @@ local function ExtractAchievementData(data)
         result.achId = data.achId or data.id
         result.maxLevel = data.maxLevel
         result.points = data.points
-        result.allowSoloDouble = data.allowSoloDouble or false
+        result.def = data._def or data.def
+        if data.allowSoloDouble ~= nil then
+            result.allowSoloDouble = data.allowSoloDouble and true or false
+        elseif result.def and result.def.allowSoloDouble ~= nil then
+            result.allowSoloDouble = result.def.allowSoloDouble and true or false
+        else
+            result.allowSoloDouble = (data.killTracker ~= nil or data.targetNpcId ~= nil) and true or false
+        end
         result.isSecretAchievement = data.isSecretAchievement or data.secret or false
         result.secretPoints = data.secretPoints
         if data.requireProfessionSkillID then
@@ -352,14 +365,34 @@ local function ShowAchievementTooltip(frame, data)
     
     GameTooltip:SetOwner(frame, "ANCHOR_RIGHT")
     
-    -- Check if SSF mode is enabled and this achievement supports it
-    -- Secret achievements should not show "Solo bonus"
+    -- Prefer stored completion points / wasSolo for the tooltip
+    local wasSoloCompleted = false
+    if achievementCompleted and achId and addon and addon.GetCharDB then
+        local _, cdb = addon.GetCharDB()
+        local rec = cdb and cdb.achievements and (cdb.achievements[tostring(achId)] or cdb.achievements[achId])
+        if rec then
+            wasSoloCompleted = rec.wasSolo and true or false
+            if rec.points ~= nil then
+                points = tonumber(rec.points) or points
+            end
+        end
+    end
+    -- Resolve allowSoloDouble from def when the row omitted it (Dashboard fallback used to force false)
+    if not allowSoloDouble and def and def.allowSoloDouble then
+        allowSoloDouble = true
+    end
+
+    -- Match under-level status text:
+    -- completed + wasSolo => "Solo"
+    -- incomplete + Solo checkbox + allowSoloDouble => "Solo bonus"
+    -- completed non-solo => no solo text
+    -- Secret/meta never show solo preview text.
     local isSoloMode = (addon and addon.IsSoloModeEnabled and addon.IsSoloModeEnabled()) or false
-    if isSoloMode and allowSoloDouble and not isSecret and not isMetaAchievement then
-        -- Show title with "Solo bonus" on the right when SSF is enabled
-        local soloText = "Solo bonus"
-        local ClassColor = (addon and addon.GetClassColor())
-        GameTooltip:AddDoubleLine(title, ClassColor .. soloText .. "|r", 1, 1, 1, 0.5, 0.3, 0.9)
+    local ClassColor = (addon and addon.GetClassColor())
+    if achievementCompleted and wasSoloCompleted and not isSecret and not isMetaAchievement then
+        GameTooltip:AddDoubleLine(title, ClassColor .. "Solo|r", 1, 1, 1, 0.5, 0.3, 0.9)
+    elseif (not achievementCompleted) and isSoloMode and allowSoloDouble and not isSecret and not isMetaAchievement then
+        GameTooltip:AddDoubleLine(title, ClassColor .. "Solo bonus|r", 1, 1, 1, 0.5, 0.3, 0.9)
     else
         GameTooltip:SetText(title, 1, 1, 1)
     end

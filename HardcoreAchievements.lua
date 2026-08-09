@@ -1413,6 +1413,20 @@ local function MarkRowCompleted(row, cdbParam)
                 local PlayerIsSolo = addon and addon.PlayerIsSolo
                 wasSolo = type(PlayerIsSolo) == "function" and PlayerIsSolo() or false
             end
+            -- If points were already solo-doubled in progress but PlayerIsSolo() is false at turn-in
+            -- (common for quest/item completes outside combat), trust the stored points.
+            if (not wasSolo) and progress and progress.pointsAtKill and row.originalPoints then
+                local stored = tonumber(progress.pointsAtKill) or 0
+                local base = tonumber(row.originalPoints) or 0
+                if not row.staticPoints and base > 0 then
+                    local preset = addon and addon.GetPlayerPresetFromSettings and addon.GetPlayerPresetFromSettings() or nil
+                    local multiplier = GetPresetMultiplier(preset) or 1.0
+                    base = base + math.floor((base) * (multiplier - 1) + 0.5)
+                end
+                if base > 0 and stored >= (base * 2) then
+                    wasSolo = true
+                end
+            end
         end
         
         cdb.achievements[id] = cdb.achievements[id] or {}

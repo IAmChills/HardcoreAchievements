@@ -530,7 +530,6 @@ local Achievements = {
     tooltip = "Complete " .. ClassColor .. "Stranglethorn Fever|r before level 48",
     icon = 134338,
     points = 10,
-    allowSoloDouble = true,
     requiredQuestId = 348,
     targetNpcId = 1514,
     zone = "Stranglethorn Vale"
@@ -559,7 +558,6 @@ local Achievements = {
     tooltip = "Complete " .. ClassColor .. "Message in a Bottle|r before level 51",
     icon = 132159,
     points = 10,
-    allowSoloDouble = true,
     requiredQuestId = 630,
     targetNpcId = 1559,
     zone = "Stranglethorn Vale"
@@ -623,7 +621,9 @@ local Achievements = {
     icon = 133879,
     points = 10,
     requiredQuestId = 4971,
-    targetNpcId = nil,
+    requiredKills = {
+        [10717] = 15,  -- Temporal Parasite x15
+    },
     zone = "Western Plaguelands"
 }, {
     achId = "GorishiHiveQueen",

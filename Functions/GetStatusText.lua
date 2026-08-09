@@ -39,8 +39,31 @@ local function GetStatusParamsForAchievement(achId, row)
     if row.completed and addon and addon.GetCharDB then
         local _, cdb = addon.GetCharDB()
         if cdb and cdb.achievements and rowId then
-            local rec = cdb.achievements[tostring(rowId)]
-            wasSolo = rec and rec.wasSolo or false
+            local rec = cdb.achievements[tostring(rowId)] or cdb.achievements[rowId]
+            wasSolo = (rec and rec.wasSolo) and true or false
+            -- Repair older quest/item completions that stored solo points but missed wasSolo
+            if (not wasSolo) and rec and row.allowSoloDouble then
+                local stored = tonumber(rec.points)
+                local base = tonumber(row.originalPoints) or tonumber(row.revealPointsBase)
+                if stored and base and base > 0 then
+                    local expected = base
+                    if not row.staticPoints and addon and addon.GetPlayerPresetFromSettings and addon.GetPresetMultiplier then
+                        local preset = addon.GetPlayerPresetFromSettings()
+                        local multiplier = addon.GetPresetMultiplier(preset) or 1.0
+                        expected = base + math.floor((base) * (multiplier - 1) + 0.5)
+                    end
+                    local sfBonus = 0
+                    if addon and addon.IsSelfFound and addon.IsSelfFound() and addon.GetSelfFoundBonus then
+                        sfBonus = tonumber(addon.GetSelfFoundBonus(base)) or 0
+                    end
+                    local expectedSolo = (expected * 2) + sfBonus
+                    local expectedNormal = expected + sfBonus
+                    if stored >= expectedSolo or (stored > expectedNormal and stored >= expected * 2) then
+                        wasSolo = true
+                        rec.wasSolo = true
+                    end
+                end
+            end
         end
     end
     local isSecretAchievement = row.isSecretAchievement

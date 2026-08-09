@@ -2521,18 +2521,18 @@ local function CreateDashboardModernRow(parent, srow)
     row.maxLevel = level > 0 and level or nil
     row.tooltip = tooltip
     row.zone = zone
+    -- Store trackers from source row first (used for allowSoloDouble default)
+    row.killTracker = srow.killTracker
+    row.questTracker = srow.questTracker
     if def and def.allowSoloDouble ~= nil then
         row.allowSoloDouble = def.allowSoloDouble and true or false
     elseif srow.allowSoloDouble ~= nil then
         row.allowSoloDouble = srow.allowSoloDouble and true or false
     else
-        row.allowSoloDouble = false
+        -- Match CreateAchievementRow: kill-tracked achievements solo-double by default
+        row.allowSoloDouble = (row.killTracker ~= nil) and true or false
     end
     row.isSecretAchievement = (def and (def.secret or def.isSecretAchievement)) or (srow.isSecretAchievement)
-    
-    -- Store trackers from source row
-    row.killTracker = srow.killTracker
-    row.questTracker = srow.questTracker
     
     -- Apply styling
     UpdateRowBorderColorDashboard(row)
@@ -2607,7 +2607,7 @@ local function UpdateDashboardModernRow(row, srow)
     elseif srow.allowSoloDouble ~= nil then
         row.allowSoloDouble = srow.allowSoloDouble and true or false
     else
-        row.allowSoloDouble = false
+        row.allowSoloDouble = (row.killTracker ~= nil) and true or false
     end
     
     -- Update timestamp display based on completion or failure state
