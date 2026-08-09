@@ -1,6 +1,6 @@
 local addonName, addon = ...
 local REQUIRED_MAP_ID = 48 -- Blackfathom Deeps map id
-local MAX_LEVEL = 70
+local MAX_LEVEL = 30
 
 local ClassColor = (addon and addon.GetClassColor())
 local achId = "FourCandle"
