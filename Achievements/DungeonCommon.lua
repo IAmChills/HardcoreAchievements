@@ -94,9 +94,6 @@ local isInDungeonOrRaid = false
 -- Helper Functions
 ---------------------------------------
 
--- Shared no-op; used as early-exit return from CreateTooltipHandler to avoid allocating a new function each time
-local function noop() end
-
 local function GetCurrentInstanceMapID()
     return select(8, GetInstanceInfo())
 end
@@ -1297,134 +1294,19 @@ local function registerDungeonAchievement(def)
   end
   if addon then addon.GetBossName = GetBossName end
 
-  -- Lazy tooltip setup - only initialize when first hovered (optimization)
-  local tooltipInitialized = false
-  local function CreateTooltipHandler()
-    local row = addon[rowVarName]
-    if not row then return noop end
-    local frame = row.frame
-    if not frame then return noop end
-    
-    -- Store the base tooltip for the main tooltip
-    local baseTooltip = tooltip or ""
-    row.tooltip = baseTooltip
-    frame.tooltip = baseTooltip
-    
-    -- Ensure mouse events are enabled and highlight texture exists
-    frame:EnableMouse(true)
-    if not frame.highlight then
-      frame.highlight = frame:CreateTexture(nil, "BACKGROUND")
-      frame.highlight:SetAllPoints(frame)
-      frame.highlight:SetColorTexture(1, 1, 1, 0.10)
-      frame.highlight:Hide()
-    end
-    
-    -- Set up OnLeave script to hide highlight and tooltip
-    frame:SetScript("OnLeave", function(self)
-      if self.highlight then
-        self.highlight:Hide()
-      end
-      GameTooltip:Hide()
-    end)
-    
-    -- Process a single boss entry (defined once per CreateTooltipHandler run, not per hover)
-    local function processBossEntry(npcId, need, achievementCompleted)
-      local done = false
-      local bossName = ""
-      if type(need) == "table" then
-        local bossNames = {}
-        for _, id in pairs(need) do
-          local current = (state.counts[id] or state.counts[tostring(id)] or 0)
-          local name = GetBossName(id)
-          table_insert(bossNames, name)
-          if current >= 1 then done = true end
-        end
-        if type(npcId) == "string" then
-          bossName = npcId
-        else
-          bossName = table_concat(bossNames, " / ")
-        end
-      else
-        local idNum = tonumber(npcId) or npcId
-        local current = (state.counts[idNum] or state.counts[tostring(idNum)] or 0)
-        bossName = GetBossName(idNum)
-        done = current >= (tonumber(need) or 1)
-      end
-      if achievementCompleted then done = true end
-      if done then
-        GameTooltip:AddLine(bossName, 1, 1, 1)
-      else
-        GameTooltip:AddLine(bossName, 0.5, 0.5, 0.5)
-      end
-    end
-    
-    -- Return the tooltip handler function
-    return function(self)
-        -- Show highlight
-        if self.highlight then
-          self.highlight:Show()
-        end
-        
-        if self.Title and self.Title.GetText then
-          -- Load fresh progress from database before showing tooltip
-          LoadProgress()
-          
-          local achievementCompleted = state.completed or (self.completed == true)
-          
-          GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-          GameTooltip:ClearLines()
-          GameTooltip:SetText(title or "", 1, 1, 1)
-          local leftText = (self.maxLevel and self.maxLevel > 0) and (LEVEL .. " " .. tostring(self.maxLevel)) or " "
-          local rightText = (self.points and tonumber(self.points) and tonumber(self.points) > 0) and (ACHIEVEMENT_POINTS .. ": " .. tostring(self.points)) or " "
-          GameTooltip:AddDoubleLine(leftText, rightText, 1, 1, 1, 0.7, 0.9, 0.7)
-          GameTooltip:AddLine(baseTooltip, nil, nil, nil, true)
-          
-          if next(requiredKills) ~= nil then
-            GameTooltip:AddLine("\nRequired Bosses:", 0, 1, 0)
-            if bossOrder then
-              for _, npcId in ipairs(bossOrder) do
-                local need = requiredKills[npcId]
-                if need then
-                  processBossEntry(npcId, need, achievementCompleted)
-                end
-              end
-            else
-              for npcId, need in pairs(requiredKills) do
-                processBossEntry(npcId, need, achievementCompleted)
-              end
-            end
-          end
-          local progress = addon and addon.GetProgress and addon.GetProgress(achId)
-          if progress and progress.avgPartyLevel then
-            local sizeText = progress.entryPartySize and (" (" .. tostring(progress.entryPartySize) .. " players)") or ""
-            GameTooltip:AddLine("Avg party level on entry: " .. tostring(progress.avgPartyLevel) .. sizeText, 0.75, 0.75, 0.75)
-          end
-          -- Hint for linking the achievement in chat
-          GameTooltip:AddLine("\nShift click to link in chat or add to tracking list", 0.5, 0.5, 0.5)
-          
-          GameTooltip:Show()
-        end
-      end
-    end
-
   ---------------------------------------
-  -- Tooltip Management
+  -- Tooltip Management (centralized)
   ---------------------------------------
 
-  -- Lazy tooltip handler - initializes on first hover
-  local tooltipHandler = nil
-  local function GetTooltipHandler()
-    if not tooltipHandler then
-      tooltipHandler = CreateTooltipHandler()
-    end
-    return tooltipHandler
-  end
+  -- Progress changes refresh via ShowAchievementTooltip on next hover; keep call sites intact.
+  UpdateTooltip = function() end
 
-  -- Update tooltip when progress changes (triggers lazy re-initialization on next hover)
-  UpdateTooltip = function()
-    -- Mark as needing update - tooltip will be re-initialized on next hover
-    tooltipInitialized = false
-    tooltipHandler = nil
+  local function BindRowTooltip(frame)
+    if addon and addon.BindAchievementRowTooltip then
+      addon.BindAchievementRowTooltip(frame, {
+        beforeShow = LoadProgress,
+      })
+    end
   end
 
   -- Check if a unit is over the level requirement
@@ -1736,18 +1618,7 @@ local function registerDungeonAchievement(def)
     if row then
       if addon and addon.AddRowUIInit then
         addon.AddRowUIInit(row, function(frame)
-          frame:EnableMouse(true)
-          -- Lazy OnEnter handler - creates tooltip handler on first hover
-          frame:SetScript("OnEnter", function(self)
-            GetTooltipHandler()(self)
-          end)
-          -- OnLeave handler
-          frame:SetScript("OnLeave", function(self)
-            if self.highlight then
-              self.highlight:Hide()
-            end
-            GameTooltip:Hide()
-          end)
+          BindRowTooltip(frame)
         end)
       end
     end

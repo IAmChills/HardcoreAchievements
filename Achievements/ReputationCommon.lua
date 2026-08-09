@@ -90,65 +90,22 @@ local function registerReputationAchievement(def)
 
   local function UpdateTooltip()
     local row = addon[rowVarName]
-    if row then
-      -- Store the base tooltip for the main tooltip
-      local baseTooltip = tooltip or ""
-      row.tooltip = baseTooltip
+    if not row then return end
+    local baseTooltip = tooltip or ""
+    row.tooltip = baseTooltip
 
-      -- UI is created lazily; only touch frame methods when the row frame exists
-      local frame = row.frame
-      if not frame then
-        if addon and addon.AddRowUIInit then
-          addon.AddRowUIInit(row, function()
-            C_Timer.After(0, UpdateTooltip)
-          end)
-        end
-        return
+    local frame = row.frame
+    if not frame then
+      if addon and addon.AddRowUIInit then
+        addon.AddRowUIInit(row, function()
+          C_Timer.After(0, UpdateTooltip)
+        end)
       end
-      frame.tooltip = baseTooltip
-      
-      -- Ensure mouse events are enabled and highlight texture exists
-      frame:EnableMouse(true)
-      if not frame.highlight then
-        frame.highlight = frame:CreateTexture(nil, "BACKGROUND")
-        frame.highlight:SetAllPoints(frame)
-        frame.highlight:SetColorTexture(1, 1, 1, 0.10)
-        frame.highlight:Hide()
-      end
-      
-      -- Override the OnEnter script to use proper GameTooltip API while preserving highlighting
-      frame:SetScript("OnEnter", function(self)
-        -- Show highlight
-        if self.highlight then
-          self.highlight:Show()
-        end
-        
-        if self.Title and self.Title.GetText then
-          GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-          GameTooltip:ClearLines()
-          GameTooltip:SetText(title or "", 1, 1, 1)
-          
-          -- Points (right) on one line
-          local rightText = (self.points and tonumber(self.points) and tonumber(self.points) > 0) and (ACHIEVEMENT_POINTS .. ": " .. tostring(self.points)) or " "
-          GameTooltip:AddLine(rightText, 0.7, 0.9, 0.7)
-          
-          -- Description in default yellow
-          GameTooltip:AddLine(baseTooltip, nil, nil, nil, true)
-          
-          -- Hint for linking the achievement in chat
-          GameTooltip:AddLine("\nShift click to link in chat or add to tracking list", 0.5, 0.5, 0.5)
-          
-          GameTooltip:Show()
-        end
-      end)
-      
-      -- Set up OnLeave script to hide highlight and tooltip
-      frame:SetScript("OnLeave", function(self)
-        if self.highlight then
-          self.highlight:Hide()
-        end
-        GameTooltip:Hide()
-      end)
+      return
+    end
+    frame.tooltip = baseTooltip
+    if addon and addon.BindAchievementRowTooltip then
+      addon.BindAchievementRowTooltip(frame)
     end
   end
   

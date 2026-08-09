@@ -38,6 +38,7 @@ HardcoreAchievements.lua
 Utils\GuildFirst.lua
 
 Leaderboard\Leaderboard.lua
+Leaderboard\LeaderboardCompletionStats.lua
 Leaderboard\LeaderboardSync.lua
 Leaderboard\LeaderboardData.lua
 

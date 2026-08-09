@@ -392,116 +392,27 @@ function DungeonSetCommon.registerDungeonSetAchievement(def)
 
   local function UpdateTooltip()
     local row = addon[rowVarName]
-    if row then
-      -- Store the base tooltip for the main tooltip
-      local baseTooltip = tooltip or ""
-      row.tooltip = baseTooltip
+    if not row then return end
+    local baseTooltip = tooltip or ""
+    row.tooltip = baseTooltip
 
-      -- UI is created lazily; only touch frame methods when the row frame exists
-      local frame = row.frame
-      if not frame then
-        if addon and addon.AddRowUIInit then
-          addon.AddRowUIInit(row, function()
-            C_Timer.After(0, UpdateTooltip)
-          end)
-        end
-        return
+    local frame = row.frame
+    if not frame then
+      if addon and addon.AddRowUIInit then
+        addon.AddRowUIInit(row, function()
+          C_Timer.After(0, UpdateTooltip)
+        end)
       end
-      frame.tooltip = baseTooltip
-      
-      -- Ensure mouse events are enabled and highlight texture exists
-      frame:EnableMouse(true)
-      if not frame.highlight then
-        frame.highlight = frame:CreateTexture(nil, "BACKGROUND")
-        frame.highlight:SetAllPoints(frame)
-        frame.highlight:SetColorTexture(1, 1, 1, 0.10)
-        frame.highlight:Hide()
-      end
-      
-      -- Override the OnEnter script to use proper GameTooltip API while preserving highlighting
-      frame:SetScript("OnEnter", function(self)
-        -- Show highlight
-        if self.highlight then
-          self.highlight:Show()
-        end
-        
-        if self.Title and self.Title.GetText then
-          -- Update item ownership before showing tooltip
+      return
+    end
+    frame.tooltip = baseTooltip
+    if addon and addon.BindAchievementRowTooltip then
+      addon.BindAchievementRowTooltip(frame, {
+        beforeShow = function()
           UpdateItemOwnership()
           LoadProgress()
-          
-          local achievementCompleted = state.completed or (self.completed == true)
-          
-          GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-          GameTooltip:ClearLines()
-          GameTooltip:SetText(title or "", 1, 1, 1)
-          
-          -- Level (left) and Points (right) on one line
-          local leftText = (self.maxLevel and self.maxLevel > 0) and (LEVEL .. " " .. tostring(self.maxLevel)) or " "
-          local rightText = (self.points and tonumber(self.points) and tonumber(self.points) > 0) and (ACHIEVEMENT_POINTS .. ": " .. tostring(self.points)) or " "
-          GameTooltip:AddDoubleLine(leftText, rightText, 1, 1, 1, 0.7, 0.9, 0.7)
-          
-          -- Description in default yellow
-          GameTooltip:AddLine(baseTooltip, nil, nil, nil, true)
-          
-          -- Show zone if provided
-          if zone then
-            GameTooltip:AddLine(zone, 0.6, 1, 0.86)
-          end
-          
-          if next(requiredItems) ~= nil then
-            GameTooltip:AddLine("\nRequired Items:", 0, 1, 0) -- Green header
-            
-            -- Helper function to process a single item entry
-            local function processItemEntry(itemId)
-              local owned = IsItemOwned(itemId)
-              
-              -- If currently owned but not saved, update and save the state
-              if owned and not state.itemOwned[itemId] then
-                state.itemOwned[itemId] = true
-                SaveProgress()
-              end
-              
-              -- If achievement is complete, all items show as owned
-              if achievementCompleted then
-                owned = true
-              end
-              
-              local itemName = GetItemName(itemId)
-              
-              if owned then
-                GameTooltip:AddLine(itemName, 1, 1, 1) -- White for owned
-              else
-                GameTooltip:AddLine(itemName, 0.5, 0.5, 0.5) -- Gray for not owned
-              end
-            end
-            
-            -- Use ordered display if provided, otherwise use array order
-            if itemOrder then
-              for _, itemId in ipairs(itemOrder) do
-                processItemEntry(itemId)
-              end
-            else
-              for _, itemId in ipairs(requiredItems) do
-                processItemEntry(itemId)
-              end
-            end
-          end
-          
-          -- Hint for linking the achievement in chat
-          GameTooltip:AddLine("\nShift click to link in chat or add to tracking list", 0.5, 0.5, 0.5)
-          
-          GameTooltip:Show()
-        end
-      end)
-      
-      -- Set up OnLeave script to hide highlight and tooltip
-      frame:SetScript("OnLeave", function(self)
-        if self.highlight then
-          self.highlight:Hide()
-        end
-        GameTooltip:Hide()
-      end)
+        end,
+      })
     end
   end
   

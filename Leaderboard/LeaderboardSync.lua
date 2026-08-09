@@ -46,9 +46,94 @@ local DB_PREFIX = "HCA_LB"
 local TABLE_NAME = "players"
 local PRESENCE_TABLE_NAME = "presence"
 local PERSIST_DEBOUNCE_SECONDS = 90
+-- LibP2PDB schema length is strict: bump DB version when player fields change.
+local DB_VERSION = 2
+
+-- v1 schema (pre-completedIds). Used only to import older persisted/network state.
+local PLAYER_SCHEMA_V1 = {
+    name = "string",
+    realm = "string",
+    guild = "string",
+    faction = "string",
+    class = "string",
+    classId = { "number", "nil" },
+    level = "number",
+    completed = "number",
+    total = "number",
+    points = "number",
+    raceId = { "number", "nil" },
+    sex = { "number", "nil" },
+    label = "string",
+    selfFound = { "boolean", "nil" },
+    dead = "boolean",
+    offline = { "boolean", "nil" },
+    version = "string",
+    updatedAt = "number",
+}
+
+local PLAYER_SCHEMA_V2 = {
+    name = "string",
+    realm = "string",
+    guild = "string",
+    faction = "string",
+    class = "string",
+    classId = { "number", "nil" },
+    level = "number",
+    completed = "number",
+    total = "number",
+    points = "number",
+    raceId = { "number", "nil" },
+    sex = { "number", "nil" },
+    label = "string",
+    selfFound = { "boolean", "nil" },
+    dead = "boolean",
+    offline = { "boolean", "nil" },
+    version = "string",
+    updatedAt = "number",
+    completedIds = { "table", "nil" },
+}
+
+local PRESENCE_SCHEMA = {
+    updatedAt = "number",
+    offline = { "boolean", "nil" },
+}
 
 local LibP2PDB = LibStub and LibStub("LibP2PDB", true)
 local persistDebounceToken = 0
+
+local function OnMigrateDB(target, source)
+    if source.version == 1 then
+        LibP2PDB:NewTable(source.db, {
+            name = TABLE_NAME,
+            keyType = "string",
+            exclusive = false,
+            schema = PLAYER_SCHEMA_V1,
+        })
+        LibP2PDB:NewTable(source.db, {
+            name = PRESENCE_TABLE_NAME,
+            keyType = "string",
+            exclusive = false,
+            schema = PRESENCE_SCHEMA,
+        })
+    end
+end
+
+local function OnMigrateRow(target, source)
+    if not source.key then
+        return nil
+    end
+    if not source.data then
+        return source.key, nil
+    end
+    if source.tableName == TABLE_NAME then
+        local data = source.data
+        if type(data.completedIds) ~= "table" then
+            data.completedIds = {}
+        end
+        return source.key, data
+    end
+    return source.key, source.data
+end
 
 local function Now()
     return (GetServerTime and GetServerTime()) or time()
@@ -126,12 +211,25 @@ local function ClearGuildCacheForPlayer()
     end
 end
 
+local function FieldEqual(key, a, b)
+    if a == b then
+        return true
+    end
+    if key == "completedIds" then
+        if Leaderboard.CompletedIdsEqual then
+            return Leaderboard.CompletedIdsEqual(a, b)
+        end
+        return false
+    end
+    return false
+end
+
 local function ShallowEqual(a, b)
     if type(a) ~= "table" or type(b) ~= "table" then
         return false
     end
     for key, value in pairs(a) do
-        if b[key] ~= value then
+        if not FieldEqual(key, value, b[key]) then
             return false
         end
     end
@@ -166,6 +264,9 @@ local function StoreRow(key, row)
     -- Full rebuilds still happen on user actions (scope/search/sort) and safety ticker.
     if Leaderboard.MarkDirty then
         Leaderboard:MarkDirty(key)
+    end
+    if Leaderboard.ScheduleCompletionStatsRebuild then
+        Leaderboard.ScheduleCompletionStatsRebuild()
     end
     return true
 end
@@ -424,6 +525,9 @@ function Sync:Initialize()
     if not db then
         db = LibP2PDB:NewDatabase({
             prefix = DB_PREFIX,
+            version = DB_VERSION,
+            onMigrateDB = OnMigrateDB,
+            onMigrateRow = OnMigrateRow,
         })
     end
     self.db = db
@@ -434,26 +538,7 @@ function Sync:Initialize()
             keyType = "string",
             exclusive = false,
             rowsPerChunk = 96,
-            schema = {
-                name = "string",
-                realm = "string",
-                guild = "string",
-                faction = "string",
-                class = "string",
-                classId = { "number", "nil" },
-                level = "number",
-                completed = "number",
-                total = "number",
-                points = "number",
-                raceId = { "number", "nil" },
-                sex = { "number", "nil" },
-                label = "string",
-                selfFound = { "boolean", "nil" },
-                dead = "boolean",
-                offline = { "boolean", "nil" },
-                version = "string",
-                updatedAt = "number",
-            },
+            schema = PLAYER_SCHEMA_V2,
             onValidate = OnPlayerRowValidate,
             onChange = OnTableChanged,
         })
@@ -465,10 +550,7 @@ function Sync:Initialize()
             keyType = "string",
             exclusive = false,
             rowsPerChunk = 128,
-            schema = {
-                updatedAt = "number",
-                offline = { "boolean", "nil" },
-            },
+            schema = PRESENCE_SCHEMA,
             onValidate = OnPresenceValidate,
             onChange = OnPresenceChanged,
         })
@@ -487,6 +569,10 @@ function Sync:Initialize()
     -- Single drain ticker: coalesces burst network deliveries into one apply pass per 0.5 seconds.
     if C_Timer and C_Timer.NewTicker then
         C_Timer.NewTicker(0.5, DrainPendingChanges)
+    end
+
+    if Leaderboard.ScheduleCompletionStatsRebuild then
+        Leaderboard.ScheduleCompletionStatsRebuild()
     end
 end
 
@@ -515,6 +601,15 @@ function Sync:BuildLocalRow(options)
         if addon.GetTotalPoints then
             points = addon.GetTotalPoints()
         end
+    end
+
+    local completedIds
+    if allowHeavyStats and Leaderboard.BuildLocalCompletedIds then
+        completedIds = Leaderboard.BuildLocalCompletedIds()
+    elseif type(current) == "table" and type(current.completedIds) == "table" then
+        completedIds = current.completedIds
+    else
+        completedIds = {}
     end
 
     local label = ""
@@ -555,6 +650,7 @@ function Sync:BuildLocalRow(options)
         offline = options.offline == true,
         version = GetAddOnVersionString(),
         updatedAt = Now(),
+        completedIds = completedIds,
     }
 end
 

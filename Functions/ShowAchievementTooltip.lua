@@ -159,7 +159,7 @@ local function ShowBossRequirements(achId, requiredKills, bossOrder, achievement
 end
 
 -- Show item requirements in tooltip
-local function ShowItemRequirements(requiredItems, itemOrder, achievementCompleted)
+local function ShowItemRequirements(requiredItems, itemOrder, achievementCompleted, achId)
     if not requiredItems or type(requiredItems) ~= "table" or #requiredItems == 0 then
         return
     end
@@ -168,6 +168,13 @@ local function ShowItemRequirements(requiredItems, itemOrder, achievementComplet
     
     -- Use itemOrder if available, otherwise use requiredItems order
     local itemsToShow = itemOrder or requiredItems
+    local itemOwned = nil
+    if achId and addon and addon.GetProgress then
+        local progress = addon.GetProgress(achId)
+        if progress and type(progress.itemOwned) == "table" then
+            itemOwned = progress.itemOwned
+        end
+    end
     
     for _, itemId in ipairs(itemsToShow) do
         local itemName, itemLink = GetItemInfo(itemId)
@@ -178,8 +185,9 @@ local function ShowItemRequirements(requiredItems, itemOrder, achievementComplet
             itemName = "Item " .. tostring(itemId)
         end
         
-        -- Check if player has the item
+        -- Inventory, or once-owned dungeon-set progress (item may have been sold)
         local hasItem = GetItemCount(itemId, true) > 0
+            or (itemOwned and (itemOwned[itemId] or itemOwned[tostring(itemId)]))
         local done = achievementCompleted or hasItem
         
         if done then
@@ -275,6 +283,26 @@ local function ShowExplorationRequirements(explorationZone)
             GameTooltip:AddLine(label, 0.5, 0.5, 0.5)
         end
     end
+end
+
+---------------------------------------
+-- Shared completion-rate line (character-frame custom tooltips + main tooltip)
+---------------------------------------
+
+local function AddAchievementCompletionRateToTooltip(achId)
+    if not achId or not addon or not addon.Leaderboard or not addon.Leaderboard.GetAchievementCompletionStats then
+        return
+    end
+    local have, total = addon.Leaderboard.GetAchievementCompletionStats(achId)
+    if type(total) ~= "number" or total <= 0 then
+        return
+    end
+    local pct = math.floor(((tonumber(have) or 0) / total) * 100 + 0.5)
+    GameTooltip:AddLine(
+        string.format("\n%d%% of eligible players have this achievement (%d/%d)", pct, tonumber(have) or 0, total),
+        0.0, 0.502, 0.4,
+        true
+    )
 end
 
 ---------------------------------------
@@ -512,7 +540,7 @@ local function ShowAchievementTooltip(frame, data)
     ShowBossRequirements(achId, requiredKills, bossOrder, achievementCompleted, def, achDef)
     
     -- Show item requirements if available
-    ShowItemRequirements(requiredItems, itemOrder, achievementCompleted)
+    ShowItemRequirements(requiredItems, itemOrder, achievementCompleted, achId)
     
     -- Show meta achievement requirements if available (continent exploration uses zone-style header)
     local useZoneListHeader = (achDef and achDef.isContinentExploration) or (def and def.isContinentExploration)
@@ -525,12 +553,47 @@ local function ShowAchievementTooltip(frame, data)
 
     -- Show exploration subzone requirements if available
     ShowExplorationRequirements(explorationZone)
-    
+
     -- Hint for linking the achievement in chat
-    GameTooltip:AddLine("\nShift click to link in chat or add to tracking list", 0.5, 0.5, 0.5)
+    GameTooltip:AddLine("\nShift click to link in chat or add to tracking list", 0.5, 0.5, 0.5, true)
+
+    -- Community completion rate from leaderboard reporters on 1.9.5+
+    AddAchievementCompletionRateToTooltip(achId)
+
     GameTooltip:Show()
+end
+
+-- Bind character-frame row hover to the centralized tooltip (highlight + optional pre-show hook).
+local function BindAchievementRowTooltip(frame, options)
+    if not frame or not frame.SetScript then
+        return
+    end
+    options = options or {}
+    frame:EnableMouse(true)
+    frame:SetScript("OnEnter", function(self)
+        if self.highlight then
+            if self.highlight.SetVertexColor then
+                self.highlight:SetVertexColor(1, 1, 1, 0.75)
+            end
+            self.highlight:Show()
+        end
+        if type(options.beforeShow) == "function" then
+            pcall(options.beforeShow, self)
+        end
+        if self.Title and self.Title.GetText and ShowAchievementTooltip then
+            ShowAchievementTooltip(self, options.data or self)
+        end
+    end)
+    frame:SetScript("OnLeave", function(self)
+        if self.highlight then
+            self.highlight:Hide()
+        end
+        GameTooltip:Hide()
+    end)
 end
 
 if addon then
     addon.ShowAchievementTooltip = ShowAchievementTooltip
+    addon.AddAchievementCompletionRateToTooltip = AddAchievementCompletionRateToTooltip
+    addon.BindAchievementRowTooltip = BindAchievementRowTooltip
 end
