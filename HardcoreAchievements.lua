@@ -664,9 +664,14 @@ local function IsRowOutleveledImpl(row)
             end
         end
 
-        -- If it's a dungeon achievement and player is in that specific dungeon, don't mark as failed
+        -- Inside this dungeon: only suppress "failed" if we entered at/under the cap
+        -- (allows dinging mid-run). Overleveled entry must still show failed.
         if isDungeonAchievement and dungeonMapId and addon and addon.IsInDungeon and addon.IsInDungeon(dungeonMapId) then
-            return false
+            local entryLevel = addon.GetDungeonEntryPlayerLevel and addon.GetDungeonEntryPlayerLevel(dungeonMapId)
+            if entryLevel and entryLevel <= row.maxLevel then
+                return false
+            end
+            -- No eligible entry snapshot (or entered over level): fall through as failed
         end
     end
     

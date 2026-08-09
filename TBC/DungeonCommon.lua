@@ -176,9 +176,10 @@ local function CheckAchievementEligibility(mapId, achDef, entryData)
     local playerLevel = entryData.playerLevel or UnitLevel("player") or 1
     if playerLevel > maxLevel then return false end
     
-    -- Variations (Trio/Duo/Solo) still require every party member under the cap.
-    -- Base dungeon achievements only require the player under the cap.
-    if achDef.isVariation and members > 1 then
+    -- Variations and specials still require every party member under the cap.
+    -- Base dungeon clears only require the player under the cap.
+    local requirePartyLevels = achDef.isVariation or achDef.requirePartyLevels
+    if requirePartyLevels and members > 1 then
         for i = 1, 4 do
             local unit = "party" .. i
             if UnitExists(unit) then
@@ -196,104 +197,42 @@ local function CheckAchievementEligibility(mapId, achDef, entryData)
     return true
 end
 
--- Helper function to check and print eligibility messages for achievements matching a mapId.
--- Prints only one message: for the lowest-level version (base then Trio, Duo, Solo, then Heroic).
-local function CheckAndPrintEligibilityMessages(mapId, entryData)
-    if not mapId or not entryData then return end
-    if not (addon and addon.AchievementDefs) then return end
-
-    local mapIdNum = tonumber(mapId) or mapId
-    local candidates = {}  -- { { achId, achDef, isFailed }, ... }
-
-    for achId, achDef in pairs(addon.AchievementDefs) do
-        local defMapId = tonumber(achDef.mapID) or achDef.mapID
-        if defMapId and mapIdNum and defMapId == mapIdNum and DungeonCommon.DefMatchesInstanceDifficulty(achDef) then
-            local progress = addon and addon.GetProgress and addon.GetProgress(achId)
-            local isCompleted = progress and progress.completed
-            local isFailed = progress and progress.failed
-
-            if not isCompleted then
-                -- Also check the shared row/model state so failed base variants are skipped even if the panel is closed.
-                if not isFailed and addon and addon.IsRowOutleveled and addon.GetAchievementRow then
-                    local row = addon.GetAchievementRow(achId)
-                    if row and addon.IsRowOutleveled(row) then
-                        isFailed = true
-                    end
-                end
-                local level = (type(achDef.level) == "number") and achDef.level or tonumber(achDef.level) or 999
-                table_insert(candidates, { achId = achId, achDef = achDef, isFailed = isFailed, level = level })
-            end
-        end
+local function GetVariationSortOrder(achDef)
+    if not achDef then return 0 end
+    if achDef.isVariation then
+        if achDef.variationType == "Trio" then return 1 end
+        if achDef.variationType == "Duo" then return 2 end
+        if achDef.variationType == "Solo" then return 3 end
+        return 4
     end
+    if achDef.isHeroicDungeon then return 5 end
+    return 0
+end
 
-    if #candidates == 0 then return end
-
-    -- Sort by level ascending (lowest first); non-variations before variations, then Trio, Duo, Solo, then Heroic
-    table_sort(candidates, function(a, b)
-        if a.level ~= b.level then return a.level < b.level end
-        local orderA = 0
-        if a.achDef.isVariation then
-            if a.achDef.variationType == "Trio" then orderA = 1
-            elseif a.achDef.variationType == "Duo" then orderA = 2
-            elseif a.achDef.variationType == "Solo" then orderA = 3
-            else orderA = 4
-            end
-        elseif a.achDef.isHeroicDungeon then
-            orderA = 5
-        end
-        local orderB = 0
-        if b.achDef.isVariation then
-            if b.achDef.variationType == "Trio" then orderB = 1
-            elseif b.achDef.variationType == "Duo" then orderB = 2
-            elseif b.achDef.variationType == "Solo" then orderB = 3
-            else orderB = 4
-            end
-        elseif b.achDef.isHeroicDungeon then
-            orderB = 5
-        end
-        return orderA < orderB
-    end)
-
-    -- Prefer the first sorted achievement that is both available and actually eligible for the current group.
-    local c = nil
-    local isEligible = false
-    for i = 1, #candidates do
-        if not candidates[i].isFailed and CheckAchievementEligibility(mapId, candidates[i].achDef, entryData) then
-            c = candidates[i]
-            isEligible = true
-            break
-        end
+local function IsAchievementFailed(achId, achDef)
+    local progress = addon and addon.GetProgress and addon.GetProgress(achId)
+    if progress and progress.failed then return true end
+    if addon and addon.IsRowOutleveled and addon.GetAchievementRow then
+        local row = addon.GetAchievementRow(achId)
+        if row and addon.IsRowOutleveled(row) then return true end
     end
+    return false
+end
 
-    -- Otherwise fall back to the first non-failed candidate so the message still refers to the next available target.
-    if not c then
-        for i = 1, #candidates do
-            if not candidates[i].isFailed then
-                c = candidates[i]
-                isEligible = CheckAchievementEligibility(mapId, c.achDef, entryData)
-                break
-            end
-        end
-    end
-
-    -- Last resort: if everything is failed, keep the old behavior of using the first sorted candidate.
-    if not c then
-        c = candidates[1]
-        isEligible = CheckAchievementEligibility(mapId, c.achDef, entryData)
-    end
-
-    local title = c.achDef.title or c.achDef.mapName or "Unknown"
+local function PrintEligibilityLine(achDef, isEligible)
+    local title = achDef.title or achDef.mapName or "Unknown"
+    local usesPartyLevels = achDef.isVariation or achDef.requirePartyLevels
     if isEligible then
-        if c.achDef.isVariation then
-            print("|cff008066[Hardcore Achievements]|r |cff00ff00Group is eligible for achievement: " .. title .. "|r. If any player levels beyond the achievement's allowed level while inside the dungeon, they must remain inside the dungeon to remain eligible.")
+        if usesPartyLevels then
+            print("|cff008066[Hardcore Achievements]|r |cff00ff00Group is eligible for achievement: " .. title .. "|r")
         else
-            print("|cff008066[Hardcore Achievements]|r |cff00ff00You are eligible for achievement: " .. title .. "|r. If you level beyond the achievement's allowed level while inside the dungeon, you must stay inside the dungeon to remain eligible. Party member levels are not required for this achievement.")
+            print("|cff008066[Hardcore Achievements]|r |cff00ff00You are eligible for achievement: " .. title .. "|r")
         end
         if addon.EventLogAdd then
             addon.EventLogAdd("Dungeon entered: |cff00ff00eligible|r for achievement: " .. title)
         end
     else
-        if c.achDef.isVariation then
+        if usesPartyLevels then
             print("|cff008066[Hardcore Achievements]|r |cffff0000Group is not eligible for achievement: " .. title .. "|r")
         else
             print("|cff008066[Hardcore Achievements]|r |cffff0000You are not eligible for achievement: " .. title .. "|r")
@@ -301,6 +240,81 @@ local function CheckAndPrintEligibilityMessages(mapId, entryData)
         if addon.EventLogAdd then
             addon.EventLogAdd("Dungeon entered: |cffff0000not eligible|r for achievement: " .. title)
         end
+    end
+end
+
+-- One prioritized message for the base/Trio/Duo/Solo clear chain, plus a separate
+-- line for specials on the same map (e.g. Four Candles).
+local function CheckAndPrintEligibilityMessages(mapId, entryData)
+    if not mapId or not entryData then return end
+    if not (addon and addon.AchievementDefs) then return end
+
+    local mapIdNum = tonumber(mapId) or mapId
+    local clearCandidates = {}
+    local specialCandidates = {}
+
+    for achId, achDef in pairs(addon.AchievementDefs) do
+        local defMapId = tonumber(achDef.mapID) or achDef.mapID
+        if defMapId and mapIdNum and defMapId == mapIdNum
+            and DungeonCommon.DefMatchesInstanceDifficulty(achDef)
+            and type(achDef.requiredKills) == "table" and next(achDef.requiredKills) ~= nil then
+            local progress = addon and addon.GetProgress and addon.GetProgress(achId)
+            if not (progress and progress.completed) then
+                local level = (type(achDef.level) == "number") and achDef.level or tonumber(achDef.level) or 999
+                local entry = {
+                    achId = achId,
+                    achDef = achDef,
+                    level = level,
+                    isFailed = IsAchievementFailed(achId, achDef),
+                }
+                if achDef.excludeFromCount then
+                    table_insert(specialCandidates, entry)
+                else
+                    table_insert(clearCandidates, entry)
+                end
+            end
+        end
+    end
+
+    local function sortCandidates(a, b)
+        if a.level ~= b.level then return a.level < b.level end
+        return GetVariationSortOrder(a.achDef) < GetVariationSortOrder(b.achDef)
+    end
+    table_sort(clearCandidates, sortCandidates)
+    table_sort(specialCandidates, sortCandidates)
+
+    -- Clear chain: first eligible available, else first available (ineligible), else base when all failed.
+    if #clearCandidates > 0 then
+        local c = nil
+        local isEligible = false
+        for i = 1, #clearCandidates do
+            if not clearCandidates[i].isFailed and CheckAchievementEligibility(mapId, clearCandidates[i].achDef, entryData) then
+                c = clearCandidates[i]
+                isEligible = true
+                break
+            end
+        end
+        if not c then
+            for i = 1, #clearCandidates do
+                if not clearCandidates[i].isFailed then
+                    c = clearCandidates[i]
+                    isEligible = CheckAchievementEligibility(mapId, c.achDef, entryData)
+                    break
+                end
+            end
+        end
+        if not c then
+            c = clearCandidates[1]
+            isEligible = false
+        end
+        PrintEligibilityLine(c.achDef, isEligible)
+    end
+
+    -- Specials always get their own line (e.g. Four Candles).
+    for i = 1, #specialCandidates do
+        local c = specialCandidates[i]
+        local isEligible = (not c.isFailed) and CheckAchievementEligibility(mapId, c.achDef, entryData)
+        PrintEligibilityLine(c.achDef, isEligible)
     end
 end
 
@@ -652,6 +666,9 @@ dungeonEventFrame:SetScript("OnEvent", function(self, event, unitIndex)
                     -- Print eligibility when re-entering so user sees messages every time
                     QueueEligibilityMessageOnInstanceInfo(mapId, existingEntry)
                     SaveDungeonEntryState()
+                    if addon and addon.RefreshOutleveledAll then
+                        addon.RefreshOutleveledAll()
+                    end
                 else
                     -- First entry: store entry levels
                     local playerLevel = UnitLevel("player") or 1
@@ -689,6 +706,9 @@ dungeonEventFrame:SetScript("OnEvent", function(self, event, unitIndex)
                     -- Check and print eligibility messages for visible achievements matching this mapId
                     QueueEligibilityMessageOnInstanceInfo(mapId, entryData)
                     SaveDungeonEntryState()
+                    if addon and addon.RefreshOutleveledAll then
+                        addon.RefreshOutleveledAll()
+                    end
                 end
             end
         else
@@ -1838,9 +1858,18 @@ local function IsInDungeon(mapId)
     return false
 end
 
+-- Player level stored when entering a dungeon (nil if no snapshot for that map).
+local function GetDungeonEntryPlayerLevel(mapId)
+    local entry = ResolveDungeonEntryLevelsForInstance(mapId)
+    if not entry then return nil end
+    return tonumber(entry.playerLevel)
+end
+
 DungeonCommon.IsInDungeon = IsInDungeon
+DungeonCommon.GetDungeonEntryPlayerLevel = GetDungeonEntryPlayerLevel
 
 if addon then
     addon.DungeonCommon = DungeonCommon
     addon.IsInDungeon = IsInDungeon
+    addon.GetDungeonEntryPlayerLevel = GetDungeonEntryPlayerLevel
 end

@@ -105,80 +105,40 @@ local function GetAchievementDefinition(achId)
     return addon.AchievementDefs[tostring(achId)]
 end
 
--- Show boss requirements in tooltip
+-- Show boss/NPC requirements in tooltip
 local function ShowBossRequirements(achId, requiredKills, bossOrder, achievementCompleted, def, achDef)
     if not requiredKills or next(requiredKills) == nil then
         return
     end
-    
-    GameTooltip:AddLine("\nRequired Bosses:", 0, 1, 0) -- Green header
-    
-    -- Get progress from database
-    local progress = addon and addon.GetProgress and addon.GetProgress(achId)
-    local counts = progress and progress.counts or {}
-    
-    -- Check if this is a raid achievement
+
+    local header = (addon and addon.GetRequiredKillHeader and addon.GetRequiredKillHeader(achDef, def)) or "Required Bosses"
+    GameTooltip:AddLine("\n" .. header .. ":", 0, 1, 0) -- Green header
+
     local isRaid = (def and def.isRaid) or (achDef and achDef.isRaid)
-    
-    -- Helper function to process a single boss entry
-    local function processBossEntry(npcId, need)
-        local done = achievementCompleted
-        local bossName = ""
-        
-        -- Determine which boss name function to use (raid vs dungeon)
-        local getBossNameFn = isRaid and (addon and addon.GetRaidBossName) or (addon and addon.GetBossName)
-        
-        -- Support both single NPC IDs and arrays of NPC IDs
-        if type(need) == "table" then
-            -- Array of NPC IDs - check if any of them has been killed
-            local bossNames = {}
-            for _, id in pairs(need) do
-                local current = (counts[id] or counts[tostring(id)] or 0)
-                local name = (getBossNameFn and getBossNameFn(id)) or ("Boss " .. tostring(id))
-                table_insert(bossNames, name)
-                if not done and current >= 1 then
-                    done = true
-                end
-            end
-            -- Use the key as display name for string keys
-            if type(npcId) == "string" then
-                bossName = npcId
-            else
-                -- For numeric keys, show all names
-                bossName = table_concat(bossNames, " / ")
-            end
-        else
-            -- Single NPC ID
-            local idNum = tonumber(npcId) or npcId
-            local current = (counts[idNum] or counts[tostring(idNum)] or 0)
-            bossName = (getBossNameFn and getBossNameFn(idNum)) or ("Boss " .. tostring(idNum))
-            if not done then
-                done = current >= (tonumber(need) or 1)
-            end
-        end
-        
-        if done then
-            GameTooltip:AddLine(bossName, 1, 1, 1) -- White for completed
-        else
-            GameTooltip:AddLine(bossName, 0.5, 0.5, 0.5) -- Gray for not completed
-        end
+    local entries = nil
+    if addon and addon.BuildRequiredKillEntries then
+        entries = addon.BuildRequiredKillEntries(achId, requiredKills, {
+            achDef = achDef,
+            def = def,
+            bossOrder = bossOrder,
+            achievementCompleted = achievementCompleted,
+            isRaid = isRaid,
+        })
     end
-    
-    -- Use ordered display if provided, otherwise use pairs
-    if bossOrder then
-        for _, npcId in ipairs(bossOrder) do
-            local need = requiredKills[npcId]
-            if need then
-                processBossEntry(npcId, need)
+
+    if entries then
+        for i = 1, #entries do
+            local entry = entries[i]
+            if entry.done then
+                GameTooltip:AddLine(entry.text, 1, 1, 1) -- White for completed
+            else
+                GameTooltip:AddLine(entry.text, 0.5, 0.5, 0.5) -- Gray for not completed
             end
-        end
-    else
-        for npcId, need in pairs(requiredKills) do
-            processBossEntry(npcId, need)
         end
     end
 
     -- Self-policing: show average party level recorded at dungeon entry
+    local progress = addon and addon.GetProgress and addon.GetProgress(achId)
     if progress and progress.avgPartyLevel then
         local sizeText = progress.entryPartySize and (" (" .. tostring(progress.entryPartySize) .. " players)") or ""
         GameTooltip:AddLine("Avg party level on entry: " .. tostring(progress.avgPartyLevel) .. sizeText, 0.75, 0.75, 0.75)

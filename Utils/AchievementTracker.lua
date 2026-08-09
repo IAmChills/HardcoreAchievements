@@ -1058,83 +1058,42 @@ local function GetAchievementDescription(achievementId)
     
     -- Build extended description
     -- For dungeon achievements (with requiredKills), skip the base tooltip and only show boss/item lists
+    -- Exceptions (e.g. Four Candles) keep the base tooltip when showing NPC kill counts.
     local description = ""
+    local keepBaseTooltip = achDef and addon and addon.ShouldShowRequiredKillCounts
+        and addon.ShouldShowRequiredKillCounts(achDef, nil)
     
     -- Only include base tooltip if this is NOT a dungeon achievement and NOT showing an exploration checklist
-    if not isDungeonOrRaidAchievement and not hasExplorationSubzoneList and not hasContinentZoneList and baseTooltip then
+    if (keepBaseTooltip or (not isDungeonOrRaidAchievement and not hasExplorationSubzoneList and not hasContinentZoneList)) and baseTooltip then
         description = baseTooltip
     end
     
-    -- Add required bosses section if available (only for actual dungeon/raid achievements)
+    -- Add required bosses/NPCs section if available (only for actual dungeon/raid achievements)
     if isDungeonOrRaidAchievement and requiredKills and next(requiredKills) ~= nil then
+        local header = (addon and addon.GetRequiredKillHeader and addon.GetRequiredKillHeader(achDef, nil)) or "Required Bosses"
         -- Only add newline before if there's already content, otherwise start directly with the header
         if description ~= "" then
-            description = description .. "\n\n|cff00ff00Required Bosses:|r"
+            description = description .. "\n\n|cff00ff00" .. header .. ":|r"
         else
             -- Start directly with header (no extra newlines for dungeon achievements)
-            description = "|cff00ff00Required Bosses:|r"
+            description = "|cff00ff00" .. header .. ":|r"
         end
-        
-        -- Get progress from database
-        local progress = addon and addon.GetProgress and addon.GetProgress(achievementId)
-        local counts = progress and progress.counts or {}
-        
-        -- Determine which boss name function to use (raid vs dungeon)
-        local getBossNameFn = isRaid and (addon and addon.GetRaidBossName) or (addon and addon.GetBossName)
-        
-        -- Helper function to process a single boss entry
-        local function processBossEntry(npcId, need)
-            local done = achievementCompleted
-            local bossName = ""
-            
-            -- Support both single NPC IDs and arrays of NPC IDs
-            if type(need) == "table" then
-                -- Array of NPC IDs - check if any of them has been killed
-                local bossNames = {}
-                for _, id in pairs(need) do
-                    local current = (counts[id] or counts[tostring(id)] or 0)
-                    local name = (getBossNameFn and getBossNameFn(id)) or ("Boss " .. tostring(id))
-                    table_insert(bossNames, name)
-                    if not done and current >= 1 then
-                        done = true
-                    end
-                end
-                -- Use the key as display name for string keys
-                if type(npcId) == "string" then
-                    bossName = npcId
-                else
-                    -- For numeric keys, show all names
-                    bossName = table_concat(bossNames, " / ")
-                end
+
+        local entries = (addon and addon.BuildRequiredKillEntries)
+            and addon.BuildRequiredKillEntries(achievementId, requiredKills, {
+                achDef = achDef,
+                bossOrder = bossOrder,
+                achievementCompleted = achievementCompleted,
+                isRaid = isRaid,
+            })
+            or {}
+
+        for i = 1, #entries do
+            local entry = entries[i]
+            if entry.done then
+                description = description .. "\n|cffffffff" .. entry.text .. "|r"
             else
-                -- Single NPC ID
-                local idNum = tonumber(npcId) or npcId
-                local current = (counts[idNum] or counts[tostring(idNum)] or 0)
-                bossName = (getBossNameFn and getBossNameFn(idNum)) or ("Boss " .. tostring(idNum))
-                if not done then
-                    done = current >= (tonumber(need) or 1)
-                end
-            end
-            
-            -- Add boss name with color coding (white for completed, gray for not completed)
-            if done then
-                description = description .. "\n|cffffffff" .. bossName .. "|r"
-            else
-                description = description .. "\n|cff808080" .. bossName .. "|r"
-            end
-        end
-        
-        -- Use ordered display if provided, otherwise use pairs
-        if bossOrder then
-            for _, npcId in ipairs(bossOrder) do
-                local need = requiredKills[npcId]
-                if need then
-                    processBossEntry(npcId, need)
-                end
-            end
-        else
-            for npcId, need in pairs(requiredKills) do
-                processBossEntry(npcId, need)
+                description = description .. "\n|cff808080" .. entry.text .. "|r"
             end
         end
     end
@@ -1827,7 +1786,7 @@ local function Update(self)
                     -- Reposition description label with indent (12px from title start)
                     line.descriptionLabel:ClearAllPoints()
                     -- Use minimal spacing for dungeon achievements (no base tooltip, description starts immediately)
-                    -- For regular achievements, use normal spacing after base tooltip
+                    -- For regular achievements / NPC-count lists with base tooltip, use normal spacing
                     local verticalOffset = isDungeonDesc and 0 or -2
                     line.descriptionLabel:SetPoint("TOPLEFT", line.label, "BOTTOMLEFT", 12, verticalOffset)
                     line.descriptionLabel:SetWidth(availableWidth - 12)  -- Account for indent

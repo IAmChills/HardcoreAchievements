@@ -295,6 +295,126 @@ local function RegisterAchievementDef(def, overrides)
 end
 
 ---------------------------------------
+-- Required kill tooltip/tracker helpers
+---------------------------------------
+
+local function GetRequiredKillCounts(achId)
+    if addon and addon.GetAchievementFunction then
+        local fn = addon.GetAchievementFunction(achId, "GetKillCounts")
+        if type(fn) == "function" then
+            local counts = fn()
+            if type(counts) == "table" then
+                return counts
+            end
+        end
+    end
+    local progress = addon and addon.GetProgress and addon.GetProgress(achId)
+    return (progress and progress.counts) or {}
+end
+
+local function GetRequiredKillHeader(achDef, def)
+    local header = (achDef and achDef.requiredKillHeader) or (def and def.requiredKillHeader)
+    if type(header) == "string" and header ~= "" then
+        return header
+    end
+    return "Required Bosses"
+end
+
+local function ShouldShowRequiredKillCounts(achDef, def)
+    return (achDef and achDef.showRequiredKillCounts) or (def and def.showRequiredKillCounts) or false
+end
+
+-- Returns ordered entries: { text = "Name 0/2", done = bool }
+local function BuildRequiredKillEntries(achId, requiredKills, opts)
+    opts = opts or {}
+    if not requiredKills or next(requiredKills) == nil then
+        return {}
+    end
+
+    local achDef = opts.achDef
+    local def = opts.def
+    local bossOrder = opts.bossOrder or (achDef and achDef.bossOrder) or (def and def.bossOrder)
+    local achievementCompleted = opts.achievementCompleted and true or false
+    local isRaid = opts.isRaid and true or false
+    local showCounts = ShouldShowRequiredKillCounts(achDef, def)
+    local counts = GetRequiredKillCounts(achId)
+    local npcNames = (achDef and achDef.npcNames) or (def and def.npcNames) or {}
+    local header = GetRequiredKillHeader(achDef, def)
+    local fallbackPrefix = (header ~= "Required Bosses") and "NPC " or "Boss "
+
+    local getBossNameFn = isRaid and (addon and addon.GetRaidBossName) or (addon and addon.GetBossName)
+
+    local function resolveName(id)
+        local idNum = tonumber(id) or id
+        if npcNames[idNum] then return npcNames[idNum] end
+        if npcNames[tostring(idNum)] then return npcNames[tostring(idNum)] end
+        if getBossNameFn then
+            local name = getBossNameFn(idNum)
+            if name and name ~= "" then return name end
+        end
+        return fallbackPrefix .. tostring(idNum)
+    end
+
+    local function processEntry(npcId, need)
+        local done = achievementCompleted
+        local text = ""
+
+        if type(need) == "table" then
+            local names = {}
+            for _, id in pairs(need) do
+                local current = (counts[id] or counts[tostring(id)] or 0)
+                table.insert(names, resolveName(id))
+                if not done and current >= 1 then
+                    done = true
+                end
+            end
+            if type(npcId) == "string" then
+                text = npcId
+            else
+                text = table.concat(names, " / ")
+            end
+        else
+            local idNum = tonumber(npcId) or npcId
+            local needNum = tonumber(need) or 1
+            local current = tonumber(counts[idNum] or counts[tostring(idNum)] or 0) or 0
+            if current > needNum then current = needNum end
+            local name = resolveName(idNum)
+            if showCounts then
+                text = name .. " " .. tostring(current) .. "/" .. tostring(needNum)
+            else
+                text = name
+            end
+            if not done then
+                done = current >= needNum
+            end
+        end
+
+        return { text = text, done = done }
+    end
+
+    local entries = {}
+    local seen = {}
+    if bossOrder then
+        for _, npcId in ipairs(bossOrder) do
+            local need = requiredKills[npcId]
+            if need then
+                table.insert(entries, processEntry(npcId, need))
+                seen[npcId] = true
+                seen[tostring(npcId)] = true
+                local idNum = tonumber(npcId)
+                if idNum then seen[idNum] = true end
+            end
+        end
+    end
+    for npcId, need in pairs(requiredKills) do
+        if not seen[npcId] and not seen[tostring(npcId)] and not seen[tonumber(npcId) or npcId] then
+            table.insert(entries, processEntry(npcId, need))
+        end
+    end
+    return entries
+end
+
+---------------------------------------
 -- Export: internal (addon)
 ---------------------------------------
 if addon then
@@ -306,4 +426,8 @@ if addon then
     addon.RegisterAchievementDef = RegisterAchievementDef
     addon.IsSelfFound = IsSelfFound
     addon.PlayerFactionMatches = PlayerFactionMatches
+    addon.GetRequiredKillCounts = GetRequiredKillCounts
+    addon.GetRequiredKillHeader = GetRequiredKillHeader
+    addon.ShouldShowRequiredKillCounts = ShouldShowRequiredKillCounts
+    addon.BuildRequiredKillEntries = BuildRequiredKillEntries
 end
