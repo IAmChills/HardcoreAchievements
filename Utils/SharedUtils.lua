@@ -263,6 +263,13 @@ local function RegisterAchievementDef(def, overrides)
         zone = def.zone,
         explorationZone = def.explorationZone,
         explorationThreshold = def.explorationThreshold,
+        -- Dungeon set / reputation fields
+        requiredItems = def.requiredItems,
+        itemOrder = def.itemOrder,
+        isDungeonSet = def.isDungeonSet or false,
+        isReputation = def.isReputation or false,
+        isGuildFirst = def.isGuildFirst or false,
+        factionId = def.factionId,
         -- Type flags
         isQuest = def.isQuest or false,
         isRaid = def.isRaid or false,

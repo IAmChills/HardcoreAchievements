@@ -24,6 +24,12 @@ local function registerReputationAchievement(def)
   local factionId = def.factionId -- Faction ID (required)
   local staticPoints = def.staticPoints or false
   local class = def.class -- Optional class restriction
+
+  -- Always register the def (eligibility still gates the character-frame row).
+  def.isReputation = true
+  if addon and addon.RegisterAchievementDef then
+    addon.RegisterAchievementDef(def, { level = nil })
+  end
   
   -- Create unique variable names
   local rowVarName = achId .. "_Row"
@@ -200,9 +206,6 @@ local function registerReputationAchievement(def)
     
     -- Check if player is eligible for this achievement (has the faction)
     if not IsEligible() then return end
-    
-    -- Mark as reputation achievement (similar to isDungeonSet for filtering)
-    def.isReputation = true
     
     addon[rowVarName] = addon.CreateAchievementRow(
       nil,

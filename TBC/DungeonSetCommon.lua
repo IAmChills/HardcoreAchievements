@@ -307,6 +307,12 @@ function DungeonSetCommon.registerDungeonSetAchievement(def)
   local class = def.class
   local zone = def.zone
   local staticPoints = def.staticPoints or false
+
+  -- Always register the def (eligibility still gates the character-frame row).
+  def.isDungeonSet = true
+  if addon and addon.RegisterAchievementDef then
+    addon.RegisterAchievementDef(def, { level = nil })
+  end
   
   -- Create unique variable names
   local rowVarName = achId .. "_Row"
@@ -518,9 +524,6 @@ function DungeonSetCommon.registerDungeonSetAchievement(def)
     -- Load progress from database
     LoadProgress()
     UpdateItemOwnership()
-    
-    -- Mark as dungeon set achievement (similar to isVariation for filtering)
-    def.isDungeonSet = true
     
     addon[rowVarName] = addon.CreateAchievementRow(
       nil,

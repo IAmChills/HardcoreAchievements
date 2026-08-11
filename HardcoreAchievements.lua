@@ -5790,6 +5790,10 @@ do
         addon.Initializing = false
         print("|cff008066[Hardcore Achievements]|r |cffffd100All achievements loaded!|r")
 
+        if addon.Leaderboard and addon.Leaderboard.ScheduleCompletionStatsRebuild then
+            addon.Leaderboard.ScheduleCompletionStatsRebuild()
+        end
+
         -- Nothing else to do after finalization
         f:UnregisterAllEvents()
     end

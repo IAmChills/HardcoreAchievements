@@ -140,6 +140,15 @@ local function ClassMatches(row, required)
     if not required then
         return true
     end
+    -- Catalogs often use class = { "PRIEST", "MAGE", "WARLOCK" }
+    if type(required) == "table" then
+        for _, token in pairs(required) do
+            if type(token) == "string" and ClassMatches(row, token) then
+                return true
+            end
+        end
+        return false
+    end
     local want = tostring(required):upper()
     local classId = tonumber(row.classId)
     if classId and CLASS_FILE_TO_ID[want] == classId then
