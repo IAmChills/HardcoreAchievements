@@ -491,6 +491,13 @@ local function IsRowOutleveled(row)
   return lvl > row.maxLevel
 end
 
+-- List rows are pooled/reused; IsRowOutleveled is cached by row object identity.
+-- Always evaluate against the bound source achievement (model/character row), never the pool frame.
+local function IsDashboardRowOutleveled(row)
+  if not row then return false end
+  return IsRowOutleveled(row.sourceRow or row)
+end
+
 local function IsDashboardRecentTab()
   return DashboardFrame and DashboardFrame.SelectedTabKey == "summary"
 end
@@ -574,7 +581,7 @@ local function UpdateStatusTextDashboard(row)
     if not row or not row.Sub or type(SetStatusTextOnRow) ~= "function" then return end
     local rowId = row.achId or row.id
     if not rowId then return end
-    local params = (addon and addon.GetStatusParamsForAchievement) and addon.GetStatusParamsForAchievement(rowId, row)
+    local params = (addon and addon.GetStatusParamsForAchievement) and addon.GetStatusParamsForAchievement(rowId, row.sourceRow or row)
     if not params then return end
     SetStatusTextOnRow(row, params)
     if params.isOutleveled and addon and addon.GetProgress then
@@ -593,7 +600,7 @@ local function UpdateRowBorderColorDashboard(row)
             row.Background:SetVertexColor(0.1, 1.0, 0.1)
             row.Background:SetAlpha(1)
         end
-    elseif IsRowOutleveled(row) then
+    elseif IsDashboardRowOutleveled(row) then
         row.Border:SetVertexColor(0.957, 0.263, 0.212)
         if row.Background then
             row.Background:SetVertexColor(1.0, 0.1, 0.1)
@@ -647,7 +654,7 @@ local function UpdatePointsDisplayDashboard(row)
                 -- Completed: use gold texture
                 row.PointsFrame.VariationOverlay:SetTexture("Interface\\AddOns\\HardcoreAchievements\\Images\\dragon_gold.png")
                 row.PointsFrame.VariationOverlay:Show()
-            elseif IsRowOutleveled(row) then
+            elseif IsDashboardRowOutleveled(row) then
                 -- Failed/overleveled: use failed texture
                 row.PointsFrame.VariationOverlay:SetTexture("Interface\\AddOns\\HardcoreAchievements\\Images\\dragon_failed.png")
                 row.PointsFrame.VariationOverlay:Show()
@@ -692,7 +699,7 @@ local function UpdatePointsDisplayDashboard(row)
         if row.IconOverlay then row.IconOverlay:Hide() end
         if row.Sub then row.Sub:SetTextColor(1, 1, 1) end
         if row.Title then row.Title:SetTextColor(1, 0.82, 0) end
-    elseif IsRowOutleveled(row) then
+    elseif IsDashboardRowOutleveled(row) then
         if row.Points then row.Points:SetAlpha(0) end
         local p = tonumber(row.points) or 0
         if p == 0 then
@@ -721,6 +728,7 @@ local function UpdatePointsDisplayDashboard(row)
         end
         if row.IconOverlay then
             row.IconOverlay:SetTexture("Interface\\AddOns\\HardcoreAchievements\\Images\\ReadyCheck-NotReady.png")
+            row.IconOverlay:SetDrawLayer("OVERLAY", 2)
             row.IconOverlay:Show()
         end
         if row.Sub then row.Sub:SetTextColor(0.5, 0.5, 0.5) end
@@ -758,13 +766,23 @@ end
 local function ApplyOutleveledStyleDashboard(row)
     if not row then return end
     
-    -- Desaturate icon
+    -- Desaturate icon + match grid failed red tint
     if row.Icon and row.Icon.SetDesaturated then
-        -- Completed achievements are full color; failed/outleveled should remain desaturated
         if row.completed then
             row.Icon:SetDesaturated(false)
+            if row.Icon.SetVertexColor then
+                row.Icon:SetVertexColor(1.0, 1.0, 1.0)
+            end
+        elseif IsDashboardRowOutleveled(row) then
+            row.Icon:SetDesaturated(true)
+            if row.Icon.SetVertexColor then
+                row.Icon:SetVertexColor(0.85, 0.45, 0.45)
+            end
         else
             row.Icon:SetDesaturated(true)
+            if row.Icon.SetVertexColor then
+                row.Icon:SetVertexColor(1.0, 1.0, 1.0)
+            end
         end
     end
     
@@ -2314,10 +2332,11 @@ local function CreateDashboardModernRow(parent, srow)
     row.IconFrame:SetDrawLayer("OVERLAY", 1)
     row.IconFrame:Show()
     
-    -- Icon overlay (for failed state - red X)
+    -- Icon overlay (for failed state - red X); draw above silver/gold frames
     row.IconOverlay = row:CreateTexture(nil, "OVERLAY")
     row.IconOverlay:SetSize(24, 24) -- Increased from 20x20 to 24x24 to match scale
     row.IconOverlay:SetPoint("CENTER", row.Icon, "CENTER", 0, 0)
+    row.IconOverlay:SetDrawLayer("OVERLAY", 2)
     row.IconOverlay:Hide()
     
     -- title
@@ -2511,6 +2530,8 @@ local function CreateDashboardModernRow(parent, srow)
     row._zone = zone
     row.sourceRow = srow
     row.requiredKills = srow.requiredKills
+    row.requiredAchievements = srow.requiredAchievements
+    row.requiredQuestId = srow.requiredQuestId or (def and def.requiredQuestId)
     
     -- Store data
     row.achId = achId
@@ -2570,6 +2591,7 @@ local function UpdateDashboardModernRow(row, srow)
     row._def = def
     row.requiredAchievements = srow.requiredAchievements
     row.requiredKills = srow.requiredKills
+    row.requiredQuestId = srow.requiredQuestId or (def and def.requiredQuestId)
     row.tooltip = tooltip or srow.tooltip or srow._tooltip or ""
     row._tooltip = row.tooltip
     row.zone = srow.zone or srow._zone
@@ -2625,7 +2647,7 @@ local function UpdateDashboardModernRow(row, srow)
             else
                 row.TS:SetText(FormatTimestampDashboard(time()))
             end
-        elseif IsRowOutleveled(row) then
+        elseif IsDashboardRowOutleveled(row) then
             local failedAt = nil
             if addon and addon.GetFailureTimestamp then
                 failedAt = addon.GetFailureTimestamp(tostring(achId or ""))

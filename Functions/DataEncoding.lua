@@ -10,6 +10,17 @@ local addonName, addon = ...
 local configForLS = { errorOnUnserializableType = false }
 local configForDeflate = { level = 1 } -- speed over size for UI responsiveness
 
+-- LibP2PDB default compressor uses LibDeflate auto level (often 5–7), which can hit
+-- "script ran too long" on periodic gossip/chunk sends. Force level 1 for sync paths.
+local LibP2PDBFastCompressor = {
+    Compress = function(_, str)
+        return (LibDeflate:CompressDeflate(str, configForDeflate))
+    end,
+    Decompress = function(_, str)
+        return LibDeflate:DecompressDeflate(str)
+    end,
+}
+
 -- Cache for repeated encodings of the same data (cleared after 5 minutes)
 local compressedCache = {}
 
@@ -103,4 +114,5 @@ end
 if addon then
     addon.EncodeData = EncodeData
     addon.DecodeData = DecodeData
+    addon.LibP2PDBFastCompressor = LibP2PDBFastCompressor
 end
