@@ -46,7 +46,7 @@ local QUEST_HORDE_ORDERED = {
 -- Achievement List Builders
 ---------------------------------------
 
--- Classic Dungeon Master - requires all dungeon achievements
+-- Classic Dungeon Master - requires all dungeon achievements (any variation counts)
 -- RFC is Horde-only, STOCK is Alliance-only
 local function GetClassicDungeonMasterAchievements()
     local playerFaction = GetPlayerFaction()
@@ -124,11 +124,12 @@ local MetaAchievements = {
   {
     achId = "DungeonMeta",
     title = "The Dungeon Master",
-    tooltip = "Complete all dungeon achievements",
+    tooltip = "Complete all dungeon achievements (any variation).",
     icon = 255345,
     points = 100,
     requiredAchievements = classicDungeons,
-    achievementOrder = classicDungeons
+    achievementOrder = classicDungeons,
+    acceptAnyVariation = true,
   },
   {
     achId = "QuestMeta",

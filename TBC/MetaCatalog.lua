@@ -49,7 +49,7 @@ local QUEST_HORDE_ORDERED = {
 -- Achievement List Builders
 ---------------------------------------
 
--- TBC Dungeon Master - requires all classic dungeon achievements plus TBC dungeon achievements
+-- TBC Dungeon Master - requires all classic + TBC dungeon achievements (any variation counts)
 -- RFC is Horde-only, STOCK is Alliance-only
 local function GetTBCDungeonMasterAchievements()
   local playerFaction = GetPlayerFaction()
@@ -147,11 +147,12 @@ local MetaAchievements = {
   {
     achId = "DungeonMeta",
     title = "The Dungeon Master",
-    tooltip = "Complete all dungeon achievements",
+    tooltip = "Complete all dungeon achievements (any variation).",
     icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_Dungeon_GloryoftheHERO.png", -- 255345
     points = 100,
     requiredAchievements = tbcDungeons,
-    achievementOrder = tbcDungeons
+    achievementOrder = tbcDungeons,
+    acceptAnyVariation = true,
   },
   {
     achId = "HeroicDungeonMeta",

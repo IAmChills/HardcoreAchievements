@@ -34,6 +34,7 @@ local function ExtractAchievementData(data)
         itemOrder = nil,
         requiredAchievements = nil,
         achievementOrder = nil,
+        acceptAnyVariation = false,
         secretPoints = nil
     }
     
@@ -106,6 +107,7 @@ local function ExtractAchievementData(data)
     result.itemOrder = getValue("itemOrder")
     result.requiredAchievements = getValue("requiredAchievements")
     result.achievementOrder = getValue("achievementOrder")
+    result.acceptAnyVariation = getValue("acceptAnyVariation") == true
     
     return result
 end
@@ -200,7 +202,8 @@ end
 
 -- Show meta achievement requirements in tooltip
 -- headerLine: optional green header (default "\nRequired Achievements:")
-local function ShowMetaAchievementRequirements(requiredAchievements, achievementOrder, achievementCompleted, headerLine)
+-- acceptAnyVariation: if true, base dungeon counts complete when any Trio/Duo/Solo variation is done
+local function ShowMetaAchievementRequirements(requiredAchievements, achievementOrder, achievementCompleted, headerLine, acceptAnyVariation)
     if not requiredAchievements or type(requiredAchievements) ~= "table" or #requiredAchievements == 0 then
         return
     end
@@ -233,23 +236,26 @@ local function ShowMetaAchievementRequirements(requiredAchievements, achievement
         end
         
         -- Check if required achievement is completed, failed (outleveled), or still available
-        local reqProgress = addon and addon.GetProgress and addon.GetProgress(reqAchId)
-        local reqCompleted = reqProgress and reqProgress.completed
+        local reqCompleted = false
         local reqFailed = false
-
-        if reqRow and reqRow.completed then
-            reqCompleted = true
-        end
-
-        -- Failed = outleveled or DB has .failed (e.g. meta)
-        if not reqCompleted and addon and addon.IsRowOutleveled and reqRow and addon.IsRowOutleveled(reqRow) then
-            reqFailed = true
-        end
-        if not reqFailed and not reqCompleted and not reqRow and addon and addon.GetCharDB then
-            local _, cdb = addon.GetCharDB()
-            local rec = cdb and cdb.achievements and cdb.achievements[tostring(reqAchId)]
-            if rec and rec.failed then
+        if addon and addon.IsMetaRequirementCompleted then
+            reqCompleted = addon.IsMetaRequirementCompleted(reqAchId, acceptAnyVariation)
+            reqFailed = (not reqCompleted) and addon.IsMetaRequirementFailed and addon.IsMetaRequirementFailed(reqAchId, acceptAnyVariation)
+        else
+            local reqProgress = addon and addon.GetProgress and addon.GetProgress(reqAchId)
+            reqCompleted = reqProgress and reqProgress.completed
+            if reqRow and reqRow.completed then
+                reqCompleted = true
+            end
+            if not reqCompleted and addon and addon.IsRowOutleveled and reqRow and addon.IsRowOutleveled(reqRow) then
                 reqFailed = true
+            end
+            if not reqFailed and not reqCompleted and not reqRow and addon and addon.GetCharDB then
+                local _, cdb = addon.GetCharDB()
+                local rec = cdb and cdb.achievements and cdb.achievements[tostring(reqAchId)]
+                if rec and rec.failed then
+                    reqFailed = true
+                end
             end
         end
 
@@ -328,6 +334,7 @@ local function ShowAchievementTooltip(frame, data)
     local itemOrder = extracted.itemOrder
     local requiredAchievements = extracted.requiredAchievements
     local achievementOrder = extracted.achievementOrder
+    local acceptAnyVariation = extracted.acceptAnyVariation
     local explorationZone = nil
     
     -- Check database for completion status if not already set
@@ -511,6 +518,9 @@ local function ShowAchievementTooltip(frame, data)
         if achDef.achievementOrder then
             achievementOrder = achDef.achievementOrder
         end
+        if achDef.acceptAnyVariation then
+            acceptAnyVariation = true
+        end
         if achDef.explorationZone then
             explorationZone = achDef.explorationZone
         end
@@ -530,6 +540,9 @@ local function ShowAchievementTooltip(frame, data)
         if def.achievementOrder then
             achievementOrder = def.achievementOrder
         end
+        if def.acceptAnyVariation then
+            acceptAnyVariation = true
+        end
         if def.explorationZone then
             explorationZone = def.explorationZone
         end
@@ -548,7 +561,8 @@ local function ShowAchievementTooltip(frame, data)
         requiredAchievements,
         achievementOrder,
         achievementCompleted,
-        useZoneListHeader and "\nRequired Zones:" or nil
+        useZoneListHeader and "\nRequired Zones:" or nil,
+        acceptAnyVariation
     )
 
     -- Show exploration subzone requirements if available

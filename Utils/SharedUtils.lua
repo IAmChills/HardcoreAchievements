@@ -256,6 +256,7 @@ local function RegisterAchievementDef(def, overrides)
         -- Meta-specific fields
         requiredAchievements = def.requiredAchievements,
         achievementOrder = def.achievementOrder,
+        acceptAnyVariation = def.acceptAnyVariation or false,
         -- Common fields
         faction = def.faction,
         race = def.race,
