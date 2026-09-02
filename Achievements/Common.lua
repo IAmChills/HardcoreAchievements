@@ -342,41 +342,16 @@ function M.registerQuestAchievement(cfg)
             if not (MAX_LEVEL and MAX_LEVEL > 0 and levelToCheck > MAX_LEVEL) then
                 state.quest = true
                 setProg("quest", true)
-                
-                -- Check if we already have pointsAtKill from a previous NPC kill
-                -- If we do, preserve it; if not, store points based on current solo status
-                local progressTable = GetProgress()
+
+                -- Retro server complete: assume normal fulfillment. Cannot verify solo at top-up time,
+                -- so only write base points when nothing was already stored from a live kill.
+                -- Also clear stale ineligibleKill so quest top-up is not blocked by an old group-state flag.
+                if progressTable and progressTable.ineligibleKill then
+                    setProg("ineligibleKill", false)
+                end
                 local existingPointsAtKill = progressTable and progressTable.pointsAtKill
-                
                 if not existingPointsAtKill then
-                    -- No existing pointsAtKill, check if quest completion was solo (check at time of topUp)
-                    StoreQuestSoloPointsAfterTurnIn(GetSoloStatusForQuest())
-                else
-                    -- We have existing pointsAtKill from NPC kill, preserve it
-                    -- But still update solo status if current check is solo (for indicator purposes)
-                    local isSoloQuest = GetSoloStatusForQuest()
-                    if isSoloQuest then
-                        setProg("soloQuest", true)
-                        local row = FindAchievementRow()
-                        if row and not row.completed then
-                            local progressTable = GetProgress()
-                            if progressTable and progressTable.pointsAtKill then
-                                row.points = tonumber(progressTable.pointsAtKill) or row.points
-                                if row.Points then
-                                    row.Points:SetText(tostring(row.points))
-                                end
-                            end
-                            if SetStatusTextOnRow then
-                                SetStatusTextOnRow(row, {
-                                    completed = false,
-                                    hasSoloStatus = true,
-                                    requiresBoth = false,
-                                    isSelfFound = IsSelfFound(),
-                                    maxLevel = row.maxLevel
-                                })
-                            end
-                        end
-                    end
+                    StoreQuestSoloPointsAfterTurnIn(false)
                 end
                 return true
             end
@@ -486,34 +461,37 @@ function M.registerQuestAchievement(cfg)
 		-- Check both state and progress table for kill/quest completion
 		local progressTable = GetProgress()
 		
-		-- Check if there's an ineligible kill flag - achievement was done when group was ineligible.
-		-- The flag is cleared by a new eligible kill of the same NPC, or by abandoning the quest
-		-- (QUEST_REMOVED performs a full progress reset for the achievement).
-		if progressTable and progressTable.ineligibleKill then
-			return false -- Kill was done when group was ineligible - do not allow completion
-		end
-		
 		local killFromProgress = progressTable and progressTable.killed
 		local questFromProgress = progressTable and progressTable.quest
 		
 		local questOk = (not REQUIRED_QUEST_ID) or state.quest or questFromProgress
+		-- Quest already completed (live turn-in or server top-up) while still eligible:
+		-- always award; skip live group / ineligibleKill gates. Solo is only set on live turn-in.
+		local completingViaQuest = REQUIRED_QUEST_ID and (state.quest or questFromProgress)
+
+		-- ineligibleKill only blocks kill-based completion paths, not quest-complete awards.
+		if progressTable and progressTable.ineligibleKill and not completingViaQuest then
+			return false
+		end
+
+		local function markComplete(needGroupCheck)
+			if needGroupCheck and IsGroupEligibleForAchievement then
+				if not IsGroupEligibleForAchievement(MAX_LEVEL, ACH_ID) then
+					return false
+				end
+			end
+			state.completed = true
+			setProg("completed", true)
+			return true
+		end
 		
 		-- If requiredKills is defined, check kill counts instead of single kill
 		if REQUIRED_KILLS then
 			local killsOk = countsSatisfied()
 			-- Complete if all kills are satisfied OR (if quest is required) quest is turned in
-			if killsOk or (REQUIRED_QUEST_ID and questOk) then
-				-- Check group eligibility before marking complete
-				local isGroupEligible = true
-				if IsGroupEligibleForAchievement then
-					isGroupEligible = IsGroupEligibleForAchievement(MAX_LEVEL, ACH_ID)
-				end
-				if not isGroupEligible then
-					return false -- Group not eligible, don't complete
-				end
-				state.completed = true
-				setProg("completed", true)
-				return true
+			if killsOk or completingViaQuest then
+				-- Group check only when awarding from kills without a completed quest
+				return markComplete(killsOk and not completingViaQuest)
 			end
 			return false
 		end
@@ -530,46 +508,13 @@ function M.registerQuestAchievement(cfg)
 			if awardOnKillEnabled then
 				local killOk = state.killed or killFromProgress
 				if killOk then
-					-- Check group eligibility before marking complete
-					local isGroupEligible = true
-					if IsGroupEligibleForAchievement then
-						isGroupEligible = IsGroupEligibleForAchievement(MAX_LEVEL, ACH_ID)
-					end
-					if not isGroupEligible then
-						return false -- Group not eligible, don't complete
-					end
-					state.completed = true
-					setProg("completed", true)
-					return true
+					return markComplete(true)
 				end
 				return false
 			else
 				-- Quest alone is sufficient for completion (default behavior)
-				if questOk then
-					-- Check group eligibility before marking complete (only if kill was not clean)
-					local isCleanKill = false
-					if killFromProgress then
-						local levelAtKill = progressTable and progressTable.levelAtKill
-						if levelAtKill then
-							if MAX_LEVEL and MAX_LEVEL > 0 then
-								isCleanKill = (levelAtKill <= MAX_LEVEL)
-							else
-								isCleanKill = true
-							end
-						end
-					end
-					if not isCleanKill then
-						local isGroupEligible = true
-						if IsGroupEligibleForAchievement then
-							isGroupEligible = IsGroupEligibleForAchievement(MAX_LEVEL, ACH_ID)
-						end
-						if not isGroupEligible then
-							return false -- Group not eligible, don't complete
-						end
-					end
-					state.completed = true
-					setProg("completed", true)
-					return true
+				if completingViaQuest then
+					return markComplete(false)
 				end
 				return false
 			end
@@ -578,17 +523,8 @@ function M.registerQuestAchievement(cfg)
 		-- Otherwise, require each defined component individually
 		local killOk = (not TARGET_NPC_ID) or state.killed or killFromProgress
 		if killOk and questOk then
-			-- Check group eligibility before marking complete
-			local isGroupEligible = true
-			if IsGroupEligibleForAchievement then
-				isGroupEligible = IsGroupEligibleForAchievement(MAX_LEVEL, ACH_ID)
-			end
-			if not isGroupEligible then
-				return false -- Group not eligible, don't complete
-			end
-			state.completed = true
-			setProg("completed", true)
-			return true
+			-- If quest is the completing signal, skip live group check
+			return markComplete(not completingViaQuest)
 		end
 		return false
     end
@@ -1092,87 +1028,12 @@ function M.registerQuestAchievement(cfg)
             if not belowMax() then
                 return false
             end
-            
+
+            -- Live turn-in while eligible: quest complete always awards (kills/group assumed fulfilled).
+            -- Solo can still be verified at turn-in time (unlike retro server top-up).
             local progressTable = GetProgress()
-            
-            -- Don't allow quest completion if there's an ineligible kill flag - kill was done when group was ineligible
-            -- The ineligibleKill flag can be cleared by getting a new eligible kill of the same NPC,
-            -- but if it's still set when quest is turned in, completion should be blocked
             if progressTable and progressTable.ineligibleKill then
-                -- Kill was done when group was ineligible - do not allow completion
-                return false
-            end
-            
-            -- Check if group is eligible (no overleveled party members in range)
-            -- Exception: If NPC kill(s) were required and already fulfilled under level, it's "clean" and achievement can be granted regardless
-            local isCleanKill = false
-            if TARGET_NPC_ID or REQUIRED_KILLS then
-                -- Check if kill(s) were already fulfilled
-                local killFulfilled = false
-                
-                if REQUIRED_KILLS then
-                    -- For required kills, check if all kills are satisfied
-                    killFulfilled = countsSatisfied()
-                else
-                    -- For single kill, check if kill was fulfilled
-                    killFulfilled = state.killed or (progressTable and progressTable.killed)
-                end
-                
-                if killFulfilled then
-                    -- Check if kill(s) were fulfilled under level
-                    local levelAtKill = progressTable and progressTable.levelAtKill
-                    if levelAtKill then
-                        if MAX_LEVEL and MAX_LEVEL > 0 then
-                            isCleanKill = (levelAtKill <= MAX_LEVEL)
-                        else
-                            isCleanKill = true -- No level cap means kill is always clean
-                        end
-                    else
-                        -- No levelAtKill stored, check current level
-                        local currentLevel = UnitLevel("player") or 1
-                        if MAX_LEVEL and MAX_LEVEL > 0 then
-                            isCleanKill = (currentLevel <= MAX_LEVEL)
-                        else
-                            isCleanKill = true
-                        end
-                    end
-                end
-            end
-            
-            -- Only check group eligibility if kill is not clean
-            if not isCleanKill then
-                local isGroupEligible = true
-                if IsGroupEligibleForAchievement then
-                    isGroupEligible = IsGroupEligibleForAchievement(MAX_LEVEL)
-                end
-                if not isGroupEligible then
-                    -- Kill exists but is not clean due to overleveled party members - mark as Pending ineligible
-                    setProg("ineligibleKill", true)
-                    
-                    -- Show "Pending Turn-in (ineligible kill)" indicator on achievement row (quest handler always means both kill and quest required)
-                    if AchievementPanel and AchievementPanel.achievements then
-                        for _, row in ipairs(AchievementPanel.achievements) do
-                            if row.id == ACH_ID and not row.completed then
-                                -- Use helper function to set status text (quest handler always means both kill and quest required)
-                                if SetStatusTextOnRow then
-                                    SetStatusTextOnRow(row, {
-                                        completed = false,
-                                        hasIneligibleKill = true,
-                                        requiresBoth = true, -- Quest handler always means both required
-                                        isSelfFound = IsSelfFound(),
-                                        maxLevel = row.maxLevel
-                                    })
-                                end
-                                break
-                            end
-                        end
-                    end
-                    
-                    return false -- Group is not eligible, cannot fulfill achievement
-                end
-                -- Note: We don't clear ineligibleKill here in the quest handler.
-                -- It is cleared either by a subsequent eligible kill (kill handler) or by
-                -- abandoning the quest (QUEST_REMOVED performs a full progress reset).
+                setProg("ineligibleKill", false)
             end
             
             state.quest = true
@@ -1180,7 +1041,7 @@ function M.registerQuestAchievement(cfg)
             
             -- Check if we already have pointsAtKill from a previous NPC kill
             -- If we do, preserve it; if not, store points based on quest turn-in solo status
-            local progressTable = GetProgress()
+            progressTable = GetProgress()
             local existingPointsAtKill = progressTable and progressTable.pointsAtKill
             
             if not existingPointsAtKill then
