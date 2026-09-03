@@ -9,6 +9,121 @@ local MetaCommon = {}
 -- Registration Function
 ---------------------------------------
 
+-- Dungeon trio/duo/solo suffixes (must match DungeonCommon VARIATIONS).
+local DUNGEON_VARIATION_SUFFIXES = { "_Trio", "_Duo", "_Solo" }
+
+local function IsSingleAchievementCompleted(reqAchId)
+  local id = tostring(reqAchId)
+
+  local progress = addon and addon.GetProgress and addon.GetProgress(id)
+  if progress and progress.completed then
+    return true
+  end
+
+  if addon and addon.GetAchievementRow then
+    local reqRow = addon.GetAchievementRow(id)
+    if reqRow and reqRow.completed then
+      return true
+    end
+  end
+
+  if addon and addon.GetCharDB then
+    local _, cdb = addon.GetCharDB()
+    local rec = cdb and cdb.achievements and cdb.achievements[id]
+    if rec and rec.completed then
+      return true
+    end
+  end
+
+  return false
+end
+
+local function IsSingleAchievementFailed(reqAchId)
+  local id = tostring(reqAchId)
+  if IsSingleAchievementCompleted(id) then
+    return false
+  end
+
+  local row = nil
+  if addon and addon.GetAchievementRow then
+    row = addon.GetAchievementRow(id)
+  end
+  if row and addon and addon.IsRowOutleveled and addon.IsRowOutleveled(row) then
+    return true
+  end
+
+  if addon and addon.GetCharDB then
+    local _, cdb = addon.GetCharDB()
+    local rec = cdb and cdb.achievements and cdb.achievements[id]
+    if rec and not rec.completed and (rec.failed or rec.failedAt) then
+      return true
+    end
+  end
+
+  local progress = addon and addon.GetProgress and addon.GetProgress(id)
+  if progress and progress.failed then
+    return true
+  end
+
+  return false
+end
+
+local function GetRequirementCompletionIds(reqAchId, acceptAnyVariation)
+  local baseId = tostring(reqAchId)
+  local ids = { baseId }
+  if acceptAnyVariation then
+    for i = 1, #DUNGEON_VARIATION_SUFFIXES do
+      ids[#ids + 1] = baseId .. DUNGEON_VARIATION_SUFFIXES[i]
+    end
+  end
+  return ids
+end
+
+-- Failure candidates: base always; variations only when registered (missing Solo must not block).
+local function GetRequirementFailureIds(reqAchId, acceptAnyVariation)
+  local baseId = tostring(reqAchId)
+  local ids = { baseId }
+  if acceptAnyVariation and addon and addon.AchievementDefs then
+    for i = 1, #DUNGEON_VARIATION_SUFFIXES do
+      local variationId = baseId .. DUNGEON_VARIATION_SUFFIXES[i]
+      if addon.AchievementDefs[variationId] then
+        ids[#ids + 1] = variationId
+      end
+    end
+  end
+  return ids
+end
+
+local function IsRequirementCompleted(reqAchId, acceptAnyVariation)
+  local ids = GetRequirementCompletionIds(reqAchId, acceptAnyVariation)
+  for i = 1, #ids do
+    if IsSingleAchievementCompleted(ids[i]) then
+      return true
+    end
+  end
+  return false
+end
+
+local function IsRequirementFailed(reqAchId, acceptAnyVariation)
+  if IsRequirementCompleted(reqAchId, acceptAnyVariation) then
+    return false
+  end
+
+  local ids = GetRequirementFailureIds(reqAchId, acceptAnyVariation)
+  for i = 1, #ids do
+    if not IsSingleAchievementFailed(ids[i]) then
+      return false
+    end
+  end
+  return #ids > 0
+end
+
+-- Shared for tooltips / other callers
+if addon then
+  addon.IsMetaRequirementCompleted = IsRequirementCompleted
+  addon.IsMetaRequirementFailed = IsRequirementFailed
+end
+
 local function registerMetaAchievement(def)
   local achId = def.achId
   local title = def.title
@@ -17,6 +132,7 @@ local function registerMetaAchievement(def)
   local points = def.points
   local requiredAchievements = def.requiredAchievements or {} -- Array of achievement IDs
   local achievementOrder = def.achievementOrder -- Optional ordering for tooltip display
+  local acceptAnyVariation = def.acceptAnyVariation == true
 
   -- Expose this definition for external lookups (e.g., chat link tooltips)
   if addon and addon.RegisterAchievementDef then
@@ -28,6 +144,7 @@ local function registerMetaAchievement(def)
     points = points,
     requiredAchievements = requiredAchievements,
     achievementOrder = achievementOrder,
+    acceptAnyVariation = acceptAnyVariation,
     isMetaAchievement = true,
   })
   end
@@ -86,50 +203,16 @@ local function registerMetaAchievement(def)
     end
   end
 
-  -- Find an achievement row by achievement ID
-  local function FindAchievementRow(reqAchId)
-    if addon and addon.GetAchievementRow then
-      local row = addon.GetAchievementRow(reqAchId)
-      if row then
-        return row
-      end
-    end
-
-    if not addon or not addon.AchievementPanel or not addon.AchievementPanel.achievements then
-      return nil
-    end
-    
-    for _, row in ipairs(addon.AchievementPanel.achievements) do
-      local rowId = row.id or row.achId
-      if rowId and tostring(rowId) == tostring(reqAchId) then
-        return row
-      end
-    end
-    return nil
-  end
-
   -- Helper function to check if any required achievement is failed/outleveled
+  -- When acceptAnyVariation is set, a dungeon only fails the meta if every registered
+  -- base/variation path is failed (e.g. failed 5-man but open Duo still counts as available).
   local function AnyRequiredAchievementFailed()
     if not requiredAchievements or #requiredAchievements == 0 then
       return false
     end
 
     for _, reqAchId in ipairs(requiredAchievements) do
-      local row = FindAchievementRow(reqAchId)
-      if row and addon and addon.IsRowOutleveled and addon.IsRowOutleveled(row) then
-        return true
-      end
-
-      if addon and addon.GetCharDB then
-        local _, cdb = addon.GetCharDB()
-        local rec = cdb and cdb.achievements and cdb.achievements[tostring(reqAchId)]
-        if rec and not rec.completed and (rec.failed or rec.failedAt) then
-          return true
-        end
-      end
-
-      local progress = addon and addon.GetProgress and addon.GetProgress(reqAchId)
-      if progress and progress.failed then
+      if IsRequirementFailed(reqAchId, acceptAnyVariation) then
         return true
       end
     end
@@ -138,38 +221,14 @@ local function registerMetaAchievement(def)
   end
 
   -- Helper function to check if all required achievements are completed
+  -- When acceptAnyVariation is set, any completed base/Trio/Duo/Solo satisfies that dungeon.
   local function AllRequiredAchievementsCompleted()
     if not requiredAchievements or #requiredAchievements == 0 then
       return false
     end
 
     for _, reqAchId in ipairs(requiredAchievements) do
-      local isCompleted = false
-
-      -- Primary source: progress DB (used by most tracker-style achievements)
-      local progress = addon and addon.GetProgress and addon.GetProgress(reqAchId)
-      if progress and progress.completed then
-        isCompleted = true
-      end
-
-      -- Fallback: row/model immediate state (important for custom completions)
-      if not isCompleted and addon and addon.GetAchievementRow then
-        local reqRow = addon.GetAchievementRow(reqAchId)
-        if reqRow and reqRow.completed then
-          isCompleted = true
-        end
-      end
-
-      -- Fallback: persisted achievement DB state
-      if not isCompleted and addon and addon.GetCharDB then
-        local _, cdb = addon.GetCharDB()
-        local rec = cdb and cdb.achievements and cdb.achievements[tostring(reqAchId)]
-        if rec and rec.completed then
-          isCompleted = true
-        end
-      end
-
-      if not isCompleted then
+      if not IsRequirementCompleted(reqAchId, acceptAnyVariation) then
         return false
       end
     end
@@ -354,6 +413,7 @@ local function registerMetaAchievement(def)
     if row and requiredAchievements and #requiredAchievements > 0 then
       row.requiredAchievements = requiredAchievements
       row.achievementOrder = achievementOrder
+      row.acceptAnyVariation = acceptAnyVariation
     end
 
     -- If this meta already qualifies at registration time, finalize it through MarkRowCompleted

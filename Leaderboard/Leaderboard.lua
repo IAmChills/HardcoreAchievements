@@ -595,6 +595,12 @@ function Leaderboard:Initialize()
             QueueFullSync(loginDelay + 2, LOGIN_SYNC_RETRY_COOLDOWN_SEC)
             QueueFullSync(loginDelay + 25, LOGIN_SYNC_RETRY_COOLDOWN_SEC)
             QueueFullSync(loginDelay + 55, 5 * 60)
+            -- Rebuild after catalogs + delayed login publish so eligibility filters and completedIds are warm.
+            if Leaderboard.ScheduleCompletionStatsRebuild and C_Timer and C_Timer.After then
+                C_Timer.After(loginDelay + 1, function()
+                    Leaderboard.ScheduleCompletionStatsRebuild()
+                end)
+            end
         elseif event == "PLAYER_LOGOUT" then
             QueueLocalPublish("PLAYER_LOGOUT", true)
             if Leaderboard.Sync and Leaderboard.Sync.PublishPresence then

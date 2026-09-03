@@ -8,7 +8,20 @@ local addonName, addon = ...
 
 -- Configuration (tuned for speed on large tables, similar to WeakAuras)
 local configForLS = { errorOnUnserializableType = false }
-local configForDeflate = { level = 1 } -- speed over size for UI responsiveness
+local configForDeflate = { level = 1 } -- speed over size for UI backup encode
+
+-- LibP2PDB gossip can serialize large digests/row chunks and compress them on the same
+-- frame as AceComm decompress. Level 1 still times out there; level 0 (store) is CPU-safe.
+-- Wire format remains raw Deflate (compatible with default peers).
+local configForP2PDeflate = { level = 0 }
+local LibP2PDBFastCompressor = {
+    Compress = function(_, str)
+        return (LibDeflate:CompressDeflate(str, configForP2PDeflate))
+    end,
+    Decompress = function(_, str)
+        return LibDeflate:DecompressDeflate(str)
+    end,
+}
 
 -- Cache for repeated encodings of the same data (cleared after 5 minutes)
 local compressedCache = {}
@@ -103,4 +116,5 @@ end
 if addon then
     addon.EncodeData = EncodeData
     addon.DecodeData = DecodeData
+    addon.LibP2PDBFastCompressor = LibP2PDBFastCompressor
 end

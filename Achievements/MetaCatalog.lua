@@ -10,8 +10,9 @@ local table_insert = table.insert
 
 -- Get player faction to filter faction-specific achievements
 local function GetPlayerFaction()
-    local _, faction = UnitFactionGroup("player")
-    return faction  -- "Alliance" or "Horde"
+    -- Prefer localized name so it matches FACTION_ALLIANCE / FACTION_HORDE globals.
+    local factionTag, factionLocalized = UnitFactionGroup("player")
+    return factionLocalized or factionTag
 end
 
 ---------------------------------------
@@ -26,7 +27,7 @@ local QUEST_ALLIANCE_ORDERED = {
   "MorLadim", "ForsakenCourier", "StinkysEscapeA", "GetMeOutOfHere",
   "ThogrunAlliance", "Kurzen", "KingBangalash", "LordShalzaru", "OOX",
   "Mokk", "MalletZF", "Mukla", "KimJaelIndeed", "StonesThatBindUs",
-  "Hakkar", "ShadowLordFeldan", "SummoningThePrincess", "GorishiHiveQueen",
+  "ShadowLordFeldan", "MatterOfTime", "SummoningThePrincess", "GorishiHiveQueen",
   "OverseerMaltorius", "DragonkinMenace", "MercutioFilthgorger",
   "HighChiefWinterfall", "Deathclasp"
 }
@@ -36,7 +37,7 @@ local QUEST_HORDE_ORDERED = {
   "TheHunt", "Gizmo", "Grenka", "Ironhill", "StinkysEscapeH", "GalensEscape",
   "GetMeOutOfHere", "ThogrunHorde", "NothingButTruth", "KingBangalash",
   "Mugthol", "OOX", "Mokk", "Hatetalon", "MalletZF", "Mukla", "Kromgrul",
-  "KimJaelIndeed", "StonesThatBindUs", "Hakkar", "ShadowLordFeldan",
+  "KimJaelIndeed", "StonesThatBindUs", "ShadowLordFeldan", "MatterOfTime",
   "SummoningThePrincess", "GorishiHiveQueen", "OverseerMaltorius",
   "MercutioFilthgorger", "HighChiefWinterfall", "Deathclasp"
 }
@@ -45,7 +46,7 @@ local QUEST_HORDE_ORDERED = {
 -- Achievement List Builders
 ---------------------------------------
 
--- Classic Dungeon Master - requires all dungeon achievements
+-- Classic Dungeon Master - requires all dungeon achievements (any variation counts)
 -- RFC is Horde-only, STOCK is Alliance-only
 local function GetClassicDungeonMasterAchievements()
     local playerFaction = GetPlayerFaction()
@@ -123,11 +124,12 @@ local MetaAchievements = {
   {
     achId = "DungeonMeta",
     title = "The Dungeon Master",
-    tooltip = "Complete all dungeon achievements",
+    tooltip = "Complete all dungeon achievements (any variation).",
     icon = 255345,
     points = 100,
     requiredAchievements = classicDungeons,
-    achievementOrder = classicDungeons
+    achievementOrder = classicDungeons,
+    acceptAnyVariation = true,
   },
   {
     achId = "QuestMeta",

@@ -102,16 +102,6 @@ local ExplorationAchievements = {
   customIsCompleted = function() return false end,
   staticPoints = true,
 }, {
-  achId = "MessageToKarazhan",
-  title = "Urgent Message to Karazhan",
-  level = nil,
-  tooltip = "Discover all of " .. ClassColor .. "Deadwind Pass|r and speak to " .. ClassColor .. "Archmage Leryda|r at the entrance of " .. ClassColor .. "Karazhan|r at or before level 25",
-  icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_Raid_Karazhan.png",
-  points = 0,
-  explorationZone = "Deadwind Pass",
-  customIsCompleted = function() return CheckZoneDiscovery(1430, 0.5) and UnitName("npc") == "Archmage Leryda" and UnitLevel("player") <= 25 end,
-  staticPoints = true,
-}, {
   achId = "OrgA",
   title = "Discover Orgrimmar",
   level = nil,
@@ -223,8 +213,13 @@ table_insert(ExplorationAchievements, CreateContinentExplorationAchievement("Eas
 -- Defer registration until PLAYER_LOGIN to prevent load timeouts
 -- Check faction eligibility (same pattern as Catalog.lua and SecretCatalog.lua)
 local function IsEligible(def)
-  if def.faction and select(2, UnitFactionGroup("player")) ~= def.faction then
+  if def.faction and addon.PlayerFactionMatches and not addon.PlayerFactionMatches(def.faction) then
     return false
+  elseif def.faction and not addon.PlayerFactionMatches then
+    local factionTag, factionLocalized = UnitFactionGroup("player")
+    if def.faction ~= factionTag and def.faction ~= factionLocalized then
+      return false
+    end
   end
   return true
 end

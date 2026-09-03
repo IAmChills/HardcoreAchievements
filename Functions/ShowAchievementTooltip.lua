@@ -34,6 +34,7 @@ local function ExtractAchievementData(data)
         itemOrder = nil,
         requiredAchievements = nil,
         achievementOrder = nil,
+        acceptAnyVariation = false,
         secretPoints = nil
     }
     
@@ -51,9 +52,15 @@ local function ExtractAchievementData(data)
         result.achId = data.achId or data.id or data._achId
         result.maxLevel = data.maxLevel
         result.points = data.points
-        result.allowSoloDouble = data.allowSoloDouble or false
-        result.isSecretAchievement = data.isSecretAchievement or (data._def and data._def.secret) or data.secret or false
         result.def = data._def
+        if data.allowSoloDouble ~= nil then
+            result.allowSoloDouble = data.allowSoloDouble and true or false
+        elseif result.def and result.def.allowSoloDouble ~= nil then
+            result.allowSoloDouble = result.def.allowSoloDouble and true or false
+        else
+            result.allowSoloDouble = (data.killTracker ~= nil) and true or false
+        end
+        result.isSecretAchievement = data.isSecretAchievement or (data._def and data._def.secret) or data.secret or false
         result.secretPoints = data.secretPoints
         if data.requireProfessionSkillID or (result.def and result.def.requireProfessionSkillID) then
             result.isProfessionAchievement = true
@@ -68,7 +75,14 @@ local function ExtractAchievementData(data)
         result.achId = data.achId or data.id
         result.maxLevel = data.maxLevel
         result.points = data.points
-        result.allowSoloDouble = data.allowSoloDouble or false
+        result.def = data._def or data.def
+        if data.allowSoloDouble ~= nil then
+            result.allowSoloDouble = data.allowSoloDouble and true or false
+        elseif result.def and result.def.allowSoloDouble ~= nil then
+            result.allowSoloDouble = result.def.allowSoloDouble and true or false
+        else
+            result.allowSoloDouble = (data.killTracker ~= nil or data.targetNpcId ~= nil) and true or false
+        end
         result.isSecretAchievement = data.isSecretAchievement or data.secret or false
         result.secretPoints = data.secretPoints
         if data.requireProfessionSkillID then
@@ -93,6 +107,7 @@ local function ExtractAchievementData(data)
     result.itemOrder = getValue("itemOrder")
     result.requiredAchievements = getValue("requiredAchievements")
     result.achievementOrder = getValue("achievementOrder")
+    result.acceptAnyVariation = getValue("acceptAnyVariation") == true
     
     return result
 end
@@ -105,82 +120,48 @@ local function GetAchievementDefinition(achId)
     return addon.AchievementDefs[tostring(achId)]
 end
 
--- Show boss requirements in tooltip
+-- Show boss/NPC requirements in tooltip
 local function ShowBossRequirements(achId, requiredKills, bossOrder, achievementCompleted, def, achDef)
     if not requiredKills or next(requiredKills) == nil then
         return
     end
-    
-    GameTooltip:AddLine("\nRequired Bosses:", 0, 1, 0) -- Green header
-    
-    -- Get progress from database
-    local progress = addon and addon.GetProgress and addon.GetProgress(achId)
-    local counts = progress and progress.counts or {}
-    
-    -- Check if this is a raid achievement
+
+    local header = (addon and addon.GetRequiredKillHeader and addon.GetRequiredKillHeader(achDef, def)) or "Required Bosses"
+    GameTooltip:AddLine("\n" .. header .. ":", 0, 1, 0) -- Green header
+
     local isRaid = (def and def.isRaid) or (achDef and achDef.isRaid)
-    
-    -- Helper function to process a single boss entry
-    local function processBossEntry(npcId, need)
-        local done = achievementCompleted
-        local bossName = ""
-        
-        -- Determine which boss name function to use (raid vs dungeon)
-        local getBossNameFn = isRaid and (addon and addon.GetRaidBossName) or (addon and addon.GetBossName)
-        
-        -- Support both single NPC IDs and arrays of NPC IDs
-        if type(need) == "table" then
-            -- Array of NPC IDs - check if any of them has been killed
-            local bossNames = {}
-            for _, id in pairs(need) do
-                local current = (counts[id] or counts[tostring(id)] or 0)
-                local name = (getBossNameFn and getBossNameFn(id)) or ("Boss " .. tostring(id))
-                table_insert(bossNames, name)
-                if not done and current >= 1 then
-                    done = true
-                end
-            end
-            -- Use the key as display name for string keys
-            if type(npcId) == "string" then
-                bossName = npcId
+    local entries = nil
+    if addon and addon.BuildRequiredKillEntries then
+        entries = addon.BuildRequiredKillEntries(achId, requiredKills, {
+            achDef = achDef,
+            def = def,
+            bossOrder = bossOrder,
+            achievementCompleted = achievementCompleted,
+            isRaid = isRaid,
+        })
+    end
+
+    if entries then
+        for i = 1, #entries do
+            local entry = entries[i]
+            if entry.done then
+                GameTooltip:AddLine(entry.text, 1, 1, 1) -- White for completed
             else
-                -- For numeric keys, show all names
-                bossName = table_concat(bossNames, " / ")
+                GameTooltip:AddLine(entry.text, 0.5, 0.5, 0.5) -- Gray for not completed
             end
-        else
-            -- Single NPC ID
-            local idNum = tonumber(npcId) or npcId
-            local current = (counts[idNum] or counts[tostring(idNum)] or 0)
-            bossName = (getBossNameFn and getBossNameFn(idNum)) or ("Boss " .. tostring(idNum))
-            if not done then
-                done = current >= (tonumber(need) or 1)
-            end
-        end
-        
-        if done then
-            GameTooltip:AddLine(bossName, 1, 1, 1) -- White for completed
-        else
-            GameTooltip:AddLine(bossName, 0.5, 0.5, 0.5) -- Gray for not completed
         end
     end
-    
-    -- Use ordered display if provided, otherwise use pairs
-    if bossOrder then
-        for _, npcId in ipairs(bossOrder) do
-            local need = requiredKills[npcId]
-            if need then
-                processBossEntry(npcId, need)
-            end
-        end
-    else
-        for npcId, need in pairs(requiredKills) do
-            processBossEntry(npcId, need)
-        end
+
+    -- Self-policing: show average party level recorded at dungeon entry
+    local progress = addon and addon.GetProgress and addon.GetProgress(achId)
+    if progress and progress.avgPartyLevel then
+        local sizeText = progress.entryPartySize and (" (" .. tostring(progress.entryPartySize) .. " players)") or ""
+        GameTooltip:AddLine("Avg party level on entry: " .. tostring(progress.avgPartyLevel) .. sizeText, 0.75, 0.75, 0.75)
     end
 end
 
 -- Show item requirements in tooltip
-local function ShowItemRequirements(requiredItems, itemOrder, achievementCompleted)
+local function ShowItemRequirements(requiredItems, itemOrder, achievementCompleted, achId)
     if not requiredItems or type(requiredItems) ~= "table" or #requiredItems == 0 then
         return
     end
@@ -189,6 +170,13 @@ local function ShowItemRequirements(requiredItems, itemOrder, achievementComplet
     
     -- Use itemOrder if available, otherwise use requiredItems order
     local itemsToShow = itemOrder or requiredItems
+    local itemOwned = nil
+    if achId and addon and addon.GetProgress then
+        local progress = addon.GetProgress(achId)
+        if progress and type(progress.itemOwned) == "table" then
+            itemOwned = progress.itemOwned
+        end
+    end
     
     for _, itemId in ipairs(itemsToShow) do
         local itemName, itemLink = GetItemInfo(itemId)
@@ -199,8 +187,9 @@ local function ShowItemRequirements(requiredItems, itemOrder, achievementComplet
             itemName = "Item " .. tostring(itemId)
         end
         
-        -- Check if player has the item
+        -- Inventory, or once-owned dungeon-set progress (item may have been sold)
         local hasItem = GetItemCount(itemId, true) > 0
+            or (itemOwned and (itemOwned[itemId] or itemOwned[tostring(itemId)]))
         local done = achievementCompleted or hasItem
         
         if done then
@@ -213,7 +202,8 @@ end
 
 -- Show meta achievement requirements in tooltip
 -- headerLine: optional green header (default "\nRequired Achievements:")
-local function ShowMetaAchievementRequirements(requiredAchievements, achievementOrder, achievementCompleted, headerLine)
+-- acceptAnyVariation: if true, base dungeon counts complete when any Trio/Duo/Solo variation is done
+local function ShowMetaAchievementRequirements(requiredAchievements, achievementOrder, achievementCompleted, headerLine, acceptAnyVariation)
     if not requiredAchievements or type(requiredAchievements) ~= "table" or #requiredAchievements == 0 then
         return
     end
@@ -246,23 +236,26 @@ local function ShowMetaAchievementRequirements(requiredAchievements, achievement
         end
         
         -- Check if required achievement is completed, failed (outleveled), or still available
-        local reqProgress = addon and addon.GetProgress and addon.GetProgress(reqAchId)
-        local reqCompleted = reqProgress and reqProgress.completed
+        local reqCompleted = false
         local reqFailed = false
-
-        if reqRow and reqRow.completed then
-            reqCompleted = true
-        end
-
-        -- Failed = outleveled or DB has .failed (e.g. meta)
-        if not reqCompleted and addon and addon.IsRowOutleveled and reqRow and addon.IsRowOutleveled(reqRow) then
-            reqFailed = true
-        end
-        if not reqFailed and not reqCompleted and not reqRow and addon and addon.GetCharDB then
-            local _, cdb = addon.GetCharDB()
-            local rec = cdb and cdb.achievements and cdb.achievements[tostring(reqAchId)]
-            if rec and rec.failed then
+        if addon and addon.IsMetaRequirementCompleted then
+            reqCompleted = addon.IsMetaRequirementCompleted(reqAchId, acceptAnyVariation)
+            reqFailed = (not reqCompleted) and addon.IsMetaRequirementFailed and addon.IsMetaRequirementFailed(reqAchId, acceptAnyVariation)
+        else
+            local reqProgress = addon and addon.GetProgress and addon.GetProgress(reqAchId)
+            reqCompleted = reqProgress and reqProgress.completed
+            if reqRow and reqRow.completed then
+                reqCompleted = true
+            end
+            if not reqCompleted and addon and addon.IsRowOutleveled and reqRow and addon.IsRowOutleveled(reqRow) then
                 reqFailed = true
+            end
+            if not reqFailed and not reqCompleted and not reqRow and addon and addon.GetCharDB then
+                local _, cdb = addon.GetCharDB()
+                local rec = cdb and cdb.achievements and cdb.achievements[tostring(reqAchId)]
+                if rec and rec.failed then
+                    reqFailed = true
+                end
             end
         end
 
@@ -299,6 +292,26 @@ local function ShowExplorationRequirements(explorationZone)
 end
 
 ---------------------------------------
+-- Shared completion-rate line (character-frame custom tooltips + main tooltip)
+---------------------------------------
+
+local function AddAchievementCompletionRateToTooltip(achId)
+    if not achId or not addon or not addon.Leaderboard or not addon.Leaderboard.GetAchievementCompletionStats then
+        return
+    end
+    local have, total = addon.Leaderboard.GetAchievementCompletionStats(achId)
+    if type(total) ~= "number" or total <= 0 then
+        return
+    end
+    local pct = math.floor(((tonumber(have) or 0) / total) * 100 + 0.5)
+    GameTooltip:AddLine(
+        string.format("\n%d%% of eligible players have this achievement (%d/%d)", pct, tonumber(have) or 0, total),
+        0.0, 0.502, 0.4,
+        true
+    )
+end
+
+---------------------------------------
 -- Main Function
 ---------------------------------------
 
@@ -321,6 +334,7 @@ local function ShowAchievementTooltip(frame, data)
     local itemOrder = extracted.itemOrder
     local requiredAchievements = extracted.requiredAchievements
     local achievementOrder = extracted.achievementOrder
+    local acceptAnyVariation = extracted.acceptAnyVariation
     local explorationZone = nil
     
     -- Check database for completion status if not already set
@@ -386,14 +400,34 @@ local function ShowAchievementTooltip(frame, data)
     
     GameTooltip:SetOwner(frame, "ANCHOR_RIGHT")
     
-    -- Check if SSF mode is enabled and this achievement supports it
-    -- Secret achievements should not show "Solo bonus"
+    -- Prefer stored completion points / wasSolo for the tooltip
+    local wasSoloCompleted = false
+    if achievementCompleted and achId and addon and addon.GetCharDB then
+        local _, cdb = addon.GetCharDB()
+        local rec = cdb and cdb.achievements and (cdb.achievements[tostring(achId)] or cdb.achievements[achId])
+        if rec then
+            wasSoloCompleted = rec.wasSolo and true or false
+            if rec.points ~= nil then
+                points = tonumber(rec.points) or points
+            end
+        end
+    end
+    -- Resolve allowSoloDouble from def when the row omitted it (Dashboard fallback used to force false)
+    if not allowSoloDouble and def and def.allowSoloDouble then
+        allowSoloDouble = true
+    end
+
+    -- Match under-level status text:
+    -- completed + wasSolo => "Solo"
+    -- incomplete + Solo checkbox + allowSoloDouble => "Solo bonus"
+    -- completed non-solo => no solo text
+    -- Secret/meta never show solo preview text.
     local isSoloMode = (addon and addon.IsSoloModeEnabled and addon.IsSoloModeEnabled()) or false
-    if isSoloMode and allowSoloDouble and not isSecret and not isMetaAchievement then
-        -- Show title with "Solo bonus" on the right when SSF is enabled
-        local soloText = "Solo bonus"
-        local ClassColor = (addon and addon.GetClassColor())
-        GameTooltip:AddDoubleLine(title, ClassColor .. soloText .. "|r", 1, 1, 1, 0.5, 0.3, 0.9)
+    local ClassColor = (addon and addon.GetClassColor())
+    if achievementCompleted and wasSoloCompleted and not isSecret and not isMetaAchievement then
+        GameTooltip:AddDoubleLine(title, ClassColor .. "Solo|r", 1, 1, 1, 0.5, 0.3, 0.9)
+    elseif (not achievementCompleted) and isSoloMode and allowSoloDouble and not isSecret and not isMetaAchievement then
+        GameTooltip:AddDoubleLine(title, ClassColor .. "Solo bonus|r", 1, 1, 1, 0.5, 0.3, 0.9)
     else
         GameTooltip:SetText(title, 1, 1, 1)
     end
@@ -484,6 +518,9 @@ local function ShowAchievementTooltip(frame, data)
         if achDef.achievementOrder then
             achievementOrder = achDef.achievementOrder
         end
+        if achDef.acceptAnyVariation then
+            acceptAnyVariation = true
+        end
         if achDef.explorationZone then
             explorationZone = achDef.explorationZone
         end
@@ -503,6 +540,9 @@ local function ShowAchievementTooltip(frame, data)
         if def.achievementOrder then
             achievementOrder = def.achievementOrder
         end
+        if def.acceptAnyVariation then
+            acceptAnyVariation = true
+        end
         if def.explorationZone then
             explorationZone = def.explorationZone
         end
@@ -513,7 +553,7 @@ local function ShowAchievementTooltip(frame, data)
     ShowBossRequirements(achId, requiredKills, bossOrder, achievementCompleted, def, achDef)
     
     -- Show item requirements if available
-    ShowItemRequirements(requiredItems, itemOrder, achievementCompleted)
+    ShowItemRequirements(requiredItems, itemOrder, achievementCompleted, achId)
     
     -- Show meta achievement requirements if available (continent exploration uses zone-style header)
     local useZoneListHeader = (achDef and achDef.isContinentExploration) or (def and def.isContinentExploration)
@@ -521,17 +561,53 @@ local function ShowAchievementTooltip(frame, data)
         requiredAchievements,
         achievementOrder,
         achievementCompleted,
-        useZoneListHeader and "\nRequired Zones:" or nil
+        useZoneListHeader and "\nRequired Zones:" or nil,
+        acceptAnyVariation
     )
 
     -- Show exploration subzone requirements if available
     ShowExplorationRequirements(explorationZone)
-    
+
     -- Hint for linking the achievement in chat
-    GameTooltip:AddLine("\nShift click to link in chat or add to tracking list", 0.5, 0.5, 0.5)
+    GameTooltip:AddLine("\nShift click to link in chat or add to tracking list", 0.5, 0.5, 0.5, true)
+
+    -- Community completion rate from leaderboard reporters on 1.9.5+
+    AddAchievementCompletionRateToTooltip(achId)
+
     GameTooltip:Show()
+end
+
+-- Bind character-frame row hover to the centralized tooltip (highlight + optional pre-show hook).
+local function BindAchievementRowTooltip(frame, options)
+    if not frame or not frame.SetScript then
+        return
+    end
+    options = options or {}
+    frame:EnableMouse(true)
+    frame:SetScript("OnEnter", function(self)
+        if self.highlight then
+            if self.highlight.SetVertexColor then
+                self.highlight:SetVertexColor(1, 1, 1, 0.75)
+            end
+            self.highlight:Show()
+        end
+        if type(options.beforeShow) == "function" then
+            pcall(options.beforeShow, self)
+        end
+        if self.Title and self.Title.GetText and ShowAchievementTooltip then
+            ShowAchievementTooltip(self, options.data or self)
+        end
+    end)
+    frame:SetScript("OnLeave", function(self)
+        if self.highlight then
+            self.highlight:Hide()
+        end
+        GameTooltip:Hide()
+    end)
 end
 
 if addon then
     addon.ShowAchievementTooltip = ShowAchievementTooltip
+    addon.AddAchievementCompletionRateToTooltip = AddAchievementCompletionRateToTooltip
+    addon.BindAchievementRowTooltip = BindAchievementRowTooltip
 end

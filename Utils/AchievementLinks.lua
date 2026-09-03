@@ -227,92 +227,28 @@ if Old_ItemRef_SetHyperlink then
 				ItemRefTooltip:AddLine(tooltip, 0.9, 0.9, 0.9, true)
 			end
 
-			-- Special handling for dungeon and raid achievements: points under description, then list required bosses
+			-- Special handling for dungeon and raid achievements: points under description, then list required bosses/NPCs
 			-- Show boss list for achievements with requiredKills and mapID (dungeons) or isRaid flag (raids)
 			local showedDungeonDetails = false
 			if rec and rec.requiredKills and next(rec.requiredKills) ~= nil and (rec.mapID or rec.isRaid) then
 				showedDungeonDetails = true
 				ItemRefTooltip:AddLine(" ")
-				ItemRefTooltip:AddLine("Required Bosses:", 0, 1, 0)
-				local progressFn = addon and addon.GetProgress
-				local progress = progressFn and progressFn(rec.achId) or nil
-				local counts = (progress and progress.counts) or {}
-				
-				-- Determine which boss name function to use (raid vs dungeon)
-				local isRaid = rec.isRaid or false
-				local getBossNameFn = isRaid and (addon and addon.GetRaidBossName) or (addon and addon.GetBossName)
-				
-				-- Use bossOrder if available (for raids), otherwise build sorted list
-				local keys = {}
-				if rec.bossOrder and next(rec.bossOrder) ~= nil then
-					-- Use provided boss order
-					for _, npcId in ipairs(rec.bossOrder) do
-						table_insert(keys, npcId)
-					end
-				else
-					-- Build sorted list of boss IDs for stable order
-					for npcId, _ in pairs(rec.requiredKills) do 
-						table_insert(keys, npcId) 
-					end
-					table_sort(keys, function(a, b)
-						local aa = tonumber(a) or 0
-						local bb = tonumber(b) or 0
-						return aa < bb
-					end)
-				end
-				
-				for i, entry in ipairs(keys) do
-					-- Check if entry is a string alias (like "Edge of Madness" or "Ring Of Law")
-					local bossName = ""
-					local done = false
-					
-					if type(entry) == "string" then
-						-- String alias - use it as the display name and look up the NPC IDs
-						bossName = entry
-						local need = rec.requiredKills[entry]
-						if type(need) == "table" then
-							-- Array of NPC IDs - check if any has been killed
-							for _, id in ipairs(need) do
-								local idNumCheck = tonumber(id) or id
-								if (counts[idNumCheck] or counts[tostring(idNumCheck)] or 0) >= 1 then
-									done = true
-									break
-								end
-							end
-						end
-					else
-						-- Numeric NPC ID - proceed normally
-						local npcId = entry
-						local need = rec.requiredKills[npcId]
-						local idNum = tonumber(npcId) or npcId
-						local current = (counts[idNum] or counts[tostring(idNum)] or 0)
-						
-						-- Support both single NPC IDs and arrays of NPC IDs
-						if type(need) == "table" then
-							-- Array of NPC IDs - get names for all of them
-							local bossNames = {}
-							for _, id in ipairs(need) do
-								local name = (getBossNameFn and getBossNameFn(id)) or ("Boss " .. tostring(id))
-								table_insert(bossNames, name)
-							end
-							bossName = table_concat(bossNames, " / ")
-							-- Check if any has been killed
-							for _, id in ipairs(need) do
-								local idNumCheck = tonumber(id) or id
-								if (counts[idNumCheck] or counts[tostring(idNumCheck)] or 0) >= 1 then
-									done = true
-									break
-								end
-							end
-						else
-							-- Single NPC ID
-							bossName = (getBossNameFn and getBossNameFn(idNum)) or ("Boss " .. tostring(idNum))
-							done = current >= (tonumber(need) or 1)
-						end
-					end
-					
-					local lr, lg, lb = done and 1 or 0.5, done and 1 or 0.5, done and 1 or 0.5
-					ItemRefTooltip:AddLine(bossName, lr, lg, lb)
+				local header = (addon and addon.GetRequiredKillHeader and addon.GetRequiredKillHeader(rec, nil)) or "Required Bosses"
+				ItemRefTooltip:AddLine(header .. ":", 0, 1, 0)
+
+				local entries = (addon and addon.BuildRequiredKillEntries)
+					and addon.BuildRequiredKillEntries(rec.achId, rec.requiredKills, {
+						achDef = rec,
+						bossOrder = rec.bossOrder,
+						achievementCompleted = false,
+						isRaid = rec.isRaid or false,
+					})
+					or {}
+
+				for i = 1, #entries do
+					local entry = entries[i]
+					local lr, lg, lb = entry.done and 1 or 0.5, entry.done and 1 or 0.5, entry.done and 1 or 0.5
+					ItemRefTooltip:AddLine(entry.text, lr, lg, lb)
 				end
 			end
 

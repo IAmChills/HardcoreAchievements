@@ -350,6 +350,18 @@ function RaidCommon.registerRaidAchievement(def)
     return mapId == requiredMapId
   end
 
+  local function GetKillCount(id)
+    if id == nil then return 0 end
+    local n = state.counts[id]
+    if n then return n end
+    local asNum = tonumber(id)
+    if asNum ~= nil then
+      n = state.counts[asNum]
+      if n then return n end
+    end
+    return state.counts[tostring(id)] or 0
+  end
+
   local function CountsSatisfied()
     for npcId, need in pairs(requiredKills) do
       -- Support both single NPC IDs and arrays of NPC IDs
@@ -357,14 +369,14 @@ function RaidCommon.registerRaidAchievement(def)
       if type(need) == "table" then
         -- Array of NPC IDs - check if any of them has been killed
         for _, id in pairs(need) do
-          if (state.counts[id] or 0) >= 1 then
+          if GetKillCount(id) >= 1 then
             isSatisfied = true
             break
           end
         end
       else
         -- Single NPC ID
-        if (state.counts[npcId] or 0) >= need then
+        if GetKillCount(npcId) >= need then
           isSatisfied = true
         end
       end
@@ -378,6 +390,7 @@ function RaidCommon.registerRaidAchievement(def)
   -- Check if an NPC ID is a required boss for this achievement
   local function IsRequiredBoss(npcId)
     if not npcId then return false end
+    npcId = tonumber(npcId) or npcId
     -- Direct lookup
     if requiredKills[npcId] then
       return true
@@ -386,7 +399,7 @@ function RaidCommon.registerRaidAchievement(def)
     for key, value in pairs(requiredKills) do
       if type(value) == "table" then
         for _, id in pairs(value) do
-          if id == npcId then
+          if (tonumber(id) or id) == npcId then
             return true
           end
         end
@@ -427,111 +440,24 @@ function RaidCommon.registerRaidAchievement(def)
   -- Update tooltip when progress changes (local; closes over the local generator)
   local function UpdateTooltip()
     local row = addon[rowVarName]
-    if row then
-      -- Store the base tooltip for the main tooltip
-      local baseTooltip = tooltip or ""
-      row.tooltip = baseTooltip
+    if not row then return end
+    local baseTooltip = tooltip or ""
+    row.tooltip = baseTooltip
 
-      local frame = row.frame
-      if not frame then
-        if addon and addon.AddRowUIInit then
-          addon.AddRowUIInit(row, function()
-            C_Timer.After(0, UpdateTooltip)
-          end)
-        end
-        return
+    local frame = row.frame
+    if not frame then
+      if addon and addon.AddRowUIInit then
+        addon.AddRowUIInit(row, function()
+          C_Timer.After(0, UpdateTooltip)
+        end)
       end
-      frame.tooltip = baseTooltip
-      
-      -- Ensure mouse events are enabled and highlight texture exists
-      frame:EnableMouse(true)
-      if not frame.highlight then
-        frame.highlight = frame:CreateTexture(nil, "BACKGROUND")
-        frame.highlight:SetAllPoints(frame)
-        frame.highlight:SetColorTexture(1, 1, 1, 0.10)
-        frame.highlight:Hide()
-      end
-      
-      -- Process a single boss entry (defined once per UpdateTooltip run, not per hover)
-      local function processBossEntry(npcId, need, achievementCompleted)
-        local done = false
-        local bossName = ""
-        if type(need) == "table" then
-          local bossNames = {}
-          for _, id in pairs(need) do
-            local current = (state.counts[id] or state.counts[tostring(id)] or 0)
-            local name = (addon and addon.GetRaidBossName and addon.GetRaidBossName(id)) or tostring(id)
-            table_insert(bossNames, name)
-            if current >= 1 then done = true end
-          end
-          if type(npcId) == "string" then
-            bossName = npcId
-          else
-            bossName = table_concat(bossNames, " / ")
-          end
-        else
-          local idNum = tonumber(npcId) or npcId
-          local current = (state.counts[idNum] or state.counts[tostring(idNum)] or 0)
-          bossName = (addon and addon.GetRaidBossName and addon.GetRaidBossName(idNum)) or tostring(idNum)
-          done = current >= (tonumber(need) or 1)
-        end
-        if achievementCompleted then done = true end
-        if done then
-          GameTooltip:AddLine(bossName, 1, 1, 1)
-        else
-          GameTooltip:AddLine(bossName, 0.5, 0.5, 0.5)
-        end
-      end
-
-      -- Override the OnEnter script to use proper GameTooltip API while preserving highlighting
-      frame:SetScript("OnEnter", function(self)
-        if self.highlight then
-          self.highlight:Show()
-        end
-        if self.Title and self.Title.GetText then
-          LoadProgress()
-          local achievementCompleted = state.completed or (self.completed == true)
-          GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-          GameTooltip:ClearLines()
-          GameTooltip:SetText(title or "", 1, 1, 1)
-          local rightText = (self.points and tonumber(self.points) and tonumber(self.points) > 0) and (ACHIEVEMENT_POINTS .. ": " .. tostring(self.points)) or " "
-          GameTooltip:AddDoubleLine(" ", rightText, 1, 1, 1, 0.7, 0.9, 0.7)
-          GameTooltip:AddLine(baseTooltip, nil, nil, nil, true)
-          if next(requiredKills) ~= nil then
-            GameTooltip:AddLine("\nRequired Bosses:", 0, 1, 0)
-            if bossOrder then
-              for _, npcId in ipairs(bossOrder) do
-                local need = requiredKills[npcId]
-                if need then
-                  processBossEntry(npcId, need, achievementCompleted)
-                end
-              end
-              for npcId, need in pairs(requiredKills) do
-                local found = false
-                for _, orderedId in ipairs(bossOrder) do
-                  if orderedId == npcId then found = true break end
-                end
-                if not found then
-                  processBossEntry(npcId, need, achievementCompleted)
-                end
-              end
-            else
-              for npcId, need in pairs(requiredKills) do
-                processBossEntry(npcId, need, achievementCompleted)
-              end
-            end
-          end
-          GameTooltip:Show()
-        end
-      end)
-      
-      -- Set up OnLeave script to hide highlight and tooltip
-      frame:SetScript("OnLeave", function(self)
-        if self.highlight then
-          self.highlight:Hide()
-        end
-        GameTooltip:Hide()
-      end)
+      return
+    end
+    frame.tooltip = baseTooltip
+    if addon and addon.BindAchievementRowTooltip then
+      addon.BindAchievementRowTooltip(frame, {
+        beforeShow = LoadProgress,
+      })
     end
   end
 
@@ -609,9 +535,13 @@ function RaidCommon.registerRaidAchievement(def)
 
   -- Check faction eligibility
   local function IsEligible()
-    -- Faction: "Alliance" / "Horde"
-    if faction and select(2, UnitFactionGroup("player")) ~= faction then
+    if faction and addon.PlayerFactionMatches and not addon.PlayerFactionMatches(faction) then
       return false
+    elseif faction and not addon.PlayerFactionMatches then
+      local factionTag, factionLocalized = UnitFactionGroup("player")
+      if faction ~= factionTag and faction ~= factionLocalized then
+        return false
+      end
     end
     return true
   end

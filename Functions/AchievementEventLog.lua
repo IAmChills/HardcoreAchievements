@@ -87,6 +87,12 @@ local function getEventLogLines()
     return addon._hcaEventLogLinesPreLogin
 end
 
+-- Ephemeral key -> line index map for EventLogUpsert (not persisted; fine within a session).
+local function getEventLogKeys()
+    addon._hcaEventLogKeys = addon._hcaEventLogKeys or {}
+    return addon._hcaEventLogKeys
+end
+
 local function formatLine(msg)
     local ver
     if C_AddOns and C_AddOns.GetAddOnMetadata then
@@ -107,6 +113,45 @@ function addon.EventLogAdd(msg)
     t[#t + 1] = formatLine(msg)
     while #t > MAX_LINES do
         table_remove(t, 1)
+        -- Indices shift left when the oldest line is dropped.
+        local keys = getEventLogKeys()
+        for k, idx in pairs(keys) do
+            if idx <= 1 then
+                keys[k] = nil
+            else
+                keys[k] = idx - 1
+            end
+        end
+    end
+    if addon.RefreshDashboardEventLog then
+        addon.RefreshDashboardEventLog()
+    end
+end
+
+-- Add or replace a log line identified by key (same key amends in place).
+-- Use attempt-scoped keys so a later run does not overwrite prior history.
+function addon.EventLogUpsert(key, msg)
+    if not key or key == "" or not msg or msg == "" then return end
+    local t = getEventLogLines()
+    local keys = getEventLogKeys()
+    addon.eventLogLines = t
+    local line = formatLine(msg)
+    local idx = keys[key]
+    if idx and t[idx] then
+        t[idx] = line
+    else
+        t[#t + 1] = line
+        keys[key] = #t
+        while #t > MAX_LINES do
+            table_remove(t, 1)
+            for k, i in pairs(keys) do
+                if i <= 1 then
+                    keys[k] = nil
+                else
+                    keys[k] = i - 1
+                end
+            end
+        end
     end
     if addon.RefreshDashboardEventLog then
         addon.RefreshDashboardEventLog()
@@ -118,6 +163,8 @@ function addon.EventLogClear()
     local t = getEventLogLines()
     wipe(t)
     addon.eventLogLines = t
+    local keys = getEventLogKeys()
+    wipe(keys)
     if addon.RefreshDashboardEventLog then
         addon.RefreshDashboardEventLog()
     end

@@ -336,7 +336,7 @@ local Achievements = {
     achId = "Ironhill",
     title = "Hillsbrad Commander",
     level = 33,
-    tooltip = "Complete " .. ClassColor .. "Battle of Hillsbrad|r before level 34",
+    tooltip = "Complete " .. ClassColor .. "Battle of Hillsbrad Pt. 6|r before level 34",
     icon = 236779,
     points = 10,
     requiredQuestId = 541,
@@ -530,7 +530,6 @@ local Achievements = {
     tooltip = "Complete " .. ClassColor .. "Stranglethorn Fever|r before level 48",
     icon = 134338,
     points = 10,
-    allowSoloDouble = true,
     requiredQuestId = 348,
     targetNpcId = 1514,
     zone = "Stranglethorn Vale"
@@ -559,7 +558,6 @@ local Achievements = {
     tooltip = "Complete " .. ClassColor .. "Message in a Bottle|r before level 51",
     icon = 132159,
     points = 10,
-    allowSoloDouble = true,
     requiredQuestId = 630,
     targetNpcId = 1559,
     zone = "Stranglethorn Vale"
@@ -615,6 +613,18 @@ local Achievements = {
     requiredQuestId = 656,
     targetNpcId = 2755,
     zone = "Badlands"
+}, {
+    achId = "MatterOfTime",
+    title = "A Matter of Time",
+    level = 55,
+    tooltip = "Complete " .. ClassColor .. "A Matter of Time|r before level 56",
+    icon = 133879,
+    points = 10,
+    requiredQuestId = 4971,
+    requiredKills = {
+        [10717] = 15,  -- Temporal Parasite x15
+    },
+    zone = "Western Plaguelands"
 }, {
     achId = "GorishiHiveQueen",
     title = "Queen’s Gambit",
@@ -738,9 +748,14 @@ local Achievements = {
 }
 
 local function IsEligible(def)
-  -- Faction: "Alliance" / "Horde"
-  if def.faction and select(2, UnitFactionGroup("player")) ~= def.faction then
+  -- Faction: FACTION_ALLIANCE / FACTION_HORDE (localized) or english "Alliance"/"Horde"
+  if def.faction and addon.PlayerFactionMatches and not addon.PlayerFactionMatches(def.faction) then
     return false
+  elseif def.faction and not addon.PlayerFactionMatches then
+    local factionTag, factionLocalized = UnitFactionGroup("player")
+    if def.faction ~= factionTag and def.faction ~= factionLocalized then
+      return false
+    end
   end
 
   -- Race: allow either raceFile or localized race name in the def

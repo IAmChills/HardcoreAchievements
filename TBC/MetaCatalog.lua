@@ -12,8 +12,9 @@ local table_insert = table.insert
 
 -- Get player faction to filter faction-specific achievements
 local function GetPlayerFaction()
-  local _, faction = UnitFactionGroup("player")
-  return faction  -- "Alliance" or "Horde"
+  -- Prefer localized name so it matches FACTION_ALLIANCE / FACTION_HORDE globals.
+  local factionTag, factionLocalized = UnitFactionGroup("player")
+  return factionLocalized or factionTag
 end
 
 ---------------------------------------
@@ -27,10 +28,10 @@ local QUEST_ALLIANCE_ORDERED = {
   "Foulborne", "Fangore", "Nekrosh", "Eliza", "MorLadim", "Morbent",
   "ForsakenCourier", "StinkysEscapeA", "OttoFalcon", "Kurzen", "GalensEscape",
   "GetMeOutOfHere", "KingBangalash", "Mokk", "SummoningThePrincess",
-  "LordShalzaru", "OOX", "MalletZF", "OverseerMaltorius", "Hakkar",
+  "LordShalzaru", "OOX", "MalletZF", "OverseerMaltorius",
   "KimJaelIndeed", "GorishiHiveQueen", "StonesThatBindUs", "MercutioFilthgorger",
-  "ShadowLordFeldan", "HighChiefWinterfall", "Deathclasp", "Overlord", "RingOfBlood",
-  "FelReaverA"
+  "ShadowLordFeldan", "MatterOfTime", "HighChiefWinterfall", "Deathclasp",
+  "Overlord", "RingOfBlood", "FelReaverA"
 }
 
 local QUEST_HORDE_ORDERED = {
@@ -38,17 +39,17 @@ local QUEST_HORDE_ORDERED = {
   "Ataeric", "Drathir", "LuzKnuck", "TheHunt", "Gizmo", "Grenka",
   "Ironhill", "StinkysEscapeH", "GalensEscape", "NothingButTruth",
   "GetMeOutOfHere", "Mugthol", "KingBangalash", "Mokk", "SummoningThePrincess",
-  "OOX", "Hatetalon", "MalletZF", "OverseerMaltorius", "Hakkar",
+  "OOX", "Hatetalon", "MalletZF", "OverseerMaltorius",
   "KimJaelIndeed", "Kromgrul", "GorishiHiveQueen", "StonesThatBindUs",
-  "MercutioFilthgorger", "ShadowLordFeldan", "HighChiefWinterfall", "Deathclasp",
-  "Cruel", "RingOfBlood", "FelReaverH"
+  "MercutioFilthgorger", "ShadowLordFeldan", "MatterOfTime", "HighChiefWinterfall",
+  "Deathclasp", "Cruel", "RingOfBlood", "FelReaverH"
 }
 
 ---------------------------------------
 -- Achievement List Builders
 ---------------------------------------
 
--- TBC Dungeon Master - requires all classic dungeon achievements plus TBC dungeon achievements
+-- TBC Dungeon Master - requires all classic + TBC dungeon achievements (any variation counts)
 -- RFC is Horde-only, STOCK is Alliance-only
 local function GetTBCDungeonMasterAchievements()
   local playerFaction = GetPlayerFaction()
@@ -146,11 +147,12 @@ local MetaAchievements = {
   {
     achId = "DungeonMeta",
     title = "The Dungeon Master",
-    tooltip = "Complete all dungeon achievements",
+    tooltip = "Complete all dungeon achievements (any variation).",
     icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_Dungeon_GloryoftheHERO.png", -- 255345
     points = 100,
     requiredAchievements = tbcDungeons,
-    achievementOrder = tbcDungeons
+    achievementOrder = tbcDungeons,
+    acceptAnyVariation = true,
   },
   {
     achId = "HeroicDungeonMeta",

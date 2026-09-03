@@ -45,10 +45,95 @@ end
 local DB_PREFIX = "HCA_LB"
 local TABLE_NAME = "players"
 local PRESENCE_TABLE_NAME = "presence"
-local PERSIST_DEBOUNCE_SECONDS = 45
+local PERSIST_DEBOUNCE_SECONDS = 90
+-- LibP2PDB schema length is strict: bump DB version when player fields change.
+local DB_VERSION = 2
+
+-- v1 schema (pre-completedIds). Used only to import older persisted/network state.
+local PLAYER_SCHEMA_V1 = {
+    name = "string",
+    realm = "string",
+    guild = "string",
+    faction = "string",
+    class = "string",
+    classId = { "number", "nil" },
+    level = "number",
+    completed = "number",
+    total = "number",
+    points = "number",
+    raceId = { "number", "nil" },
+    sex = { "number", "nil" },
+    label = "string",
+    selfFound = { "boolean", "nil" },
+    dead = "boolean",
+    offline = { "boolean", "nil" },
+    version = "string",
+    updatedAt = "number",
+}
+
+local PLAYER_SCHEMA_V2 = {
+    name = "string",
+    realm = "string",
+    guild = "string",
+    faction = "string",
+    class = "string",
+    classId = { "number", "nil" },
+    level = "number",
+    completed = "number",
+    total = "number",
+    points = "number",
+    raceId = { "number", "nil" },
+    sex = { "number", "nil" },
+    label = "string",
+    selfFound = { "boolean", "nil" },
+    dead = "boolean",
+    offline = { "boolean", "nil" },
+    version = "string",
+    updatedAt = "number",
+    completedIds = { "table", "nil" },
+}
+
+local PRESENCE_SCHEMA = {
+    updatedAt = "number",
+    offline = { "boolean", "nil" },
+}
 
 local LibP2PDB = LibStub and LibStub("LibP2PDB", true)
 local persistDebounceToken = 0
+
+local function OnMigrateDB(target, source)
+    if source.version == 1 then
+        LibP2PDB:NewTable(source.db, {
+            name = TABLE_NAME,
+            keyType = "string",
+            exclusive = false,
+            schema = PLAYER_SCHEMA_V1,
+        })
+        LibP2PDB:NewTable(source.db, {
+            name = PRESENCE_TABLE_NAME,
+            keyType = "string",
+            exclusive = false,
+            schema = PRESENCE_SCHEMA,
+        })
+    end
+end
+
+local function OnMigrateRow(target, source)
+    if not source.key then
+        return nil
+    end
+    if not source.data then
+        return source.key, nil
+    end
+    if source.tableName == TABLE_NAME then
+        local data = source.data
+        if type(data.completedIds) ~= "table" then
+            data.completedIds = {}
+        end
+        return source.key, data
+    end
+    return source.key, source.data
+end
 
 local function Now()
     return (GetServerTime and GetServerTime()) or time()
@@ -126,12 +211,25 @@ local function ClearGuildCacheForPlayer()
     end
 end
 
+local function FieldEqual(key, a, b)
+    if a == b then
+        return true
+    end
+    if key == "completedIds" then
+        if Leaderboard.CompletedIdsEqual then
+            return Leaderboard.CompletedIdsEqual(a, b)
+        end
+        return false
+    end
+    return false
+end
+
 local function ShallowEqual(a, b)
     if type(a) ~= "table" or type(b) ~= "table" then
         return false
     end
     for key, value in pairs(a) do
-        if b[key] ~= value then
+        if not FieldEqual(key, value, b[key]) then
             return false
         end
     end
@@ -166,6 +264,9 @@ local function StoreRow(key, row)
     -- Full rebuilds still happen on user actions (scope/search/sort) and safety ticker.
     if Leaderboard.MarkDirty then
         Leaderboard:MarkDirty(key)
+    end
+    if Leaderboard.ScheduleCompletionStatsRebuild then
+        Leaderboard.ScheduleCompletionStatsRebuild()
     end
     return true
 end
@@ -209,10 +310,28 @@ local function GetCachedLeaderboardStats(current)
     return 0, 0, 0
 end
 
+-- Guard: at most one combat-deferred persist pending at a time.
+local _persistCombatPending = false
+
 local function PersistState()
     if not LibP2PDB or not Sync.db then
+        _persistCombatPending = false
         return
     end
+    -- Avoid running ExportDatabase (O(n) over all leaderboard rows) during active combat.
+    -- A single retry fires 8s later; if still in combat another retry is scheduled, but
+    -- _persistCombatPending ensures at most one is ever queued at once.
+    if UnitAffectingCombat and UnitAffectingCombat("player") then
+        if C_Timer and C_Timer.After and not _persistCombatPending then
+            _persistCombatPending = true
+            C_Timer.After(8, function()
+                _persistCombatPending = false
+                PersistState()
+            end)
+        end
+        return
+    end
+    _persistCombatPending = false
     local db = Leaderboard:GetDB()
     local ok, state = pcall(function()
         return LibP2PDB:ExportDatabase(Sync.db)
@@ -239,16 +358,39 @@ local function SchedulePersistState(immediate)
     end)
 end
 
-local function OnTableChanged(key, newData)
-    if StoreRow(key, newData) then
+-- Pending-change buffers for leaderboard and presence data.
+-- Incoming network messages are accumulated here and applied once per drain tick (0.5s),
+-- coalescing burst deliveries (e.g. guild login) into a single StoreRow/StorePresence pass.
+-- "Last write wins" semantics are correct because updatedAt ordering makes the latest message
+-- authoritative. false is used as a nil-sentinel to represent explicit deletions.
+local _pendingRowChanges = {}
+local _pendingPresenceChanges = {}
+
+local function DrainPendingChanges()
+    local any = false
+    for key, newData in pairs(_pendingRowChanges) do
+        if StoreRow(key, newData ~= false and newData or nil) then
+            any = true
+        end
+        _pendingRowChanges[key] = nil
+    end
+    for key, newData in pairs(_pendingPresenceChanges) do
+        if StorePresence(key, newData ~= false and newData or nil) then
+            any = true
+        end
+        _pendingPresenceChanges[key] = nil
+    end
+    if any then
         SchedulePersistState(false)
     end
 end
 
+local function OnTableChanged(key, newData)
+    _pendingRowChanges[key] = newData or false
+end
+
 local function OnPresenceChanged(key, newData)
-    if StorePresence(key, newData) then
-        SchedulePersistState(false)
-    end
+    _pendingPresenceChanges[key] = newData or false
 end
 
 local function ValidatePeerOwnedKey(key, context)
@@ -383,6 +525,10 @@ function Sync:Initialize()
     if not db then
         db = LibP2PDB:NewDatabase({
             prefix = DB_PREFIX,
+            version = DB_VERSION,
+            compressor = addon.LibP2PDBFastCompressor,
+            onMigrateDB = OnMigrateDB,
+            onMigrateRow = OnMigrateRow,
         })
     end
     self.db = db
@@ -392,27 +538,8 @@ function Sync:Initialize()
             name = TABLE_NAME,
             keyType = "string",
             exclusive = false,
-            rowsPerChunk = 96,
-            schema = {
-                name = "string",
-                realm = "string",
-                guild = "string",
-                faction = "string",
-                class = "string",
-                classId = { "number", "nil" },
-                level = "number",
-                completed = "number",
-                total = "number",
-                points = "number",
-                raceId = { "number", "nil" },
-                sex = { "number", "nil" },
-                label = "string",
-                selfFound = { "boolean", "nil" },
-                dead = "boolean",
-                offline = { "boolean", "nil" },
-                version = "string",
-                updatedAt = "number",
-            },
+            rowsPerChunk = 16, -- completedIds makes player rows large; keep compress payloads small
+            schema = PLAYER_SCHEMA_V2,
             onValidate = OnPlayerRowValidate,
             onChange = OnTableChanged,
         })
@@ -424,10 +551,7 @@ function Sync:Initialize()
             keyType = "string",
             exclusive = false,
             rowsPerChunk = 128,
-            schema = {
-                updatedAt = "number",
-                offline = { "boolean", "nil" },
-            },
+            schema = PRESENCE_SCHEMA,
             onValidate = OnPresenceValidate,
             onChange = OnPresenceChanged,
         })
@@ -442,6 +566,15 @@ function Sync:Initialize()
     end
 
     MigrateLegacyLeaderboardKey()
+
+    -- Single drain ticker: coalesces burst network deliveries into one apply pass per 0.5 seconds.
+    if C_Timer and C_Timer.NewTicker then
+        C_Timer.NewTicker(0.5, DrainPendingChanges)
+    end
+
+    if Leaderboard.ScheduleCompletionStatsRebuild then
+        Leaderboard.ScheduleCompletionStatsRebuild()
+    end
 end
 
 function Sync:BuildLocalRow(options)
@@ -457,12 +590,27 @@ function Sync:BuildLocalRow(options)
     end
     local completed, total, points = GetCachedLeaderboardStats(current)
     local allowHeavyStats = not options.skipHeavyStats and not (addon and addon.Initializing)
-    if allowHeavyStats and addon.AchievementCount then
-        completed, total = addon.AchievementCount()
+    if allowHeavyStats and addon.GetCachedAchievementStats then
+        local stats = addon.GetCachedAchievementStats()
+        if stats then
+            completed, total, points = stats.completed, stats.total, stats.points
+        end
+    elseif allowHeavyStats then
+        if addon.AchievementCount then
+            completed, total = addon.AchievementCount()
+        end
+        if addon.GetTotalPoints then
+            points = addon.GetTotalPoints()
+        end
     end
 
-    if allowHeavyStats and addon.GetTotalPoints then
-        points = addon.GetTotalPoints()
+    local completedIds
+    if allowHeavyStats and Leaderboard.BuildLocalCompletedIds then
+        completedIds = Leaderboard.BuildLocalCompletedIds()
+    elseif type(current) == "table" and type(current.completedIds) == "table" then
+        completedIds = current.completedIds
+    else
+        completedIds = {}
     end
 
     local label = ""
@@ -503,6 +651,7 @@ function Sync:BuildLocalRow(options)
         offline = options.offline == true,
         version = GetAddOnVersionString(),
         updatedAt = Now(),
+        completedIds = completedIds,
     }
 end
 

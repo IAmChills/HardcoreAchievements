@@ -459,6 +459,9 @@ if addon then
     def.secret = true
     def.isSecret = true
     addon.GuildFirst_DefById[def.achId] = def
+    if addon.RegisterAchievementDef then
+      addon.RegisterAchievementDef(def, { level = nil })
+    end
     if def.triggerAchievementId then
       local k = tostring(def.triggerAchievementId)
       addon.GuildFirst_ByTrigger[k] = addon.GuildFirst_ByTrigger[k] or {}

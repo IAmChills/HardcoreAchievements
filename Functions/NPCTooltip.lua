@@ -15,67 +15,46 @@ local function GetNPCIdFromGUID(guid)
     return npcId and tonumber(npcId) or nil
 end
 
--- Helper function to find achievements that require a specific NPC ID
-local function GetAchievementsForNPC(npcId)
-    if not npcId then return {} end
-    
-    local achievements = {}
-    
-    -- Check AchievementDefs (all achievement types: quest, dungeon, raid)
-    if addon and addon.AchievementDefs then
-        for achId, achDef in pairs(addon.AchievementDefs) do
-            -- Skip variations and secret achievements so hidden objectives stay hidden.
-            if not achDef.isVariation and not achDef.secret then
-                local found = false
-                
-                -- Check targetNpcId (single ID or array)
-                if achDef.targetNpcId then
-                    if type(achDef.targetNpcId) == "table" then
-                        for _, id in pairs(achDef.targetNpcId) do
-                            if tonumber(id) == npcId then
-                                found = true
-                                break
-                            end
-                        end
+-- Reverse index: npcId -> list of { achId, title }.
+-- Built once on first use. AchievementDefs does not change after load.
+local _npcToAchievements = nil
+
+local function BuildNPCIndex()
+    _npcToAchievements = {}
+    if not (addon and addon.AchievementDefs) then return end
+    for achId, achDef in pairs(addon.AchievementDefs) do
+        if not achDef.isVariation and not achDef.secret then
+            local entry = { achId = achId, title = achDef.title or achDef.mapName or tostring(achId) }
+            local function addEntry(npcId)
+                npcId = tonumber(npcId)
+                if not npcId then return end
+                if not _npcToAchievements[npcId] then _npcToAchievements[npcId] = {} end
+                table_insert(_npcToAchievements[npcId], entry)
+            end
+            if achDef.targetNpcId then
+                if type(achDef.targetNpcId) == "table" then
+                    for _, id in pairs(achDef.targetNpcId) do addEntry(id) end
+                else
+                    addEntry(achDef.targetNpcId)
+                end
+            end
+            if achDef.requiredKills then
+                for killNpcId, need in pairs(achDef.requiredKills) do
+                    if type(need) == "table" then
+                        for _, id in pairs(need) do addEntry(id) end
                     else
-                        if tonumber(achDef.targetNpcId) == npcId then
-                            found = true
-                        end
+                        addEntry(killNpcId)
                     end
-                end
-                
-                -- Check requiredKills (supports both single IDs and arrays)
-                if not found and achDef.requiredKills then
-                    for killNpcId, need in pairs(achDef.requiredKills) do
-                        if type(need) == "table" then
-                            -- Array of NPC IDs
-                            for _, id in pairs(need) do
-                                if tonumber(id) == npcId then
-                                    found = true
-                                    break
-                                end
-                            end
-                        else
-                            -- Single NPC ID
-                            if tonumber(killNpcId) == npcId then
-                                found = true
-                            end
-                        end
-                        if found then break end
-                    end
-                end
-                
-                if found then
-                    table_insert(achievements, {
-                        achId = achId,
-                        title = achDef.title or achDef.mapName or tostring(achId)
-                    })
                 end
             end
         end
     end
-    
-    return achievements
+end
+
+local function GetAchievementsForNPC(npcId)
+    if not npcId then return {} end
+    if not _npcToAchievements then BuildNPCIndex() end
+    return _npcToAchievements[npcId] or {}
 end
 
 -- Hook GameTooltip to add achievement information

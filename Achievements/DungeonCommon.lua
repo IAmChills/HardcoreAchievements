@@ -94,9 +94,6 @@ local isInDungeonOrRaid = false
 -- Helper Functions
 ---------------------------------------
 
--- Shared no-op; used as early-exit return from CreateTooltipHandler to avoid allocating a new function each time
-local function noop() end
-
 local function GetCurrentInstanceMapID()
     return select(8, GetInstanceInfo())
 end
@@ -120,6 +117,28 @@ local function IsSupportedClassicDungeonDef(achDef)
     return achDef ~= nil and achDef.isHeroicDungeon ~= true
 end
 
+-- Average level of player + party at dungeon entry (for tooltip self-policing).
+local function ComputeAverageEntryLevel(entryData)
+    if not entryData then return nil, 0 end
+    local sum, count = 0, 0
+    local playerLevel = tonumber(entryData.playerLevel)
+    if playerLevel and playerLevel > 0 then
+        sum = sum + playerLevel
+        count = count + 1
+    end
+    if type(entryData.partyLevels) == "table" then
+        for _, lvl in pairs(entryData.partyLevels) do
+            local n = tonumber(lvl)
+            if n and n > 0 then
+                sum = sum + n
+                count = count + 1
+            end
+        end
+    end
+    if count == 0 then return nil, 0 end
+    return math.floor(sum / count + 0.5), count
+end
+
 -- Helper function to check if a group is eligible for a dungeon achievement
 local function CheckAchievementEligibility(mapId, achDef, entryData)
     if not mapId or not achDef or not entryData then return false end
@@ -134,16 +153,22 @@ local function CheckAchievementEligibility(mapId, achDef, entryData)
     
     -- Check faction
     if achDef.faction then
-        local playerFaction = select(2, UnitFactionGroup("player"))
-        if playerFaction ~= achDef.faction then return false end
+        local matches = addon and addon.PlayerFactionMatches and addon.PlayerFactionMatches(achDef.faction)
+        if matches == nil then
+            local factionTag, factionLocalized = UnitFactionGroup("player")
+            matches = achDef.faction == factionTag or achDef.faction == factionLocalized
+        end
+        if not matches then return false end
     end
     
-    -- Check player level
+    -- Check player level (always)
     local playerLevel = entryData.playerLevel or UnitLevel("player") or 1
     if playerLevel > maxLevel then return false end
     
-    -- Check party member levels
-    if members > 1 then
+    -- Variations and specials (e.g. Four Candles) still require every party member under the cap.
+    -- Base dungeon clears only require the player under the cap.
+    local requirePartyLevels = achDef.isVariation or achDef.requirePartyLevels
+    if requirePartyLevels and members > 1 then
         for i = 1, 4 do
             local unit = "party" .. i
             if UnitExists(unit) then
@@ -161,99 +186,123 @@ local function CheckAchievementEligibility(mapId, achDef, entryData)
     return true
 end
 
--- Helper function to check and print eligibility messages for achievements matching a mapId.
--- Prints only one message: for the lowest-level version (base then Trio, Duo, Solo).
+local function GetVariationSortOrder(achDef)
+    if not achDef then return 0 end
+    if achDef.isVariation then
+        if achDef.variationType == "Trio" then return 1 end
+        if achDef.variationType == "Duo" then return 2 end
+        if achDef.variationType == "Solo" then return 3 end
+        return 4
+    end
+    return 0
+end
+
+local function IsAchievementFailed(achId, achDef)
+    local progress = addon and addon.GetProgress and addon.GetProgress(achId)
+    if progress and progress.failed then return true end
+    if addon and addon.IsRowOutleveled and addon.GetAchievementRow then
+        local row = addon.GetAchievementRow(achId)
+        if row and addon.IsRowOutleveled(row) then return true end
+    end
+    return false
+end
+
+local function PrintEligibilityLine(achDef, isEligible)
+    local title = achDef.title or achDef.mapName or "Unknown"
+    local usesPartyLevels = achDef.isVariation or achDef.requirePartyLevels
+    if isEligible then
+        if usesPartyLevels then
+            print("|cff008066[Hardcore Achievements]|r |cff00ff00Group is eligible for achievement: " .. title .. "|r")
+        else
+            print("|cff008066[Hardcore Achievements]|r |cff00ff00You are eligible for achievement: " .. title .. "|r")
+        end
+        if addon.EventLogAdd then
+            addon.EventLogAdd("Dungeon entered: |cff00ff00eligible|r for achievement: " .. title)
+        end
+    else
+        if usesPartyLevels then
+            print("|cff008066[Hardcore Achievements]|r |cffff0000Group is not eligible for achievement: " .. title .. "|r")
+        else
+            print("|cff008066[Hardcore Achievements]|r |cffff0000You are not eligible for achievement: " .. title .. "|r")
+        end
+        if addon.EventLogAdd then
+            addon.EventLogAdd("Dungeon entered: |cffff0000not eligible|r for achievement: " .. title)
+        end
+    end
+end
+
+-- One prioritized message for the base/Trio/Duo/Solo clear chain, plus a separate
+-- line for specials on the same map (e.g. Four Candles).
 local function CheckAndPrintEligibilityMessages(mapId, entryData)
     if not mapId or not entryData then return end
     if not (addon and addon.AchievementDefs) then return end
 
     local mapIdNum = tonumber(mapId) or mapId
-    local candidates = {}
+    local clearCandidates = {}
+    local specialCandidates = {}
 
     for achId, achDef in pairs(addon.AchievementDefs) do
         local defMapId = tonumber(achDef.mapID) or achDef.mapID
-        if defMapId and mapIdNum and defMapId == mapIdNum and IsSupportedClassicDungeonDef(achDef) then
+        if defMapId and mapIdNum and defMapId == mapIdNum
+            and IsSupportedClassicDungeonDef(achDef)
+            and type(achDef.requiredKills) == "table" and next(achDef.requiredKills) ~= nil then
             local progress = addon and addon.GetProgress and addon.GetProgress(achId)
-            local isCompleted = progress and progress.completed
-            local isFailed = progress and progress.failed
-
-            if not isCompleted then
-                -- Also check the shared row/model state so failed base variants are skipped even if the panel is closed.
-                if not isFailed and addon and addon.IsRowOutleveled and addon.GetAchievementRow then
-                    local row = addon.GetAchievementRow(achId)
-                    if row and addon.IsRowOutleveled(row) then
-                        isFailed = true
-                    end
-                end
-                
+            if not (progress and progress.completed) then
                 local level = (type(achDef.level) == "number") and achDef.level or tonumber(achDef.level) or 999
-                table_insert(candidates, { achId = achId, achDef = achDef, isFailed = isFailed, level = level })
+                local entry = {
+                    achId = achId,
+                    achDef = achDef,
+                    level = level,
+                    isFailed = IsAchievementFailed(achId, achDef),
+                }
+                if achDef.excludeFromCount then
+                    table_insert(specialCandidates, entry)
+                else
+                    table_insert(clearCandidates, entry)
+                end
             end
         end
     end
 
-    if #candidates == 0 then return end
-
-    table_sort(candidates, function(a, b)
+    local function sortCandidates(a, b)
         if a.level ~= b.level then return a.level < b.level end
-        local orderA = 0
-        if a.achDef.isVariation then
-            if a.achDef.variationType == "Trio" then orderA = 1
-            elseif a.achDef.variationType == "Duo" then orderA = 2
-            elseif a.achDef.variationType == "Solo" then orderA = 3
-            else orderA = 4
-            end
-        end
-        local orderB = 0
-        if b.achDef.isVariation then
-            if b.achDef.variationType == "Trio" then orderB = 1
-            elseif b.achDef.variationType == "Duo" then orderB = 2
-            elseif b.achDef.variationType == "Solo" then orderB = 3
-            else orderB = 4
-            end
-        end
-        return orderA < orderB
-    end)
-
-    -- Prefer the first sorted achievement that is both available and actually eligible for the current group.
-    local c = nil
-    local isEligible = false
-    for i = 1, #candidates do
-        if not candidates[i].isFailed and CheckAchievementEligibility(mapId, candidates[i].achDef, entryData) then
-            c = candidates[i]
-            isEligible = true
-            break
-        end
+        return GetVariationSortOrder(a.achDef) < GetVariationSortOrder(b.achDef)
     end
+    table_sort(clearCandidates, sortCandidates)
+    table_sort(specialCandidates, sortCandidates)
 
-    -- Otherwise fall back to the first non-failed candidate so the message still refers to the next available target.
-    if not c then
-        for i = 1, #candidates do
-            if not candidates[i].isFailed then
-                c = candidates[i]
-                isEligible = CheckAchievementEligibility(mapId, c.achDef, entryData)
+    -- Clear chain: first eligible available, else first available (ineligible), else base when all failed.
+    if #clearCandidates > 0 then
+        local c = nil
+        local isEligible = false
+        for i = 1, #clearCandidates do
+            if not clearCandidates[i].isFailed and CheckAchievementEligibility(mapId, clearCandidates[i].achDef, entryData) then
+                c = clearCandidates[i]
+                isEligible = true
                 break
             end
         end
+        if not c then
+            for i = 1, #clearCandidates do
+                if not clearCandidates[i].isFailed then
+                    c = clearCandidates[i]
+                    isEligible = CheckAchievementEligibility(mapId, c.achDef, entryData)
+                    break
+                end
+            end
+        end
+        if not c then
+            c = clearCandidates[1]
+            isEligible = false
+        end
+        PrintEligibilityLine(c.achDef, isEligible)
     end
 
-    -- Last resort: if everything is failed, keep the old behavior of using the first sorted candidate.
-    if not c then
-        c = candidates[1]
-        isEligible = CheckAchievementEligibility(mapId, c.achDef, entryData)
-    end
-
-    local title = c.achDef.title or c.achDef.mapName or "Unknown"
-    if isEligible then
-      print("|cff008066[Hardcore Achievements]|r |cff00ff00Group is eligible for achievement: " .. title .. "|r. If any player levels beyond the achievement's allowed level while inside the dungeon, they must remain inside the dungeon to remain eligible.")
-        if addon.EventLogAdd then
-            addon.EventLogAdd("Dungeon entered: group is |cff00ff00eligible|r for achievement: " .. title)
-        end
-    else
-        print("|cff008066[Hardcore Achievements]|r |cffff0000Group is not eligible for achievement: " .. title .. "|r")
-        if addon.EventLogAdd then
-            addon.EventLogAdd("Dungeon entered: group is |cffff0000not eligible|r for achievement: " .. title)
-        end
+    -- Specials always get their own line (e.g. Four Candles).
+    for i = 1, #specialCandidates do
+        local c = specialCandidates[i]
+        local isEligible = (not c.isFailed) and CheckAchievementEligibility(mapId, c.achDef, entryData)
+        PrintEligibilityLine(c.achDef, isEligible)
     end
 end
 
@@ -615,6 +664,9 @@ dungeonEventFrame:SetScript("OnEvent", function(self, event, unitIndex)
                       -- Print eligibility when re-entering so user sees messages every time
                       QueueEligibilityMessageOnInstanceInfo(mapId, existingEntry)
                       SaveDungeonEntryState()
+                      if addon and addon.RefreshOutleveledAll then
+                          addon.RefreshOutleveledAll()
+                      end
                   else
                       -- First entry: store entry levels
                       local playerLevel = UnitLevel("player") or 1
@@ -652,6 +704,9 @@ dungeonEventFrame:SetScript("OnEvent", function(self, event, unitIndex)
                       -- Check and print eligibility messages for visible achievements matching this mapId
                       QueueEligibilityMessageOnInstanceInfo(mapId, entryData)
                       SaveDungeonEntryState()
+                      if addon and addon.RefreshOutleveledAll then
+                          addon.RefreshOutleveledAll()
+                      end
                   end
               end
             end
@@ -764,6 +819,31 @@ local function CreateVariation(baseDef, variation)
     variationDef.isVariation = true
     variationDef.baseAchId = baseDef.achId
     variationDef.variationType = variation.label
+
+    -- Drop bosses that require a larger party than this variation allows
+    -- (e.g. Archaedas needs 3 people — omit from Duo/Solo).
+    local minByBoss = baseDef.minPartySizeForBoss
+    if type(minByBoss) == "table" and type(baseDef.requiredKills) == "table" then
+      local filteredKills = {}
+      for npcId, need in pairs(baseDef.requiredKills) do
+        local minSize = minByBoss[npcId]
+        if not minSize or variation.maxPartySize >= minSize then
+          filteredKills[npcId] = need
+        end
+      end
+      variationDef.requiredKills = filteredKills
+
+      if type(baseDef.bossOrder) == "table" then
+        local filteredOrder = {}
+        for _, npcId in ipairs(baseDef.bossOrder) do
+          local minSize = minByBoss[npcId]
+          if not minSize or variation.maxPartySize >= minSize then
+            table_insert(filteredOrder, npcId)
+          end
+        end
+        variationDef.bossOrder = filteredOrder
+      end
+    end
     
     return variationDef
 end
@@ -803,6 +883,7 @@ local function registerDungeonAchievement(def)
     faction = faction,
     isVariation = def.isVariation,
     baseAchId = def.baseAchId,
+    allowSoloDouble = false,
   })
   end
 
@@ -860,6 +941,18 @@ local function registerDungeonAchievement(def)
     return DungeonMapIdsMatch(GetCurrentInstanceMapID(), requiredMapId)
   end
 
+  local function GetKillCount(id)
+    if id == nil then return 0 end
+    local n = state.counts[id]
+    if n then return n end
+    local asNum = tonumber(id)
+    if asNum ~= nil then
+      n = state.counts[asNum]
+      if n then return n end
+    end
+    return state.counts[tostring(id)] or 0
+  end
+
   local function CountsSatisfied()
     for npcId, need in pairs(requiredKills) do
       -- Support both single NPC IDs and arrays of NPC IDs
@@ -867,14 +960,14 @@ local function registerDungeonAchievement(def)
       if type(need) == "table" then
         -- Array of NPC IDs - check if any of them has been killed
         for _, id in pairs(need) do
-          if (state.counts[id] or 0) >= 1 then
+          if GetKillCount(id) >= 1 then
             isSatisfied = true
             break
           end
         end
       else
         -- Single NPC ID
-        if (state.counts[npcId] or 0) >= need then
+        if GetKillCount(npcId) >= need then
           isSatisfied = true
         end
       end
@@ -888,6 +981,7 @@ local function registerDungeonAchievement(def)
   -- Check if an NPC ID is a required boss for this achievement
   local function IsRequiredBoss(npcId)
     if not npcId then return false end
+    npcId = tonumber(npcId) or npcId
     -- Direct lookup
     if requiredKills[npcId] then
       return true
@@ -896,7 +990,7 @@ local function registerDungeonAchievement(def)
     for key, value in pairs(requiredKills) do
       if type(value) == "table" then
         for _, id in pairs(value) do
-          if id == npcId then
+          if (tonumber(id) or id) == npcId then
             return true
           end
         end
@@ -951,6 +1045,23 @@ local function registerDungeonAchievement(def)
     addon.SetProgress(achId, "pointsAtKill", pointsToStore)
   end
 
+  local function StoreEntryLevelSnapshot()
+    local rawMapId = GetCurrentInstanceMapID()
+    local entryData = ResolveDungeonEntryLevelsForInstance(rawMapId)
+    if not entryData then return end
+    -- Keep recording party levels for average display even when base achievements
+    -- do not enforce party level requirements.
+    UpdatePartyMemberLevels(rawMapId, entryData)
+    local avg, partySize = ComputeAverageEntryLevel(entryData)
+    if entryData.playerLevel then
+      addon.SetProgress(achId, "entryPlayerLevel", entryData.playerLevel)
+    end
+    if avg then
+      addon.SetProgress(achId, "avgPartyLevel", avg)
+      addon.SetProgress(achId, "entryPartySize", partySize)
+    end
+  end
+
   local function ApplyBossKillCredit(npcId, killToken)
     if not npcId or not IsRequiredBoss(npcId) then
       return false
@@ -962,6 +1073,7 @@ local function registerDungeonAchievement(def)
     IncrementBossKill(npcId)
     MarkKillTokenProcessed(killToken)
     StorePointsAtKill()
+    StoreEntryLevelSnapshot()
     SaveProgress()
     UpdateTooltip()
 
@@ -1182,129 +1294,19 @@ local function registerDungeonAchievement(def)
   end
   if addon then addon.GetBossName = GetBossName end
 
-  -- Lazy tooltip setup - only initialize when first hovered (optimization)
-  local tooltipInitialized = false
-  local function CreateTooltipHandler()
-    local row = addon[rowVarName]
-    if not row then return noop end
-    local frame = row.frame
-    if not frame then return noop end
-    
-    -- Store the base tooltip for the main tooltip
-    local baseTooltip = tooltip or ""
-    row.tooltip = baseTooltip
-    frame.tooltip = baseTooltip
-    
-    -- Ensure mouse events are enabled and highlight texture exists
-    frame:EnableMouse(true)
-    if not frame.highlight then
-      frame.highlight = frame:CreateTexture(nil, "BACKGROUND")
-      frame.highlight:SetAllPoints(frame)
-      frame.highlight:SetColorTexture(1, 1, 1, 0.10)
-      frame.highlight:Hide()
-    end
-    
-    -- Set up OnLeave script to hide highlight and tooltip
-    frame:SetScript("OnLeave", function(self)
-      if self.highlight then
-        self.highlight:Hide()
-      end
-      GameTooltip:Hide()
-    end)
-    
-    -- Process a single boss entry (defined once per CreateTooltipHandler run, not per hover)
-    local function processBossEntry(npcId, need, achievementCompleted)
-      local done = false
-      local bossName = ""
-      if type(need) == "table" then
-        local bossNames = {}
-        for _, id in pairs(need) do
-          local current = (state.counts[id] or state.counts[tostring(id)] or 0)
-          local name = GetBossName(id)
-          table_insert(bossNames, name)
-          if current >= 1 then done = true end
-        end
-        if type(npcId) == "string" then
-          bossName = npcId
-        else
-          bossName = table_concat(bossNames, " / ")
-        end
-      else
-        local idNum = tonumber(npcId) or npcId
-        local current = (state.counts[idNum] or state.counts[tostring(idNum)] or 0)
-        bossName = GetBossName(idNum)
-        done = current >= (tonumber(need) or 1)
-      end
-      if achievementCompleted then done = true end
-      if done then
-        GameTooltip:AddLine(bossName, 1, 1, 1)
-      else
-        GameTooltip:AddLine(bossName, 0.5, 0.5, 0.5)
-      end
-    end
-    
-    -- Return the tooltip handler function
-    return function(self)
-        -- Show highlight
-        if self.highlight then
-          self.highlight:Show()
-        end
-        
-        if self.Title and self.Title.GetText then
-          -- Load fresh progress from database before showing tooltip
-          LoadProgress()
-          
-          local achievementCompleted = state.completed or (self.completed == true)
-          
-          GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-          GameTooltip:ClearLines()
-          GameTooltip:SetText(title or "", 1, 1, 1)
-          local leftText = (self.maxLevel and self.maxLevel > 0) and (LEVEL .. " " .. tostring(self.maxLevel)) or " "
-          local rightText = (self.points and tonumber(self.points) and tonumber(self.points) > 0) and (ACHIEVEMENT_POINTS .. ": " .. tostring(self.points)) or " "
-          GameTooltip:AddDoubleLine(leftText, rightText, 1, 1, 1, 0.7, 0.9, 0.7)
-          GameTooltip:AddLine(baseTooltip, nil, nil, nil, true)
-          
-          if next(requiredKills) ~= nil then
-            GameTooltip:AddLine("\nRequired Bosses:", 0, 1, 0)
-            if bossOrder then
-              for _, npcId in ipairs(bossOrder) do
-                local need = requiredKills[npcId]
-                if need then
-                  processBossEntry(npcId, need, achievementCompleted)
-                end
-              end
-            else
-              for npcId, need in pairs(requiredKills) do
-                processBossEntry(npcId, need, achievementCompleted)
-              end
-            end
-          end
-          -- Hint for linking the achievement in chat
-          GameTooltip:AddLine("\nShift click to link in chat or add to tracking list", 0.5, 0.5, 0.5)
-          
-          GameTooltip:Show()
-        end
-      end
-    end
-
   ---------------------------------------
-  -- Tooltip Management
+  -- Tooltip Management (centralized)
   ---------------------------------------
 
-  -- Lazy tooltip handler - initializes on first hover
-  local tooltipHandler = nil
-  local function GetTooltipHandler()
-    if not tooltipHandler then
-      tooltipHandler = CreateTooltipHandler()
-    end
-    return tooltipHandler
-  end
+  -- Progress changes refresh via ShowAchievementTooltip on next hover; keep call sites intact.
+  UpdateTooltip = function() end
 
-  -- Update tooltip when progress changes (triggers lazy re-initialization on next hover)
-  UpdateTooltip = function()
-    -- Mark as needing update - tooltip will be re-initialized on next hover
-    tooltipInitialized = false
-    tooltipHandler = nil
+  local function BindRowTooltip(frame)
+    if addon and addon.BindAchievementRowTooltip then
+      addon.BindAchievementRowTooltip(frame, {
+        beforeShow = LoadProgress,
+      })
+    end
   end
 
   -- Check if a unit is over the level requirement
@@ -1320,6 +1322,7 @@ local function registerDungeonAchievement(def)
     local maxPartySize = def.maxPartySize or 5
     if members > maxPartySize then return false end
 
+    local requirePartyLevels = def.isVariation == true
     local inInstance, instanceType = IsInInstance()
     local rawMapId = inInstance and GetCurrentInstanceMapID()
     local entryData = ResolveDungeonEntryLevelsForInstance(rawMapId)
@@ -1330,6 +1333,7 @@ local function registerDungeonAchievement(def)
     -- Use stored dungeon snapshot when we have one; otherwise open-world fallback uses live levels
     if useEntryLevels then
       local dirty = false
+      -- Always track party levels for avgPartyLevel tooltip, even on base achievements.
       if UpdatePartyMemberLevels(rawMapId, entryData) then
         dirty = true
       end
@@ -1345,7 +1349,7 @@ local function registerDungeonAchievement(def)
       end
       if not playerLevel or IsOverLeveled(playerLevel) then return false end
       
-      if members > 1 then
+      if requirePartyLevels and members > 1 then
         for i = 1, 4 do
           local u = "party"..i
           if UnitExists(u) then
@@ -1354,7 +1358,7 @@ local function registerDungeonAchievement(def)
               local partyLevel = entryData.partyLevels and entryData.partyLevels[guid]
               if not partyLevel then
                 local live = UnitLevel(u) or 0
-                if live > 0 and not IsOverLeveled(live) then
+                if live > 0 then
                   if not entryData.partyLevels then entryData.partyLevels = {} end
                   entryData.partyLevels[guid] = live
                   partyLevel = live
@@ -1379,7 +1383,7 @@ local function registerDungeonAchievement(def)
       local playerLevel = UnitLevel("player")
       if IsOverLeveled(playerLevel) then return false end
       
-      if members > 1 then
+      if requirePartyLevels and members > 1 then
         for i = 1, 4 do
           local u = "party"..i
           if UnitExists(u) and IsOverLeveled(UnitLevel(u)) then
@@ -1404,7 +1408,8 @@ local function registerDungeonAchievement(def)
       return true
     end
 
-    if GetNumGroupMembers() > 1 then
+    -- Base achievements ignore party overlevel; variations still enforce it.
+    if def.isVariation and GetNumGroupMembers() > 1 then
       for i = 1, 4 do
         local unit = "party"..i
         if UnitExists(unit) then
@@ -1463,9 +1468,10 @@ local function registerDungeonAchievement(def)
       local skipOutleveledVariantNoise = IsOutleveledForCurrentRun()
       if not skipWrongPartySizeNoise and not skipOutleveledVariantNoise and isStillAvailable and addon and addon.DungeonKillPrintedForGUID ~= destGUID then
         addon.DungeonKillPrintedForGUID = destGUID
-        print("|cff008066[Hardcore Achievements]|r |cffffd100" .. GetBossName(npcId) .. " killed but group is ineligible - kill not counted for achievement: " .. title .. "|r")
+        local reason = def.isVariation and "group is ineligible" or "you are ineligible"
+        print("|cff008066[Hardcore Achievements]|r |cffffd100" .. GetBossName(npcId) .. " killed but " .. reason .. " - kill not counted for achievement: " .. title .. "|r")
         if addon.EventLogAdd then
-          addon.EventLogAdd("Boss kill not counted (group ineligible): " .. GetBossName(npcId) .. " (npc " .. tostring(npcId) .. ") — " .. title)
+          addon.EventLogAdd("Boss kill not counted (" .. reason .. "): " .. GetBossName(npcId) .. " (npc " .. tostring(npcId) .. ") — " .. title)
         end
       end
       return false
@@ -1545,9 +1551,13 @@ local function registerDungeonAchievement(def)
 
   -- Check faction eligibility
   local function IsEligible()
-    -- Faction: "Alliance" / "Horde"
-    if faction and select(2, UnitFactionGroup("player")) ~= faction then
+    if faction and addon.PlayerFactionMatches and not addon.PlayerFactionMatches(faction) then
       return false
+    elseif faction and not addon.PlayerFactionMatches then
+      local factionTag, factionLocalized = UnitFactionGroup("player")
+      if faction ~= factionTag and faction ~= factionLocalized then
+        return false
+      end
     end
     return true
   end
@@ -1564,6 +1574,13 @@ local function registerDungeonAchievement(def)
 
     -- Load progress from database
     LoadProgress()
+
+    -- If requirements were reduced (e.g. Duo/Solo omitting Archaedas) and existing
+    -- kills already satisfy the list, complete without needing another kill.
+    if not state.completed and next(requiredKills) ~= nil and CountsSatisfied() then
+      state.completed = true
+      addon.SetProgress(achId, "completed", true)
+    end
 
     -- Ensure dungeons never have allowSoloDouble enabled
     local dungeonDef = def or {}
@@ -1601,18 +1618,7 @@ local function registerDungeonAchievement(def)
     if row then
       if addon and addon.AddRowUIInit then
         addon.AddRowUIInit(row, function(frame)
-          frame:EnableMouse(true)
-          -- Lazy OnEnter handler - creates tooltip handler on first hover
-          frame:SetScript("OnEnter", function(self)
-            GetTooltipHandler()(self)
-          end)
-          -- OnLeave handler
-          frame:SetScript("OnLeave", function(self)
-            if self.highlight then
-              self.highlight:Hide()
-            end
-            GameTooltip:Hide()
-          end)
+          BindRowTooltip(frame)
         end)
       end
     end
@@ -1699,14 +1705,23 @@ local function IsInDungeon(mapId)
     return false
 end
 
+-- Player level stored when entering a dungeon (nil if no snapshot for that map).
+local function GetDungeonEntryPlayerLevel(mapId)
+    local entry = ResolveDungeonEntryLevelsForInstance(mapId)
+    if not entry then return nil end
+    return tonumber(entry.playerLevel)
+end
+
 DungeonCommon.registerDungeonAchievement = registerDungeonAchievement
 DungeonCommon.registerDungeonVariations = registerDungeonVariations
 DungeonCommon.refreshDungeonVariations = refreshDungeonVariations
 DungeonCommon.IsInDungeonOrRaid = IsInDungeonOrRaid
 DungeonCommon.IsInDungeon = IsInDungeon
+DungeonCommon.GetDungeonEntryPlayerLevel = GetDungeonEntryPlayerLevel
 
 if addon then
     addon.IsInDungeonOrRaid = IsInDungeonOrRaid
     addon.IsInDungeon = IsInDungeon
+    addon.GetDungeonEntryPlayerLevel = GetDungeonEntryPlayerLevel
     addon.DungeonCommon = DungeonCommon
 end

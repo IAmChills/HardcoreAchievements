@@ -20,6 +20,7 @@ local PlayerIsSoloForGUID = (addon and addon.PlayerIsSoloForGUID)
 local PlayerIsSolo = (addon and addon.PlayerIsSolo)
 local RefreshAllAchievementPoints = (addon and addon.RefreshAllAchievementPoints)
 local IsSelfFound = (addon and addon.IsSelfFound)
+local PlayerFactionMatches = (addon and addon.PlayerFactionMatches)
 local select = select
 
 ---------------------------------------
@@ -139,6 +140,9 @@ function M.registerQuestAchievement(cfg)
         return (addon and addon.GetAchievementRow) and addon.GetAchievementRow(ACH_ID) or nil
     end
 
+    -- Assigned after countsSatisfied(); used by quest turn-in / topUp paths.
+    local StoreQuestSoloPointsAfterTurnIn
+
     -- Calculate base points from row (handles originalPoints, multipliers, solo mode preview)
     local function CalculateBasePoints(row)
         if not row or not row.points then
@@ -241,7 +245,15 @@ function M.registerQuestAchievement(cfg)
     ---------------------------------------
 
     local function gate()
-        if FACTION and UnitFactionGroup("player") ~= FACTION then return false end
+        -- FACTION comes from FACTION_ALLIANCE/FACTION_HORDE (localized). Match english tag or localized name.
+        if FACTION then
+            if PlayerFactionMatches then
+                if not PlayerFactionMatches(FACTION) then return false end
+            else
+                local factionTag, factionLocalized = UnitFactionGroup("player")
+                if FACTION ~= factionTag and FACTION ~= factionLocalized then return false end
+            end
+        end
         if RACE then
             local _, raceFile = UnitRace("player")
             if raceFile ~= RACE then return false end
@@ -330,117 +342,16 @@ function M.registerQuestAchievement(cfg)
             if not (MAX_LEVEL and MAX_LEVEL > 0 and levelToCheck > MAX_LEVEL) then
                 state.quest = true
                 setProg("quest", true)
-                
-                -- Check if we already have pointsAtKill from a previous NPC kill
-                -- If we do, preserve it; if not, store points based on current solo status
-                local progressTable = GetProgress()
+
+                -- Retro server complete: assume normal fulfillment. Cannot verify solo at top-up time,
+                -- so only write base points when nothing was already stored from a live kill.
+                -- Also clear stale ineligibleKill so quest top-up is not blocked by an old group-state flag.
+                if progressTable and progressTable.ineligibleKill then
+                    setProg("ineligibleKill", false)
+                end
                 local existingPointsAtKill = progressTable and progressTable.pointsAtKill
-                
                 if not existingPointsAtKill then
-                    -- No existing pointsAtKill, check if quest completion was solo (check at time of topUp)
-                    -- Solo points apply: requires self-found if hardcore is active, otherwise solo is allowed
-                    local isSoloQuest = GetSoloStatusForQuest()
-                    
-                    if AchievementPanel and AchievementPanel.achievements then
-                        for _, row in ipairs(AchievementPanel.achievements) do
-                            if row.id == ACH_ID and row.points then
-                                -- Get the original base points (before preview doubling or self-found bonus)
-                                -- Check if row.points has been doubled by preview toggle
-                                local currentPoints = tonumber(row.points) or 0
-                                local isSoloMode = (addon and addon.IsSoloModeEnabled and addon.IsSoloModeEnabled()) or false
-                                
-                                -- Detect if points have been doubled by preview toggle
-                                -- Use originalPoints when available; do NOT subtract a flat self-found bonus from display points.
-                                local basePoints = tonumber(row.originalPoints) or currentPoints
-                                -- If solo mode toggle is on and row.allowSoloDouble, the points might be doubled
-                                -- Use originalPoints if available, otherwise divide by 2 if doubled
-                                if row.originalPoints then
-                                    -- Use stored original points
-                                    basePoints = tonumber(row.originalPoints) or basePoints
-                                    -- Apply multiplier if not static (replaces base points)
-                                    if not row.staticPoints then
-                                        local preset = addon and addon.GetPlayerPresetFromSettings and addon.GetPlayerPresetFromSettings() or nil
-                                        local multiplier = GetPresetMultiplier(preset) or 1.0
-                                        basePoints = math.floor((basePoints) * multiplier + 0.5)
-                                    end
-                                elseif isSoloMode and row.allowSoloDouble and not row.staticPoints then
-                                    -- Points might have been doubled by preview, divide by 2 to get base
-                                    local progress = GetProgress()
-                                    if not (progress and progress.pointsAtKill) then
-                                        basePoints = math.floor(basePoints / 2 + 0.5)
-                                    end
-                                end
-                                
-                                local pointsToStore = basePoints
-                                -- If solo quest, store doubled points; otherwise store regular points
-                                if isSoloQuest then
-                                    pointsToStore = basePoints * 2
-                                    -- Update points display to show doubled value (including self-found bonus for display)
-                                    local displayPoints = pointsToStore
-                                    if IsSelfFound() then
-                                        -- pointsAtKill is stored WITHOUT self-found bonus; display includes it.
-                                        -- 0-point achievements naturally add 0.
-                                        local getBonus = addon and addon.GetSelfFoundBonus
-                                        local baseForBonus = row.originalPoints or row.revealPointsBase or 0
-                                        local bonus = (type(getBonus) == "function") and getBonus(tonumber(baseForBonus) or 0) or 0
-                                        if bonus > 0 and displayPoints > 0 then
-                                            displayPoints = displayPoints + bonus
-                                        end
-                                    end
-                                    row.points = displayPoints
-                                    if row.Points then
-                                        row.Points:SetText(tostring(displayPoints))
-                                    end
-                                    -- Set "pending solo" indicator on the achievement row (not yet completed)
-                                    if SetStatusTextOnRow then
-                                        SetStatusTextOnRow(row, {
-                                            completed = false,
-                                            hasSoloStatus = true,
-                                            requiresBoth = false,
-                                            isSelfFound = IsSelfFound(),
-                                            maxLevel = row.maxLevel
-                                        })
-                                    end
-                                end
-                                setProg("pointsAtKill", pointsToStore)
-                                -- Also store solo status for later reference
-                                setProg("soloQuest", isSoloQuest)
-                                break
-                            end
-                        end
-                    end
-                else
-                    -- We have existing pointsAtKill from NPC kill, preserve it
-                    -- But still update solo status if current check is solo (for indicator purposes)
-                    local isSoloQuest = PlayerIsSolo()
-                    if isSoloQuest then
-                        -- Update solo quest status and indicator (only if not completed)
-                        setProg("soloQuest", true)
-                        if AchievementPanel and AchievementPanel.achievements then
-                            for _, row in ipairs(AchievementPanel.achievements) do
-                                if row.id == ACH_ID and not row.completed then
-                                    -- Use stored pointsAtKill value if available (doubled for solo)
-                                    local progressTable = GetProgress()
-                                    if progressTable and progressTable.pointsAtKill then
-                                        row.points = tonumber(progressTable.pointsAtKill) or row.points
-                                        if row.Points then
-                                            row.Points:SetText(tostring(row.points))
-                                        end
-                                    end
-                                    if SetStatusTextOnRow then
-                                        SetStatusTextOnRow(row, {
-                                            completed = false,
-                                            hasSoloStatus = true,
-                                            requiresBoth = false,
-                                            isSelfFound = IsSelfFound(),
-                                            maxLevel = row.maxLevel
-                                        })
-                                    end
-                                    break
-                                end
-                            end
-                        end
-                    end
+                    StoreQuestSoloPointsAfterTurnIn(false)
                 end
                 return true
             end
@@ -475,6 +386,70 @@ function M.registerQuestAchievement(cfg)
         return true
     end
 
+    -- Persist quest-turn-in solo points using model or panel row (Dashboard-only users have no panel rows).
+    StoreQuestSoloPointsAfterTurnIn = function(isSoloQuest)
+        local row = FindAchievementRow()
+        if not row then
+            setProg("soloQuest", isSoloQuest and true or false)
+            return
+        end
+
+        local currentPoints = tonumber(row.points) or 0
+        local isSoloMode = (addon and addon.IsSoloModeEnabled and addon.IsSoloModeEnabled()) or false
+        local basePoints = tonumber(row.originalPoints) or currentPoints
+
+        if row.originalPoints then
+            basePoints = tonumber(row.originalPoints) or basePoints
+            if not row.staticPoints then
+                local preset = addon and addon.GetPlayerPresetFromSettings and addon.GetPlayerPresetFromSettings() or nil
+                local multiplier = GetPresetMultiplier(preset) or 1.0
+                basePoints = basePoints + math.floor((basePoints) * (multiplier - 1) + 0.5)
+            end
+        elseif isSoloMode and row.allowSoloDouble and not row.staticPoints then
+            local progress = GetProgress()
+            if not (progress and progress.pointsAtKill) then
+                basePoints = math.floor(basePoints / 2 + 0.5)
+            end
+        end
+
+        local pointsToStore = basePoints
+        if isSoloQuest then
+            pointsToStore = basePoints * 2
+            local displayPoints = pointsToStore
+            if IsSelfFound() then
+                local getBonus = addon and addon.GetSelfFoundBonus
+                local baseForBonus = row.originalPoints or row.revealPointsBase or 0
+                local bonus = (type(getBonus) == "function") and getBonus(tonumber(baseForBonus) or 0) or 0
+                if bonus > 0 and displayPoints > 0 then
+                    displayPoints = displayPoints + bonus
+                end
+            end
+            row.points = displayPoints
+            if row.Points then
+                row.Points:SetText(tostring(displayPoints))
+            end
+
+            if SetStatusTextOnRow and not row.completed then
+                local killsSatisfied = false
+                if REQUIRED_QUEST_ID and (TARGET_NPC_ID or REQUIRED_KILLS) then
+                    local hasKill = REQUIRED_KILLS and countsSatisfied() or (state.killed or false)
+                    killsSatisfied = hasKill and not state.quest
+                end
+                SetStatusTextOnRow(row, {
+                    completed = false,
+                    hasSoloStatus = true,
+                    requiresBoth = (REQUIRED_QUEST_ID and (TARGET_NPC_ID or REQUIRED_KILLS)) and true or false,
+                    killsSatisfied = killsSatisfied,
+                    isSelfFound = IsSelfFound(),
+                    maxLevel = row.maxLevel
+                })
+            end
+        end
+
+        setProg("pointsAtKill", pointsToStore)
+        setProg("soloQuest", isSoloQuest and true or false)
+    end
+
     local function checkComplete()
         if state.completed then
             return true
@@ -486,34 +461,37 @@ function M.registerQuestAchievement(cfg)
 		-- Check both state and progress table for kill/quest completion
 		local progressTable = GetProgress()
 		
-		-- Check if there's an ineligible kill flag - achievement was done when group was ineligible.
-		-- The flag is cleared by a new eligible kill of the same NPC, or by abandoning the quest
-		-- (QUEST_REMOVED performs a full progress reset for the achievement).
-		if progressTable and progressTable.ineligibleKill then
-			return false -- Kill was done when group was ineligible - do not allow completion
-		end
-		
 		local killFromProgress = progressTable and progressTable.killed
 		local questFromProgress = progressTable and progressTable.quest
 		
 		local questOk = (not REQUIRED_QUEST_ID) or state.quest or questFromProgress
+		-- Quest already completed (live turn-in or server top-up) while still eligible:
+		-- always award; skip live group / ineligibleKill gates. Solo is only set on live turn-in.
+		local completingViaQuest = REQUIRED_QUEST_ID and (state.quest or questFromProgress)
+
+		-- ineligibleKill only blocks kill-based completion paths, not quest-complete awards.
+		if progressTable and progressTable.ineligibleKill and not completingViaQuest then
+			return false
+		end
+
+		local function markComplete(needGroupCheck)
+			if needGroupCheck and IsGroupEligibleForAchievement then
+				if not IsGroupEligibleForAchievement(MAX_LEVEL, ACH_ID) then
+					return false
+				end
+			end
+			state.completed = true
+			setProg("completed", true)
+			return true
+		end
 		
 		-- If requiredKills is defined, check kill counts instead of single kill
 		if REQUIRED_KILLS then
 			local killsOk = countsSatisfied()
 			-- Complete if all kills are satisfied OR (if quest is required) quest is turned in
-			if killsOk or (REQUIRED_QUEST_ID and questOk) then
-				-- Check group eligibility before marking complete
-				local isGroupEligible = true
-				if IsGroupEligibleForAchievement then
-					isGroupEligible = IsGroupEligibleForAchievement(MAX_LEVEL, ACH_ID)
-				end
-				if not isGroupEligible then
-					return false -- Group not eligible, don't complete
-				end
-				state.completed = true
-				setProg("completed", true)
-				return true
+			if killsOk or completingViaQuest then
+				-- Group check only when awarding from kills without a completed quest
+				return markComplete(killsOk and not completingViaQuest)
 			end
 			return false
 		end
@@ -530,46 +508,13 @@ function M.registerQuestAchievement(cfg)
 			if awardOnKillEnabled then
 				local killOk = state.killed or killFromProgress
 				if killOk then
-					-- Check group eligibility before marking complete
-					local isGroupEligible = true
-					if IsGroupEligibleForAchievement then
-						isGroupEligible = IsGroupEligibleForAchievement(MAX_LEVEL, ACH_ID)
-					end
-					if not isGroupEligible then
-						return false -- Group not eligible, don't complete
-					end
-					state.completed = true
-					setProg("completed", true)
-					return true
+					return markComplete(true)
 				end
 				return false
 			else
 				-- Quest alone is sufficient for completion (default behavior)
-				if questOk then
-					-- Check group eligibility before marking complete (only if kill was not clean)
-					local isCleanKill = false
-					if killFromProgress then
-						local levelAtKill = progressTable and progressTable.levelAtKill
-						if levelAtKill then
-							if MAX_LEVEL and MAX_LEVEL > 0 then
-								isCleanKill = (levelAtKill <= MAX_LEVEL)
-							else
-								isCleanKill = true
-							end
-						end
-					end
-					if not isCleanKill then
-						local isGroupEligible = true
-						if IsGroupEligibleForAchievement then
-							isGroupEligible = IsGroupEligibleForAchievement(MAX_LEVEL, ACH_ID)
-						end
-						if not isGroupEligible then
-							return false -- Group not eligible, don't complete
-						end
-					end
-					state.completed = true
-					setProg("completed", true)
-					return true
+				if completingViaQuest then
+					return markComplete(false)
 				end
 				return false
 			end
@@ -578,17 +523,8 @@ function M.registerQuestAchievement(cfg)
 		-- Otherwise, require each defined component individually
 		local killOk = (not TARGET_NPC_ID) or state.killed or killFromProgress
 		if killOk and questOk then
-			-- Check group eligibility before marking complete
-			local isGroupEligible = true
-			if IsGroupEligibleForAchievement then
-				isGroupEligible = IsGroupEligibleForAchievement(MAX_LEVEL, ACH_ID)
-			end
-			if not isGroupEligible then
-				return false -- Group not eligible, don't complete
-			end
-			state.completed = true
-			setProg("completed", true)
-			return true
+			-- If quest is the completing signal, skip live group check
+			return markComplete(not completingViaQuest)
 		end
 		return false
     end
@@ -1092,87 +1028,12 @@ function M.registerQuestAchievement(cfg)
             if not belowMax() then
                 return false
             end
-            
+
+            -- Live turn-in while eligible: quest complete always awards (kills/group assumed fulfilled).
+            -- Solo can still be verified at turn-in time (unlike retro server top-up).
             local progressTable = GetProgress()
-            
-            -- Don't allow quest completion if there's an ineligible kill flag - kill was done when group was ineligible
-            -- The ineligibleKill flag can be cleared by getting a new eligible kill of the same NPC,
-            -- but if it's still set when quest is turned in, completion should be blocked
             if progressTable and progressTable.ineligibleKill then
-                -- Kill was done when group was ineligible - do not allow completion
-                return false
-            end
-            
-            -- Check if group is eligible (no overleveled party members in range)
-            -- Exception: If NPC kill(s) were required and already fulfilled under level, it's "clean" and achievement can be granted regardless
-            local isCleanKill = false
-            if TARGET_NPC_ID or REQUIRED_KILLS then
-                -- Check if kill(s) were already fulfilled
-                local killFulfilled = false
-                
-                if REQUIRED_KILLS then
-                    -- For required kills, check if all kills are satisfied
-                    killFulfilled = countsSatisfied()
-                else
-                    -- For single kill, check if kill was fulfilled
-                    killFulfilled = state.killed or (progressTable and progressTable.killed)
-                end
-                
-                if killFulfilled then
-                    -- Check if kill(s) were fulfilled under level
-                    local levelAtKill = progressTable and progressTable.levelAtKill
-                    if levelAtKill then
-                        if MAX_LEVEL and MAX_LEVEL > 0 then
-                            isCleanKill = (levelAtKill <= MAX_LEVEL)
-                        else
-                            isCleanKill = true -- No level cap means kill is always clean
-                        end
-                    else
-                        -- No levelAtKill stored, check current level
-                        local currentLevel = UnitLevel("player") or 1
-                        if MAX_LEVEL and MAX_LEVEL > 0 then
-                            isCleanKill = (currentLevel <= MAX_LEVEL)
-                        else
-                            isCleanKill = true
-                        end
-                    end
-                end
-            end
-            
-            -- Only check group eligibility if kill is not clean
-            if not isCleanKill then
-                local isGroupEligible = true
-                if IsGroupEligibleForAchievement then
-                    isGroupEligible = IsGroupEligibleForAchievement(MAX_LEVEL)
-                end
-                if not isGroupEligible then
-                    -- Kill exists but is not clean due to overleveled party members - mark as Pending ineligible
-                    setProg("ineligibleKill", true)
-                    
-                    -- Show "Pending Turn-in (ineligible kill)" indicator on achievement row (quest handler always means both kill and quest required)
-                    if AchievementPanel and AchievementPanel.achievements then
-                        for _, row in ipairs(AchievementPanel.achievements) do
-                            if row.id == ACH_ID and not row.completed then
-                                -- Use helper function to set status text (quest handler always means both kill and quest required)
-                                if SetStatusTextOnRow then
-                                    SetStatusTextOnRow(row, {
-                                        completed = false,
-                                        hasIneligibleKill = true,
-                                        requiresBoth = true, -- Quest handler always means both required
-                                        isSelfFound = IsSelfFound(),
-                                        maxLevel = row.maxLevel
-                                    })
-                                end
-                                break
-                            end
-                        end
-                    end
-                    
-                    return false -- Group is not eligible, cannot fulfill achievement
-                end
-                -- Note: We don't clear ineligibleKill here in the quest handler.
-                -- It is cleared either by a subsequent eligible kill (kill handler) or by
-                -- abandoning the quest (QUEST_REMOVED performs a full progress reset).
+                setProg("ineligibleKill", false)
             end
             
             state.quest = true
@@ -1180,168 +1041,45 @@ function M.registerQuestAchievement(cfg)
             
             -- Check if we already have pointsAtKill from a previous NPC kill
             -- If we do, preserve it; if not, store points based on quest turn-in solo status
-            local progressTable = GetProgress()
+            progressTable = GetProgress()
             local existingPointsAtKill = progressTable and progressTable.pointsAtKill
             
             if not existingPointsAtKill then
                 -- No existing pointsAtKill, check if quest completion was solo
-                -- Solo points apply: requires self-found if hardcore is active, otherwise solo is allowed
-                local isHardcoreActive = C_GameRules and C_GameRules.IsHardcoreActive and C_GameRules.IsHardcoreActive() or false
-                local allowSoloBonus = IsSelfFound() or not isHardcoreActive
-                local isSoloQuest = allowSoloBonus and (PlayerIsSolo() or false) or false
-                
-                if AchievementPanel and AchievementPanel.achievements then
-                    for _, row in ipairs(AchievementPanel.achievements) do
-                        if row.id == ACH_ID and row.points then
-                            -- Get the original base points (before preview doubling or self-found bonus)
-                            -- Check if row.points has been doubled by preview toggle
-                            local currentPoints = tonumber(row.points) or 0
-                            local isSoloMode = (addon and addon.IsSoloModeEnabled and addon.IsSoloModeEnabled()) or false
-                            
-                                -- Detect if points have been doubled by preview toggle
-                                -- Use originalPoints when available; do NOT subtract a flat self-found bonus from display points.
-                                local basePoints = tonumber(row.originalPoints) or currentPoints
-                            -- If solo mode toggle is on and row.allowSoloDouble, the points might be doubled
-                            -- Use originalPoints if available, otherwise divide by 2 if doubled
-                            if row.originalPoints then
-                                -- Use stored original points
-                                basePoints = tonumber(row.originalPoints) or basePoints
-                                -- Apply multiplier if not static
-                                if not row.staticPoints then
-                                    local preset = addon and addon.GetPlayerPresetFromSettings and addon.GetPlayerPresetFromSettings() or nil
-                                    local multiplier = GetPresetMultiplier(preset) or 1.0
-                                    basePoints = basePoints + math.floor((basePoints) * (multiplier - 1) + 0.5)
-                                end
-                            elseif isSoloMode and row.allowSoloDouble and not row.staticPoints then
-                                -- Points might have been doubled by preview, divide by 2 to get base
-                                local progress = GetProgress()
-                                if not (progress and progress.pointsAtKill) then
-                                    basePoints = math.floor(basePoints / 2 + 0.5)
-                                end
-                            end
-                            
-                            local pointsToStore = basePoints
-                            -- If solo quest, store doubled points; otherwise store regular points
-                            if isSoloQuest then
-                                pointsToStore = basePoints * 2
-                                -- Update points display to show doubled value (including self-found bonus for display)
-                                local displayPoints = pointsToStore
-                                if IsSelfFound() then
-                                    -- pointsAtKill is stored WITHOUT self-found bonus; display includes it.
-                                    -- 0-point achievements naturally add 0.
-                                    local getBonus = addon and addon.GetSelfFoundBonus
-                                    local baseForBonus = row.originalPoints or row.revealPointsBase or 0
-                                    local bonus = (type(getBonus) == "function") and getBonus(tonumber(baseForBonus) or 0) or 0
-                                    if bonus > 0 and displayPoints > 0 then
-                                        displayPoints = displayPoints + bonus
-                                    end
-                                end
-                                row.points = displayPoints
-                                if row.Points then
-                                    row.Points:SetText(tostring(displayPoints))
-                                end
-                                -- Check if kills are satisfied but quest is pending
-                                local killsSatisfied = false
-                                if REQUIRED_QUEST_ID and (TARGET_NPC_ID or REQUIRED_KILLS) then
-                                    local hasKill = false
-                                    if REQUIRED_KILLS then
-                                        hasKill = countsSatisfied()
-                                    else
-                                        hasKill = state.killed or false
-                                    end
-                                    local questNotTurnedIn = not state.quest
-                                    killsSatisfied = hasKill and questNotTurnedIn
-                                end
-                                
-                                -- Set "pending solo" indicator on the achievement row (not yet completed)
-                                if SetStatusTextOnRow then
-                                    SetStatusTextOnRow(row, {
-                                        completed = false,
-                                        hasSoloStatus = true,
-                                        requiresBoth = REQUIRED_QUEST_ID and (TARGET_NPC_ID or REQUIRED_KILLS),
-                                        killsSatisfied = killsSatisfied,
-                                        isSelfFound = IsSelfFound(),
-                                        maxLevel = row.maxLevel
-                                    })
-                                end
-                            end
-                            setProg("pointsAtKill", pointsToStore)
-                            -- Also store solo status for later reference
-                            setProg("soloQuest", isSoloQuest)
-                            break
-                        end
-                    end
-                end
-                else
-                    -- We have existing pointsAtKill from NPC kill, preserve it
-                    -- But still update solo status if quest was solo (for indicator purposes)
-                    -- Solo points apply: requires self-found if hardcore is active, otherwise solo is allowed
-                    local isSoloQuest = GetSoloStatusForQuest()
-                    if isSoloQuest then
-                    -- Update solo quest status and indicator (only if not completed)
+                StoreQuestSoloPointsAfterTurnIn(GetSoloStatusForQuest())
+            else
+                -- We have existing pointsAtKill from NPC kill, preserve it
+                -- But still update solo status if quest was solo (for indicator purposes)
+                local isSoloQuest = GetSoloStatusForQuest()
+                if isSoloQuest then
                     setProg("soloQuest", true)
-                    if AchievementPanel and AchievementPanel.achievements then
-                        for _, row in ipairs(AchievementPanel.achievements) do
-                            if row.id == ACH_ID and not row.completed then
-                                -- Use stored pointsAtKill value if available (doubled for solo)
-                                -- pointsAtKill doesn't include self-found bonus, so add it if applicable
-                                local progressTable = GetProgress()
-                                if progressTable and progressTable.pointsAtKill then
-                                    local storedPoints = tonumber(progressTable.pointsAtKill) or row.points
-                                    if IsSelfFound() then
-                                        -- pointsAtKill is stored WITHOUT self-found bonus; display includes it.
-                                        -- 0-point achievements naturally add 0.
-                                        local getBonus = addon and addon.GetSelfFoundBonus
-                                        local baseForBonus = row.originalPoints or row.revealPointsBase or 0
-                                        local bonus = (type(getBonus) == "function") and getBonus(tonumber(baseForBonus) or 0) or 0
-                                        if bonus > 0 and storedPoints > 0 then
-                                            storedPoints = storedPoints + bonus
-                                        end
-                                    end
-                                    row.points = storedPoints
-                                    if row.Points then
-                                        row.Points:SetText(tostring(storedPoints))
-                                    end
+                    local row = FindAchievementRow()
+                    if row and not row.completed then
+                        local progressTable = GetProgress()
+                        if progressTable and progressTable.pointsAtKill then
+                            local storedPoints = tonumber(progressTable.pointsAtKill) or row.points
+                            if IsSelfFound() then
+                                local getBonus = addon and addon.GetSelfFoundBonus
+                                local baseForBonus = row.originalPoints or row.revealPointsBase or 0
+                                local bonus = (type(getBonus) == "function") and getBonus(tonumber(baseForBonus) or 0) or 0
+                                if bonus > 0 and storedPoints > 0 then
+                                    storedPoints = storedPoints + bonus
                                 end
-                                -- Check if kills are satisfied but quest is pending
-                                local killsSatisfied = false
-                                if REQUIRED_QUEST_ID and (TARGET_NPC_ID or REQUIRED_KILLS) then
-                                    local hasKill = false
-                                    local progressTable = GetProgress()
-                                    if REQUIRED_KILLS then
-                                        -- Need to check eligibleCounts from progress table
-                                        if progressTable and progressTable.eligibleCounts then
-                                            local allSatisfied = true
-                                            for npcId, requiredCount in pairs(REQUIRED_KILLS) do
-                                                local idNum = tonumber(npcId) or npcId
-                                                local current = progressTable.eligibleCounts[idNum] or progressTable.eligibleCounts[tostring(idNum)] or 0
-                                                local required = tonumber(requiredCount) or 1
-                                                if current < required then
-                                                    allSatisfied = false
-                                                    break
-                                                end
-                                            end
-                                            hasKill = allSatisfied
-                                        end
-                                    else
-                                        hasKill = (progressTable and progressTable.killed) or false
-                                    end
-                                    local questNotTurnedIn = not (progressTable and progressTable.quest)
-                                    killsSatisfied = hasKill and questNotTurnedIn
-                                end
-                                
-                                if SetStatusTextOnRow then
-                                    SetStatusTextOnRow(row, {
-                                        completed = false,
-                                        hasSoloStatus = true,
-                                        requiresBoth = REQUIRED_QUEST_ID and (TARGET_NPC_ID or REQUIRED_KILLS),
-                                        killsSatisfied = killsSatisfied,
-                                        isSelfFound = IsSelfFound(),
-                                        maxLevel = row.maxLevel
-                                    })
-                                end
-                                break
                             end
+                            row.points = storedPoints
+                            if row.Points then
+                                row.Points:SetText(tostring(storedPoints))
+                            end
+                        end
+                        if SetStatusTextOnRow then
+                            SetStatusTextOnRow(row, {
+                                completed = false,
+                                hasSoloStatus = true,
+                                requiresBoth = (REQUIRED_QUEST_ID and (TARGET_NPC_ID or REQUIRED_KILLS)) and true or false,
+                                killsSatisfied = false,
+                                isSelfFound = IsSelfFound(),
+                                maxLevel = row.maxLevel
+                            })
                         end
                     end
                 end
