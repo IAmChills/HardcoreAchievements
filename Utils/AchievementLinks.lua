@@ -245,10 +245,28 @@ if Old_ItemRef_SetHyperlink then
 					})
 					or {}
 
-				for i = 1, #entries do
-					local entry = entries[i]
+				local requiredEntries, bonusEntries = entries, {}
+				if addon and addon.PartitionKillEntries then
+					requiredEntries, bonusEntries = addon.PartitionKillEntries(entries)
+				end
+				for i = 1, #requiredEntries do
+					local entry = requiredEntries[i]
 					local lr, lg, lb = entry.done and 1 or 0.5, entry.done and 1 or 0.5, entry.done and 1 or 0.5
 					ItemRefTooltip:AddLine(entry.text, lr, lg, lb)
+				end
+				if bonusEntries and #bonusEntries > 0 then
+					ItemRefTooltip:AddLine(" ")
+					ItemRefTooltip:AddLine("Bonus:", 0, 1, 0)
+					for i = 1, #bonusEntries do
+						local entry = bonusEntries[i]
+						local lr, lg, lb
+						if entry.done then
+							lr, lg, lb = 0.6, 0.9, 0.6
+						else
+							lr, lg, lb = 0.5, 0.5, 0.5
+						end
+						ItemRefTooltip:AddLine(entry.text, lr, lg, lb)
+					end
 				end
 			end
 

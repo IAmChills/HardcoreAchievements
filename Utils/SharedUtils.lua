@@ -253,6 +253,8 @@ local function RegisterAchievementDef(def, overrides)
         mapID = def.requiredMapId or def.mapID,
         mapName = def.mapName or def.title,
         bossOrder = def.bossOrder,
+        extraCreditKills = def.extraCreditKills,
+        extraCreditLegacyGrant = def.extraCreditLegacyGrant,
         -- Meta-specific fields
         requiredAchievements = def.requiredAchievements,
         achievementOrder = def.achievementOrder,
@@ -332,15 +334,135 @@ local function ShouldShowRequiredKillCounts(achDef, def)
     return (achDef and achDef.showRequiredKillCounts) or (def and def.showRequiredKillCounts) or false
 end
 
+local EXTRA_CREDIT_POINTS_PER_BOSS = 5
+
+local function GetAchievementRecord(achId)
+    if not achId or not addon or type(addon.GetCharDB) ~= "function" then
+        return nil
+    end
+    local _, cdb = addon.GetCharDB()
+    return cdb and cdb.achievements and cdb.achievements[tostring(achId)]
+end
+
+local function IsExtraCreditKillAwarded(achId, npcId)
+    if not achId or npcId == nil then
+        return false
+    end
+    local key = tostring(npcId)
+    local rec = GetAchievementRecord(achId)
+    if rec and type(rec.extraCreditKills) == "table" then
+        if rec.extraCreditKills[key] or rec.extraCreditKills[npcId] or rec.extraCreditKills[tonumber(npcId)] then
+            return true
+        end
+    end
+    local counts = GetRequiredKillCounts(achId)
+    local current = tonumber(counts[npcId] or counts[key] or counts[tonumber(npcId)] or 0) or 0
+    return current >= 1
+end
+
+local function GetExtraCreditPoints(achId)
+    local rec = GetAchievementRecord(achId)
+    if rec and rec.extraCreditPoints then
+        return tonumber(rec.extraCreditPoints) or 0
+    end
+    local progress = addon and addon.GetProgress and addon.GetProgress(achId)
+    return tonumber(progress and progress.extraCreditPoints) or 0
+end
+
+local function ApplyExtraCreditPointsToRow(achId, rec)
+    if not rec then
+        return
+    end
+    local row = addon and addon.GetAchievementRow and addon.GetAchievementRow(achId)
+    if row then
+        if rec.points ~= nil then
+            row.points = rec.points
+        end
+        local frame = row.frame or row
+        if frame and frame ~= row then
+            frame.points = row.points
+        end
+        if frame and frame.Points then
+            frame.Points:SetText(tostring(row.points or rec.points or 0))
+        end
+    end
+    if addon and addon.InvalidateCachedAchievementStats then
+        addon.InvalidateCachedAchievementStats()
+    end
+    if addon and addon.UpdateTotalPoints then
+        addon.UpdateTotalPoints()
+    end
+    if addon and addon.RefreshAuxiliaryViews then
+        addon.RefreshAuxiliaryViews()
+    end
+end
+
+-- Persist an extra-credit boss kill. Returns points added (0 if already awarded).
+-- Additive after multipliers, same as self-found: +5 per boss.
+local function AwardDungeonExtraCreditKill(achId, npcId)
+    if not achId or npcId == nil or not addon or type(addon.GetCharDB) ~= "function" then
+        return 0
+    end
+    local _, cdb = addon.GetCharDB()
+    if not cdb then
+        return 0
+    end
+    cdb.achievements = cdb.achievements or {}
+    local id = tostring(achId)
+    cdb.achievements[id] = cdb.achievements[id] or {}
+    local rec = cdb.achievements[id]
+    rec.extraCreditKills = rec.extraCreditKills or {}
+    local key = tostring(npcId)
+    if rec.extraCreditKills[key] then
+        return 0
+    end
+
+    rec.extraCreditKills[key] = true
+    rec.extraCreditPoints = (tonumber(rec.extraCreditPoints) or 0) + EXTRA_CREDIT_POINTS_PER_BOSS
+    if addon.SetProgress then
+        addon.SetProgress(achId, "extraCreditPoints", rec.extraCreditPoints)
+    end
+
+    if rec.completed then
+        rec.points = (tonumber(rec.points) or 0) + EXTRA_CREDIT_POINTS_PER_BOSS
+        ApplyExtraCreditPointsToRow(achId, rec)
+    end
+    return EXTRA_CREDIT_POINTS_PER_BOSS
+end
+
+-- Completions from before extra-credit existed may have required some of these bosses.
+-- Only grant for IDs listed in legacyGrant (e.g. Urok), never for rares that were always optional.
+local function GrantLegacyDungeonExtraCredit(achId, legacyGrant)
+    if not achId or type(legacyGrant) ~= "table" or not next(legacyGrant) then
+        return
+    end
+    local rec = GetAchievementRecord(achId)
+    if not rec or not rec.completed or rec.extraCreditKills ~= nil then
+        return
+    end
+    rec.extraCreditKills = {}
+    rec.extraCreditPoints = 0
+    for npcId in pairs(legacyGrant) do
+        rec.extraCreditKills[tostring(npcId)] = true
+        rec.extraCreditPoints = rec.extraCreditPoints + EXTRA_CREDIT_POINTS_PER_BOSS
+    end
+    if rec.extraCreditPoints > 0 then
+        rec.points = (tonumber(rec.points) or 0) + rec.extraCreditPoints
+        ApplyExtraCreditPointsToRow(achId, rec)
+    end
+end
+
 -- Returns ordered entries: { text = "Name 0/2", done = bool }
 local function BuildRequiredKillEntries(achId, requiredKills, opts)
     opts = opts or {}
-    if not requiredKills or next(requiredKills) == nil then
-        return {}
-    end
-
     local achDef = opts.achDef
     local def = opts.def
+    local extraCreditKills = opts.extraCreditKills or (achDef and achDef.extraCreditKills) or (def and def.extraCreditKills)
+    if (not requiredKills or next(requiredKills) == nil) and (not extraCreditKills or next(extraCreditKills) == nil) then
+        return {}
+    end
+    requiredKills = requiredKills or {}
+
     local bossOrder = opts.bossOrder or (achDef and achDef.bossOrder) or (def and def.bossOrder)
     local achievementCompleted = opts.achievementCompleted and true or false
     local isRaid = opts.isRaid and true or false
@@ -363,8 +485,8 @@ local function BuildRequiredKillEntries(achId, requiredKills, opts)
         return fallbackPrefix .. tostring(idNum)
     end
 
-    local function processEntry(npcId, need)
-        local done = achievementCompleted
+    local function processEntry(npcId, need, extraCredit)
+        local done = (not extraCredit) and achievementCompleted
         local text = ""
 
         if type(need) == "table" then
@@ -372,7 +494,11 @@ local function BuildRequiredKillEntries(achId, requiredKills, opts)
             for _, id in pairs(need) do
                 local current = (counts[id] or counts[tostring(id)] or 0)
                 table.insert(names, resolveName(id))
-                if not done and current >= 1 then
+                if extraCredit then
+                    if IsExtraCreditKillAwarded(achId, id) or current >= 1 then
+                        done = true
+                    end
+                elseif not done and current >= 1 then
                     done = true
                 end
             end
@@ -387,39 +513,79 @@ local function BuildRequiredKillEntries(achId, requiredKills, opts)
             local current = tonumber(counts[idNum] or counts[tostring(idNum)] or 0) or 0
             if current > needNum then current = needNum end
             local name = resolveName(idNum)
-            if showCounts then
-                text = name .. " " .. tostring(current) .. "/" .. tostring(needNum)
-            else
+            if extraCredit then
                 text = name
-            end
-            if not done then
-                done = current >= needNum
+                done = IsExtraCreditKillAwarded(achId, idNum) or current >= needNum
+            else
+                if showCounts then
+                    text = name .. " " .. tostring(current) .. "/" .. tostring(needNum)
+                else
+                    text = name
+                end
+                if not done then
+                    done = current >= needNum
+                end
             end
         end
 
-        return { text = text, done = done }
+        if extraCredit and text ~= "" then
+            text = text .. " (+" .. tostring(EXTRA_CREDIT_POINTS_PER_BOSS) .. " pts)"
+        end
+
+        return { text = text, done = done, extraCredit = extraCredit and true or nil }
     end
 
     local entries = {}
     local seen = {}
+
+    local function markSeen(npcId)
+        seen[npcId] = true
+        seen[tostring(npcId)] = true
+        local idNum = tonumber(npcId)
+        if idNum then seen[idNum] = true end
+    end
+
+    extraCreditKills = extraCreditKills or {}
     if bossOrder then
         for _, npcId in ipairs(bossOrder) do
             local need = requiredKills[npcId]
             if need then
-                table.insert(entries, processEntry(npcId, need))
-                seen[npcId] = true
-                seen[tostring(npcId)] = true
-                local idNum = tonumber(npcId)
-                if idNum then seen[idNum] = true end
+                table.insert(entries, processEntry(npcId, need, false))
+                markSeen(npcId)
+            elseif extraCreditKills[npcId] then
+                table.insert(entries, processEntry(npcId, extraCreditKills[npcId], true))
+                markSeen(npcId)
             end
         end
     end
     for npcId, need in pairs(requiredKills) do
         if not seen[npcId] and not seen[tostring(npcId)] and not seen[tonumber(npcId) or npcId] then
-            table.insert(entries, processEntry(npcId, need))
+            table.insert(entries, processEntry(npcId, need, false))
+            markSeen(npcId)
+        end
+    end
+    for npcId, need in pairs(extraCreditKills) do
+        if not seen[npcId] and not seen[tostring(npcId)] and not seen[tonumber(npcId) or npcId] then
+            table.insert(entries, processEntry(npcId, need, true))
         end
     end
     return entries
+end
+
+local function PartitionKillEntries(entries)
+    local required, bonus = {}, {}
+    if type(entries) ~= "table" then
+        return required, bonus
+    end
+    for i = 1, #entries do
+        local entry = entries[i]
+        if entry and entry.extraCredit then
+            table.insert(bonus, entry)
+        elseif entry then
+            table.insert(required, entry)
+        end
+    end
+    return required, bonus
 end
 
 ---------------------------------------
@@ -438,4 +604,10 @@ if addon then
     addon.GetRequiredKillHeader = GetRequiredKillHeader
     addon.ShouldShowRequiredKillCounts = ShouldShowRequiredKillCounts
     addon.BuildRequiredKillEntries = BuildRequiredKillEntries
+    addon.PartitionKillEntries = PartitionKillEntries
+    addon.IsExtraCreditKillAwarded = IsExtraCreditKillAwarded
+    addon.GetExtraCreditPoints = GetExtraCreditPoints
+    addon.AwardDungeonExtraCreditKill = AwardDungeonExtraCreditKill
+    addon.GrantLegacyDungeonExtraCredit = GrantLegacyDungeonExtraCredit
+    addon.EXTRA_CREDIT_POINTS_PER_BOSS = EXTRA_CREDIT_POINTS_PER_BOSS
 end

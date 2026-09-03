@@ -57,6 +57,17 @@ local function CalculateAchievementPoints(row, preset, isSelfFound, isSoloMode, 
             finalPoints = finalPoints + bonus
         end
     end
+
+    -- Dungeon extra-credit bosses: flat +5 each after multipliers (does not stack with them).
+    local extraPts = 0
+    if addon and addon.GetExtraCreditPoints then
+        extraPts = tonumber(addon.GetExtraCreditPoints(row.id or row.achId)) or 0
+    elseif progress and progress.extraCreditPoints then
+        extraPts = tonumber(progress.extraCreditPoints) or 0
+    end
+    if extraPts > 0 then
+        finalPoints = finalPoints + extraPts
+    end
     
     return finalPoints
 end

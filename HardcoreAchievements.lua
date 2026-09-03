@@ -1495,6 +1495,19 @@ local function MarkRowCompleted(row, cdbParam)
 
         -- Points from pointsAtKill already include multiplier and solo doubling if applicable
 
+        -- Dungeon extra-credit bosses: flat +5 each (after multipliers / solo, same layer as self-found).
+        local extraPts = tonumber(rec.extraCreditPoints)
+        if not extraPts and progress and progress.extraCreditPoints then
+            extraPts = tonumber(progress.extraCreditPoints)
+        end
+        extraPts = extraPts or 0
+        if extraPts > 0 then
+            finalPoints = finalPoints + extraPts
+            rec.extraCreditPoints = extraPts
+        end
+        -- Mark empty table so legacy grant does not re-award on next login.
+        rec.extraCreditKills = rec.extraCreditKills or {}
+
         rec.points = finalPoints
         -- Reflect final points in UI row and text immediately
         row.points = finalPoints

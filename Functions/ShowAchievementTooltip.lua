@@ -142,12 +142,27 @@ local function ShowBossRequirements(achId, requiredKills, bossOrder, achievement
     end
 
     if entries then
-        for i = 1, #entries do
-            local entry = entries[i]
+        local requiredEntries, bonusEntries = entries, nil
+        if addon and addon.PartitionKillEntries then
+            requiredEntries, bonusEntries = addon.PartitionKillEntries(entries)
+        end
+        for i = 1, #requiredEntries do
+            local entry = requiredEntries[i]
             if entry.done then
                 GameTooltip:AddLine(entry.text, 1, 1, 1) -- White for completed
             else
                 GameTooltip:AddLine(entry.text, 0.5, 0.5, 0.5) -- Gray for not completed
+            end
+        end
+        if bonusEntries and #bonusEntries > 0 then
+            GameTooltip:AddLine("\nBonus:", 0, 1, 0)
+            for i = 1, #bonusEntries do
+                local entry = bonusEntries[i]
+                if entry.done then
+                    GameTooltip:AddLine(entry.text, 0.6, 0.9, 0.6) -- Points green
+                else
+                    GameTooltip:AddLine(entry.text, 0.5, 0.5, 0.5) -- Gray
+                end
             end
         end
     end

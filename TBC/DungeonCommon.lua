@@ -821,6 +821,17 @@ local function CreateVariation(baseDef, variation)
         variationDef.bossOrder = filteredOrder
       end
     end
+
+    if type(minByBoss) == "table" and type(baseDef.extraCreditKills) == "table" then
+      local filteredExtra = {}
+      for npcId, need in pairs(baseDef.extraCreditKills) do
+        local minSize = minByBoss[npcId]
+        if not minSize or variation.maxPartySize >= minSize then
+          filteredExtra[npcId] = need
+        end
+      end
+      variationDef.extraCreditKills = filteredExtra
+    end
     
     return variationDef
 end
@@ -841,6 +852,7 @@ function DungeonCommon.registerDungeonAchievement(def)
   local staticPoints = def.staticPoints or false
   local requiredMapId = def.requiredMapId
   local requiredKills = def.requiredKills or {}
+  local extraCreditKills = def.extraCreditKills or {}
   local bossOrder = def.bossOrder  -- Optional ordering for tooltip display
   local faction = def.faction
 
@@ -855,6 +867,7 @@ function DungeonCommon.registerDungeonAchievement(def)
     requiredMapId = def.requiredMapId,
     mapName = def.title,
     requiredKills = requiredKills,
+    extraCreditKills = extraCreditKills,
     bossOrder = bossOrder,
     faction = faction,
     isHeroicDungeon = def.isHeroicDungeon or false,
@@ -883,6 +896,12 @@ function DungeonCommon.registerDungeonAchievement(def)
     -- Check if already completed in previous session
     if progress and progress.completed then
       state.completed = true
+    elseif addon and addon.GetCharDB then
+      local _, cdb = addon.GetCharDB()
+      local rec = cdb and cdb.achievements and cdb.achievements[tostring(achId)]
+      if rec and rec.completed then
+        state.completed = true
+      end
     end
   end
 
@@ -975,6 +994,28 @@ function DungeonCommon.registerDungeonAchievement(def)
     return false
   end
 
+  local function IsExtraCreditBoss(npcId)
+    if not npcId or not next(extraCreditKills) then return false end
+    npcId = tonumber(npcId) or npcId
+    if extraCreditKills[npcId] then
+      return true
+    end
+    for key, value in pairs(extraCreditKills) do
+      if type(value) == "table" then
+        for _, id in pairs(value) do
+          if (tonumber(id) or id) == npcId then
+            return true
+          end
+        end
+      end
+    end
+    return false
+  end
+
+  local function IsTrackedBoss(npcId)
+    return IsRequiredBoss(npcId) or IsExtraCreditBoss(npcId)
+  end
+
   local UpdateTooltip
 
   -- Increment kill count for a boss
@@ -1039,8 +1080,15 @@ function DungeonCommon.registerDungeonAchievement(def)
   end
 
   local function ApplyBossKillCredit(npcId, killToken)
-    if not npcId or not IsRequiredBoss(npcId) then
+    if not npcId or not IsTrackedBoss(npcId) then
       return false
+    end
+    local isExtra = IsExtraCreditBoss(npcId)
+    local isRequired = IsRequiredBoss(npcId)
+    if isExtra and addon and addon.IsExtraCreditKillAwarded and addon.IsExtraCreditKillAwarded(achId, npcId) then
+      if not isRequired then
+        return false
+      end
     end
     if killToken and HasProcessedKillToken(killToken) then
       return false
@@ -1048,7 +1096,15 @@ function DungeonCommon.registerDungeonAchievement(def)
 
     IncrementBossKill(npcId)
     MarkKillTokenProcessed(killToken)
-    StorePointsAtKill()
+
+    local extraAwarded = 0
+    if isExtra and addon and addon.AwardDungeonExtraCreditKill then
+      extraAwarded = addon.AwardDungeonExtraCreditKill(achId, npcId) or 0
+    end
+
+    if isRequired then
+      StorePointsAtKill()
+    end
     StoreEntryLevelSnapshot()
     SaveProgress()
     UpdateTooltip()
@@ -1056,16 +1112,16 @@ function DungeonCommon.registerDungeonAchievement(def)
     local progress = addon and addon.GetProgress and addon.GetProgress(achId)
     if progress and progress.completed then
       state.completed = true
-      return true
+      return true, extraAwarded
     end
 
-    if CountsSatisfied() then
+    if isRequired and CountsSatisfied() then
       state.completed = true
       if addon and addon.SetProgress then addon.SetProgress(achId, "completed", true) end
-      return true
+      return true, extraAwarded
     end
 
-    return true
+    return true, extraAwarded
   end
 
   -- Get boss names from NPC IDs (you can expand this with a lookup table)
@@ -1087,6 +1143,7 @@ function DungeonCommon.registerDungeonAchievement(def)
       [3669] = "Lord Cobrahn",
       [3670] = "Lord Pythas",
       [3674] = "Skum",
+      [5912] = "Deviate Faerie Dragon",
       [3673] = "Lord Serpentis",
       [5775] = "Verdan the Everliving",
       [3654] = "Mutanus the Devourer",
@@ -1095,7 +1152,7 @@ function DungeonCommon.registerDungeonAchievement(def)
       [3887] = "Baron Silverlaine",
       [4278] = "Commander Springvale",
       [4279] = "Odo the Blindwatcher",
-      --[3872] = "Deathsworn Captain",
+      [3872] = "Deathsworn Captain",
       [4274] = "Fenrus the Devourer",
       [3927] = "Wolf Master Nandos",
       [4275] = "Archmage Arugal",
@@ -1112,11 +1169,12 @@ function DungeonCommon.registerDungeonAchievement(def)
       [1717] = "Hamhock",
       [1663] = "Dextren Ward",
       [1716] = "Bazil Thredd",
+      [1720] = "Bruegal Ironknuckle",
       [7361] = "Grubbis",
       [7079] = "Viscous Fallout",
       [6235] = "Electrocutioner 6000",
       [6229] = "Crowd Pummeler 9-60",
-      --[6228] = "Dark Iron Ambassador",
+      [6228] = "Dark Iron Ambassador",
       [7800] = "Mekgineer Thermaplugg",
       [6168] = "Roogug",
       [4424] = "Aggem Thorncurse",
@@ -1126,6 +1184,9 @@ function DungeonCommon.registerDungeonAchievement(def)
       [4421] = "Charlga Razorflank",
       [3983] = "Interrogator Vishas",
       [4543] = "Bloodmage Thalnos",
+      [6490] = "Azshir the Sleepless",
+      [6488] = "Fallen Champion",
+      [6489] = "Ironspine",
       [3974] = "Houndmaster Loksey",
       [6487] = "Arcanist Doan",
       [3975] = "Herod",
@@ -1135,7 +1196,7 @@ function DungeonCommon.registerDungeonAchievement(def)
       [7355] = "Tuten'kash",
       [7356] = "Plaguemaw the Rotting",
       [7357] = "Mordresh Fire Eye",
-      --[7354] = "Ragglesnout",
+      [7354] = "Ragglesnout",
       [8567] = "Glutton",
       [7358] = "Amnennar the Coldbringer",
       [6910] = "Revelosh",
@@ -1163,6 +1224,9 @@ function DungeonCommon.registerDungeonAchievement(def)
       [7795] = "Hydromancer Velratha",
       [7267] = "Chief Ukorz Sandscalp",
       [7797] = "Ruuzlu",
+      [10081] = "Dustwraith",
+      [10082] = "Zerillis",
+      [10080] = "Sandarr Dunereaver",
       [8580] = "Atal'alarion",
       [5721] = "Dreamscythe",
       [5720] = "Weaver",
@@ -1211,10 +1275,10 @@ function DungeonCommon.registerDungeonAchievement(def)
       [10430] = "The Beast",
       [10363] = "General Drakkisath",
       [11058] = "Ezra Grimm",
-      --[10393] = "Skul",
-      --[10558] = "Hearthsinger Forresten",
+      [10393] = "Skul",
+      [10558] = "Hearthsinger Forresten",
       [10516] = "The Unforgiven",
-      --[11143] = "Postmaster Malown",
+      [11143] = "Postmaster Malown",
       [10808] = "Timmy the Cruel",
       [11032] = "Malor the Zealous",
       [10997] = "Cannon Master Willey",
@@ -1222,7 +1286,7 @@ function DungeonCommon.registerDungeonAchievement(def)
       [10811] = "Archivist Galford",
       [10813] = "Balnazzar",
       [10435] = "Magistrate Barthilas",
-      --[10809] = "Stonespine",
+      [10809] = "Stonespine",
       [10437] = "Nerub'enkan",
       [11121] = "Black Guard Swordsmith",
       [10438] = "Maleki the Pallid",
@@ -1243,11 +1307,11 @@ function DungeonCommon.registerDungeonAchievement(def)
       [11501] = "King Gordok",
       [11489] = "Tendris Warpwood",
       [11487] = "Magister Kalendris",
-      --[11467] = "Tsu'zee",
+      [11467] = "Tsu'zee",
       [11488] = "Illyanna Ravenoak",
       [11496] = "Immol'thar",
       [11486] = "Prince Tortheldrin",
-      --[10506] = "Kirtonos the Herald",
+      [10506] = "Kirtonos the Herald",
       [10503] = "Jandice Barov",
       [11622] = "Rattlegore",
       [10433] = "Marduk Blackpool",
@@ -1473,13 +1537,17 @@ function DungeonCommon.registerDungeonAchievement(def)
       return false
     end
 
-    if state.completed then 
-
-      return false 
+    local npcId = GetNpcIdFromGUID(destGUID)
+    if not npcId or not IsTrackedBoss(npcId) then
+      return false
     end
 
-    local npcId = GetNpcIdFromGUID(destGUID)
-    if not npcId or not IsRequiredBoss(npcId) then
+    local isExtra = IsExtraCreditBoss(npcId)
+    local isRequired = IsRequiredBoss(npcId)
+    if state.completed and not isExtra then
+      return false
+    end
+    if isExtra and addon and addon.IsExtraCreditKillAwarded and addon.IsExtraCreditKillAwarded(achId, npcId) and not isRequired then
       return false
     end
     
@@ -1507,20 +1575,31 @@ function DungeonCommon.registerDungeonAchievement(def)
 
     -- Group is eligible - count this kill
     local killToken = BuildKillToken(destGUID, npcId)
-    local applied = ApplyBossKillCredit(npcId, killToken)
+    local applied, extraAwarded = ApplyBossKillCredit(npcId, killToken)
     if not applied then
       return false
     end
     -- Only print for the first eligible variation (processKill iterates base then Trio, Duo, Solo)
     if addon and addon.DungeonKillPrintedForGUID ~= destGUID then
         addon.DungeonKillPrintedForGUID = destGUID
-        print("|cff008066[Hardcore Achievements]|r |cffffd100" .. GetBossName(npcId) .. " killed as part of achievement: " .. title .. "|r")
-        if addon.EventLogAdd then
-          addon.EventLogAdd("Boss kill counted toward dungeon achievement: " .. GetBossName(npcId) .. " (npc " .. tostring(npcId) .. ") — " .. title)
+        if extraAwarded and extraAwarded > 0 and state.completed and not isRequired then
+          print("|cff008066[Hardcore Achievements]|r |cffffd100" .. GetBossName(npcId) .. " extra credit (+" .. tostring(extraAwarded) .. ") for: " .. title .. "|r")
+          if addon.EventLogAdd then
+            addon.EventLogAdd("Dungeon extra credit +" .. tostring(extraAwarded) .. ": " .. GetBossName(npcId) .. " (npc " .. tostring(npcId) .. ") — " .. title)
+          end
+        else
+          print("|cff008066[Hardcore Achievements]|r |cffffd100" .. GetBossName(npcId) .. " killed as part of achievement: " .. title .. "|r")
+          if addon.EventLogAdd then
+            addon.EventLogAdd("Boss kill counted toward dungeon achievement: " .. GetBossName(npcId) .. " (npc " .. tostring(npcId) .. ") — " .. title)
+          end
         end
     end
     if addon and type(addon.SendDungeonBossCreditMessage) == "function" and killToken then
       addon.SendDungeonBossCreditMessage(achId, requiredMapId, npcId, killToken)
+    end
+
+    if state.completed and isExtra and not isRequired then
+      return false
     end
 
     -- Check if achievement should be completed
@@ -1533,7 +1612,7 @@ function DungeonCommon.registerDungeonAchievement(def)
       return true
     end
     
-    -- Check if all bosses are killed
+    -- Check if all required bosses are killed (extra credit is optional)
     if CountsSatisfied() then
       -- Since we only count kills when group is eligible (using entry levels when in instance),
       -- if CountsSatisfied() is true, all bosses were killed while eligible
@@ -1554,6 +1633,26 @@ function DungeonCommon.registerDungeonAchievement(def)
   if addon and addon.RegisterAchievementFunction then
     addon.RegisterAchievementFunction(achId, "Kill", KillTracker)
     addon.RegisterAchievementFunction(achId, "IsCompleted", function() return state.completed end)
+    addon.RegisterAchievementFunction(achId, "GetKillCounts", function()
+      LoadProgress()
+      local counts = {}
+      for k, v in pairs(state.counts or {}) do
+        counts[k] = v
+      end
+      if addon and addon.GetCharDB then
+        local _, cdb = addon.GetCharDB()
+        local rec = cdb and cdb.achievements and cdb.achievements[tostring(achId)]
+        if rec and type(rec.extraCreditKills) == "table" then
+          for npcKey in pairs(rec.extraCreditKills) do
+            local idNum = tonumber(npcKey) or npcKey
+            if (counts[idNum] or 0) < 1 then
+              counts[idNum] = 1
+            end
+          end
+        end
+      end
+      return counts
+    end)
     addon.RegisterAchievementFunction(achId, "SyncBossKill", function(payload, sender)
       if not payload then return false end
       if tostring(payload.achievementId or "") ~= tostring(achId) then return false end
@@ -1603,6 +1702,10 @@ function DungeonCommon.registerDungeonAchievement(def)
     -- Load progress from database
     LoadProgress()
 
+    if addon and addon.GrantLegacyDungeonExtraCredit and def.extraCreditLegacyGrant and next(def.extraCreditLegacyGrant) then
+      addon.GrantLegacyDungeonExtraCredit(achId, def.extraCreditLegacyGrant)
+    end
+
     -- If requirements were reduced (e.g. Duo/Solo omitting Archaedas) and existing
     -- kills already satisfy the list, complete without needing another kill.
     if not state.completed and next(requiredKills) ~= nil and CountsSatisfied() then
@@ -1638,6 +1741,9 @@ function DungeonCommon.registerDungeonAchievement(def)
     -- Store requiredKills on the row for the embed UI to access
     if row and requiredKills and next(requiredKills) then
       addon[rowVarName].requiredKills = requiredKills
+    end
+    if row and extraCreditKills and next(extraCreditKills) then
+      addon[rowVarName].extraCreditKills = extraCreditKills
     end
     
     -- Refresh points with multipliers after creation

@@ -81,7 +81,10 @@ local Dungeons = {
       [5775] = 1,  -- Verdan the Everliving
       [3654] = 1,  -- Mutanus the Devourer
     },
-    bossOrder = {3671, 3653, 3669, 3670, 3674, 3673, 5775, 3654}
+    extraCreditKills = {
+      [5912] = 1,  -- Deviate Faerie Dragon (rare)
+    },
+    bossOrder = {3671, 3653, 3669, 3670, 3674, 5912, 3673, 5775, 3654}
   },
 
   -- Shadowfang Keep (Both, Level 18-25)
@@ -100,12 +103,14 @@ local Dungeons = {
       [3887] = 1,  -- Baron Silverlaine
       [4278] = 1,  -- Commander Springvale
       [4279] = 1,  -- Odo the Blindwatcher
-      --[3872] = 1,  -- Deathsworn Captain (rare)
       [4274] = 1,  -- Fenrus the Devourer
       [3927] = 1,  -- Wolf Master Nandos
       [4275] = 1,  -- Archmage Arugal
     },
-    bossOrder = {3914, 3886, 3887, 4278, 4279, 4274, 3927, 4275}
+    extraCreditKills = {
+      [3872] = 1,  -- Deathsworn Captain (rare)
+    },
+    bossOrder = {3914, 3886, 3887, 4278, 4279, 3872, 4274, 3927, 4275}
   },
 
   -- Blackfathom Deeps (Both, Level 20-30)
@@ -149,7 +154,10 @@ local Dungeons = {
       [1663] = 1,  -- Dextren Ward
       [1716] = 1,  -- Bazil Thredd
     },
-    bossOrder = {1696, 1666, 1717, 1663, 1716}
+    extraCreditKills = {
+      [1720] = 1,  -- Bruegal Ironknuckle (rare)
+    },
+    bossOrder = {1696, 1666, 1717, 1663, 1716, 1720}
   },
 
   -- Razorfen Kraul (Both, Level 25-35)
@@ -188,10 +196,12 @@ local Dungeons = {
       [7079] = 1,  -- Viscous Fallout
       [6235] = 1,  -- Electrocutioner 6000
       [6229] = 1,  -- Crowd Pummeler 9-60
-      --[6228] = 1,  -- Dark Iron Ambassador
       [7800] = 1,  -- Mekgineer Thermaplugg
     },
-    bossOrder = {7361, 7079, 6235, 6229, 7800}
+    extraCreditKills = {
+      [6228] = 1,  -- Dark Iron Ambassador (rare)
+    },
+    bossOrder = {7361, 7079, 6235, 6229, 6228, 7800}
   },
 
   --  -- Potential Duskwood Achievement (Alliance)
@@ -234,7 +244,12 @@ local Dungeons = {
       [3977] = 1,  -- High Inquisitor Whitemane
       [4542] = 1,  -- High Inquisitor Fairbanks
     },
-    bossOrder = {3983, 4543, 3974, 6487, 3975, 4542, 3976, 3977}
+    extraCreditKills = {
+      [6490] = 1,  -- Azshir the Sleepless (rare)
+      [6488] = 1,  -- Fallen Champion (rare)
+      [6489] = 1,  -- Ironspine (rare)
+    },
+    bossOrder = {3983, 4543, 6490, 6488, 6489, 3974, 6487, 3975, 4542, 3976, 3977}
   },
 
   -- Razorfen Downs (Both, Level 35-45)
@@ -251,11 +266,13 @@ local Dungeons = {
       [7355] = 1,  -- Tuten'kash
       [7356] = 1,  -- Plaguemaw the Rotting
       [7357] = 1,  -- Mordresh Fire Eye
-      --[7354] = 1,  -- Ragglesnout (rare)
       [8567] = 1,  -- Glutton
       [7358] = 1,  -- Amnennar the Coldbringer
     },
-    bossOrder = {7355, 7356, 7357, 8567, 7358}
+    extraCreditKills = {
+      [7354] = 1,  -- Ragglesnout (rare)
+    },
+    bossOrder = {7355, 7356, 7357, 7354, 8567, 7358}
   },
 
   -- Uldaman (Both, Level 35-45)
@@ -306,7 +323,12 @@ local Dungeons = {
       [7267] = 1,  -- Chief Ukorz Sandscalp
       [7797] = 1,  -- Ruuzlu
     },
-    bossOrder = {8127, 7272, 7271, 7796, 7604, 7795, 7267, 7797}
+    extraCreditKills = {
+      [10081] = 1,  -- Dustwraith (rare)
+      [10082] = 1,  -- Zerillis (rare)
+      [10080] = 1,  -- Sandarr Dunereaver (rare)
+    },
+    bossOrder = {8127, 7272, 7271, 7796, 7604, 7795, 7267, 7797, 10081, 10082, 10080}
   },
 
   -- Maraudon (Both, Level 40-50)
@@ -381,8 +403,10 @@ local Dungeons = {
       [9042] = 1,  -- Verek
       [9156] = 1,  -- Ambassador Flamelash
       [9938] = 1,  -- Magmus
-      --[8929] = 1,  -- Princess Moira Bronzebeard (Removed as saving the princess is almost required pre 60)
       [9019] = 1,  -- Emperor Dagran Thaurissan
+    },
+    extraCreditKills = {
+      [8929] = 1,  -- Princess Moira Bronzebeard
     },
     bossOrder = {9025, 9016, 9319, 9018, "Ring Of Law", 9024, 9033, 8983, 9017, 9056, 9041, 9042, 9156, 9938, 8929, 9019}
   },
@@ -402,11 +426,18 @@ local Dungeons = {
       [9236] = 1,  -- Shadow Hunter Vosh'gajin
       [9237] = 1,  -- War Master Voone
       [10596] = 1, -- Mother Smolderweb
-      [10584] = 1, -- Urok Doomhowl
       [9736] = 1,  -- Quartermaster Zigris
       [10268] = 1, -- Gizrul the Slavener
       [10220] = 1, -- Halycon
       [9568] = 1,  -- Overlord Wyrmthalak
+    },
+    -- Optional: summoned / exceptionally hard at the level cap. +5 flat after multipliers.
+    extraCreditKills = {
+      [10584] = 1, -- Urok Doomhowl
+    },
+    -- Previously required; grant +5 once for already-completed characters.
+    extraCreditLegacyGrant = {
+      [10584] = true,
     },
     bossOrder = {9196, 9236, 9237, 10596, 10584, 9736, 10268, 10220, 9568}
   },
@@ -423,10 +454,7 @@ local Dungeons = {
     requiredMapId = 329,
     requiredKills = {
       [11058] = 1, -- Ezra Grimm
-      --[10393] = 1, -- Skul (rare)
-      --[10558] = 1, -- Hearthsinger Forresten (rare)
       [10516] = 1, -- The Unforgiven
-      --[11143] = 1, -- Postmaster Malown (summoned)
       [10808] = 1, -- Timmy the Cruel
       [11032] = 1, -- Malor the Zealous
       [10997] = 1, -- Cannon Master Willey
@@ -434,7 +462,6 @@ local Dungeons = {
       [10811] = 1, -- Archivist Galford
       [10813] = 1, -- Balnazzar
       [10435] = 1, -- Magistrate Barthilas
-      --[10809] = 1, -- Stonespine (rare)
       [10437] = 1, -- Nerub'enkan
       [11121] = 1, -- Black Guard Swordsmith
       [10438] = 1, -- Maleki the Pallid
@@ -442,7 +469,13 @@ local Dungeons = {
       [10439] = 1, -- Ramstein the Gorger
       [10440] = 1, -- Baron Rivendare
     },
-    bossOrder = {11058, 10516, 10808, 11032, 10997, 11120, 10811, 10813, 10435, 10437, 11121, 10438, 10436, 10439, 10440}
+    extraCreditKills = {
+      [10393] = 1, -- Skul (rare)
+      [10558] = 1, -- Hearthsinger Forresten (rare)
+      [11143] = 1, -- Postmaster Malown (summoned)
+      [10809] = 1, -- Stonespine (rare)
+    },
+    bossOrder = {11058, 10393, 10558, 10516, 11143, 10808, 11032, 10997, 11120, 10811, 10813, 10435, 10809, 10437, 11121, 10438, 10436, 10439, 10440}
   },
 
   -- Dire Maul (Both, Level 58-60)
@@ -470,12 +503,14 @@ local Dungeons = {
       [11501] = 1, -- King Gordok
       [11489] = 1, -- Tendris Warpwood
       [11487] = 1, -- Magister Kalendris
-      --[11467] = 1, -- Tsu'zee (rare)
       [11488] = 1, -- Illyanna Ravenoak
       [11496] = 1, -- Immol'thar
       [11486] = 1, -- Prince Tortheldrin
     },
-    bossOrder = {14354, 14327, 13280, 11490, 11492, 14326, 14322, 14321, 14323, 14325, 14324, 11501, 11489, 11487, 11488, 11496, 11486}
+    extraCreditKills = {
+      [11467] = 1, -- Tsu'zee (rare)
+    },
+    bossOrder = {14354, 14327, 13280, 11490, 11492, 14326, 14322, 14321, 14323, 14325, 14324, 11501, 11489, 11487, 11467, 11488, 11496, 11486}
   },
 
   -- Scholomance (Both, Level 58-60)
@@ -489,7 +524,6 @@ local Dungeons = {
     staticPoints = false,
     requiredMapId = 289,
     requiredKills = {
-      --[10506] = 1, -- Kirtonos the Herald (summoned)
       [10503] = 1, -- Jandice Barov
       [11622] = 1, -- Rattlegore
       [10433] = 1, -- Marduk Blackpool
@@ -503,7 +537,10 @@ local Dungeons = {
       [10502] = 1, -- Lady Illucia Barov
       [1853] = 1,  -- Darkmaster Gandling
     },
-    bossOrder = {10503, 11622, 10433, 10432, 10508, 10505, 11261, 10901, 10507, 10504, 10502, 1853}
+    extraCreditKills = {
+      [10506] = 1, -- Kirtonos the Herald (summoned)
+    },
+    bossOrder = {10506, 10503, 11622, 10433, 10432, 10508, 10505, 11261, 10901, 10507, 10504, 10502, 1853}
   },
 
   -- Hellfire Ramparts (Both, Level 60-62)
