@@ -1263,15 +1263,21 @@ local function EnsureDashboardLeaderboardUI()
   DashboardFrame.LeaderboardScopeText = scopeText
 
   -- Search box: top-right, same vertical line as scope label, right-aligned to scroll/table.
+  -- InputBoxTemplate borders inset the usable text area (~8px each side), so width must
+  -- leave room for the placeholder string including its literal "...".
   local searchBox = CreateFrame("EditBox", nil, DashboardFrame, "InputBoxTemplate")
   searchBox:SetAutoFocus(false)
-  searchBox:SetWidth(140)
+  searchBox:SetWidth(170)
   searchBox:SetHeight(22)
   searchBox:SetPoint("BOTTOMRIGHT", DashboardFrame.Scroll, "TOPRIGHT", 0, 0)
 
   -- Placeholder (light gray hint text) shown only when empty and not focused.
+  -- Anchor both sides with template insets so the string cannot paint over the right border.
   local searchPlaceholder = searchBox:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
-  searchPlaceholder:SetPoint("LEFT", searchBox, "LEFT", 0, 0)
+  searchPlaceholder:SetPoint("LEFT", searchBox, "LEFT", 2, 0)
+  searchPlaceholder:SetPoint("RIGHT", searchBox, "RIGHT", -2, 0)
+  searchPlaceholder:SetJustifyH("LEFT")
+  searchPlaceholder:SetWordWrap(false)
   searchPlaceholder:SetText("Search name, class, level...")
   searchPlaceholder:Hide()
   searchBox.placeholder = searchPlaceholder
