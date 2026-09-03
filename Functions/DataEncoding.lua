@@ -8,13 +8,15 @@ local addonName, addon = ...
 
 -- Configuration (tuned for speed on large tables, similar to WeakAuras)
 local configForLS = { errorOnUnserializableType = false }
-local configForDeflate = { level = 1 } -- speed over size for UI responsiveness
+local configForDeflate = { level = 1 } -- speed over size for UI backup encode
 
--- LibP2PDB default compressor uses LibDeflate auto level (often 5–7), which can hit
--- "script ran too long" on periodic gossip/chunk sends. Force level 1 for sync paths.
+-- LibP2PDB gossip can serialize large digests/row chunks and compress them on the same
+-- frame as AceComm decompress. Level 1 still times out there; level 0 (store) is CPU-safe.
+-- Wire format remains raw Deflate (compatible with default peers).
+local configForP2PDeflate = { level = 0 }
 local LibP2PDBFastCompressor = {
     Compress = function(_, str)
-        return (LibDeflate:CompressDeflate(str, configForDeflate))
+        return (LibDeflate:CompressDeflate(str, configForP2PDeflate))
     end,
     Decompress = function(_, str)
         return LibDeflate:DecompressDeflate(str)

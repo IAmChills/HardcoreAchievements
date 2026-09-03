@@ -538,7 +538,7 @@ function Sync:Initialize()
             name = TABLE_NAME,
             keyType = "string",
             exclusive = false,
-            rowsPerChunk = 96,
+            rowsPerChunk = 16, -- completedIds makes player rows large; keep compress payloads small
             schema = PLAYER_SCHEMA_V2,
             onValidate = OnPlayerRowValidate,
             onChange = OnTableChanged,
