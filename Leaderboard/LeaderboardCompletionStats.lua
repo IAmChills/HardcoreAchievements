@@ -17,6 +17,9 @@ local ipairs = ipairs
 -- First version that publishes completedIds on leaderboard rows.
 local MIN_COMPLETION_STATS_VERSION = "1.9.5"
 
+-- Packed wire form: one string instead of a nested id list (LibSerialize-safe on gossip).
+local COMPLETED_IDS_SEP = "\031"
+
 -- Vanilla/TBC class file tokens only (Blizzard ids; 6/10 unused here).
 local CLASS_FILE_TO_ID = {
     WARRIOR = 1,
@@ -88,6 +91,18 @@ end
 
 local function BuildCompletedSet(completedIds)
     local set = {}
+    if type(completedIds) == "string" then
+        if completedIds ~= "" then
+            local ids = { strsplit(COMPLETED_IDS_SEP, completedIds) }
+            for i = 1, #ids do
+                local id = ids[i]
+                if id and id ~= "" then
+                    set[id] = true
+                end
+            end
+        end
+        return set
+    end
     if type(completedIds) ~= "table" then
         return set
     end
@@ -110,7 +125,7 @@ local function IsCompletionReporter(row)
     if type(row) ~= "table" then
         return false
     end
-    if type(row.completedIds) ~= "table" then
+    if type(row.completedIds) ~= "table" and type(row.completedIds) ~= "string" then
         return false
     end
     return VersionAtLeast(row.version, MIN_COMPLETION_STATS_VERSION)
@@ -305,9 +320,39 @@ function Leaderboard.BuildLocalCompletedIds()
     return ids
 end
 
+function Leaderboard.PackCompletedIds(ids)
+    if type(ids) == "string" then
+        return ids
+    end
+    if type(ids) ~= "table" then
+        return ""
+    end
+    local list = {}
+    if #ids > 0 then
+        for i = 1, #ids do
+            local id = ids[i]
+            if id ~= nil and id ~= "" then
+                list[#list + 1] = tostring(id)
+            end
+        end
+    else
+        for k, v in pairs(ids) do
+            if type(k) == "string" and k ~= "" and v then
+                list[#list + 1] = k
+            end
+        end
+        table_sort(list)
+    end
+    return table.concat(list, COMPLETED_IDS_SEP)
+end
+
 function Leaderboard.CompletedIdsEqual(a, b)
     if a == b then
         return true
+    end
+    local pack = Leaderboard.PackCompletedIds
+    if pack then
+        return pack(a) == pack(b)
     end
     if type(a) ~= "table" or type(b) ~= "table" then
         return false

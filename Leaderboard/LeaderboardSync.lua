@@ -47,7 +47,8 @@ local TABLE_NAME = "players"
 local PRESENCE_TABLE_NAME = "presence"
 local PERSIST_DEBOUNCE_SECONDS = 90
 -- LibP2PDB schema length is strict: bump DB version when player fields change.
-local DB_VERSION = 2
+-- v3: completedIds is a packed string (still accepts legacy tables from v2 peers).
+local DB_VERSION = 3
 
 -- v1 schema (pre-completedIds). Used only to import older persisted/network state.
 local PLAYER_SCHEMA_V1 = {
@@ -90,7 +91,7 @@ local PLAYER_SCHEMA_V2 = {
     offline = { "boolean", "nil" },
     version = "string",
     updatedAt = "number",
-    completedIds = { "table", "nil" },
+    completedIds = { "table", "string", "nil" },
 }
 
 local PRESENCE_SCHEMA = {
@@ -127,8 +128,10 @@ local function OnMigrateRow(target, source)
     end
     if source.tableName == TABLE_NAME then
         local data = source.data
-        if type(data.completedIds) ~= "table" then
-            data.completedIds = {}
+        if Leaderboard.PackCompletedIds then
+            data.completedIds = Leaderboard.PackCompletedIds(data.completedIds)
+        elseif type(data.completedIds) ~= "table" and type(data.completedIds) ~= "string" then
+            data.completedIds = ""
         end
         return source.key, data
     end
@@ -538,7 +541,7 @@ function Sync:Initialize()
             name = TABLE_NAME,
             keyType = "string",
             exclusive = false,
-            rowsPerChunk = 16, -- completedIds makes player rows large; keep compress payloads small
+            rowsPerChunk = 16, -- packed completedIds keeps each chunk small; 1 would 16x whisper count (1.5s apart)
             schema = PLAYER_SCHEMA_V2,
             onValidate = OnPlayerRowValidate,
             onChange = OnTableChanged,
@@ -651,7 +654,7 @@ function Sync:BuildLocalRow(options)
         offline = options.offline == true,
         version = GetAddOnVersionString(),
         updatedAt = Now(),
-        completedIds = completedIds,
+        completedIds = (Leaderboard.PackCompletedIds and Leaderboard.PackCompletedIds(completedIds)) or completedIds,
     }
 end
 

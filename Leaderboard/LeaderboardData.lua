@@ -81,21 +81,21 @@ end
 
 local function GetLeaderboardAchievementColorCode(completed, total)
   if not total or total == 0 then
-    return "9d9d9d"
+    return "9d9d9d" -- Gray
   end
   local percentage = (completed or 0) / total * 100
   if percentage == 0 then
-    return "9d9d9d"
+    return "9d9d9d" -- Gray
   elseif percentage > 0 and percentage < 20 then
-    return "ffffff"
+    return "ffffff" -- White
   elseif percentage >= 20 and percentage < 40 then
-    return "1eff00"
+    return "1eff00" -- Green
   elseif percentage >= 40 and percentage < 60 then
-    return "0070dd"
+    return "0070dd" -- Blue
   elseif percentage >= 60 and percentage < 80 then
-    return "a335ee"
+    return "a335ee" -- Purple
   end
-  return "ff8000"
+  return "ff8000" -- Orange
 end
 local dataVersion = 0
 local cachedBaseRows

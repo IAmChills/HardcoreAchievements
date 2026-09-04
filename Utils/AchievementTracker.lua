@@ -1088,12 +1088,27 @@ local function GetAchievementDescription(achievementId)
             })
             or {}
 
-        for i = 1, #entries do
-            local entry = entries[i]
+        local requiredEntries, bonusEntries = entries, {}
+        if addon and addon.PartitionKillEntries then
+            requiredEntries, bonusEntries = addon.PartitionKillEntries(entries)
+        end
+        for i = 1, #requiredEntries do
+            local entry = requiredEntries[i]
             if entry.done then
                 description = description .. "\n|cffffffff" .. entry.text .. "|r"
             else
                 description = description .. "\n|cff808080" .. entry.text .. "|r"
+            end
+        end
+        if bonusEntries and #bonusEntries > 0 then
+            description = description .. "\n\n|cff00ff00Bonus:|r"
+            for i = 1, #bonusEntries do
+                local entry = bonusEntries[i]
+                if entry.done then
+                    description = description .. "\n|cff99e699" .. entry.text .. "|r"
+                else
+                    description = description .. "\n|cff808080" .. entry.text .. "|r"
+                end
             end
         end
     end
