@@ -1582,7 +1582,7 @@ function DungeonCommon.registerDungeonAchievement(def)
     -- Only print for the first eligible variation (processKill iterates base then Trio, Duo, Solo)
     if addon and addon.DungeonKillPrintedForGUID ~= destGUID then
         addon.DungeonKillPrintedForGUID = destGUID
-        if extraAwarded and extraAwarded > 0 and state.completed and not isRequired then
+        if extraAwarded and extraAwarded > 0 and not isRequired then
           print("|cff008066[Hardcore Achievements]|r |cffffd100" .. GetBossName(npcId) .. " extra credit (+" .. tostring(extraAwarded) .. ") for: " .. title .. "|r")
           if addon.EventLogAdd then
             addon.EventLogAdd("Dungeon extra credit +" .. tostring(extraAwarded) .. ": " .. GetBossName(npcId) .. " (npc " .. tostring(npcId) .. ") — " .. title)

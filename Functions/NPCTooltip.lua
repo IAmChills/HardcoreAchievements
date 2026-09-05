@@ -47,6 +47,15 @@ local function BuildNPCIndex()
                     end
                 end
             end
+            if achDef.extraCreditKills then
+                for killNpcId, need in pairs(achDef.extraCreditKills) do
+                    if type(need) == "table" then
+                        for _, id in pairs(need) do addEntry(id) end
+                    else
+                        addEntry(killNpcId)
+                    end
+                end
+            end
         end
     end
 end

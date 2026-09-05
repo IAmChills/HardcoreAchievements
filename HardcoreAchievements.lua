@@ -4401,6 +4401,9 @@ do
             local def = row._def
             local targetNpcId = def and def.targetNpcId
             local rk = row.requiredKills or (def and def.requiredKills)
+            local extra = row.extraCreditKills or (def and def.extraCreditKills)
+            -- Completed dungeon rows only stay indexed for optional bonus bosses.
+            local includeRequired = not row.completed
             local trackedNpcIds
             local seenNpcIds
 
@@ -4418,18 +4421,12 @@ do
                 table_insert(trackedNpcIds, npcId)
             end
 
-            if type(targetNpcId) == "table" then
-                for _, id in pairs(targetNpcId) do
-                    addNpcId(id)
+            local function addFromKillTable(killTable)
+                if type(killTable) ~= "table" then
+                    return
                 end
-            else
-                addNpcId(targetNpcId)
-            end
-
-            if type(rk) == "table" then
-                for key, need in pairs(rk) do
-                    -- Any-of groups (e.g. "Ring Of Law", "Edge of Madness") store NPC IDs
-                    -- as the value table; index those IDs, not the string alias key.
+                for key, need in pairs(killTable) do
+                    -- Any-of groups (e.g. "Ring Of Law") store NPC IDs as the value table.
                     if type(need) == "table" then
                         for _, id in pairs(need) do
                             addNpcId(id)
@@ -4439,6 +4436,19 @@ do
                     end
                 end
             end
+
+            if includeRequired then
+                if type(targetNpcId) == "table" then
+                    for _, id in pairs(targetNpcId) do
+                        addNpcId(id)
+                    end
+                else
+                    addNpcId(targetNpcId)
+                end
+                addFromKillTable(rk)
+            end
+
+            addFromKillTable(extra)
 
             return trackedNpcIds
         end
@@ -4476,10 +4486,20 @@ do
             return oa < ob
         end
 
+        local function rowHasExtraCreditKills(row)
+            if not row then return false end
+            local extra = row.extraCreditKills or (row._def and row._def.extraCreditKills)
+            return type(extra) == "table" and next(extra) ~= nil
+        end
+
         -- Keep dungeon kill rows registered for CLEU even if IsRowOutleveled mis-fires briefly
         -- (e.g. instance id not ready). KillTracker still enforces entry-level eligibility.
+        -- Completed rows stay active only when they still have optional bonus bosses to award.
         local function isRuntimeKillRowActive(row)
-            if not row or row.completed or type(row.killTracker) ~= "function" then
+            if not row or type(row.killTracker) ~= "function" then
+                return false
+            end
+            if row.completed and not rowHasExtraCreditKills(row) then
                 return false
             end
             if not IsRowOutleveled(row) then
@@ -4504,8 +4524,10 @@ do
             }
             local rows = (addon and addon.AchievementRowModel) or {}
             for _, row in ipairs(rows) do
-                if not row.completed and type(row.killTracker) == "function" then
-                    table_insert(index.killTrackerRowsSorted, row)
+                if type(row.killTracker) == "function" then
+                    if not row.completed or rowHasExtraCreditKills(row) then
+                        table_insert(index.killTrackerRowsSorted, row)
+                    end
                 end
             end
             table_sort(index.killTrackerRowsSorted, compareKillRows)

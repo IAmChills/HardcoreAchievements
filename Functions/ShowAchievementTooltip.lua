@@ -155,7 +155,9 @@ local function ShowBossRequirements(achId, requiredKills, bossOrder, achievement
             end
         end
         if bonusEntries and #bonusEntries > 0 then
-            GameTooltip:AddLine("\nBonus:", 0, 1, 0)
+            -- Separate blank line; do not prefix "\n" onto a short header (Classic truncates to "Bon...").
+            GameTooltip:AddLine(" ")
+            GameTooltip:AddLine("Bonus:", 0, 1, 0)
             for i = 1, #bonusEntries do
                 local entry = bonusEntries[i]
                 if entry.done then
@@ -171,6 +173,7 @@ local function ShowBossRequirements(achId, requiredKills, bossOrder, achievement
     local progress = addon and addon.GetProgress and addon.GetProgress(achId)
     if progress and progress.avgPartyLevel then
         local sizeText = progress.entryPartySize and (" (" .. tostring(progress.entryPartySize) .. " players)") or ""
+        GameTooltip:AddLine(" ")
         GameTooltip:AddLine("Avg party level on entry: " .. tostring(progress.avgPartyLevel) .. sizeText, 0.75, 0.75, 0.75)
     end
 end
