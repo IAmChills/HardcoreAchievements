@@ -16,19 +16,20 @@ local FilterDropdown = {}
 local function GetStatusFilterStates()
     local statusFilters = { true, true, true }  -- completed, available, failed (all default to true)
     local getCharDB = addon and addon.GetCharDB
-    if type(getCharDB) == "function" then
-        local _, cdb = getCharDB()
-        if cdb and cdb.settings and cdb.settings.statusFilters then
-            local states = cdb.settings.statusFilters
-            if type(states) == "table" then
-                statusFilters = {
-                    states[1] ~= false,  -- Completed (default true)
-                    states[2] ~= false,  -- Available (default true)
-                    states[3] ~= false,  -- Failed (default true)
-                }
-            end
-        end
+    if type(getCharDB) ~= "function" then
+        return statusFilters
     end
+    local _, cdb = getCharDB()
+    local states = cdb and cdb.settings and cdb.settings.statusFilters
+    -- No saved setting (or invalid): keep all three on.
+    if type(states) ~= "table" then
+        return statusFilters
+    end
+    statusFilters = {
+        states[1] ~= false,  -- Completed (default true)
+        states[2] ~= false,  -- Available (default true)
+        states[3] ~= false,  -- Failed (default true)
+    }
     return statusFilters
 end
 
@@ -161,7 +162,7 @@ local function GetPlayerClassColor()
 end
 
 -- Create and style the dropdown frame
-local function CreateDropdown(self, parent, anchorPoint, anchorTo, xOffset, yOffset, width)
+local function CreateDropdown(self, parent, anchorPoint, anchorTo, xOffset, yOffset, width, relativePoint)
     local dropdown = CreateFrame("Frame", nil, parent, "UIDropDownMenuTemplate")
     
     -- Apply custom styling (hide default textures, add custom background)
@@ -175,7 +176,8 @@ local function CreateDropdown(self, parent, anchorPoint, anchorTo, xOffset, yOff
     bg:SetTexture("Interface\\AddOns\\HardcoreAchievements\\Images\\dropdown.png")
     
     -- Position the dropdown
-    dropdown:SetPoint(anchorPoint or "TOPRIGHT", anchorTo or parent, anchorPoint or "TOPRIGHT", xOffset or -17, yOffset or -50)
+    local point = anchorPoint or "TOPRIGHT"
+    dropdown:SetPoint(point, anchorTo or parent, relativePoint or point, xOffset or -17, yOffset or -50)
     UIDropDownMenu_SetWidth(dropdown, width or 85)
     UIDropDownMenu_SetText(dropdown, "Filters")
     
@@ -234,11 +236,14 @@ local function InitializeDropdown(self, dropdown, config)
     dropdown._onStatusFilterChange = onStatusFilterChange
     dropdown._checkboxLabels = checkboxLabels
     dropdown._filterList = filterList
+    dropdown._statusOnly = config.statusOnly and true or false
     
     UIDropDownMenu_Initialize(dropdown, function(self, level)
         if level == 1 then
             -- Reload checkbox states from database each time dropdown opens (for sync between frames)
-            dropdown._checkboxStates = GetCheckboxStatesFromDB()
+            if not dropdown._statusOnly then
+                dropdown._checkboxStates = GetCheckboxStatesFromDB()
+            end
             -- Reload status filter states from database each time dropdown opens
             dropdown._statusFilters = GetStatusFilterStates()
             
@@ -291,6 +296,11 @@ local function InitializeDropdown(self, dropdown, config)
                     end
                 end
                 UIDropDownMenu_AddButton(info)
+            end
+
+            -- Dashboard only needs status filters; category tabs replace the rest.
+            if dropdown._statusOnly then
+                return
             end
             
             -- Add separator
@@ -477,12 +487,13 @@ local function CreateAndInitializeDropdown(self, parent, positionConfig, callbac
     callbacks = callbacks or {}
     
     local anchorPoint = positionConfig.anchorPoint or "TOPRIGHT"
+    local relativePoint = positionConfig.relativePoint or anchorPoint
     local anchorTo = positionConfig.anchorTo or parent
     local xOffset = positionConfig.xOffset or -20
     local yOffset = positionConfig.yOffset or -52
     local width = positionConfig.width or 60
     
-    local dropdown = CreateDropdown(self, parent, anchorPoint, anchorTo, xOffset, yOffset, width)
+    local dropdown = CreateDropdown(self, parent, anchorPoint, anchorTo, xOffset, yOffset, width, relativePoint)
     
     local checkboxLabels = { 
         "Quests", "Dungeons", "Heroic Dungeons", "Raids", "Professions", "Meta", 
@@ -492,6 +503,7 @@ local function CreateAndInitializeDropdown(self, parent, positionConfig, callbac
     
     InitializeDropdown(self, dropdown, {
         checkboxLabels = checkboxLabels,
+        statusOnly = positionConfig.statusOnly,
         onFilterChange = callbacks.onFilterChange or function() end,
         onCheckboxChange = callbacks.onCheckboxChange or function() end,
         onStatusFilterChange = callbacks.onStatusFilterChange or function() end,

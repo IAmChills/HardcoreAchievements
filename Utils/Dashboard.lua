@@ -320,6 +320,38 @@ local function ShouldShowByCheckboxFilter(def, isCompleted, checkboxIndex, varia
     return true -- Fallback to showing if FilterDropdown not available
 end
 
+local function GetDashboardStatusFilters()
+    if FilterDropdown and FilterDropdown.GetStatusFilterStatesFromDropdown and DashboardFrame and DashboardFrame.filterDropdown then
+        local states = FilterDropdown:GetStatusFilterStatesFromDropdown(DashboardFrame.filterDropdown)
+        if type(states) == "table" then
+            return states[1] ~= false, states[2] ~= false, states[3] ~= false
+        end
+    end
+    if FilterDropdown and FilterDropdown.GetStatusFilterStates then
+        local states = FilterDropdown.GetStatusFilterStates()
+        if type(states) == "table" then
+            return states[1] ~= false, states[2] ~= false, states[3] ~= false
+        end
+    end
+    return true, true, true
+end
+
+local function ShouldShowDashboardStatusFilterDropdown()
+    local key = (DashboardFrame and DashboardFrame.SelectedTabKey) or "summary"
+    return key ~= "summary" and key ~= "leaderboard" and key ~= "log"
+end
+
+local function UpdateDashboardStatusFilterVisibility()
+    if not DashboardFrame or not DashboardFrame.filterDropdown then
+        return
+    end
+    if ShouldShowDashboardStatusFilterDropdown() then
+        DashboardFrame.filterDropdown:Show()
+    else
+        DashboardFrame.filterDropdown:Hide()
+    end
+end
+
 -- Category filtering via new left-side tabs (DashboardFrame.SelectedTabKey)
 local function ShouldShowBySelectedTab(def)
   if not def then return true end
@@ -2178,6 +2210,9 @@ function DASHBOARD:BuildClassicGrid(srcRows)
       end
       local isAvailable = not isCompleted and not isFailed
       local showCompleted, showAvailable, showFailed = true, true, true
+      if not isDashboardView then
+        showCompleted, showAvailable, showFailed = GetDashboardStatusFilters()
+      end
       if (isCompleted and showCompleted) or (isAvailable and showAvailable) or (isFailed and showFailed) then
         shouldShow = true
       end
@@ -2185,7 +2220,7 @@ function DASHBOARD:BuildClassicGrid(srcRows)
       if data.hiddenByProfession then shouldShow = false end
       if isDashboardView then
         local key = tostring(srow.achId or srow.id or "")
-        shouldShow = shouldShow and (data.completed == true) and recentSet and recentSet[key] == true
+        shouldShow = (data.completed == true) and recentSet and recentSet[key] == true
       else
         if srow._def and not ShouldShowBySelectedTab(srow._def) then shouldShow = false end
       end
@@ -3202,9 +3237,11 @@ function DASHBOARD:BuildModernRows(srcRows)
       end
       local isAvailable = not isCompleted and not isFailed
 
-      -- Status filters (Completed/Available/Failed) were previously controlled by the dropdown.
-      -- Tabs replace the dropdown, so for now default to showing all statuses.
+      -- Status filters apply on category tabs only; Summary recent list ignores them.
       local showCompleted, showAvailable, showFailed = true, true, true
+      if not isDashboardView then
+        showCompleted, showAvailable, showFailed = GetDashboardStatusFilters()
+      end
       
       -- Show based on status filter checkboxes
       if (isCompleted and showCompleted) or (isAvailable and showAvailable) or (isFailed and showFailed) then
@@ -3219,7 +3256,7 @@ function DASHBOARD:BuildModernRows(srcRows)
       
       if isDashboardView then
         local key = tostring(srow.achId or srow.id or "")
-        shouldShow = shouldShow and (data.completed == true) and recentSet and recentSet[key] == true
+        shouldShow = (data.completed == true) and recentSet and recentSet[key] == true
       else
         -- Category filter is now driven by the selected tab.
         if srow._def and not ShouldShowBySelectedTab(srow._def) then
@@ -4064,6 +4101,7 @@ local function BuildDashboardFrame()
       if DashboardFrame.LeaderboardTopTab then
         ApplyTabVisual(DashboardFrame.LeaderboardTopTab, key == "leaderboard")
       end
+      UpdateDashboardStatusFilterVisibility()
       -- Re-apply filter when tab changes (tabs replace the dropdown)
       if ApplyFilter then
         ApplyFilter()
@@ -4240,6 +4278,22 @@ local function BuildDashboardFrame()
 
   UpdateDashboardClassIcon()
   UpdateDashboardClassBackground()
+
+  -- Status-only Filters dropdown (Completed / Available / Failed), under the class icon.
+  if not DashboardFrame.filterDropdown and FilterDropdown and FilterDropdown.CreateDropdown and FilterDropdown.InitializeDropdown then
+    local dropdownParent = DashboardFrame.UIOverlayFrame or DashboardFrame
+    -- +18 offsets UIDropDownMenuTemplate's empty right padding so the visible control lines up.
+    DashboardFrame.filterDropdown = FilterDropdown:CreateDropdown(
+      dropdownParent, "TOPRIGHT", DashboardFrame.ClassIcon, 18, 4, 60, "BOTTOMRIGHT"
+    )
+    FilterDropdown:InitializeDropdown(DashboardFrame.filterDropdown, {
+      statusOnly = true,
+      onStatusFilterChange = function()
+        if ApplyFilter then ApplyFilter() end
+      end,
+    })
+    UpdateDashboardStatusFilterVisibility()
+  end
 
   -- Points number text (with drop shadow) - positioned below title bar/divider
   if not DashboardFrame.TotalPointsText then
@@ -4443,7 +4497,7 @@ local function BuildDashboardFrame()
     DashboardFrame.LeaderboardScopeDeadCheckbox:Hide()
   end
 
-  -- Filter dropdown removed (tabs replace category selection)
+  -- Status Filters dropdown lives under the class icon
 
   DASHBOARD.Content = DashboardFrame.Content
   SyncContentWidth()
