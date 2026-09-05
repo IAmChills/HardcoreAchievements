@@ -3795,7 +3795,7 @@ local function BuildDashboardFrame()
     titleBar:SetPoint("TOPLEFT", DashboardFrame, "TOPLEFT", 0, 0)
     titleBar:SetPoint("TOPRIGHT", DashboardFrame, "TOPRIGHT", 0, 0)
     titleBar:SetFrameStrata("DIALOG")
-    titleBar:SetFrameLevel(20)
+    titleBar:SetFrameLevel(50)
     titleBar:SetBackdrop({
       edgeFile = "Interface\\Buttons\\WHITE8x8",
       tile = false,
@@ -3830,6 +3830,7 @@ local function BuildDashboardFrame()
     DashboardFrame.TitleText:SetText("Hardcore Achievements Dashboard")
     DashboardFrame.TitleText:SetFont(POINTS_FONT_PATH, 20)
     DashboardFrame.TitleText:SetTextColor(0.922, 0.871, 0.761)
+    DashboardFrame.TitleText:Show()
     
     -- Close button (matching UltraHardcore style)
     local closeButton = CreateFrame("Button", nil, titleBar, "UIPanelCloseButton")
@@ -3859,7 +3860,7 @@ local function BuildDashboardFrame()
     dividerFrame:SetPoint("TOPLEFT", titleBar, "BOTTOMLEFT", -5, 5)
     dividerFrame:SetPoint("TOPRIGHT", titleBar, "BOTTOMRIGHT", 5, 5)
     dividerFrame:SetFrameStrata("DIALOG")
-    dividerFrame:SetFrameLevel(20)
+    dividerFrame:SetFrameLevel(50)
     local dividerTexture = dividerFrame:CreateTexture(nil, "ARTWORK")
     dividerTexture:SetAllPoints()
     local dividerTexturePath = "Interface\\AddOns\\HardcoreAchievements\\Images\\divider.png"
@@ -4218,7 +4219,7 @@ local function BuildDashboardFrame()
     local backdropTemplate = BackdropTemplateMixin and "BackdropTemplate" or nil
     local background = CreateFrame("Frame", nil, DashboardFrame, backdropTemplate)
     background:SetPoint("TOPLEFT", DashboardFrame.Scroll, "TOPLEFT", 0, 0)
-    background:SetPoint("BOTTOMRIGHT", DashboardFrame.Scroll, "BOTTOMRIGHT", 0, 0)
+    background:SetPoint("BOTTOMRIGHT", DashboardFrame.Scroll, "BOTTOMRIGHT", -4, 0)
     background:SetFrameStrata(DashboardFrame.Scroll:GetFrameStrata())
     local scrollLevel = DashboardFrame.Scroll:GetFrameLevel() or 1
     background:SetFrameLevel(scrollLevel > 0 and (scrollLevel - 1) or 0)
@@ -4271,7 +4272,7 @@ local function BuildDashboardFrame()
   -- Class icon (centered over background, with drop shadow)
   if not DashboardFrame.ClassIcon then
     DashboardFrame.ClassIcon = DashboardFrame:CreateTexture(nil, "OVERLAY")
-    DashboardFrame.ClassIcon:SetPoint("BOTTOMRIGHT", DashboardFrame.Scroll, "TOPRIGHT", -6, 20)
+    DashboardFrame.ClassIcon:SetPoint("BOTTOMRIGHT", DashboardFrame.Scroll, "TOPRIGHT", -6, 50)
     DashboardFrame.ClassIcon:SetTexCoord(0, 1, 0, 1)
     DashboardFrame.ClassIcon:SetSize(60, 60)
   end
@@ -4284,7 +4285,7 @@ local function BuildDashboardFrame()
     local dropdownParent = DashboardFrame.UIOverlayFrame or DashboardFrame
     -- +18 offsets UIDropDownMenuTemplate's empty right padding so the visible control lines up.
     DashboardFrame.filterDropdown = FilterDropdown:CreateDropdown(
-      dropdownParent, "TOPRIGHT", DashboardFrame.ClassIcon, 18, 4, 60, "BOTTOMRIGHT"
+      dropdownParent, "TOPRIGHT", DashboardFrame.Scroll, 13, 25, 60, "TOPRIGHT"
     )
     FilterDropdown:InitializeDropdown(DashboardFrame.filterDropdown, {
       statusOnly = true,
@@ -4298,7 +4299,7 @@ local function BuildDashboardFrame()
   -- Points number text (with drop shadow) - positioned below title bar/divider
   if not DashboardFrame.TotalPointsText then
     DashboardFrame.TotalPointsText = DashboardFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlightLarge")
-    DashboardFrame.TotalPointsText:SetPoint("TOPLEFT", DashboardFrame, "TOPLEFT", 20, -50)
+    DashboardFrame.TotalPointsText:SetPoint("TOPLEFT", DashboardFrame, "TOPLEFT", 20, -58)
     DashboardFrame.TotalPointsText:SetText("0") -- Will be updated by UpdateTotalPointsText
     DashboardFrame.TotalPointsText:SetTextColor(0.922, 0.871, 0.761)
     DashboardFrame.TotalPointsText:SetFont(POINTS_FONT_PATH, 42)
