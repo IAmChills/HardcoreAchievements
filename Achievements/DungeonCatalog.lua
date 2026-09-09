@@ -264,15 +264,15 @@ local Dungeons = {
     requiredMapId = 129,
     requiredKills = {
       [7355] = 1,  -- Tuten'kash
-      [7356] = 1,  -- Plaguemaw the Rotting
       [7357] = 1,  -- Mordresh Fire Eye
       [8567] = 1,  -- Glutton
       [7358] = 1,  -- Amnennar the Coldbringer
     },
     extraCreditKills = {
       [7354] = 1,  -- Ragglesnout (rare)
+      [7356] = 1,  -- Plaguemaw the Rotting (Summoned)
     },
-    bossOrder = {7355, 7356, 7357, 7354, 8567, 7358}
+    bossOrder = {7355, 7357, 8567, 7358, 7354, 7356}
   },
 
   -- Uldaman (Both, Level 35-45)
