@@ -2602,7 +2602,7 @@ end)
 -- Function to show welcome message popup on first login or when version changes
 function addon:ShowWelcomeMessage()
     local Disabled = false
-    local WELCOME_MESSAGE_NUMBER = 5
+    local WELCOME_MESSAGE_NUMBER = 6
     local db = EnsureDB()
     db.settings = db.settings or {}
     
@@ -2619,7 +2619,7 @@ function addon:ShowWelcomeMessage()
     end
 end
 
--- Define the welcome message popup
+-- Define the welcome message popup (MOTD)
 StaticPopupDialogs["Hardcore Achievements Vanilla"] = {
     text = "|cff008066Hardcore Achievements|r\n\nLeaderboard performance issues have been |cff00ff00resolved|r. I have optimized the code and added a row limit to prevent lag and frame drops.\n\nPlease report any issues or feedback on Discord.",
     button1 = "Okay",
