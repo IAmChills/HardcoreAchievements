@@ -63,7 +63,19 @@ local cache = {
     version = 0,
 }
 
-local rebuildPending = false
+-- The cache is only read when a tooltip shows a completion rate, so gossip bursts just mark it
+-- dirty and the rebuild happens on first read. Rebuilding per incoming row batch was scanning
+-- every def against every reporter dozens of times per sync round.
+local cacheDirty = true
+
+-- Parsed completedIds keyed by the packed wire string. Most reporters resend an identical
+-- string every round, so this keeps rebuilds from re-splitting hundreds of payloads.
+local completedSetCache = {}
+local completedSetCacheCount = 0
+local COMPLETED_SET_CACHE_LIMIT = 2000
+
+-- Normalized eligibility requirements keyed by def table (defs live for the whole session).
+local defReqCache = {}
 
 local function ParseVersion(ver)
     if type(ver) ~= "string" or ver == "" or ver == "?" then
@@ -92,6 +104,10 @@ end
 local function BuildCompletedSet(completedIds)
     local set = {}
     if type(completedIds) == "string" then
+        local cached = completedSetCache[completedIds]
+        if cached then
+            return cached
+        end
         if completedIds ~= "" then
             local ids = { strsplit(COMPLETED_IDS_SEP, completedIds) }
             for i = 1, #ids do
@@ -101,6 +117,14 @@ local function BuildCompletedSet(completedIds)
                 end
             end
         end
+        -- Payload strings are stable across rounds, so memoize. Wipe wholesale rather than
+        -- tracking LRU order; the cache refills lazily on the next rebuild.
+        if completedSetCacheCount >= COMPLETED_SET_CACHE_LIMIT then
+            completedSetCache = {}
+            completedSetCacheCount = 0
+        end
+        completedSetCache[completedIds] = set
+        completedSetCacheCount = completedSetCacheCount + 1
         return set
     end
     if type(completedIds) ~= "table" then
@@ -131,83 +155,100 @@ local function IsCompletionReporter(row)
     return VersionAtLeast(row.version, MIN_COMPLETION_STATS_VERSION)
 end
 
-local function FactionMatches(rowFaction, required)
-    if not required then
-        return true
+-- Rows store the UnitFactionGroup english tag; defs often use FACTION_* localized globals.
+-- Collapsing both sides to a single key lets the match be a plain equality test.
+local function NormalizeFactionKey(faction)
+    if type(faction) ~= "string" or faction == "" then
+        return nil
     end
-    if type(rowFaction) ~= "string" or rowFaction == "" then
-        return false
+    if faction == "Horde" or faction == FACTION_HORDE then
+        return "Horde"
     end
-    if rowFaction == required then
-        return true
+    if faction == "Alliance" or faction == FACTION_ALLIANCE then
+        return "Alliance"
     end
-    -- Row stores UnitFactionGroup english tag; defs often use FACTION_* localized globals.
-    if required == "Horde" or required == FACTION_HORDE then
-        return rowFaction == "Horde" or rowFaction == FACTION_HORDE
-    end
-    if required == "Alliance" or required == FACTION_ALLIANCE then
-        return rowFaction == "Alliance" or rowFaction == FACTION_ALLIANCE
-    end
-    return false
+    return faction
 end
 
-local function ClassMatches(row, required)
-    if not required then
-        return true
+-- Precomputed, allocation-free form of a def's faction/class/race gates.
+-- impossible marks defs no row can ever satisfy (e.g. a non-string race requirement).
+local UNRESTRICTED_REQ = { unrestricted = true }
+
+local function GetDefRequirements(def)
+    if type(def) ~= "table" then
+        return UNRESTRICTED_REQ
     end
-    -- Catalogs often use class = { "PRIEST", "MAGE", "WARLOCK" }
-    if type(required) == "table" then
-        for _, token in pairs(required) do
-            if type(token) == "string" and ClassMatches(row, token) then
-                return true
+    local req = defReqCache[def]
+    if req then
+        return req
+    end
+
+    req = {}
+
+    if def.faction then
+        req.factionKey = NormalizeFactionKey(def.faction)
+        if not req.factionKey then
+            req.impossible = true
+        end
+    end
+
+    local class = def.class
+    if class then
+        local ids, tokens = nil, nil
+        local function AddToken(token)
+            if type(token) ~= "string" then return end
+            local want = token:upper()
+            tokens = tokens or {}
+            tokens[want] = true
+            local id = CLASS_FILE_TO_ID[want]
+            if id then
+                ids = ids or {}
+                ids[id] = true
             end
         end
-        return false
+        if type(class) == "table" then
+            for _, token in pairs(class) do
+                AddToken(token)
+            end
+        else
+            AddToken(tostring(class))
+        end
+        req.classIds = ids
+        req.classTokens = tokens
+        if not ids and not tokens then
+            req.impossible = true
+        end
     end
-    local want = tostring(required):upper()
-    local classId = tonumber(row.classId)
-    if classId and CLASS_FILE_TO_ID[want] == classId then
-        return true
+
+    if def.race then
+        req.raceWant = NormalizeRaceToken(def.race)
+        if not req.raceWant then
+            req.impossible = true
+        end
     end
-    -- Fallback: english display name on row ("Mage") vs file token ("MAGE")
-    local className = row.class
-    if type(className) == "string" and className:upper() == want then
-        return true
-    end
-    return false
+
+    req.unrestricted = not (req.impossible or req.factionKey or req.classTokens or req.raceWant)
+
+    defReqCache[def] = req
+    return req
 end
 
-local function RaceMatches(row, required)
-    if not required then
-        return true
-    end
-    local want = NormalizeRaceToken(required)
-    if not want then
+-- entry carries the reporter's normalized identity so matching never allocates.
+local function ReporterMatches(entry, req)
+    if req.factionKey and entry.factionKey ~= req.factionKey then
         return false
     end
-    local raceId = tonumber(row.raceId)
-    local raceFile = raceId and RACE_ID_TO_FILE[raceId]
-    if raceFile and NormalizeRaceToken(raceFile) == want then
-        return true
+    if req.classTokens then
+        local byId = req.classIds
+        if not (byId and entry.classId and byId[entry.classId]) then
+            local token = entry.classToken
+            if not (token and req.classTokens[token]) then
+                return false
+            end
+        end
     end
-    -- Catalog IsEligible also allows localized raceName (e.g. "Undead"); accept row.race if present.
-    if row.race and NormalizeRaceToken(row.race) == want then
-        return true
-    end
-    return false
-end
-
-local function RowMatchesAchievementDef(row, def)
-    if not def then
-        return true
-    end
-    if not FactionMatches(row.faction, def.faction) then
-        return false
-    end
-    if not ClassMatches(row, def.class) then
-        return false
-    end
-    if not RaceMatches(row, def.race) then
+    local raceWant = req.raceWant
+    if raceWant and entry.raceFromId ~= raceWant and entry.raceFromName ~= raceWant then
         return false
     end
     return true
@@ -221,64 +262,75 @@ function Leaderboard.RebuildCompletionStatsCache()
 
     for _, row in pairs(rows) do
         if IsCompletionReporter(row) then
+            local classToken = row.class
+            local raceId = tonumber(row.raceId)
+            local raceFile = raceId and RACE_ID_TO_FILE[raceId]
             reporters[#reporters + 1] = {
-                row = row,
                 set = BuildCompletedSet(row.completedIds),
+                factionKey = NormalizeFactionKey(row.faction),
+                classId = tonumber(row.classId),
+                classToken = type(classToken) == "string" and classToken:upper() or nil,
+                raceFromId = raceFile and NormalizeRaceToken(raceFile) or nil,
+                raceFromName = NormalizeRaceToken(row.race),
             }
         end
     end
 
+    local reporterCount = #reporters
     local defs = (addon and addon.AchievementDefs) or {}
     for achId, def in pairs(defs) do
         local idKey = tostring(achId)
+        local req = GetDefRequirements(def)
         local have, total = 0, 0
-        for i = 1, #reporters do
-            local entry = reporters[i]
-            if RowMatchesAchievementDef(entry.row, def) then
-                total = total + 1
-                if entry.set[idKey] then
+        if req.impossible then
+            -- No row can satisfy this def; leave the tally empty so the tooltip omits the line.
+        elseif req.unrestricted then
+            total = reporterCount
+            for i = 1, reporterCount do
+                if reporters[i].set[idKey] then
                     have = have + 1
+                end
+            end
+        else
+            for i = 1, reporterCount do
+                local entry = reporters[i]
+                if ReporterMatches(entry, req) then
+                    total = total + 1
+                    if entry.set[idKey] then
+                        have = have + 1
+                    end
                 end
             end
         end
         byAchId[idKey] = { have = have, total = total }
     end
 
-    -- Achievements present in payloads but not in local defs still get a global (unfiltered) tally
-    for i = 1, #reporters do
-        local entry = reporters[i]
-        for achId in pairs(entry.set) do
-            if not byAchId[achId] then
-                local have, total = 0, #reporters
-                for j = 1, #reporters do
-                    if reporters[j].set[achId] then
-                        have = have + 1
-                    end
-                end
-                byAchId[achId] = { have = have, total = total }
+    -- Achievements present in payloads but not in local defs still get a global (unfiltered)
+    -- tally. Counting in one pass avoids rescanning every reporter per orphan id.
+    local orphanCounts
+    for i = 1, reporterCount do
+        for achId in pairs(reporters[i].set) do
+            if byAchId[achId] == nil then
+                orphanCounts = orphanCounts or {}
+                orphanCounts[achId] = (orphanCounts[achId] or 0) + 1
             end
+        end
+    end
+    if orphanCounts then
+        for achId, have in pairs(orphanCounts) do
+            byAchId[achId] = { have = have, total = reporterCount }
         end
     end
 
     cache.byAchId = byAchId
     cache.version = cache.version + 1
-    rebuildPending = false
+    cacheDirty = false
 end
 
+--- Marks the cache stale. The rebuild itself is deferred to the next read, since incoming
+--- gossip rows arrive in chunks and nothing consumes these stats unless a tooltip is shown.
 function Leaderboard.ScheduleCompletionStatsRebuild()
-    if rebuildPending then
-        return
-    end
-    rebuildPending = true
-    if C_Timer and C_Timer.After then
-        C_Timer.After(0.25, function()
-            if rebuildPending then
-                Leaderboard.RebuildCompletionStatsCache()
-            end
-        end)
-    else
-        Leaderboard.RebuildCompletionStatsCache()
-    end
+    cacheDirty = true
 end
 
 --- Returns have, total for an achievement among eligible known reporters.
@@ -286,7 +338,7 @@ function Leaderboard.GetAchievementCompletionStats(achId)
     if not achId then
         return 0, 0
     end
-    if cache.version == 0 then
+    if cacheDirty or cache.version == 0 then
         Leaderboard.RebuildCompletionStatsCache()
     end
     local entry = cache.byAchId[tostring(achId)]

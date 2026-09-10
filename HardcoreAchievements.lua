@@ -813,6 +813,36 @@ local function FormatTimestamp(timestamp)
     end
 end
 
+-- Resolves a display title for log output. Callers that already hold a row pass it in; the
+-- stored-failure trackers and kill handlers only have an id, so fall back to the registered
+-- definition and then the row model before printing the raw id.
+local function GetAchievementTitle(achId, row)
+    if row then
+        local rowTitle = (row.Title and row.Title.GetText and row.Title:GetText()) or row.title
+        if type(rowTitle) == "string" and rowTitle ~= "" then
+            return rowTitle
+        end
+    end
+    if achId == nil then return "Unknown" end
+    local key = tostring(achId)
+    local defs = addon and addon.AchievementDefs
+    local def = defs and (defs[key] or defs[achId])
+    if def and type(def.title) == "string" and def.title ~= "" then
+        return def.title
+    end
+    for _, r in ipairs((addon and addon.AchievementRowModel) or {}) do
+        if r.id == achId or r.achId == achId or tostring(r.id or r.achId) == key then
+            if type(r.title) == "string" and r.title ~= "" then
+                return r.title
+            end
+            break
+        end
+    end
+    return key
+end
+
+if addon then addon.GetAchievementTitle = GetAchievementTitle end
+
 local function EnsureFailureTimestamp(achId, row)
     if not achId then return nil end
     local _, cdb = GetCharDB()
@@ -823,15 +853,24 @@ local function EnsureFailureTimestamp(achId, row)
         rec = {}
         cdb.achievements[achId] = rec
     end
+    local becameFailed = false
     if not rec.completed and not rec.failedAt then
         rec.failedAt = time()
+        becameFailed = true
         if addon and addon.EventLogAdd then
-            local title = (row and row.Title and row.Title.GetText and row.Title:GetText()) or (row and row.title) or tostring(achId)
-            addon.EventLogAdd("Achievement |cffff0000failed|r (no longer available): " .. tostring(title))
+            addon.EventLogAdd("Achievement |cffff0000failed|r (no longer available): " .. GetAchievementTitle(achId, row))
         end
     end
     if rec.failedAt and not rec.failed then
         rec.failed = true
+        becameFailed = true
+    end
+    -- IsRowOutleveled memoizes per row object and is otherwise only wiped on level, zone and
+    -- quest events. Stored-failure achievements (the Ridiculous set) fail on jumps, XP gain and
+    -- equipment changes, none of which touch those events, so without this the row keeps
+    -- reporting the cached "available" result until the next reload.
+    if becameFailed then
+        InvalidateOutleveledCacheForAchId(achId)
     end
     return rec.failedAt
 end
@@ -4306,6 +4345,8 @@ do
         -- Debounce flags for events that burst (multiple fires per frame).
         local _pendingExplorationCheck = false
         local _pendingAuraCheck = false
+        local _pendingInventoryCheck = false
+        local _pendingFactionCheck = false
 
         -- Party/pet GUID cache — rebuilt on GROUP_ROSTER_UPDATE/PLAYER_ENTERING_WORLD/UNIT_PET.
         -- Eliminates 20-30 UnitExists/UnitGUID calls per damage event in isPlayerPartyOrPetSource.
@@ -4984,6 +5025,12 @@ do
                 local _, subevent, _, sourceGUID, sourceName, _, _, destGUID, destName, _, _, param12, param13, param14, param15, param16 = CombatLogGetCurrentEventInfo()
                 
                 if subevent == "PARTY_KILL" then
+                    -- Routed here instead of its own CLEU frame; must run before the tap-denial
+                    -- and instance gates below, which can return early.
+                    local onRareQuestLootKill = addon and addon.FirstKillRareQuestLoot_OnPartyKill
+                    if onRareQuestLootKill and destGUID then
+                        onRareQuestLootKill(destGUID)
+                    end
                     -- PARTY_KILL fires when the player/party gets credit for a kill.
                     -- In dungeon/raid: only the group is present, so we always process (interchangeable with UNIT_DIED).
                     -- In open world: require npcsInCombat and check tap denial so we don't credit kills we didn't tag.
@@ -5242,37 +5289,46 @@ do
                 local unit = ...
                 if unit ~= "player" then return end
 
-                -- Single pass: evaluate DefiasMask (Rogue only) and dungeon set achievements together.
-                local _, classFile = UnitClass("player")
-                local isRogue = (classFile == "ROGUE")
-                local headSlotItemId = isRogue and GetInventoryItemID("player", 1) or nil
+                -- Debounce: equipping a set fires this once per slot, and each pass scans every
+                -- row and pcalls a tracker per dungeon-set row. Collapse a burst into one pass.
+                if not _pendingInventoryCheck then
+                    _pendingInventoryCheck = true
+                    C_Timer.After(0, function()
+                        _pendingInventoryCheck = false
 
-                for _, row in ipairs(addon.AchievementRowModel or {}) do
-                    if not IsAchievementAlreadyCompleted(row) then
-                        -- DefiasMask: Rogue wearing the head item
-                        if isRogue and headSlotItemId == 7997 and (row.id == "DefiasMask" or row.achId == "DefiasMask") then
-                            MarkRowCompleted(row)
-                            local iconTex = (row.frame and row.frame.Icon and row.frame.Icon.GetTexture and row.frame.Icon:GetTexture()) or row.icon or 136116
-                            local titleText = (row.frame and row.frame.Title and row.frame.Title.GetText and row.frame.Title:GetText()) or row.title or "Achievement"
-                            CreateAchToast(iconTex, titleText, row.points, row.frame or row)
-                        end
-                        -- Dungeon set achievements (tracker checks all required items internally)
-                        if row._def and row._def.isDungeonSet then
-                            local achId = row.achId or row.id
-                            if achId then
-                                local trackerFn = (addon and addon.GetAchievementFunction and addon.GetAchievementFunction(achId, "IsCompleted")) or (addon and addon[achId])
-                                if type(trackerFn) == "function" then
-                                    local ok, shouldComplete = pcall(trackerFn)
-                                    if ok and shouldComplete == true then
-                                        MarkRowCompleted(row)
-                                        local iconTex = (row.frame and row.frame.Icon and row.frame.Icon.GetTexture and row.frame.Icon:GetTexture()) or row.icon or 136116
-                                        local titleText = (row.frame and row.frame.Title and row.frame.Title.GetText and row.frame.Title:GetText()) or row.title or "Achievement"
-                                        CreateAchToast(iconTex, titleText, row.points, row.frame or row)
+                        -- Single pass: evaluate DefiasMask (Rogue only) and dungeon set achievements together.
+                        local _, classFile = UnitClass("player")
+                        local isRogue = (classFile == "ROGUE")
+                        local headSlotItemId = isRogue and GetInventoryItemID("player", 1) or nil
+
+                        for _, row in ipairs(addon.AchievementRowModel or {}) do
+                            if not IsAchievementAlreadyCompleted(row) then
+                                -- DefiasMask: Rogue wearing the head item
+                                if isRogue and headSlotItemId == 7997 and (row.id == "DefiasMask" or row.achId == "DefiasMask") then
+                                    MarkRowCompleted(row)
+                                    local iconTex = (row.frame and row.frame.Icon and row.frame.Icon.GetTexture and row.frame.Icon:GetTexture()) or row.icon or 136116
+                                    local titleText = (row.frame and row.frame.Title and row.frame.Title.GetText and row.frame.Title:GetText()) or row.title or "Achievement"
+                                    CreateAchToast(iconTex, titleText, row.points, row.frame or row)
+                                end
+                                -- Dungeon set achievements (tracker checks all required items internally)
+                                if row._def and row._def.isDungeonSet then
+                                    local achId = row.achId or row.id
+                                    if achId then
+                                        local trackerFn = (addon and addon.GetAchievementFunction and addon.GetAchievementFunction(achId, "IsCompleted")) or (addon and addon[achId])
+                                        if type(trackerFn) == "function" then
+                                            local ok, shouldComplete = pcall(trackerFn)
+                                            if ok and shouldComplete == true then
+                                                MarkRowCompleted(row)
+                                                local iconTex = (row.frame and row.frame.Icon and row.frame.Icon.GetTexture and row.frame.Icon:GetTexture()) or row.icon or 136116
+                                                local titleText = (row.frame and row.frame.Title and row.frame.Title.GetText and row.frame.Title:GetText()) or row.title or "Achievement"
+                                                CreateAchToast(iconTex, titleText, row.points, row.frame or row)
+                                            end
+                                        end
                                     end
                                 end
                             end
                         end
-                    end
+                    end)
                 end
             elseif event == "ITEM_LOCKED" then
                 -- Track item delete flow for "Precious"
@@ -5432,25 +5488,33 @@ do
                     end
                 end
             elseif event == "UPDATE_FACTION" then
-                -- Handle reputation achievement completion
-                for _, row in ipairs(addon.AchievementRowModel or {}) do
-                    if not row.completed and row._def and row._def.isReputation then
-                        local achId = row.achId or row.id
-                        if achId then
-                            -- Check if this achievement has a reputation tracker function
-                            local trackerFn = (addon and addon.GetAchievementFunction and addon.GetAchievementFunction(achId, "IsCompleted")) or (addon and addon[achId])
-                            if type(trackerFn) == "function" then
-                                -- The tracker function checks if the player is exalted with the faction
-                                local ok, shouldComplete = pcall(trackerFn)
-                                if ok and shouldComplete == true then
-                                    MarkRowCompleted(row)
-                                local iconTex = (row.frame and row.frame.Icon and row.frame.Icon.GetTexture and row.frame.Icon:GetTexture()) or row.icon or 136116
-                                local titleText = (row.frame and row.frame.Title and row.frame.Title.GetText and row.frame.Title:GetText()) or row.title or "Achievement"
-                                CreateAchToast(iconTex, titleText, row.points, row.frame or row)
+                -- Debounce: UPDATE_FACTION arrives in bursts on quest turn-ins and rep grinds,
+                -- and each pass scans every row and pcalls a tracker per reputation row.
+                if not _pendingFactionCheck then
+                    _pendingFactionCheck = true
+                    C_Timer.After(0.5, function()
+                        _pendingFactionCheck = false
+                        -- Handle reputation achievement completion
+                        for _, row in ipairs(addon.AchievementRowModel or {}) do
+                            if not row.completed and row._def and row._def.isReputation then
+                                local achId = row.achId or row.id
+                                if achId then
+                                    -- Check if this achievement has a reputation tracker function
+                                    local trackerFn = (addon and addon.GetAchievementFunction and addon.GetAchievementFunction(achId, "IsCompleted")) or (addon and addon[achId])
+                                    if type(trackerFn) == "function" then
+                                        -- The tracker function checks if the player is exalted with the faction
+                                        local ok, shouldComplete = pcall(trackerFn)
+                                        if ok and shouldComplete == true then
+                                            MarkRowCompleted(row)
+                                            local iconTex = (row.frame and row.frame.Icon and row.frame.Icon.GetTexture and row.frame.Icon:GetTexture()) or row.icon or 136116
+                                            local titleText = (row.frame and row.frame.Title and row.frame.Title.GetText and row.frame.Title:GetText()) or row.title or "Achievement"
+                                            CreateAchToast(iconTex, titleText, row.points, row.frame or row)
+                                        end
+                                    end
                                 end
                             end
                         end
-                    end
+                    end)
                 end
             elseif event == "QUEST_REMOVED" then
                 for k in pairs(_questLogCache) do _questLogCache[k] = nil end

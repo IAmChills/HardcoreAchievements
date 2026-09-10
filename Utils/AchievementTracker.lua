@@ -2282,8 +2282,15 @@ local explorationRefreshFrame = CreateFrame("Frame")
 pcall(function()
     explorationRefreshFrame:RegisterEvent("MAP_EXPLORATION_UPDATED")
 end)
-explorationRefreshFrame:SetScript("OnEvent", function()
-    if addon and type(addon.EvaluateCustomCompletions) == "function" then
+-- MAP_EXPLORATION_UPDATED fires repeatedly while moving through unexplored terrain, and this
+-- handler drives a full tracker rebuild. Debounce so a run through new territory costs one pass.
+local explorationRefreshPending = false
+
+local function RefreshTrackerForExploration()
+    explorationRefreshPending = false
+    -- addon.AchEvt already runs EvaluateCustomCompletions on this event (also debounced), so only
+    -- evaluate here if that frame never got created.
+    if not (addon and addon.AchEvt) and addon and type(addon.EvaluateCustomCompletions) == "function" then
         addon.EvaluateCustomCompletions()
     end
     if not isInitialized then
@@ -2297,6 +2304,19 @@ explorationRefreshFrame:SetScript("OnEvent", function()
     end
     if AchievementTracker and AchievementTracker.Update then
         AchievementTracker:Update()
+    end
+end
+
+explorationRefreshFrame:SetScript("OnEvent", function()
+    if explorationRefreshPending then
+        return
+    end
+    explorationRefreshPending = true
+    if C_Timer and C_Timer.After then
+        -- Slightly behind addon.AchEvt's 0.5s pass so completions are already evaluated.
+        C_Timer.After(0.6, RefreshTrackerForExploration)
+    else
+        RefreshTrackerForExploration()
     end
 end)
 

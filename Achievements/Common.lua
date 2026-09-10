@@ -117,6 +117,16 @@ function M.registerQuestAchievement(cfg)
     local MAX_LEVEL = tonumber(cfg.maxLevel)
     local FACTION, RACE, CLASS = cfg.faction, cfg.race, cfg.class
 
+    -- Log and chat output should name the achievement, not its internal id. Callers register
+    -- with ids only, so the title is resolved from the definition registry at output time.
+    local function AchTitle()
+        local resolve = addon and addon.GetAchievementTitle
+        if resolve then
+            return resolve(ACH_ID)
+        end
+        return tostring(ACH_ID)
+    end
+
     ---------------------------------------
     -- Helper Functions
     ---------------------------------------
@@ -748,7 +758,7 @@ function M.registerQuestAchievement(cfg)
                 
                 if not canTrackKill then
                     if addon.EventLogAdd then
-                        addon.EventLogAdd("NPC kill not counted (quest): achievement " .. tostring(ACH_ID) .. ", npcId " .. tostring(destId) .. " — not on required quest (or award-on-kill / allowKillsBeforeQuest off, no quest progress)")
+                        addon.EventLogAdd("NPC kill not counted (quest): achievement " .. AchTitle() .. ", npcId " .. tostring(destId) .. " — not on required quest (or award-on-kill / allowKillsBeforeQuest off, no quest progress)")
                     end
                     return false -- Player is not on quest, award on kill is disabled, allowKillsBeforeQuest is disabled, and no quest progress - don't track kill
                 end
@@ -776,10 +786,10 @@ function M.registerQuestAchievement(cfg)
                 
                 -- Always warn in chat when an ineligible player blocks completion.
                 -- This is a critical one-time notification; do not gate behind row visibility.
-                print("|cff008066[Hardcore Achievements]|r |cffffd100Achievement " .. (ACH_ID or "Unknown") .. " cannot be fulfilled: An ineligible player contributed.|r")
+                print("|cff008066[Hardcore Achievements]|r |cffffd100Achievement " .. AchTitle() .. " cannot be fulfilled: An ineligible player contributed.|r")
                 print("|cff008066[Hardcore Achievements]|r |cffffd100You can kill the NPC again to update your status. Or abandon the quest to reset all progress|r")
                 if addon.EventLogAdd then
-                    addon.EventLogAdd("NPC kill not counted (ineligible group / external help): achievement " .. tostring(ACH_ID) .. ", npcId " .. tostring(destId))
+                    addon.EventLogAdd("NPC kill not counted (ineligible group / external help): achievement " .. AchTitle() .. ", npcId " .. tostring(destId))
                 end
                 
                 -- Track the kill progress, but mark as ineligible (don't increment eligible counts)
@@ -863,7 +873,7 @@ function M.registerQuestAchievement(cfg)
                 setProg("counts", state.counts)
                 setProg("eligibleCounts", state.eligibleCounts)
                 if killContributesToRequirement then
-                    maybeLogKillProgress(destGUID, "NPC kill counted toward achievement " .. tostring(ACH_ID) .. ": npcId " .. tostring(idNum) .. " (kill requirements satisfied=" .. tostring(countsSatisfied()) .. ")")
+                    maybeLogKillProgress(destGUID, "NPC kill counted toward achievement " .. AchTitle() .. ": npcId " .. tostring(idNum) .. " (kill requirements satisfied=" .. tostring(countsSatisfied()) .. ")")
                 end
                 
                 -- Store player's level at time of THIS kill
@@ -929,7 +939,7 @@ function M.registerQuestAchievement(cfg)
                 local killLevel = UnitLevel("player") or 1
                 setProg("levelAtKill", killLevel)
                 if not killAlreadySatisfied then
-                    maybeLogKillProgress(destGUID, "NPC kill counted toward achievement " .. tostring(ACH_ID) .. ": npcId " .. tostring(destId) .. " (target kill registered)")
+                    maybeLogKillProgress(destGUID, "NPC kill counted toward achievement " .. AchTitle() .. ": npcId " .. tostring(destId))
                 end
                 
                 -- Store points and solo status (use model row when panel not built)
@@ -1093,13 +1103,22 @@ function M.registerQuestAchievement(cfg)
         end
 
         local f = CreateFrame("Frame")
+        local questLogCheckPending = false
         f:RegisterEvent("QUEST_LOG_UPDATE")
         f:SetScript("OnEvent", function(self)
             if state.completed then
                 self:UnregisterAllEvents()
                 return
             end
+            -- QUEST_LOG_UPDATE fires in bursts and on every objective change. Without this guard
+            -- each quest achievement queued a fresh timer per event, so a burst multiplied into
+            -- hundreds of pending server top-up checks.
+            if questLogCheckPending then
+                return
+            end
+            questLogCheckPending = true
             C_Timer.After(0.25, function()
+                questLogCheckPending = false
                 if topUpFromServer() and checkComplete() then
                     self:UnregisterAllEvents()
                 end

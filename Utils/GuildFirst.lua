@@ -221,8 +221,25 @@ end
 -- Utilities
 -- ---------------------------------------------------------------------------------------------------------------------
 
-local function GetGuildName()
+-- Requesting the roster is throttled to 10s by the server and each response fires
+-- GUILD_ROSTER_UPDATE. Asking for it from inside that handler (which is where the guild name
+-- is needed) used to pump a full roster refresh forever, so the request is kept separate and
+-- rate limited. GetGuildInfo("player") does not need a roster request to answer.
+local lastRosterRequestAt = 0
+local ROSTER_REQUEST_THROTTLE_SEC = 30
+
+local function RequestGuildRoster()
+    if not (C_GuildInfo and C_GuildInfo.GuildRoster) then return end
+    if not (IsInGuild and IsInGuild()) then return end
+    local now = GetTime and GetTime() or 0
+    if lastRosterRequestAt > 0 and (now - lastRosterRequestAt) < ROSTER_REQUEST_THROTTLE_SEC then
+        return
+    end
+    lastRosterRequestAt = now
     C_GuildInfo.GuildRoster()
+end
+
+local function GetGuildName()
     return GetGuildInfo and GetGuildInfo("player") or nil
 end
 
@@ -859,6 +876,12 @@ initFrame:SetScript("OnEvent", function(_, event)
         end
         return
     end
+    if event == "PLAYER_LOGIN" then
+        -- One throttled request so the guild name is available; responses arrive as
+        -- GUILD_ROSTER_UPDATE, which we handle below without asking again.
+        RequestGuildRoster()
+    end
+
     -- Pre-initialize common scopes (guild-first and server-first)
     local realm = GetRealmName()
     if realm ~= "" then
