@@ -1310,6 +1310,7 @@ local function registerDungeonAchievement(def)
       [10997] = "Cannon Master Willey",
       [11120] = "Crimson Hammersmith",
       [10811] = "Archivist Galford",
+      [10812] = "Grand Crusader Dathrohan/Balnazzar",
       [10813] = "Balnazzar",
       [10435] = "Magistrate Barthilas",
       [10809] = "Stonespine",

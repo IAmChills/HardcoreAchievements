@@ -6039,8 +6039,7 @@ local function ShowAchievementTab()
     
     -- Sync solo mode checkbox state
     if AchievementPanel.SoloModeCheckbox then
-        local _, cdb = GetCharDB()
-        local isChecked = (cdb and cdb.settings and cdb.settings.soloAchievements) or false
+        local isChecked = (addon.IsSoloModeEnabled and addon.IsSoloModeEnabled()) or false
         AchievementPanel.SoloModeCheckbox:SetChecked(isChecked)
         
         local isHardcoreActive = C_GameRules and C_GameRules.IsHardcoreActive and C_GameRules.IsHardcoreActive() or false

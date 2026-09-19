@@ -453,17 +453,17 @@ local Dungeons = {
     staticPoints = false,
     requiredMapId = 329,
     requiredKills = {
-      [11058] = 1, -- Ezra Grimm
+      --[11058] = 1, -- Ezra Grimm
       [10516] = 1, -- The Unforgiven
       [10808] = 1, -- Timmy the Cruel
       [11032] = 1, -- Malor the Zealous
       [10997] = 1, -- Cannon Master Willey
-      [11120] = 1, -- Crimson Hammersmith
+      --[11120] = 1, -- Crimson Hammersmith
       [10811] = 1, -- Archivist Galford
-      [10813] = 1, -- Balnazzar
+      ["Grand Crusader Dathrohan/Balnazzar"] = {10812, 10813}, -- Grand Crusader Dathrohan/Balnazzar
       [10435] = 1, -- Magistrate Barthilas
       [10437] = 1, -- Nerub'enkan
-      [11121] = 1, -- Black Guard Swordsmith
+      --[11121] = 1, -- Black Guard Swordsmith
       [10438] = 1, -- Maleki the Pallid
       [10436] = 1, -- Baroness Anastari
       [10439] = 1, -- Ramstein the Gorger
@@ -475,7 +475,7 @@ local Dungeons = {
       [11143] = 1, -- Postmaster Malown (summoned)
       [10809] = 1, -- Stonespine (rare)
     },
-    bossOrder = {11058, 10393, 10558, 10516, 11143, 10808, 11032, 10997, 11120, 10811, 10813, 10435, 10809, 10437, 11121, 10438, 10436, 10439, 10440}
+    bossOrder = {10516, 10808, 11032, 10997, 10811, "Grand Crusader Dathrohan/Balnazzar", 10435, 10437, 10438, 10436, 10439, 10440, 10393, 10558, 11143, 10809}
   },
 
   -- Dire Maul (Both, Level 58-60)

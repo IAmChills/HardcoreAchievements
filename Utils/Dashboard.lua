@@ -3093,7 +3093,7 @@ local function UpdateDashboardProgressOverview(srcRows)
   else
     table_insert(leftKeys, "profession")
   end
-  local moreLeft = { "raid" }
+  local moreLeft = { "raid", "guild" }
   for _, k in ipairs(moreLeft) do table_insert(leftKeys, k) end
 
   local rightKeys = { }
@@ -3105,7 +3105,6 @@ local function UpdateDashboardProgressOverview(srcRows)
   end
   table_insert(rightKeys, "exploration")
   table_insert(rightKeys, "secret")
-  table_insert(rightKeys, "guild")
 
   local function LayoutColumn(keys, side)
     for i, key in ipairs(keys) do
@@ -3711,8 +3710,7 @@ function DASHBOARD:Rebuild()
   
   if DashboardFrame and DashboardFrame.SoloModeCheckbox then
     if type(GetCharDB) == "function" then
-      local _, cdb = GetCharDB()
-      local isChecked = (cdb and cdb.settings and cdb.settings.soloAchievements) or false
+      local isChecked = (addon.IsSoloModeEnabled and addon.IsSoloModeEnabled()) or false
       DashboardFrame.SoloModeCheckbox:SetChecked(isChecked)
       
       local isHardcoreActive = C_GameRules and C_GameRules.IsHardcoreActive and C_GameRules.IsHardcoreActive() or false

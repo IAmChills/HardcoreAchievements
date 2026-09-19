@@ -75,13 +75,26 @@ end
 
 -- Helper function to check if solo achievements mode is enabled
 local function IsSoloModeEnabled()
+    local cdb
     if type(GetCharDB) == "function" then
-        local _, cdb = GetCharDB()
-        if cdb and cdb.settings and cdb.settings.soloAchievements then
-            return true
+        _, cdb = GetCharDB()
+    end
+    if not (cdb and cdb.settings and cdb.settings.soloAchievements) then
+        return false
+    end
+
+    -- Hardcore Self-Found can be turned off at an NPC and never reapplied. The SSF
+    -- checkbox is then disabled, so a leftover checked setting would stay stuck on
+    -- and keep previewing solo/SSF points.
+    local isHardcoreActive = C_GameRules and C_GameRules.IsHardcoreActive and C_GameRules.IsHardcoreActive()
+    if isHardcoreActive then
+        local isSelfFound = addon and addon.IsSelfFound
+        if type(isSelfFound) ~= "function" or not isSelfFound() then
+            cdb.settings.soloAchievements = false
+            return false
         end
     end
-    return false
+    return true
 end
 
 -- Helper function to check if award on kill is enabled
