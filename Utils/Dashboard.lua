@@ -4260,7 +4260,7 @@ local function BuildDashboardFrame()
   -- Class icon (centered over background, with drop shadow)
   if not DashboardFrame.ClassIcon then
     DashboardFrame.ClassIcon = DashboardFrame:CreateTexture(nil, "OVERLAY")
-    DashboardFrame.ClassIcon:SetPoint("BOTTOMRIGHT", DashboardFrame.Scroll, "TOPRIGHT", -6, 50)
+    DashboardFrame.ClassIcon:SetPoint("BOTTOMRIGHT", DashboardFrame.Scroll, "TOPRIGHT", -6, 30)
     DashboardFrame.ClassIcon:SetTexCoord(0, 1, 0, 1)
     DashboardFrame.ClassIcon:SetSize(60, 60)
   end
