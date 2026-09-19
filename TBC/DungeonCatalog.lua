@@ -316,8 +316,8 @@ local Dungeons = {
       [8127] = 1,  -- Antu'sul
       [7272] = 1,  -- Theka the Martyr
       [7271] = 1,  -- Witch Doctor Zum'rah
-      [7796] = 1,  -- Nekrum Gutchewer
-      --[7275] = 1,  -- Shadowpriest Sezz'ziz
+      [7796] = 1,  -- Nekrum Gutchewer (not sure how to implement this it has been buggy)
+      [7275] = 1,  -- Shadowpriest Sezz'ziz (not sure how to implement this it has been buggy)
       [7604] = 1,  -- Sergeant Bly
       [7795] = 1,  -- Hydromancer Velratha
       [7267] = 1,  -- Chief Ukorz Sandscalp
@@ -328,7 +328,7 @@ local Dungeons = {
       [10082] = 1,  -- Zerillis (rare)
       [10080] = 1,  -- Sandarr Dunereaver (rare)
     },
-    bossOrder = {8127, 7272, 7271, 7796, 7604, 7795, 7267, 7797, 10081, 10082, 10080}
+    bossOrder = {8127, 7272, 7271, 7796, 7275, 7604, 7795, 7267, 7797, 10081, 10082, 10080}
   },
 
   -- Maraudon (Both, Level 40-50)

@@ -111,7 +111,7 @@ end
 
 -- Create Discord frame (will be created on first use)
 local discordFrame = nil
-local DISCORD_LINK = "https://discord.gg/3KChDhux2D" --https://discord.gg/3KChDhux2D alternative link
+local DISCORD_LINK = "https://discord.gg/BemPAE2y8h" --https://discord.gg/3KChDhux2D alternative link
 
 local function CreateDiscordFrame()
     if discordFrame then return discordFrame end
@@ -149,20 +149,32 @@ local function CreateDiscordFrame()
     discordLinkBox:SetAutoFocus(false)
     discordLinkBox:SetText(DISCORD_LINK)
     discordLinkBox:SetTextColor(0.345, 0.396, 0.949, 1) -- Discord blurple color
+
+    -- The link is wider than the box and the view follows the cursor, which SetText leaves at the
+    -- end. Select the whole link for copying, then park the cursor at the start so the visible
+    -- portion begins at "https://" instead of the invite code.
+    local function SelectLinkFromStart()
+        discordLinkBox:HighlightText()
+        discordLinkBox:SetCursorPosition(0)
+    end
+
+    SelectLinkFromStart()
+
     discordLinkBox:SetScript("OnEscapePressed", function(self)
         self:ClearFocus()
     end)
     
     -- Make read-only (disable editing)
-    discordLinkBox:SetScript("OnEditFocusGained", function(self)
+    discordLinkBox:SetScript("OnEditFocusGained", function()
         -- Allow selection but prevent editing
-        self:HighlightText()
+        SelectLinkFromStart()
     end)
     
     -- Make it appear read-only by preventing text changes
     discordLinkBox:SetScript("OnChar", function(self)
         -- Prevent any text input - restore original text
         self:SetText(DISCORD_LINK)
+        SelectLinkFromStart()
     end)
     
     -- Close button
@@ -172,6 +184,13 @@ local function CreateDiscordFrame()
         discordFrame:Hide()
     end)
     
+    -- The frame is reused across opens, so re-select on every show rather than only at creation.
+    -- SetFocus fires OnEditFocusGained; the explicit call covers the case where focus was retained.
+    discordFrame:SetScript("OnShow", function()
+        discordLinkBox:SetFocus()
+        SelectLinkFromStart()
+    end)
+
     -- Make frame movable
     discordFrame:SetMovable(true)
     discordFrame:EnableMouse(true)
@@ -808,11 +827,17 @@ local function ShowBackupRestore()
     ExportDatabase()
 end
 
+local function ShowDiscordFrame()
+    local frame = CreateDiscordFrame()
+    frame:Show()
+end
+
 if addon then
     addon.ShouldTakeScreenshot = ShouldTakeScreenshot
     addon.IsSoloModeEnabled = IsSoloModeEnabled
     addon.IsAwardOnKillEnabled = IsAwardOnKillEnabled
     addon.ShouldAnnounceInGuildChat = ShouldAnnounceInGuildChat
     addon.ShowBackupRestore = ShowBackupRestore
+    addon.ShowDiscordFrame = ShowDiscordFrame
     addon.OptionsPanel = optionsPanel
 end

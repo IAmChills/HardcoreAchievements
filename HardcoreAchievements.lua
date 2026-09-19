@@ -2602,7 +2602,7 @@ end)
 -- Function to show welcome message popup on first login or when version changes
 function addon:ShowWelcomeMessage()
     local Disabled = false
-    local WELCOME_MESSAGE_NUMBER = 6
+    local WELCOME_MESSAGE_NUMBER = 7
     local db = EnsureDB()
     db.settings = db.settings or {}
     
@@ -2621,9 +2621,9 @@ end
 
 -- Define the welcome message popup (MOTD)
 StaticPopupDialogs["Hardcore Achievements Vanilla"] = {
-    text = "|cff008066Hardcore Achievements|r\n\nLeaderboard performance issues have been |cff00ff00resolved|r. I have optimized the code and added a row limit to prevent lag and frame drops.\n\nPlease report any issues or feedback on Discord.",
+    text = "|cff008066Hardcore Achievements|r\n\nThe Discord link has been updated.\n\nhttps://discord.gg/BemPAE2y8h",
     button1 = "Okay",
-    --button2 = "Show Me!",
+    button2 = "Show QR code",
     timeout = 0,
     whileDead = true,
     hideOnEscape = true,
@@ -2631,15 +2631,20 @@ StaticPopupDialogs["Hardcore Achievements Vanilla"] = {
     OnAccept = function()
         -- Popup automatically closes
     end,
-    --OnCancel = function()
-        -- Popup automatically closes
-    --end,
+    OnCancel = function()
+        local showDiscord = addon and addon.ShowDiscordFrame
+        if showDiscord then
+            showDiscord()
+        else
+            OpenOptionsPanel()
+        end
+    end,
 }
 
 StaticPopupDialogs["Hardcore Achievements TBC"] = {
-    text = "|cff008066Hardcore Achievements|r\n\nLeaderboard performance issues have been |cff00ff00resolved|r. I have optimized the code and added a row limit to prevent lag and frame drops.\n\nPlease report any issues or feedback on Discord.",
+    text = "|cff008066Hardcore Achievements|r\n\nThe Discord link has been updated.\n\nhttps://discord.gg/BemPAE2y8h",
     button1 = "Okay",
-    --button2 = "Show Me!",
+    button2 = "Show QR code",
     timeout = 0,
     whileDead = true,
     hideOnEscape = true,
@@ -2647,9 +2652,14 @@ StaticPopupDialogs["Hardcore Achievements TBC"] = {
     OnAccept = function()
         -- Popup automatically closes
     end,
-    --OnCancel = function()
-        -- Popup automatically closes
-    --end,
+    OnCancel = function()
+        local showDiscord = addon and addon.ShowDiscordFrame
+        if showDiscord then
+            showDiscord()
+        else
+            OpenOptionsPanel()
+        end
+    end,
 }
 
 -- =========================================================

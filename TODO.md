@@ -3,6 +3,9 @@
 NOT USED BUT COULD HAVE USE (Already added to Icons)
 Achievement_Dungeon_Outland_Dungeon_Hero
 
+Discord link generator
+https://linkbreakers.com/qr-code-generator/discord
+
 ## Active Tasks
 
 
@@ -11,17 +14,11 @@ Achievement_Dungeon_Outland_Dungeon_Hero
 
 ## TBC TODO List
 
-- Dungeon Set Catalog
-  - Already implemented, needs updated to include TBC sets
-- Dungeon Set Common
-  - dependancy for the above catalog
-
 ## Quests
- - The Dying Balance (Boglash) at 58
-   - Something like this might suck because its so low level for Outlands
+ - 
 
 ## Explorer Achievements
- - Get Light’s Hope Chapel flight path before level 25
+ - 
 
 ## Titles? (I can fake titles in tooltips / chat but that's it. Requires addon)
  - The Eager Explorer title
