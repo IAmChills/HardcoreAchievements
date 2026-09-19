@@ -827,20 +827,36 @@ local function PositionRowBorder(row)
     
     row.Border:ClearAllPoints()
     row.Border:SetPoint("TOPLEFT", row, "TOPLEFT", -4, 0)
-    row.Border:SetSize(295, 43)
+    local borderW, highlightRight = 295, -20
+    if addon.GetRetailAchievementRowLayout then
+        local layout = addon.GetRetailAchievementRowLayout()
+        if layout then
+            row:SetWidth(layout.rowWidth)
+            borderW = layout.borderWidth
+            highlightRight = layout.highlightRight
+            if row.PointsFrame then
+                row.PointsFrame:ClearAllPoints()
+                row.PointsFrame:SetPoint("RIGHT", row, "RIGHT", layout.pointsOffset, 0)
+            end
+            if row.Sub then
+                row.Sub:SetWidth(layout.subWidth)
+            end
+        end
+    end
+    row.Border:SetSize(borderW, 43)
     row.Border:Show()
     
     if row.Background then
         row.Background:ClearAllPoints()
         row.Background:SetPoint("TOPLEFT", row, "TOPLEFT", -4, 0)
-        row.Background:SetSize(295, 43)
+        row.Background:SetSize(borderW, 43)
         row.Background:Show()
     end
 
     if row.highlight then
         row.highlight:ClearAllPoints()
         row.highlight:SetPoint("TOPLEFT", row, "TOPLEFT", -4, 0)
-        row.highlight:SetPoint("BOTTOMRIGHT", row, "BOTTOMRIGHT", -20, -1)
+        row.highlight:SetPoint("BOTTOMRIGHT", row, "BOTTOMRIGHT", highlightRight, -1)
     end
 end
 
@@ -1222,7 +1238,7 @@ local function SortAchievementRows()
     end
 
     AchievementPanel.Content:SetHeight(math.max(totalHeight + 16, AchievementPanel.Scroll:GetHeight() or 0))
-    AchievementPanel.Scroll:UpdateScrollChildRect()
+    pcall(AchievementPanel.Scroll.UpdateScrollChildRect, AchievementPanel.Scroll)
 end
 
 -- Function to update points display and checkmark based on state
@@ -1908,6 +1924,13 @@ local function RestoreCompletionsFromDB()
 end
 
 local function ToggleAchievementCharacterFrameTab()
+    if addon.IsForeverCharacterUI and not (addon.HasCharacterFrameModeTabs and addon.HasCharacterFrameModeTabs()) then
+        if addon.Dashboard and addon.Dashboard.Toggle then
+            addon.Dashboard:Toggle()
+        end
+        return
+    end
+
     local isShown = CharacterFrame and CharacterFrame:IsShown() and
                    (AchievementPanel and AchievementPanel:IsShown() or (Tab and Tab.squareFrame and Tab.squareFrame:IsShown()))
     -- Resolve at call time: addon.ShowAchievementTab is set later in this file
@@ -1925,6 +1948,14 @@ local function ToggleAchievementCharacterFrameTab()
 end
 
 local function ShowHardcoreAchievementWindow()
+    -- Forever + classic UI restorer: no character-frame tab. Dashboard only.
+    if addon.IsForeverCharacterUI and not (addon.HasCharacterFrameModeTabs and addon.HasCharacterFrameModeTabs()) then
+        if addon.Dashboard and addon.Dashboard.Toggle then
+            addon.Dashboard:Toggle()
+        end
+        return
+    end
+
     local _, cdb = GetCharDB()
     -- Check if user wants to use Character Panel instead of Dashboard (default is Character Panel)
     local useCharacterPanel = true
@@ -2536,7 +2567,10 @@ if addon then
     addon.SetProgress = SetProgress
     addon.ClearProgress = ClearProgress
     addon.GetCharDB = GetCharDB
-    addon.GetTab = function() return Tab end
+    addon.GetTab = function()
+        -- Retail Forever uses CharacterFrameModeTabN in the side strip; the classic bottom tab is hidden.
+        return addon.CharacterFrameModeTab or Tab
+    end
     addon.HideVerticalTab = function()
         if Tab and Tab.squareFrame then
             Tab.squareFrame:Hide()
@@ -2869,6 +2903,16 @@ local TabName = (addonName or "HardcoreAchievements") .. "Tab"
 
 -- Don't set position here - let LoadTabPosition handle it after CharacterFrame is fully initialized
 Tab = addon.CreatePanelTab(TabName, CharacterFrame or UIParent, ACHIEVEMENTS)
+if addon.IsForeverCharacterUI then
+    -- Forever never uses the Classic/TBC CharacterFrameTab. Retail ModeTabs get a crown tab;
+    -- a classic-UI restorer gets no character-frame tab (dashboard only).
+    Tab:Hide()
+    Tab:EnableMouse(false)
+    Tab:SetAlpha(0)
+    if addon.HasCharacterFrameModeTabs and addon.HasCharacterFrameModeTabs() and addon.CreateCharacterFrameModeTab then
+        addon.CreateCharacterFrameModeTab(TabName .. "Mode")
+    end
+end
 
 -- Draggable "curl" behavior for Achievements tab (bottom + right edges only)
 -- Tab persistence functions
@@ -2907,6 +2951,31 @@ local function SaveTabPosition()
 end
 
 function LoadTabPosition()
+    -- Forever: never place the Classic/TBC bottom/right tab. Retail ModeTabs keep the crown;
+    -- a classic-UI restorer has no character-frame achievements tab.
+    if addon.IsForeverCharacterUI then
+        if Tab then
+            Tab:Hide()
+            Tab:EnableMouse(false)
+            Tab:SetAlpha(0)
+            if Tab.squareFrame then
+                Tab.squareFrame:Hide()
+                Tab.squareFrame:EnableMouse(false)
+            end
+        end
+        if addon.HasCharacterFrameModeTabs and addon.HasCharacterFrameModeTabs() then
+            if addon.LayoutCharacterFrameModeTab then
+                addon.LayoutCharacterFrameModeTab()
+            end
+            if addon.BindCharacterFrameModeTabClick then
+                addon.BindCharacterFrameModeTabClick()
+            end
+        elseif addon.LayoutCharacterFrameModeTab then
+            addon.LayoutCharacterFrameModeTab()
+        end
+        return
+    end
+
     local db = EnsureDB()
     if db.tabSettings and db.tabSettings.mode and db.tabSettings.position then
         local savedMode = db.tabSettings.mode
@@ -3428,6 +3497,13 @@ do
     end)
 end
 -- === end draggable curl behavior ===
+
+if addon.IsForeverCharacterUI then
+    -- The drag block above re-enables mouse on the classic tab; Forever never uses that tab.
+    Tab:Hide()
+    Tab:EnableMouse(false)
+    Tab:SetAlpha(0)
+end
  
 local function EnsureAchievementPanelCreated()
     if AchievementPanel then
@@ -3571,7 +3647,13 @@ AchievementPanel:HookScript("OnHide", function(self)
     end
     
     if Tab then
-        PanelTemplates_DeselectTab(Tab)
+        if addon.HasCharacterFrameModeTabs and addon.HasCharacterFrameModeTabs() then
+            if addon.SetCharacterFrameModeTabSelected then
+                addon.SetCharacterFrameModeTabSelected(addon.CharacterFrameModeTab, false)
+            end
+        else
+            PanelTemplates_DeselectTab(Tab)
+        end
         if Tab.squareFrame and Tab.squareFrame:IsShown() and Tab.squareFrame.highlight then
             Tab.squareFrame.highlight:Hide()
         end
@@ -3881,7 +3963,9 @@ AchievementPanel.Scroll:SetScript("OnMouseWheel", function(self, delta)
     self:SetVerticalScroll(newV)
 
     local sb = self.ScrollBar or (self:GetName() and _G[self:GetName().."ScrollBar"])
-    if sb then sb:SetValue(newV) end
+    if sb and sb.SetValue then
+        pcall(sb.SetValue, sb, newV)
+    end
 end)
 
 AchievementPanel.Scroll:SetScript("OnScrollRangeChanged", function(self, xRange, yRange)
@@ -3894,8 +3978,12 @@ AchievementPanel.Scroll:SetScript("OnScrollRangeChanged", function(self, xRange,
     end
     local sb = self.ScrollBar or (self:GetName() and _G[self:GetName().."ScrollBar"])
     if sb then
-        sb:SetMinMaxValues(0, yRange)
-        sb:SetValue(self:GetVerticalScroll())
+        if sb.SetMinMaxValues then
+            pcall(sb.SetMinMaxValues, sb, 0, yRange)
+        end
+        if sb.SetValue then
+            pcall(sb.SetValue, sb, self:GetVerticalScroll())
+        end
     end
 end)
 
@@ -3922,9 +4010,13 @@ BR:SetTexture("Interface\\PaperDollInfoFrame\\UI-Character-General-BottomRight")
 BR:SetPoint("TOPLEFT", BL, "TOPRIGHT", 0, 0)
 BR:SetPoint("LEFT", TR, "LEFT", 0, 0)
 BR:SetPoint("BOTTOMRIGHT", AchievementPanel, "BOTTOMRIGHT", 2, -1)
+AchievementPanel._hcaClassicParchment = { TL, TR, BL, BR }
 
     -- Storage for UI row frames (built lazily from the model)
     AchievementPanel.achievements = AchievementPanel.achievements or {}
+    if addon.ApplyRetailAchievementPanelLayout then
+        addon.ApplyRetailAchievementPanelLayout(AchievementPanel)
+    end
 
     -- Hook restore after panel is shown
     if not AchievementPanel._hc_restoreCompletionsHooked and RestoreCompletionsFromDB then
@@ -3947,7 +4039,14 @@ local function CreateAchievementRowFromData(data, index)
         data.achId, data.title, data.tooltip, data.icon, data.level, data.points, data.killTracker, data.questTracker, data.staticPoints, data.zone, data.def
     local rowParent = AchievementPanel and AchievementPanel.Content or AchievementPanel
     local row = CreateFrame("Frame", nil, rowParent)
-    row:SetSize(310, 42)
+    local rowWidth = 310
+    if addon.GetRetailAchievementRowLayout then
+        local layout = addon.GetRetailAchievementRowLayout()
+        if layout then
+            rowWidth = layout.rowWidth
+        end
+    end
+    row:SetSize(rowWidth, 42)
     row:SetClipsChildren(false)
     if index == 1 then
         row:SetPoint("TOPLEFT", rowParent, "TOPLEFT", 0, 0)
@@ -5872,6 +5971,14 @@ end
  
 -- Reusable function for achievement tab click logic
 local function ShowAchievementTab()
+    -- Forever + classic UI restorer: do not open the character-frame panel.
+    if addon.IsForeverCharacterUI and not (addon.HasCharacterFrameModeTabs and addon.HasCharacterFrameModeTabs()) then
+        if addon.Dashboard and addon.Dashboard.Toggle then
+            addon.Dashboard:Toggle()
+        end
+        return
+    end
+
     if EnsureAchievementPanelCreated then
         EnsureAchievementPanelCreated()
     end
@@ -5888,14 +5995,26 @@ local function ShowAchievementTab()
         PlaySound("igCharacterInfoTab")
     end
 
-    for i = 1, addon.GetCharacterFrameTabCount() do
-        local t = _G["CharacterFrameTab"..i]
-        if t then
-            PanelTemplates_DeselectTab(t)
+    if addon.HasCharacterFrameModeTabs and addon.HasCharacterFrameModeTabs() then
+        if addon.LayoutCharacterFrameModeTab then
+            addon.LayoutCharacterFrameModeTab()
         end
-    end
+        if addon.BindCharacterFrameModeTabClick then
+            addon.BindCharacterFrameModeTabClick()
+        end
+        if addon.SelectCharacterFrameModeTab then
+            addon.SelectCharacterFrameModeTab(addon.CharacterFrameModeTab)
+        end
+    else
+        for i = 1, addon.GetCharacterFrameTabCount() do
+            local t = _G["CharacterFrameTab"..i]
+            if t then
+                PanelTemplates_DeselectTab(t)
+            end
+        end
 
-    PanelTemplates_SelectTab(Tab)
+        PanelTemplates_SelectTab(Tab)
+    end
 
     -- Hide Blizzard subframes manually (same list Hardcore hides)
     if _G["PaperDollFrame"]    then _G["PaperDollFrame"]:Hide()    end
@@ -5913,6 +6032,9 @@ local function ShowAchievementTab()
 
     -- Show our AchievementPanel directly (no CharacterFrame_ShowSubFrame)
     AchievementPanel:Show()
+    if addon.ApplyRetailAchievementPanelLayout then
+        addon.ApplyRetailAchievementPanelLayout(AchievementPanel)
+    end
     --Tab.squareFrame:Show()
     
     -- Sync solo mode checkbox state
@@ -5959,6 +6081,14 @@ local function ShowAchievementTab()
 end
 -- Export so ToggleAchievementCharacterFrameTab and square frame can call at click time
 if addon then addon.ShowAchievementTab = ShowAchievementTab end
+
+addon.BindCharacterFrameModeTabClick = function()
+    local modeTab = addon.CharacterFrameModeTab
+    if modeTab and addon.SetCharacterFrameModeTabOnActivate then
+        addon.SetCharacterFrameModeTabOnActivate(modeTab, ShowAchievementTab)
+    end
+end
+addon.BindCharacterFrameModeTabClick()
 
 Tab:SetScript("OnClick", ShowAchievementTab)
 
@@ -6013,7 +6143,13 @@ addon.SafeHookGlobal("CharacterFrame_ShowSubFrame", function(frameName)
         AchievementPanel._suppressOnHide = true
         AchievementPanel:Hide()
         -- AchievementPanel.PortraitCover:Hide()
-        PanelTemplates_DeselectTab(Tab)
+        if addon.HasCharacterFrameModeTabs and addon.HasCharacterFrameModeTabs() then
+            if addon.SetCharacterFrameModeTabSelected then
+                addon.SetCharacterFrameModeTabSelected(addon.CharacterFrameModeTab, false)
+            end
+        else
+            PanelTemplates_DeselectTab(Tab)
+        end
         
         -- Hide highlight when switching away from achievements
         if Tab.squareFrame and Tab.squareFrame:IsShown() and Tab.squareFrame.highlight then
@@ -6053,6 +6189,11 @@ CharacterFrame:HookScript("OnShow", function()
     
     -- Load tab position (this handles both saved and default positions, including expansion-dependent defaults)
     LoadTabPosition()
+    -- Forever classic-UI restorers hide ModeTabs in their own OnShow; re-evaluate so the crown tab
+    -- is put away and we do not leave a leftover character-frame tab.
+    if addon.IsForeverCharacterUI and C_Timer and C_Timer.After then
+        C_Timer.After(0, LoadTabPosition)
+    end
 end)
 
 -- Hook ToggleCharacter to handle CharacterStatsClassic visibility and square frame
