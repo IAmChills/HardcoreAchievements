@@ -1626,9 +1626,13 @@ local function MarkRowCompleted(row, cdbParam)
         
         -- Fire hook event for other addons
         if addon and addon.Hooks then
-            -- Get aggregate statistics (after completion, so counts are up-to-date)
-            local completedCount, totalCount = AchievementCount()
-            local totalPoints = GetTotalPoints()
+            -- Get aggregate statistics (after completion, so counts are up-to-date).
+            -- Via the cached accessor: UpdateTotalPoints above already walked every row, and the
+            -- leaderboard publish this hook kicks off reads the same tuple, so going through the
+            -- cache turns three full scans into one.
+            local stats = GetCachedAchievementStats()
+            local completedCount, totalCount = stats.completed, stats.total
+            local totalPoints = stats.points
             
             local achievementData = {
                 achievementId = id,
@@ -2351,6 +2355,75 @@ local function GetProgress(achId)
     return cdb.progress[achId]
 end
 
+-- A single boss kill fans out into a lot of SetProgress calls. Every dungeon variation tracking that
+-- boss (base, Solo, Duo, Trio) separately stores counts, points-at-kill and a three-part entry-level
+-- snapshot, which is roughly 5-7 writes each, so 20-plus writes for one kill. Each write used to
+-- queue its own next-frame pass, and every pass ran CheckPendingCompletions across the whole
+-- catalog, meaning one kill could probe tens of thousands of rows in a single frame.
+--
+-- Coalesce the burst into one pass and remember which achievements actually changed so the follow-up
+-- refresh stays as narrow as it was before.
+local progressFlushPending = false
+local progressDirtyAchIds = {}
+
+local function FlushProgressUpdates()
+    progressFlushPending = false
+
+    -- Only live gameplay progress should queue follow-up completion checks.
+    -- Initial login/retroactive passes run their own synchronous completion sweep.
+    -- One sweep covers every achievement touched during the burst.
+    if addon and addon.CheckPendingCompletions then
+        addon.CheckPendingCompletions()
+    end
+
+    -- Resolve every dirty achievement in one pass over the model rather than one pass each.
+    local dirtyRows = nil
+    local resolved = nil
+    for _, r in ipairs((addon and addon.AchievementRowModel) or {}) do
+        local matched = nil
+        if r.id ~= nil and progressDirtyAchIds[r.id] then
+            matched = r.id
+        elseif r.achId ~= nil and progressDirtyAchIds[r.achId] then
+            matched = r.achId
+        end
+        if matched ~= nil then
+            dirtyRows = dirtyRows or {}
+            dirtyRows[#dirtyRows + 1] = r
+            resolved = resolved or {}
+            resolved[matched] = true
+        end
+    end
+
+    -- Progress can flip failed <-> available (e.g. kills done, quest still in log).
+    -- Clear only the affected achievements' cached rows so other results stay hot.
+    local needsFullOutleveledRefresh = false
+    local anyUnresolved = false
+    for achId in pairs(progressDirtyAchIds) do
+        progressDirtyAchIds[achId] = nil
+        local dirtyUiRow = InvalidateOutleveledCacheForAchId(achId)
+        if dirtyUiRow then
+            ApplyOutleveledStyle(dirtyUiRow)
+        else
+            needsFullOutleveledRefresh = true
+        end
+        if not (resolved and resolved[achId]) then
+            anyUnresolved = true
+        end
+    end
+
+    if needsFullOutleveledRefresh then
+        RefreshOutleveledAll()
+    else
+        RefreshAuxiliaryViews()
+    end
+
+    -- Partial refresh: only recalculate the rows whose progress just changed. An achievement we
+    -- could not resolve to a model row means we cannot narrow it, so fall back to the full pass.
+    if addon and addon.RefreshAllAchievementPoints then
+        addon.RefreshAllAchievementPoints((not anyUnresolved) and dirtyRows or nil)
+    end
+end
+
 local function SetProgress(achId, key, value)
     local _, cdb = GetCharDB()
     if not cdb then return end
@@ -2368,34 +2441,13 @@ local function SetProgress(achId, key, value)
 
     if restorationsComplete and not skipBroadcastForRetroactive and not (addon and addon.Initializing) then
         MarkUnsavedAchievementProgress()
-        C_Timer.After(0, function()
-            -- Only live gameplay progress should queue follow-up completion checks.
-            -- Initial login/retroactive passes run their own synchronous completion sweep.
-            addon.CheckPendingCompletions()
-
-            -- Progress can flip failed ↔ available (e.g. kills done, quest still in log).
-            -- Clear only this achievement's cached rows so other results stay hot.
-            local dirtyUiRow = InvalidateOutleveledCacheForAchId(achId)
-            if dirtyUiRow then
-                ApplyOutleveledStyle(dirtyUiRow)
-                RefreshAuxiliaryViews()
-            else
-                RefreshOutleveledAll()
-            end
-
-            -- Partial refresh: only recalculate the row whose progress just changed
-            -- instead of looping all achievements on every kill/quest event.
-            if addon.RefreshAllAchievementPoints then
-                local dirtyRow = nil
-                for _, r in ipairs(addon.AchievementRowModel or {}) do
-                    if (r.id == achId or r.achId == achId) then
-                        dirtyRow = r
-                        break
-                    end
-                end
-                addon.RefreshAllAchievementPoints(dirtyRow and {dirtyRow} or nil)
-            end
-        end)
+        if achId ~= nil then
+            progressDirtyAchIds[achId] = true
+        end
+        if not progressFlushPending then
+            progressFlushPending = true
+            C_Timer.After(0, FlushProgressUpdates)
+        end
     end
 end
 
