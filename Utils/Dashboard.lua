@@ -2888,12 +2888,11 @@ local function IsSummaryDataReady(srcRows)
   if type(GetCharDB) ~= "function" then
     return false
   end
+  -- cdb is nil until the player GUID resolves, which is the genuine "not ready yet" case. Its
+  -- achievements table being empty is not: a new character has no records and never will until it earns
+  -- one, so requiring a key here left the summary permanently blank on a fresh character.
   local _, cdb = GetCharDB()
   if not (cdb and cdb.achievements) then
-    return false
-  end
-  -- If the database is still restoring, it may be empty initially; allow it once it has any keys.
-  if next(cdb.achievements) == nil then
     return false
   end
   return true
@@ -2941,12 +2940,9 @@ local function UpdateDashboardProgressOverview(srcRows)
   if type(GetCharDB) == "function" then
     _, cdb = GetCharDB()
   end
-  local achievements = cdb and cdb.achievements or {}
-  if not achievements or next(achievements) == nil then
-    DashboardFrame.ProgressContainer:Hide()
-    DashboardFrame.ProgressHeaderText:Hide()
-    return
-  end
+  -- No records is the normal state for a new character, not a sign that anything is missing, so the
+  -- bars render at zero instead of the overview staying hidden until the first achievement lands.
+  local achievements = (cdb and cdb.achievements) or {}
 
   local classR, classG, classB = GetPlayerClassColor()
 
