@@ -2859,11 +2859,13 @@ StaticPopupDialogs["Hardcore Achievements Vanilla"] = {
     timeout = 0,
     whileDead = true,
     hideOnEscape = true,
+    noCancelOnEscape = true,
     preferredIndex = 3,
     OnAccept = function()
         -- Popup automatically closes
     end,
     OnCancel = function()
+        -- button2 only. Escape must not run this (cinematic skip also presses Escape).
         local showDiscord = addon and addon.ShowDiscordFrame
         if showDiscord then
             showDiscord()
@@ -2880,11 +2882,13 @@ StaticPopupDialogs["Hardcore Achievements TBC"] = {
     timeout = 0,
     whileDead = true,
     hideOnEscape = true,
+    noCancelOnEscape = true,
     preferredIndex = 3,
     OnAccept = function()
         -- Popup automatically closes
     end,
     OnCancel = function()
+        -- button2 only. Escape must not run this (cinematic skip also presses Escape).
         local showDiscord = addon and addon.ShowDiscordFrame
         if showDiscord then
             showDiscord()
