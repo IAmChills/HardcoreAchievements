@@ -497,6 +497,15 @@ local function ShowAchievementTooltip(frame, data)
     end
     
     GameTooltip:AddLine(tooltip, nil, nil, nil, true)
+
+    -- Guild firsts won by someone else remain listed, so say so and when it happened.
+    if isGuildFirst and not achievementCompleted and addon and addon.GetGuildFirstClaimedLabel then
+        local claimedLabel, claimedAt = addon.GetGuildFirstClaimedLabel(achId, data)
+        if claimedLabel then
+            local claimedDate = (claimedAt and addon.FormatTimestamp) and addon.FormatTimestamp(claimedAt) or ""
+            GameTooltip:AddDoubleLine(claimedLabel, claimedDate, 1, 0.27, 0.27, 0.6, 0.6, 0.6)
+        end
+    end
     
     -- For achievements without level requirements (secret, profession, or no level), show points below the description
     if showPointsInBody then

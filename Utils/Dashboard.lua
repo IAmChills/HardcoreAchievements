@@ -372,6 +372,7 @@ local function ShouldShowBySelectedTab(def)
   if key == "dungeon_trio" then return def.isVariation == true and def.variationType == "Trio" end
   if key == "ridiculous" then return def.isRidiculous == true end
   if key == "secret" then return def.isSecret == true end
+  if key == "guild" then return def.isGuildFirst == true end
   if key == "log" then return false end
   if key == "leaderboard" then return false end
 
@@ -396,6 +397,7 @@ local function DefMatchesTabKey(def, key)
   if key == "dungeon_trio" then return def.isVariation == true and def.variationType == "Trio" end
   if key == "ridiculous" then return def.isRidiculous == true end
   if key == "secret" then return def.isSecret == true end
+  if key == "guild" then return def.isGuildFirst == true end
   if key == "log" then return false end
   if key == "leaderboard" then return false end
   return false
@@ -2863,6 +2865,7 @@ local function EnsureDashboardProgressOverviewUI()
     dungeon_trio = CreateProgressBar(container),
     ridiculous = CreateProgressBar(container),
     secret = CreateProgressBar(container),
+    guild = CreateProgressBar(container),
   }
 end
 
@@ -2959,6 +2962,8 @@ local function UpdateDashboardProgressOverview(srcRows)
         local isExploration = row._def and row._def.isExploration
         local isRidiculous = row._def and row._def.isRidiculous
         local isSecret = row._def and row._def.isSecret
+        -- Only one player per guild can win each guild first, so unclaimed ones stay out of totals.
+        local isGuildFirst = row._def and row._def.isGuildFirst
         local excludeFromCount = row._def and row._def.excludeFromCount
 
         local shouldCount =
@@ -2971,6 +2976,7 @@ local function UpdateDashboardProgressOverview(srcRows)
           and (not isExploration or row.completed)
           and (not isRidiculous or row.completed)
           and (not isSecret or row.completed)
+          and (not isGuildFirst or row.completed)
 
         if shouldCount then
           total = total + 1
@@ -3015,27 +3021,6 @@ local function UpdateDashboardProgressOverview(srcRows)
           end
 
           if hasSkill or isCompleted then
-            total = total + 1
-            if isCompleted then
-              completed = completed + 1
-            end
-          end
-        end
-      end
-      c, t = completed, total
-    elseif key == "secret" then
-      -- Secret progress: count secret achievements, but do NOT include GuildFirst-style
-      -- "claim" secrets unless the player has actually completed them.
-      local completed, total = 0, 0
-      for _, row in ipairs(srcRows) do
-        local def = row and row._def
-        if def and def.isSecret == true then
-          local achId = tostring(row.achId or row.id or def.achId or "")
-          local rec = (achId ~= "" and achievements) and achievements[achId] or nil
-          local isCompleted = (rec and rec.completed == true) or (row and row.completed == true)
-
-          -- GuildFirst secrets are not "real" secrets for the player unless they won/claimed them.
-          if def.isGuildFirst ~= true or isCompleted then
             total = total + 1
             if isCompleted then
               completed = completed + 1
@@ -3121,6 +3106,7 @@ local function UpdateDashboardProgressOverview(srcRows)
   end
   table_insert(rightKeys, "exploration")
   table_insert(rightKeys, "secret")
+  table_insert(rightKeys, "guild")
 
   local function LayoutColumn(keys, side)
     for i, key in ipairs(keys) do
@@ -3157,6 +3143,7 @@ local function UpdateDashboardProgressOverview(srcRows)
   SetBar("dungeon_trio", "Dungeon Trio")
   SetBar("ridiculous", "Ridiculous")
   SetBar("secret", "Secret")
+  SetBar("guild", "Guild")
 
   LayoutColumn(leftKeys, "left")
   LayoutColumn(rightKeys, "right")
@@ -4067,6 +4054,7 @@ local function BuildDashboardFrame()
       { key = "dungeon_trio", label = "Dungeon Trio" },
       { key = "ridiculous", label = "Ridiculous" },
       { key = "secret", label = "Secret" },
+      { key = "guild", label = "Guild" },
       { key = "log", label = "Logs" },
     }
     for _, t in ipairs(more) do table_insert(tabDefs, t) end
@@ -4662,6 +4650,7 @@ local DASHBOARD_ACHIEVEMENT_TAB_KEYS = {
   "dungeon_trio",
   "ridiculous",
   "secret",
+  "guild",
   "all",
 }
 

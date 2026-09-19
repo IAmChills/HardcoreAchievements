@@ -72,6 +72,10 @@ local function GetStatusParamsForAchievement(achId, row)
     local isMetaAchievement = (row._def and (row._def.isMetaAchievement or row._def.isMeta or row._def.requiredAchievements ~= nil))
         or (row.requiredAchievements ~= nil)
         or false
+    local guildFirstClaimedLabel = nil
+    if not row.completed and addon and addon.GetGuildFirstClaimedLabel then
+        guildFirstClaimedLabel = addon.GetGuildFirstClaimedLabel(rowId, row)
+    end
     return {
         completed = row.completed or false,
         hasSoloStatus = hasSoloStatus,
@@ -86,6 +90,7 @@ local function GetStatusParamsForAchievement(achId, row)
         isOutleveled = (addon and addon.IsRowOutleveled) and addon.IsRowOutleveled(row),
         isSecretAchievement = isSecretAchievement,
         isMetaAchievement = isMetaAchievement,
+        guildFirstClaimedLabel = guildFirstClaimedLabel,
     }
 end
 
@@ -102,6 +107,12 @@ local function GetStatusText(params)
     local allowSoloDouble = params.allowSoloDouble or false
     local isSecretAchievement = params.isSecretAchievement or false
     local isMetaAchievement = params.isMetaAchievement or false
+    local guildFirstClaimedLabel = params.guildFirstClaimedLabel
+
+    -- A guild first taken by another player can never be earned, which outranks every other status.
+    if not completed and type(guildFirstClaimedLabel) == "string" and guildFirstClaimedLabel ~= "" then
+        return "|cffff4646" .. guildFirstClaimedLabel .. "|r"
+    end
     
     -- Priority order:
     -- 1. Ineligible kill (takes highest priority)

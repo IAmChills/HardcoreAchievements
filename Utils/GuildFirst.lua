@@ -66,6 +66,7 @@ local table_concat = table.concat
 local string_byte = string.byte
 local string_format = string.format
 local string_gmatch = string.gmatch
+local string_match = string.match
 
 -- ---------------------------------------------------------------------------------------------------------------------
 -- Guild-first toast (own frame above main achievement toast so both are visible)
@@ -249,6 +250,13 @@ local function Debug(msg)
     end
 end
 
+--- Callers build their message before Debug can discard it. IsClaimed now runs for every
+--- guild-first row on each points refresh, so the hot paths check this first and skip the
+--- concatenations (and the peer-ID work that only feeds them) when debug output is off.
+local function DebugEnabled()
+    return (addon and addon.HardcoreAchievementsDB and addon.HardcoreAchievementsDB.debugEnabled) and true or false
+end
+
 local function Hash32(s)
     local h = 5381
     for i = 1, #s do
@@ -338,6 +346,42 @@ local function GetGuildFirstDef(achId, row)
         return defById[tostring(achId)]
     end
     return nil
+end
+
+--- True when a guild member other than us has already reached `level`.
+---
+--- Level guild-firsts are the one case we can police against guildmates who do not run the addon:
+--- the claim network only knows about peers, but the guild roster reports a level for every member,
+--- including offline ones. If anyone else is already there, they got there first.
+---
+--- Deliberately fails open. A roster that has not populated yet reports zero members, and denying a
+--- legitimate claim is worse than missing a non-addon rival, since a claim can only be made once.
+--- @param level number
+--- @return boolean
+local function GuildmateHasReachedLevel(level)
+    level = tonumber(level)
+    if not level or level <= 0 then return false end
+    if not (IsInGuild and IsInGuild()) then return false end
+    if type(GetNumGuildMembers) ~= "function" or type(GetGuildRosterInfo) ~= "function" then
+        return false
+    end
+
+    -- UnitName("player") is already bare, so no realm stripping or trimming is needed here.
+    local myName = UnitName("player") or ""
+    local total = GetNumGuildMembers() or 0
+    for i = 1, total do
+        local name, _, _, memberLevel = GetGuildRosterInfo(i)
+        if name then
+            -- Roster names can carry a realm suffix; compare on the character name alone.
+            local baseName = string_match(tostring(name), "^([^%-]+)") or tostring(name)
+            if baseName ~= myName and (tonumber(memberLevel) or 0) >= level then
+                Debug("GuildmateHasReachedLevel(" .. level .. "): " .. baseName .. " is already level " .. tostring(memberLevel))
+                return true
+            end
+        end
+    end
+
+    return false
 end
 
 local function DefaultRequireSameGuild(def)
@@ -582,11 +626,23 @@ local function EnsureDBForScope(scopeKey)
                     ClearRevokedGuildFirstClaim(tostring(key), "claim removed")
                 end
                 
-                if type(ApplyFilter) == "function" then
-                    C_Timer.After(0.1, function()
-                        ApplyFilter()
-                    end)
+                -- Whether a guild-first row reads as failed now depends on this claim, and
+                -- IsRowOutleveled memoizes per row, so drop the cached verdict before restyling.
+                if addon and addon.InvalidateOutleveledCacheForAchId then
+                    addon.InvalidateOutleveledCacheForAchId(tostring(key))
                 end
+
+                C_Timer.After(0.1, function()
+                    -- RefreshAllAchievementPoints rewrites the status text and calls
+                    -- RefreshOutleveledAll, so the row picks up the red styling and the
+                    -- "Claimed by" subtext in a single pass.
+                    if addon and addon.RefreshAllAchievementPoints then
+                        addon.RefreshAllAchievementPoints()
+                    end
+                    if type(ApplyFilter) == "function" then
+                        ApplyFilter()
+                    end
+                end)
             end,
         })
     end
@@ -694,11 +750,12 @@ local function IsClaimed(self, achievementId, row)
 
     local rec = LibP2PDB:GetKey(db, TABLE_NAME, achievementId)
     if rec then
-        local myGUID = UnitGUID("player") or ""
-        if RecordIncludesPeerID(rec, GetLocalPeerId()) then
-            Debug("IsClaimed(" .. achievementId .. "): Already claimed and I am an eligible winner (scope: " .. tostring(scopeKey) .. ")")
-        else
-            Debug("IsClaimed(" .. achievementId .. "): Already claimed by " .. tostring(rec.winnerName or "?") .. " (scope: " .. tostring(scopeKey) .. ")")
+        if DebugEnabled() then
+            if RecordIncludesPeerID(rec, GetLocalPeerId()) then
+                Debug("IsClaimed(" .. achievementId .. "): Already claimed and I am an eligible winner (scope: " .. tostring(scopeKey) .. ")")
+            else
+                Debug("IsClaimed(" .. achievementId .. "): Already claimed by " .. tostring(rec.winnerName or "?") .. " (scope: " .. tostring(scopeKey) .. ")")
+            end
         end
         return true, rec
     end
@@ -770,6 +827,15 @@ local function CanClaimAndAward(self, achievementId, row, winnersPeerIDs)
         return false
     end
 
+    -- Level milestones also lose to guildmates who never installed the addon, so they are checked
+    -- against the roster rather than only against the claim network.
+    local def = GetGuildFirstDef(achievementId, row)
+    local levelGate = def and tonumber(def.requiresNoGuildmateAtLevel)
+    if levelGate and GuildmateHasReachedLevel(levelGate) then
+        Debug("CanClaimAndAward(" .. achievementId .. "): A guildmate already reached level " .. levelGate .. " - silently failing")
+        return false
+    end
+
     -- Claim it (use peer IDs for smaller sync payload)
     local myName = UnitName("player") or ""
     local myPeerId = GetLocalPeerId()
@@ -812,7 +878,6 @@ local function CanClaimAndAward(self, achievementId, row, winnersPeerIDs)
             MarkRowCompleted(row)
         end
         -- Always show guild-first toast when we're a winner (use row or def so we show even when row is nil)
-        local def = GetGuildFirstDef(achievementId, row)
         local icon = (row and ((row.Icon and row.Icon.GetTexture and row.Icon:GetTexture()) or row.icon)) or (def and def.icon) or 136116
         local titleText = (row and ((row.Title and row.Title.GetText and row.Title:GetText()) or row.title)) or (def and def.title) or tostring(achievementId)
         local pts = (row and row.points) or (def and def.points) or 0
@@ -851,10 +916,89 @@ local function Trigger(self, guildFirstAchId, opts)
     return self:CanClaimAndAward(guildFirstAchId, row, winnersPeerIDs)
 end
 
+-- ---------------------------------------------------------------------------------------------------------------------
+-- Guild scope tracking
+--
+-- Guild-scoped claims live in a per-guild database (scope key carries the guild name, and
+-- PrefixForKey hashes it into its own LibP2PDB channel). Changing guild therefore changes which
+-- claims apply to us: entries we never won read as unclaimed again in the new guild, while anything
+-- we actually won stays completed in the character database regardless of guild.
+-- ---------------------------------------------------------------------------------------------------------------------
+
+local activeGuildScopeKey = nil
+local guildScopeSettled = false
+
+--- Drop a guild scope we are no longer a member of. State is persisted first so rejoining that guild
+--- restores its claims, and the presence ticker is cancelled so we stop gossiping to a guild we left
+--- every 60 seconds for the rest of the session.
+local function ReleaseGuildScope(scopeKey)
+    local info = scopeKey and databases[scopeKey]
+    if not info then return end
+    if info.db then
+        PersistScopeState(scopeKey, info.db)
+    end
+    if info.presenceTicker and type(info.presenceTicker.Cancel) == "function" then
+        info.presenceTicker:Cancel()
+    end
+    databases[scopeKey] = nil
+    Debug("Released guild scope: " .. tostring(scopeKey))
+end
+
+--- Every guild-first row can flip between claimed and available when the guild changes, and
+--- IsRowOutleveled memoizes those verdicts, so wipe the cache and restyle instead of leaving stale
+--- "Claimed" labels until the next reload.
+local function NotifyGuildScopeChanged()
+    if addon and addon.InvalidateOutleveledCache then
+        addon.InvalidateOutleveledCache()
+    end
+    if addon and addon.RefreshAllAchievementPoints then
+        addon.RefreshAllAchievementPoints()
+    end
+    if type(ApplyFilter) == "function" then
+        ApplyFilter()
+    end
+end
+
+local function RefreshGuildScope()
+    local realm = GetRealmName()
+    if realm == "" then return end
+
+    local guildName = GetGuildName()
+    local newKey = (guildName and guildName ~= "") and ("Guild@" .. guildName .. "@" .. realm) or nil
+    if newKey == activeGuildScopeKey then return end
+
+    -- Before the scope settles this is just login resolving our guild, and login already runs a full
+    -- refresh of its own. Only genuine guild changes after that are worth another pass.
+    local isGuildChange = guildScopeSettled
+
+    if activeGuildScopeKey then
+        ReleaseGuildScope(activeGuildScopeKey)
+    end
+    activeGuildScopeKey = newKey
+
+    if newKey then
+        local db = EnsureDBForScope(newKey)
+        -- EnsureDBForScope only broadcasts presence, assuming no peers exist yet. After a guild
+        -- change peers are already out there, so pull the new guild's claims now rather than waiting
+        -- up to 60 seconds for the first ticker tick.
+        if db and isGuildChange then
+            pcall(function()
+                LibP2PDB:SyncDatabase(db)
+            end)
+        end
+    end
+
+    if isGuildChange then
+        Debug("Guild scope changed to: " .. tostring(newKey or "(no guild)"))
+        NotifyGuildScopeChanged()
+    end
+end
+
 -- Initialize databases on login/guild events (lazy initialization per scope)
 local initFrame = CreateFrame("Frame")
 initFrame:RegisterEvent("PLAYER_LOGIN")
 initFrame:RegisterEvent("GUILD_ROSTER_UPDATE")
+initFrame:RegisterEvent("PLAYER_GUILD_UPDATE")
 initFrame:RegisterEvent("PLAYER_LEAVING_WORLD")
 initFrame:SetScript("OnEvent", function(_, event)
     if event == "PLAYER_LEAVING_WORLD" then
@@ -880,20 +1024,22 @@ initFrame:SetScript("OnEvent", function(_, event)
         -- One throttled request so the guild name is available; responses arrive as
         -- GUILD_ROSTER_UPDATE, which we handle below without asking again.
         RequestGuildRoster()
+        -- Give the initial roster response time to land, then treat any further guild change as a
+        -- real one. Using a timer rather than the first roster event also covers players who log in
+        -- guildless, since GUILD_ROSTER_UPDATE may never fire for them.
+        C_Timer.After(10, function()
+            guildScopeSettled = true
+        end)
     end
 
-    -- Pre-initialize common scopes (guild-first and server-first)
+    -- Pre-init server-first (always available)
     local realm = GetRealmName()
     if realm ~= "" then
-        -- Pre-init server-first (always available)
         EnsureDBForScope("Server@" .. realm)
-
-        -- Pre-init guild-first if in a guild
-        local guildName = GetGuildName()
-        if guildName and guildName ~= "" then
-            EnsureDBForScope("Guild@" .. guildName .. "@" .. realm)
-        end
     end
+
+    -- Pre-init guild-first, and handle joining, leaving or switching guilds mid-session.
+    RefreshGuildScope()
 end)
 
 -- ---------------------------------------------------------------------------------------------------------------------

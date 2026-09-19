@@ -51,7 +51,7 @@ Achievements\MetaCommon.lua
 Achievements\ProfessionCatalog.lua [AllowLoadGameType vanilla]
 Achievements\Catalog.lua [AllowLoadGameType vanilla]
 Achievements\SecretCatalog.lua [AllowLoadGameType vanilla]
-#Achievements\GuildFirstCatalog.lua [AllowLoadGameType vanilla]
+Achievements\GuildFirstCatalog.lua [AllowLoadGameType vanilla]
 Achievements\RidiculousCatalog.lua [AllowLoadGameType vanilla]
 Achievements\DungeonCatalog.lua [AllowLoadGameType vanilla]
 Achievements\DungeonSetCatalog.lua [AllowLoadGameType vanilla]

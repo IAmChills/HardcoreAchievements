@@ -600,6 +600,61 @@ local function GetQuestLogState(questID)
     return false, false
 end
 
+--- Guild-first claims are exclusive: once another player wins one, nobody else can ever earn it.
+--- Those rows stay listed so players can see what was taken, so this describes the claim rather
+--- than hiding the row. Returns nil when the entry is unclaimed or when we are one of the winners.
+---
+--- Solo claims name the winner. Party/raid claims stay anonymous on purpose: the record stores only
+--- the claimant's name next to a peer-ID list, so naming one of up to forty winners would read as
+--- though they took it alone.
+---
+--- Gated on GuildFirst_DefById so the rest of the catalog never pays for a claim lookup.
+--- @return string? label, number? claimedAt
+local function GetGuildFirstClaimedLabel(achId, row)
+    achId = achId or (row and (row.achId or row.id))
+    if not achId then return nil end
+    local key = tostring(achId)
+
+    local defs = addon and addon.GuildFirst_DefById
+    if not (defs and defs[key]) then return nil end
+
+    local GuildFirst = addon and addon.GuildFirst
+    if not GuildFirst or type(GuildFirst.IsClaimed) ~= "function" then return nil end
+
+    local isClaimed, winner = GuildFirst:IsClaimed(key, row)
+    if not isClaimed or type(winner) ~= "table" then return nil end
+
+    local isWinner = false
+    if type(GuildFirst.IsWinnerRecord) == "function" then
+        isWinner = GuildFirst:IsWinnerRecord(winner) == true
+    else
+        isWinner = tostring(winner.winnerGUID or "") == (UnitGUID("player") or "")
+    end
+    if isWinner then return nil end
+
+    local claimedAt = tonumber(winner.claimedAt)
+
+    -- winnerPeerID is a ';' delimited peer list; admin overrides carry a single winnerGUID instead.
+    local winnerCount = 0
+    local encoded = winner.winnerPeerID or winner.winnerGUID
+    if type(encoded) == "string" then
+        for _ in string.gmatch(encoded, "[^;]+") do
+            winnerCount = winnerCount + 1
+        end
+    end
+    if winnerCount > 1 then
+        return "Claimed", claimedAt
+    end
+
+    local name = winner.winnerName
+    if type(name) ~= "string" or name == "" then
+        return "Claimed", claimedAt
+    end
+    return "Claimed by " .. name, claimedAt
+end
+
+if addon then addon.GetGuildFirstClaimedLabel = GetGuildFirstClaimedLabel end
+
 local function IsRowOutleveledImpl(row)
     if not row or row.completed then return false end
     
@@ -616,6 +671,13 @@ local function IsRowOutleveledImpl(row)
         if addon and addon.IsLevelMilestone and addon.IsLevelMilestone(achId) then
             return false
         end
+    end
+
+    -- A guild first won by someone else is permanently out of reach, so it reads as failed instead
+    -- of sitting in the available list forever. Guild firsts carry no maxLevel, so this has to run
+    -- before the no-maxLevel early return below.
+    if GetGuildFirstClaimedLabel(achId, row) then
+        return true
     end
     
     -- Achievements without a maxLevel normally stay available forever.
@@ -894,6 +956,8 @@ if addon then
     addon.EnsureFailureTimestamp = EnsureFailureTimestamp
     addon.FormatTimestamp = FormatTimestamp
     addon.IsRowOutleveled = IsRowOutleveled
+    addon.InvalidateOutleveledCache = InvalidateOutleveledCache
+    addon.InvalidateOutleveledCacheForAchId = InvalidateOutleveledCacheForAchId
 end
 
 -- Returns the list of achievement rows. Prefer model (populated at load) so tracker/dashboard work
@@ -1005,9 +1069,12 @@ local function AchievementCount()
             local isExploration = def and def.isExploration
             local isRidiculous = def and def.isRidiculous
             local isSecret = def and def.isSecret
+            -- Guild firsts are visible in their own tab but only one player per guild can ever win
+            -- each one, so counting the unclaimed ones would cap everyone below 100%.
+            local isGuildFirst = def and def.isGuildFirst
             local excludeFromCount = def and def.excludeFromCount
             -- Note: isRaid is Core (index 4), so it always counts - don't exclude it
-            local shouldCount = not hiddenByProfession and not hiddenUntilComplete and not excludeFromCount and (not isVariation or row.completed) and (not isDungeonSet or row.completed) and (not isReputation or row.completed) and (not isExploration or row.completed) and (not isRidiculous or row.completed) and (not isSecret or row.completed)
+            local shouldCount = not hiddenByProfession and not hiddenUntilComplete and not excludeFromCount and (not isVariation or row.completed) and (not isDungeonSet or row.completed) and (not isReputation or row.completed) and (not isExploration or row.completed) and (not isRidiculous or row.completed) and (not isSecret or row.completed) and (not isGuildFirst or row.completed)
             
             if shouldCount then
                 total = total + 1
@@ -3410,30 +3477,8 @@ local function ApplyFilter()
         if row.hiddenByProfession then
             shouldShow = false
         end
-        -- Hide GuildFirst achievements that are already claimed by someone else.
-        -- IMPORTANT: only apply this to achievements explicitly marked as GuildFirst,
-        -- otherwise we'll do unnecessary checks (and spam debug) for the entire catalog.
-        if not row.completed and row._def and row._def.isGuildFirst then
-            local achId = row.id or row.achId
-            local GuildFirst = addon and addon.GuildFirst
-            if achId and GuildFirst then
-                local isClaimed, winner = GuildFirst:IsClaimed(tostring(achId), row)
-                if isClaimed and winner then
-                    local isWinner = false
-                    if type(GuildFirst.IsWinnerRecord) == "function" then
-                        isWinner = GuildFirst:IsWinnerRecord(winner) == true
-                    else
-                        local myGUID = UnitGUID("player") or ""
-                        isWinner = tostring(winner.winnerGUID or "") == myGUID
-                    end
-                    if not isWinner then
-                        -- Claimed by someone else - silently fail (hide)
-                        if addon and addon.DebugPrint then addon.DebugPrint("[Filter] Hiding achievement '" .. tostring(achId) .. "' - already claimed by " .. tostring(winner.winnerName or "?") .. " (silent fail)") end
-                        shouldShow = false
-                    end
-                end
-            end
-        end
+        -- Guild firsts claimed by another player stay visible so everyone can see what was taken.
+        -- IsRowOutleveled reports them as failed, so the status filter above already governs them.
         
         -- Hide/show achievements based on checkbox filter
         if row._def then
