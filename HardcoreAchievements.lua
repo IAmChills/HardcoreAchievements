@@ -88,6 +88,17 @@ local CreateAchToast
 -- When true, MarkRowCompleted skips emote/guild broadcast (first run after login = retroactive completions)
 local skipBroadcastForRetroactive = false
 
+-- GuildFirst replays its persisted claims through MarkRowCompleted at login, which would re-announce
+-- wins the player earned long ago. Returns the previous value so callers restore it rather than
+-- assuming they are the only one suppressing.
+if addon then
+    addon.SetSkipAchievementBroadcast = function(skip)
+        local previous = skipBroadcastForRetroactive
+        skipBroadcastForRetroactive = skip and true or false
+        return previous
+    end
+end
+
 -- Achievement function registry to reduce global pollution
 local AchievementFunctionRegistry = {}
 

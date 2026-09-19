@@ -521,6 +521,35 @@ end
 -- Database initialization
 -- ---------------------------------------------------------------------------------------------------------------------
 
+-- Claim changes arrive in bursts: ImportDatabase replays every persisted row at login, and one sync
+-- round can deliver several. RefreshAllAchievementPoints with no argument walks every achievement and
+-- ApplyFilter re-sorts the whole panel, so scheduling them per changed row meant a full UI rebuild per
+-- claim. Coalesce the burst into a single pass.
+local claimRefreshPending = false
+
+local function QueueClaimRefresh()
+    if claimRefreshPending then return end
+    claimRefreshPending = true
+    C_Timer.After(0.1, function()
+        claimRefreshPending = false
+        -- RefreshAllAchievementPoints rewrites the status text and calls RefreshOutleveledAll, so the
+        -- rows pick up the red styling and the "Claimed by" subtext in a single pass.
+        if addon and addon.RefreshAllAchievementPoints then
+            addon.RefreshAllAchievementPoints()
+        end
+        if type(ApplyFilter) == "function" then
+            ApplyFilter()
+        end
+    end)
+end
+
+-- ImportDatabase replays persisted rows through onChange, so without this the login handler cannot
+-- tell a claim it has known about for weeks from one that just arrived over the wire. Flag the replay
+-- so it reports a single summary instead of narrating every stored row as breaking news.
+local importReplayActive = false
+local importClaimCount = 0
+local importRemovedCount = 0
+
 local function EnsureDBForScope(scopeKey)
     if not scopeKey then
         return nil
@@ -566,7 +595,11 @@ local function EnsureDBForScope(scopeKey)
                 end
                 if data and (data.winnerPeerID or data.winnerGUID) then
                     if RecordIncludesPeerID(data, myPeerId) then
-                        Debug("Received claim update: Achievement '" .. tostring(key) .. "' claimed and I am an eligible winner")
+                        if importReplayActive then
+                            importClaimCount = importClaimCount + 1
+                        else
+                            Debug("Received claim update: Achievement '" .. tostring(key) .. "' claimed and I am an eligible winner")
+                        end
                         -- Skip re-awarding if admin manually deleted this achievement from the player.
                         if cdb and cdb.deletedByAdmin and cdb.deletedByAdmin[tostring(key)] then
                             Debug("Skipping GuildFirst re-award: achievement was deleted by admin")
@@ -574,8 +607,6 @@ local function EnsureDBForScope(scopeKey)
                             Debug("Skipping GuildFirst re-award: claim was revoked by admin and is waiting for corrected propagation")
                         else
                             -- Mark row completed when we receive the claim (e.g. from sync or broadcast).
-                            -- Do NOT show toast here: onChange also fires on load/relog when we ImportDatabase,
-                            -- so we only show the toast in CanClaimAndAward when we actually just claimed.
                             -- Ensure row frames exist (they may not be built yet if player hasn't opened achievement tab)
                             if addon and addon.EnsureAchievementRowsBuilt then
                                 addon.EnsureAchievementRowsBuilt()
@@ -592,11 +623,15 @@ local function EnsureDBForScope(scopeKey)
                             local frame = (row and row.Title and row.Points and row) or (row and row.frame)
                             if frame and not frame.completed and type(MarkRowCompleted) == "function" then
                                 MarkRowCompleted(frame)
-                                local def = GetGuildFirstDef(tostring(key), row)
-                                local icon = (frame.Icon and frame.Icon.GetTexture and frame.Icon:GetTexture()) or (def and def.icon) or 136116
-                                local titleText = (frame.Title and frame.Title.GetText and frame.Title:GetText()) or (def and def.title) or tostring(key)
-                                local pts = frame.points or (def and def.points) or 0
-                                ShowGuildFirstToast(icon, titleText, pts, tostring(key))
+                                -- Only celebrate a claim that just happened. On import replay this row is
+                                -- a win the player already knows about, so restore it silently.
+                                if not importReplayActive then
+                                    local def = GetGuildFirstDef(tostring(key), row)
+                                    local icon = (frame.Icon and frame.Icon.GetTexture and frame.Icon:GetTexture()) or (def and def.icon) or 136116
+                                    local titleText = (frame.Title and frame.Title.GetText and frame.Title:GetText()) or (def and def.title) or tostring(key)
+                                    local pts = frame.points or (def and def.points) or 0
+                                    ShowGuildFirstToast(icon, titleText, pts, tostring(key))
+                                end
                             elseif not frame and addon and addon.GetCharDB then
                                 -- No frame yet (model not built) - persist to DB so RestoreCompletionsFromDB applies when panel opens
                                 local _, cdb = addon.GetCharDB()
@@ -618,11 +653,21 @@ local function EnsureDBForScope(scopeKey)
                             end
                         end
                     else
-                        Debug("Received claim update: Achievement '" .. tostring(key) .. "' claimed by " .. tostring(data.winnerName or "?") .. " - not eligible (silent fail)")
+                        if importReplayActive then
+                            importClaimCount = importClaimCount + 1
+                        else
+                            Debug("Received claim update: Achievement '" .. tostring(key) .. "' claimed by " .. tostring(data.winnerName or "?") .. " - not eligible (silent fail)")
+                        end
                         ClearRevokedGuildFirstClaim(tostring(key), "claim now belongs to another player")
                     end
                 else
-                    Debug("Received claim update: Achievement '" .. tostring(key) .. "' claim removed")
+                    -- A row with no winner is a LibP2PDB tombstone from ClearClaim. It has to stay in the
+                    -- table so the deletion keeps propagating, which means it replays on every login.
+                    if importReplayActive then
+                        importRemovedCount = importRemovedCount + 1
+                    else
+                        Debug("Received claim update: Achievement '" .. tostring(key) .. "' claim removed")
+                    end
                     ClearRevokedGuildFirstClaim(tostring(key), "claim removed")
                 end
                 
@@ -632,27 +677,36 @@ local function EnsureDBForScope(scopeKey)
                     addon.InvalidateOutleveledCacheForAchId(tostring(key))
                 end
 
-                C_Timer.After(0.1, function()
-                    -- RefreshAllAchievementPoints rewrites the status text and calls
-                    -- RefreshOutleveledAll, so the row picks up the red styling and the
-                    -- "Claimed by" subtext in a single pass.
-                    if addon and addon.RefreshAllAchievementPoints then
-                        addon.RefreshAllAchievementPoints()
-                    end
-                    if type(ApplyFilter) == "function" then
-                        ApplyFilter()
-                    end
-                end)
+                QueueClaimRefresh()
             end,
         })
     end
 
-    -- Load persisted state
+    -- Load persisted state. Every stored row replays through onChange here, so mark the replay: these
+    -- are claims we already knew about, and one summary reads better than a line per row.
     local root = addon and addon.HardcoreAchievementsDB
     if root and root.guildFirst and root.guildFirst[scopeKey] and root.guildFirst[scopeKey].state then
+        importReplayActive = true
+        importClaimCount, importRemovedCount = 0, 0
+        -- Replaying a claim we won runs MarkRowCompleted, which emotes and posts to guild chat. Reuse
+        -- the same suppression the post-login retroactive pass uses so we do not re-announce old wins.
+        local restoreBroadcast
+        if addon and addon.SetSkipAchievementBroadcast then
+            restoreBroadcast = addon.SetSkipAchievementBroadcast(true)
+        end
         pcall(function()
             LibP2PDB:ImportDatabase(db, root.guildFirst[scopeKey].state)
         end)
+        if addon and addon.SetSkipAchievementBroadcast then
+            addon.SetSkipAchievementBroadcast(restoreBroadcast)
+        end
+        importReplayActive = false
+        if DebugEnabled() and (importClaimCount > 0 or importRemovedCount > 0) then
+            Debug("Loaded stored claims for scope " .. tostring(scopeKey) .. ": "
+                .. importClaimCount .. " claimed, " .. importRemovedCount .. " previously removed")
+        end
+        -- One refresh for the whole replay rather than one per stored row.
+        QueueClaimRefresh()
     end
 
     -- Periodic presence broadcast and sync (only create one ticker per scope).
@@ -730,6 +784,11 @@ local function GetAchievementScope(row, achievementId)
     return "guild"
 end
 
+-- IsClaimed is a pure read, but it now runs for every guild-first row on each points refresh and again
+-- on every tooltip, so logging each call drowned the log in identical lines. Remember what we last
+-- reported per achievement and only speak up when the answer actually changes.
+local lastClaimLogState = {}
+
 --- Check if an achievement is already claimed by someone else.
 --- @param achievementId string
 --- @param row table? Optional achievement row (to determine scope)
@@ -751,15 +810,25 @@ local function IsClaimed(self, achievementId, row)
     local rec = LibP2PDB:GetKey(db, TABLE_NAME, achievementId)
     if rec then
         if DebugEnabled() then
-            if RecordIncludesPeerID(rec, GetLocalPeerId()) then
-                Debug("IsClaimed(" .. achievementId .. "): Already claimed and I am an eligible winner (scope: " .. tostring(scopeKey) .. ")")
-            else
-                Debug("IsClaimed(" .. achievementId .. "): Already claimed by " .. tostring(rec.winnerName or "?") .. " (scope: " .. tostring(scopeKey) .. ")")
+            local isMine = RecordIncludesPeerID(rec, GetLocalPeerId())
+            local logKey = scopeKey .. "|" .. achievementId
+            local verdict = isMine and "me" or ("other:" .. tostring(rec.winnerName or "?"))
+            if lastClaimLogState[logKey] ~= verdict then
+                lastClaimLogState[logKey] = verdict
+                if isMine then
+                    Debug("IsClaimed(" .. achievementId .. "): Already claimed and I am an eligible winner (scope: " .. tostring(scopeKey) .. ")")
+                else
+                    Debug("IsClaimed(" .. achievementId .. "): Already claimed by " .. tostring(rec.winnerName or "?") .. " (scope: " .. tostring(scopeKey) .. ")")
+                end
             end
         end
         return true, rec
     end
-    
+
+    if DebugEnabled() then
+        -- Forget the logged verdict so a future claim on this achievement is reported once.
+        lastClaimLogState[scopeKey .. "|" .. achievementId] = nil
+    end
     return false, nil
 end
 
@@ -941,6 +1010,11 @@ local function ReleaseGuildScope(scopeKey)
         info.presenceTicker:Cancel()
     end
     databases[scopeKey] = nil
+    -- Verdicts logged for the old guild no longer describe anything, so let the new guild's claims
+    -- report themselves once each.
+    for logKey in pairs(lastClaimLogState) do
+        lastClaimLogState[logKey] = nil
+    end
     Debug("Released guild scope: " .. tostring(scopeKey))
 end
 
