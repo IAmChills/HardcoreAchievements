@@ -315,24 +315,14 @@ function M.registerQuestAchievement(cfg)
         if not REQUIRED_QUEST_ID then
             return true -- No quest requirement means always "on quest"
         end
-        -- Check if quest is in quest log (player is actively on the quest)
-        if GetQuestLogIndexByID then
-            local logIndex = GetQuestLogIndexByID(REQUIRED_QUEST_ID)
-            if logIndex and logIndex > 0 then
-                return true
-            end
+        -- Via the compat bridge: the Classic quest log globals are gone on retail-based clients, where
+        -- reading their absence as "not on this quest" silently dropped kills here (see Utils\Compat.lua).
+        local getQuestLogState = addon and addon.GetQuestLogState
+        if not getQuestLogState then
+            return false
         end
-        -- Fallback: check using classic API (for older versions)
-        if GetNumQuestLogEntries then
-            local numEntries = GetNumQuestLogEntries()
-            for i = 1, numEntries do
-                local title, level, suggestGroup, isHeader, isCollapsed, isComplete, frequency, questID = GetQuestLogTitle(i)
-                if not isHeader and questID == REQUIRED_QUEST_ID then
-                    return true
-                end
-            end
-        end
-        return false
+        local onQuest = getQuestLogState(REQUIRED_QUEST_ID)
+        return onQuest and true or false
     end
 
     local function topUpFromServer()

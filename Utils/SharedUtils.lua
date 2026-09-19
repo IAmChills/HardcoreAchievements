@@ -177,15 +177,27 @@ end
 -- Other files: local IsSelfFound = addon.IsSelfFound; call IsSelfFound() for true/false.
 -- =========================================================
 
+-- Whether the player is self-found cannot change for the life of the character, so the last answer the
+-- client was willing to give remains true afterwards. That matters because retail 12.0 refuses aura reads
+-- from tainted code while auras are secret, and combat is exactly when this gets asked: it sits behind
+-- the solo-bonus decision on every kill.
+local selfFoundLastKnown = nil
+
 local function IsSelfFound()
     for i = 1, 40 do
         -- Via the compat bridge: UnitBuff was removed in retail 11.0 (see Utils\Compat.lua).
-        local name, spellId = GetPlayerBuff(i)
+        local name, spellId, refused = GetPlayerBuff(i)
+        if refused then
+            -- Treating a refusal as "no buff" would silently demote a self-found character mid-combat.
+            return selfFoundLastKnown == true
+        end
         if not name then break end
         if spellId == 431567 or name == "Self-Found Adventurer" then
+            selfFoundLastKnown = true
             return true
         end
     end
+    selfFoundLastKnown = false
     return false
 end
 

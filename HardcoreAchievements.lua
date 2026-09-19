@@ -584,30 +584,11 @@ end
 
 local function GetQuestLogState(questID)
     if not questID then return false, false end
-
-    if GetQuestLogIndexByID then
-        local logIndex = GetQuestLogIndexByID(questID)
-        if logIndex and logIndex > 0 then
-            if GetQuestLogTitle then
-                local _, _, _, isHeader, _, isComplete, _, questIDFromLog = GetQuestLogTitle(logIndex)
-                if not isHeader and questIDFromLog == questID then
-                    return true, (isComplete == 1 or isComplete == true)
-                end
-            end
-            return true, false
-        end
+    -- Via the compat bridge, which probes for whichever quest log API this client kept: the Classic
+    -- globals this used to call directly are absent on retail-based clients (see Utils\Compat.lua).
+    if addon and addon.GetQuestLogState then
+        return addon.GetQuestLogState(questID)
     end
-
-    if GetNumQuestLogEntries and GetQuestLogTitle then
-        local numEntries = GetNumQuestLogEntries()
-        for i = 1, numEntries do
-            local _, _, _, isHeader, _, isComplete, _, questIDFromLog = GetQuestLogTitle(i)
-            if not isHeader and questIDFromLog == questID then
-                return true, (isComplete == 1 or isComplete == true)
-            end
-        end
-    end
-
     return false, false
 end
 
@@ -5420,10 +5401,9 @@ do
                 if InvalidateAchievementRuntimeIndex then
                     InvalidateAchievementRuntimeIndex()
                 end
-                -- arg2 is the QuestId
+                -- Classic: (questLogIndex, questID). Retail/Forever: (questID) only.
                 local arg1, arg2 = ...
-                local questID = arg2 and tonumber(arg2) or nil
-                questID = questID and tonumber(questID) or nil
+                local questID = tonumber(arg2) or tonumber(arg1)
                 if questID and addon and addon.SetProgress then
                     -- Store player's level when quest is accepted as a backup reference
                     -- This helps prevent achievements from failing if player levels up between accepting and turning in

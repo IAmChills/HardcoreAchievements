@@ -19,6 +19,22 @@ local UnitIsTapDenied = UnitIsTapDenied
 local UnitAffectingCombat = UnitAffectingCombat
 local UnitCanAttack = UnitCanAttack
 local CreateFrame = CreateFrame
+local issecretvalue = issecretvalue
+
+-- Retail 12.0 / Forever: combat-related unit queries can return secret booleans and numbers.
+-- Tainted code may store those values but must not use them in `if`, `and`, `or`, `not`, or `>=`.
+-- issecretvalue() itself returns a plain boolean, so it is the only legal test.
+local function IsSecret(value)
+    return issecretvalue and issecretvalue(value) or false
+end
+
+--- @param ifSecret boolean answer to use when the client will not say
+local function PlainBool(value, ifSecret)
+    if IsSecret(value) then
+        return ifSecret and true or false
+    end
+    return value and true or false
+end
 
 ---------------------------------------
 -- Configuration
@@ -131,8 +147,20 @@ end
 -- Check if a specific unit has significant threat
 ---------------------------------------
 local function UnitHasSignificantThreat(unit, mobUnit, threshold)
-    local isUnitTanking, unitStatus, scaledPct, rawPct = UnitDetailedThreatSituation(unit, mobUnit)
-    
+    if not UnitDetailedThreatSituation then
+        return false
+    end
+    local ok, isUnitTanking, unitStatus, scaledPct, rawPct = pcall(UnitDetailedThreatSituation, unit, mobUnit)
+    if not ok then
+        return false
+    end
+
+    -- A secret return means they are on the table. Presence is enough to count as helping;
+    -- the percentages cannot legally be compared.
+    if IsSecret(isUnitTanking) or IsSecret(unitStatus) or IsSecret(scaledPct) or IsSecret(rawPct) then
+        return true
+    end
+
     -- Check if this unit is tanking (definitely helping) - disqualify immediately
     if isUnitTanking and unitStatus and unitStatus >= 2 then
         return true
@@ -161,7 +189,7 @@ local function AnyGroupedPlayerOverThresholdOn(mobUnit, pct)
         local n = GetNumGroupMembers()
         for i = 1, n do
             local u = "raid"..i
-            if UnitExists(u) and not UnitIsUnit(u, "player") then
+            if PlainBool(UnitExists(u), true) and not PlainBool(UnitIsUnit(u, "player"), true) then
                 if UnitHasSignificantThreat(u, mobUnit, pct) then
                     return true
                 end
@@ -171,7 +199,7 @@ local function AnyGroupedPlayerOverThresholdOn(mobUnit, pct)
         local n = GetNumSubgroupMembers()
         for i = 1, n do
             local u = "party"..i
-            if UnitExists(u) then
+            if PlainBool(UnitExists(u), true) then
                 if UnitHasSignificantThreat(u, mobUnit, pct) then
                     return true
                 end
@@ -187,7 +215,12 @@ end
 ---------------------------------------
 local function MobPrimaryTargetIsOtherPlayer(mobUnit)
     local tgt = mobUnit .. "target"
-    return UnitExists(tgt) and UnitIsPlayer(tgt) and not UnitIsUnit(tgt, "player")
+    if not PlainBool(UnitExists(tgt), false) then
+        return false
+    end
+    -- Uncertain "is this a player other than you" is treated as yes, which makes the solo
+    -- check stricter rather than handing out the bonus.
+    return PlainBool(UnitIsPlayer(tgt), true) and not PlainBool(UnitIsUnit(tgt, "player"), true)
 end
 
 ---------------------------------------
@@ -197,14 +230,26 @@ end
 --   you're allowed to pass without the strict threshold as long as no other *player* breaks rules.
 ---------------------------------------
 local function PlayerThreatGoodEnough(mobUnit)
-    local isTanking, status, scaledPct, rawPct = UnitDetailedThreatSituation("player", mobUnit)
+    local isTanking, status, scaledPct, rawPct
+    if UnitDetailedThreatSituation then
+        local ok, a, b, c, d = pcall(UnitDetailedThreatSituation, "player", mobUnit)
+        if ok then
+            isTanking, status, scaledPct, rawPct = a, b, c, d
+        end
+    end
     local primaryIsOtherPlayer = MobPrimaryTargetIsOtherPlayer(mobUnit)
+
+    -- Secret threat numbers cannot be compared to the 90% bar, so solo credit is refused.
+    -- Returning the raw secrets is still legal; callers that boolean-test them must use PlainBool.
+    if IsSecret(isTanking) or IsSecret(status) or IsSecret(scaledPct) or IsSecret(rawPct) then
+        return false, isTanking, status, scaledPct, rawPct
+    end
 
     -- If data is missing entirely, treat as not good enough (unless mob is clearly on a non-player).
     if not (scaledPct or rawPct or status or isTanking) then
         -- If it's smacking a non-player (dummy/pet), allow it and let the other checks decide.
         local mobTarget = mobUnit .. "target"
-        if UnitExists(mobTarget) and not UnitIsPlayer(mobTarget) then
+        if PlainBool(UnitExists(mobTarget), false) and not PlainBool(UnitIsPlayer(mobTarget), true) then
             return true, isTanking, status, scaledPct, rawPct
         end
         return false, isTanking, status, scaledPct, rawPct
@@ -234,7 +279,7 @@ local function PlayerThreatGoodEnough(mobUnit)
 
     -- Relaxation: mob not on another player -> allow (pets/dummies case).
     local mobTarget = mobUnit .. "target"
-    if UnitExists(mobTarget) and not UnitIsPlayer(mobTarget) then
+    if PlainBool(UnitExists(mobTarget), false) and not PlainBool(UnitIsPlayer(mobTarget), true) then
         return true, isTanking, status, scaledPct, rawPct
     end
 
@@ -249,7 +294,7 @@ local function CheckSoloStatusForGUID(targetGUID)
     
     -- Try to find the unit by GUID (check target first, then nameplate)
     local mobUnit = nil
-    if UnitExists("target") and UnitGUID("target") == targetGUID then
+    if PlainBool(UnitExists("target"), false) and UnitGUID("target") == targetGUID then
         mobUnit = "target"
     else
         -- Try to find via nameplate (limited in Classic, but worth trying)
@@ -259,16 +304,17 @@ local function CheckSoloStatusForGUID(targetGUID)
         return nil -- Can't check without unit
     end
     
-    if not mobUnit or not UnitExists(mobUnit) or not UnitCanAttack("player", mobUnit) then
+    if not mobUnit or not PlainBool(UnitExists(mobUnit), false) or not PlainBool(UnitCanAttack("player", mobUnit), false) then
         return nil
     end
     
-    -- Early exit: if player doesn't have the tag, they can't be solo
-    if UnitIsTapDenied(mobUnit) then
+    -- Early exit: if player doesn't have the tag, they can't be solo.
+    -- Secret tap: refuse the bonus rather than guess.
+    if PlainBool(UnitIsTapDenied(mobUnit), true) then
         return false
     end
     
-    if not UnitAffectingCombat("player") then
+    if not PlainBool(UnitAffectingCombat("player"), false) then
         return nil
     end
     
@@ -285,6 +331,9 @@ local function CheckSoloStatusForGUID(targetGUID)
     -- If any *ungrouped* player recently helped (via combat log),
     -- only fail if you're NOT clearly holding threat (not tanking and <90%).
     if OtherPlayersRecentlyHelped(targetGUID) then
+        if IsSecret(isTanking) or IsSecret(status) or IsSecret(scaledPct) or IsSecret(rawPct) then
+            return false
+        end
         local clearlyAhead =
             (isTanking and status and status >= 2) or
             (scaledPct and scaledPct >= PLAYER_SOLO_THREAT_THRESHOLD) or
@@ -301,12 +350,12 @@ end
 local function PlayerIsSolo()
     local mobUnit = "target"
 
-    if UnitExists(mobUnit)
-        and UnitCanAttack("player", mobUnit)
-        and UnitAffectingCombat("player")
+    if PlainBool(UnitExists(mobUnit), false)
+        and PlainBool(UnitCanAttack("player", mobUnit), false)
+        and PlainBool(UnitAffectingCombat("player"), false)
     then
         -- Early exit: if player doesn't have the tag, they can't be solo
-        if UnitIsTapDenied(mobUnit) then
+        if PlainBool(UnitIsTapDenied(mobUnit), true) then
             return false
         end
         
@@ -335,11 +384,14 @@ local function PlayerIsSolo()
         return true
     end
 
+    -- UnitInRange (and sometimes UnitExists) is a secret boolean for grouped units in combat.
+    -- A secret answer is treated as "yes, they are here": this path only runs when we could not
+    -- read the mob, and handing out solo points because the range check was secret would be wrong.
     if IsInRaid() then
         local n = GetNumGroupMembers()
         for i = 1, n do
             local u = "raid"..i
-            if UnitExists(u) and not UnitIsUnit(u, "player") and UnitInRange(u) then
+            if PlainBool(UnitExists(u), true) and not PlainBool(UnitIsUnit(u, "player"), true) and PlainBool(UnitInRange(u), true) then
                 return false
             end
         end
@@ -347,7 +399,7 @@ local function PlayerIsSolo()
         local n = GetNumSubgroupMembers()
         for i = 1, n do
             local u = "party"..i
-            if UnitExists(u) and UnitInRange(u) then
+            if PlainBool(UnitExists(u), true) and PlainBool(UnitInRange(u), true) then
                 return false
             end
         end
@@ -377,7 +429,7 @@ local function PlayerIsSolo_UpdateStatusForGUID(targetGUID)
     if not targetGUID then return end
     
     -- Only update if target exists and matches GUID
-    if UnitExists("target") and UnitGUID("target") == targetGUID then
+    if PlainBool(UnitExists("target"), false) and UnitGUID("target") == targetGUID then
         local isSolo = CheckSoloStatusForGUID(targetGUID)
         if isSolo ~= nil then
             local now = GetTime()
@@ -393,7 +445,7 @@ end
 -- Helper: Update solo status for current target if in combat
 ---------------------------------------
 local function UpdateSoloStatusForCurrentTarget()
-    if UnitExists("target") and UnitAffectingCombat("player") then
+    if PlainBool(UnitExists("target"), false) and PlainBool(UnitAffectingCombat("player"), false) then
         local targetGUID = UnitGUID("target")
         if targetGUID then
             PlayerIsSolo_UpdateStatusForGUID(targetGUID)

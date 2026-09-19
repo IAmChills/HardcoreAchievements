@@ -22,7 +22,9 @@ local select = select
 --- UnitBuff was removed in retail 11.0 in favour of C_UnitAuras. Callers only ever needed the name and
 --- spell id out of the old ten-value return, so this returns just those two.
 --- @param index number 1-based aura slot
---- @return string? name, number? spellId  nil name means there is no aura at that index
+--- @return string? name, number? spellId, boolean? refused
+---   A nil name means there is no aura in that slot. refused means the client would not say either way,
+---   which is a different answer, so callers that would draw a conclusion from "no aura" must check it.
 function addon.GetPlayerBuff(index)
     if UnitBuff then
         local name, _, _, _, _, _, _, _, _, spellId = UnitBuff("player", index)
@@ -30,7 +32,14 @@ function addon.GetPlayerBuff(index)
     end
 
     if C_UnitAuras_GetAuraDataByIndex then
-        local data = C_UnitAuras_GetAuraDataByIndex("player", index, "HELPFUL")
+        -- Retail 12.0 marks aura data secret during combat and raises an error, rather than returning
+        -- anything, once the calling code is tainted by an addon -- which ours always is. Nothing
+        -- exposes that state to test beforehand, so the refusal has to be caught here; uncaught, it
+        -- aborts whichever achievement check was mid-flight when the aura scan happened.
+        local ok, data = pcall(C_UnitAuras_GetAuraDataByIndex, "player", index, "HELPFUL")
+        if not ok then
+            return nil, nil, true
+        end
         if data then
             return data.name, data.spellId
         end
@@ -96,6 +105,98 @@ function addon.GetLastCharacterFrameTab()
         end
     end
     return nil
+end
+
+--- Whether a quest sits in the player's log right now, and whether its objectives are all done.
+--- GetQuestLogIndexByID, GetNumQuestLogEntries and GetQuestLogTitle were removed in retail 9.0 in favour
+--- of C_QuestLog. This one is worth spelling out because of how it failed: callers read "not on quest" as
+--- a legitimate answer rather than a missing API, so on a client with none of these globals the old code
+--- returned a confident false and every kill toward a quest-gated achievement was dropped without an
+--- error to show why. The Classic globals are probed first so those clients keep the exact path they had.
+--- @param questId number
+--- @return boolean onQuest, boolean isComplete
+local function QuestIsCompleteFlag(flag)
+    return flag == true or flag == 1
+end
+
+function addon.GetQuestLogState(questId)
+    questId = tonumber(questId)
+    if not questId then
+        return false, false
+    end
+
+    -- Classic globals first, wrapped because Forever can still expose the names as stubs that error
+    -- or return nothing useful. A failed lookup here must fall through rather than decide "not on quest".
+    if GetQuestLogIndexByID and GetQuestLogTitle then
+        local ok, logIndex = pcall(GetQuestLogIndexByID, questId)
+        if ok and logIndex and logIndex > 0 then
+            local titleOk, _, _, _, isHeader, _, isComplete, _, idFromLog = pcall(GetQuestLogTitle, logIndex)
+            if titleOk then
+                if not isHeader and idFromLog == questId then
+                    return true, QuestIsCompleteFlag(isComplete)
+                end
+                return true, false
+            end
+        end
+    end
+
+    if C_QuestLog then
+        -- pcall: the same secret-value trap as auras. A tainted addon asking during combat can error
+        -- instead of returning, and that used to abort the kill tracker the same way GetPlayerBuff did.
+        if C_QuestLog.IsOnQuest then
+            local ok, onQuest = pcall(C_QuestLog.IsOnQuest, questId)
+            if ok and onQuest then
+                local complete = false
+                if C_QuestLog.IsComplete then
+                    local cok, isComplete = pcall(C_QuestLog.IsComplete, questId)
+                    complete = cok and QuestIsCompleteFlag(isComplete)
+                end
+                return true, complete
+            end
+        end
+        if C_QuestLog.GetLogIndexForQuestID then
+            local ok, logIndex = pcall(C_QuestLog.GetLogIndexForQuestID, questId)
+            if ok and logIndex and logIndex > 0 then
+                local complete = false
+                if C_QuestLog.IsComplete then
+                    local cok, isComplete = pcall(C_QuestLog.IsComplete, questId)
+                    complete = cok and QuestIsCompleteFlag(isComplete)
+                end
+                return true, complete
+            end
+        end
+        -- Forever's C_QuestLog can exist without IsOnQuest. Walking GetInfo is the retail equivalent
+        -- of GetNumQuestLogEntries + GetQuestLogTitle, which the Classic-only fallback below never
+        -- reaches if those globals are gone.
+        local getNum = C_QuestLog.GetNumQuestLogEntries
+        local getInfo = C_QuestLog.GetInfo
+        if getNum and getInfo then
+            local ok, numEntries = pcall(getNum)
+            if ok and type(numEntries) == "number" then
+                for i = 1, numEntries do
+                    local iok, info = pcall(getInfo, i)
+                    if iok and type(info) == "table" and not info.isHeader and info.questID == questId then
+                        return true, QuestIsCompleteFlag(info.isComplete)
+                    end
+                end
+            end
+        end
+    end
+
+    -- Last resort: walk the log with whichever Classic enumeration API this client kept.
+    if GetNumQuestLogEntries and GetQuestLogTitle then
+        local ok, n = pcall(GetNumQuestLogEntries)
+        if ok then
+            for i = 1, (n or 0) do
+                local titleOk, _, _, _, isHeader, _, isComplete, _, idFromLog = pcall(GetQuestLogTitle, i)
+                if titleOk and not isHeader and idFromLog == questId then
+                    return true, QuestIsCompleteFlag(isComplete)
+                end
+            end
+        end
+    end
+
+    return false, false
 end
 
 -- Reputation. GetNumFactions, GetFactionInfo and GetFactionInfoByID were all removed in retail 10.x in
