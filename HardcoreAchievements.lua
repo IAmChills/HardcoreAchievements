@@ -3706,6 +3706,11 @@ local function ApplyFilter()
                 if not ShouldShowByCheckboxFilter(def, isCompleted, 14, nil) then
                     shouldShow = false
                 end
+            elseif def.isGuildFirst then
+                -- Guild First: check index 15
+                if not ShouldShowByCheckboxFilter(def, isCompleted, 15, nil) then
+                    shouldShow = false
+                end
             else
                 -- Fallback: default to showing if no category flag is set
                 -- (This should not happen, but included for safety)

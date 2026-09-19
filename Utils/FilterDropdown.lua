@@ -51,7 +51,7 @@ end
 
 -- Get checkbox states from database with proper defaults
 local function GetCheckboxStates()
-    local checkboxStates = { true, true, true, true, true, true, false, false, false, false, false, false, false, false }
+    local checkboxStates = { true, true, true, true, true, true, false, false, false, false, false, false, false, false, false }
     local getCharDB = addon and addon.GetCharDB
     if type(getCharDB) == "function" then
         local _, cdb = getCharDB()
@@ -73,6 +73,7 @@ local function GetCheckboxStates()
                     states[12] == true,  -- Trio
                     states[13] == true,  -- Ridiculous
                     states[14] == true,  -- Secret
+                    states[15] == true,  -- Guild First
                 }
             end
         end
@@ -102,6 +103,7 @@ local function SaveCheckboxStates(checkboxStates)
                 checkboxStates[12] == true,  -- Trio
                 checkboxStates[13] == true,  -- Ridiculous
                 checkboxStates[14] == true,  -- Secret
+                checkboxStates[15] == true,  -- Guild First
             }
         end
     end
@@ -396,8 +398,8 @@ local function InitializeDropdown(self, dropdown, config)
             miscTitleInfo.disabled = true
             UIDropDownMenu_AddButton(miscTitleInfo)
             
-            -- Add Miscellaneous checkboxes (indices 7-14: Reputations, Exploration, Dungeon Sets, Solo, Duo, Trio, Ridiculous, Secret)
-            for i = 7, 14 do
+            -- Add Miscellaneous checkboxes (indices 7-15: Reputations, Exploration, Dungeon Sets, Solo, Duo, Trio, Ridiculous, Secret, Guild First)
+            for i = 7, 15 do
                 local info = UIDropDownMenu_CreateInfo()
                 local checkboxIndex = i  -- Capture index in local variable
                 info.text = checkboxLabels[checkboxIndex]
@@ -497,8 +499,8 @@ local function CreateAndInitializeDropdown(self, parent, positionConfig, callbac
     
     local checkboxLabels = { 
         "Quests", "Dungeons", "Heroic Dungeons", "Raids", "Professions", "Meta", 
-        "Reputations", "Exploration", "Dungeon Sets", "Solo Dungeons", "Duo Dungeons", 
-        "Trio Dungeons", "Ridiculous", "Secret" 
+        "Reputations", "Exploration", "Gear Sets", "Dungeon Solo", "Dungeon Duo", 
+        "Dungeon Trio", "Ridiculous", "Secret", "Guild First" 
     }
     
     InitializeDropdown(self, dropdown, {
