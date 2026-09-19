@@ -941,8 +941,15 @@ local function HandleSlashCommand(msg)
             if cdb then cdb.showCustomTab = true end
         end
         
-        -- Immediately show the custom tab
-        local tab = _G["CharacterFrameTab" .. (CharacterFrame.numTabs + 1)]
+        -- Immediately show the custom tab. Prefer the direct getter; the name lookup only works on
+        -- clients whose character panel populates numTabs, which retail does not.
+        local tab = (addon and addon.GetTab and addon.GetTab()) or nil
+        if not tab and addon and addon.GetCharacterFrameTabCount then
+            local count = addon.GetCharacterFrameTabCount()
+            if count >= 1 then
+                tab = _G["CharacterFrameTab" .. (count + 1)]
+            end
+        end
         if tab and tab:GetText() and tab:GetText():find("Achievements") then
             tab:Show()
             tab:SetScript("OnClick", function(self)

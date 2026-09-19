@@ -347,7 +347,11 @@ local function CreateBackupRestoreFrame()
     -- =========================================================
     -- Create Tabs
     -- =========================================================
-    local backupTab = CreateFrame("Button", "HardcoreAchievementsBackupTab", frame, "CharacterFrameTabButtonTemplate")
+    -- ResolveTemplate rather than a literal: CharacterFrameTabButtonTemplate is absent on retail-based
+    -- clients (Forever), where CreateFrame would error on the unknown template name.
+    local tabTemplate = addon.ResolveTemplate("CharacterFrameTabButtonTemplate", "PanelTabButtonTemplate")
+
+    local backupTab = CreateFrame("Button", "HardcoreAchievementsBackupTab", frame, tabTemplate)
     backupTab:SetFrameStrata("FULLSCREEN")
     backupTab:SetPoint("TOPLEFT", frame, "BOTTOMLEFT", 0, 8)
     backupTab:SetText("Backup")
@@ -356,7 +360,7 @@ local function CreateBackupRestoreFrame()
     backupTab:SetScript("OnShow", nil)
     backupTab:SetScript("OnClick", function() SwitchTab("Backup") end)
     
-    local restoreTab = CreateFrame("Button", "HardcoreAchievementsRestoreTab", frame, "CharacterFrameTabButtonTemplate")
+    local restoreTab = CreateFrame("Button", "HardcoreAchievementsRestoreTab", frame, tabTemplate)
     restoreTab:SetFrameStrata("FULLSCREEN")
     restoreTab:SetPoint("LEFT", backupTab, "RIGHT")
     restoreTab:SetText("Restore")

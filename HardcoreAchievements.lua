@@ -2543,6 +2543,12 @@ local function SetProgress(achId, key, value)
     end
 end
 
+-- Forward declaration. The exports below close over Tab, and the character panel tab is not built until
+-- much later in this file; without declaring the local up here those closures would capture the global
+-- of the same name instead, which is nil. addon.GetTab() silently returned nil on every client because
+-- of that, and callers fell through to fragile CharacterFrame.numTabs lookups.
+local Tab
+
 -- Export API on addon for achievement modules and other addon files
 if addon then
     addon.GetProgress = GetProgress
@@ -2880,12 +2886,8 @@ StaticPopupDialogs["Hardcore Achievements TBC"] = {
 -- Constants
 local TabName = (addonName or "HardcoreAchievements") .. "Tab"
 
--- Create and configure the subframe
-local Tab = CreateFrame("Button" , TabName, CharacterFrame, "CharacterFrameTabButtonTemplate")
 -- Don't set position here - let LoadTabPosition handle it after CharacterFrame is fully initialized
-Tab:SetText(ACHIEVEMENTS)
-PanelTemplates_TabResize(Tab, 0)
-PanelTemplates_DeselectTab(Tab)
+Tab = addon.CreatePanelTab(TabName, CharacterFrame or UIParent, ACHIEVEMENTS)
 
 -- Draggable "curl" behavior for Achievements tab (bottom + right edges only)
 -- Tab persistence functions
@@ -3028,8 +3030,13 @@ function LoadTabPosition()
                 end
             else
                 -- Hardcore default: bottom mode
-                local Tabs = CharacterFrame.numTabs
-                Tab:SetPoint("RIGHT", _G["CharacterFrameTab"..Tabs], "RIGHT", 43, 0)
+                local lastTab = addon.GetLastCharacterFrameTab()
+                if lastTab then
+                    Tab:SetPoint("RIGHT", lastTab, "RIGHT", 43, 0)
+                else
+                    -- No Blizzard tabs to sit beside, so anchor to the panel's bottom edge instead.
+                    Tab:SetPoint("BOTTOMLEFT", CharacterFrame, "BOTTOMLEFT", 10, 8)
+                end
                 Tab:SetAlpha(1)
                 Tab:EnableMouse(true)
                 Tab.mode = "bottom"
@@ -3047,6 +3054,7 @@ function LoadTabPosition()
                     Tab.squareFrame:Show()
                 else
                     Tab:SetAlpha(1)
+                    Tab:EnableMouse(true)
                     Tab:Show()
                 end
             else
@@ -3142,8 +3150,8 @@ do
         local squareFrame = CreateFrame("Button", nil, UIParent) -- Parent to UIParent instead of Tab; use Button for clicks/drag
         squareFrame:SetSize(SQUARE_SIZE, SQUARE_SIZE)
         squareFrame:SetHitRectInsets(0, 30, 0, 0) -- shrink hitbox by 30px from right edge
-        squareFrame:SetFrameStrata("BACKGROUND") -- Move to background strata
-        squareFrame:SetFrameLevel(1) -- Low frame level to appear below borders
+        squareFrame:SetFrameStrata("HIGH")
+        squareFrame:SetFrameLevel(10)
         squareFrame:Hide()
         
         -- Background - Stat background texture only
@@ -3348,8 +3356,12 @@ do
         -- Anchor to bottom by default so first frame is stable
         if mode == "bottom" then
             -- Use RIGHT anchor to preserve 1-pixel offset (same as default horizontal position)
-            local Tabs = CharacterFrame.numTabs
-            self:SetPoint("RIGHT", _G["CharacterFrameTab"..Tabs], "RIGHT", 43, 0)
+            local lastTab = addon.GetLastCharacterFrameTab()
+            if lastTab then
+                self:SetPoint("RIGHT", lastTab, "RIGHT", 43, 0)
+            else
+                self:SetPoint("BOTTOMLEFT", CharacterFrame, "BOTTOMLEFT", 10, 8)
+            end
         else
             self:SetPoint("TOPRIGHT", CharacterFrame, "TOPRIGHT", 25, 0)
         end
@@ -3391,8 +3403,12 @@ do
                 SwitchTabMode("bottom")
                 s:ClearAllPoints()
                 -- Re-anchor using RIGHT anchor to preserve 1-pixel offset (same as default horizontal position)
-                local Tabs = CharacterFrame.numTabs
-                s:SetPoint("RIGHT", _G["CharacterFrameTab"..Tabs], "RIGHT", 43, 0)
+                local lastTab = addon.GetLastCharacterFrameTab()
+                if lastTab then
+                    s:SetPoint("RIGHT", lastTab, "RIGHT", 43, 0)
+                else
+                    s:SetPoint("BOTTOMLEFT", CharacterFrame, "BOTTOMLEFT", 10, 8)
+                end
             end
 
             if mode == "bottom" then
@@ -3478,8 +3494,8 @@ local function HideCharacterFrameContentsForCombat()
             CharacterFrame:EnableMouse(false)
             characterFrameHiddenForCombat = true
 
-            if CharacterFrame.numTabs then
-                for i = 1, CharacterFrame.numTabs do
+            do
+                for i = 1, addon.GetCharacterFrameTabCount() do
                     local tab = _G["CharacterFrameTab"..i]
                     if tab and tab:IsShown() then
                         tab._hc_prevAlpha = tab:GetAlpha()
@@ -3513,8 +3529,8 @@ local function RestoreCharacterFrameAfterCombat()
             CharacterFrame:EnableMouse(true)
         end
 
-        if CharacterFrame.numTabs then
-            for i = 1, CharacterFrame.numTabs do
+        do
+            for i = 1, addon.GetCharacterFrameTabCount() do
                 local tab = _G["CharacterFrameTab"..i]
                 if tab then
                     tab:SetAlpha(tab._hc_prevAlpha or 1)
@@ -5138,9 +5154,38 @@ do
             return externalPlayersByNPC[destGUID] or {}
         end
         
+        -- Entry point for clients that cannot register COMBAT_LOG_EVENT_UNFILTERED (Forever). The caller
+        -- decides credit itself, because the npcTapDenied and npcsInCombat gates the PARTY_KILL branch
+        -- relies on are fed by combat log events that never arrive there. See Forever\KillTracking.lua.
+        if addon then
+            addon.AwardKillFromExternalSource = function(destGUID)
+                if type(destGUID) ~= "string" or destGUID:sub(1, 9) ~= "Creature-" then
+                    return false
+                end
+
+                local npcId = getNpcIdFromGUID(destGUID)
+                if not npcId then
+                    return false
+                end
+
+                -- Same order as the PARTY_KILL branch: the rare/quest-loot hook runs before processKill.
+                local onRareQuestLootKill = addon.FirstKillRareQuestLoot_OnPartyKill
+                if onRareQuestLootKill then
+                    onRareQuestLootKill(destGUID)
+                end
+
+                processKill(destGUID, npcId)
+                clearCombatTrackingForGUID(destGUID)
+                return true
+            end
+        end
+
         achEvt:RegisterEvent("GROUP_ROSTER_UPDATE")
         achEvt:RegisterEvent("UNIT_PET")
-        achEvt:RegisterEvent("COMBAT_LOG_EVENT_UNFILTERED")
+        -- Forever forbids this for insecure addons, and asking anyway reports ADDON_ACTION_FORBIDDEN
+        if not (addon.Restrictions and addon.Restrictions.combatLog) then
+            achEvt:RegisterEvent("COMBAT_LOG_EVENT_UNFILTERED")
+        end
         achEvt:RegisterEvent("BOSS_KILL")
         achEvt:RegisterEvent("QUEST_ACCEPTED")
         achEvt:RegisterEvent("QUEST_TURNED_IN")
@@ -5858,7 +5903,7 @@ local function ShowAchievementTab()
         PlaySound("igCharacterInfoTab")
     end
 
-    for i = 1, CharacterFrame.numTabs do
+    for i = 1, addon.GetCharacterFrameTabCount() do
         local t = _G["CharacterFrameTab"..i]
         if t then
             PanelTemplates_DeselectTab(t)
@@ -5964,19 +6009,21 @@ Tab:HookScript("OnLeave", function(self)
 end)
 
 -- Hook tab selection to show/hide highlight based on selection state
-hooksecurefunc("PanelTemplates_SelectTab", function(tab)
+addon.SafeHookGlobal("PanelTemplates_SelectTab", function(tab)
     if tab == Tab and Tab.squareFrame and Tab.squareFrame:IsShown() and Tab.squareFrame.highlight then
         Tab.squareFrame.highlight:Show()
     end
 end)
 
-hooksecurefunc("PanelTemplates_DeselectTab", function(tab)
+addon.SafeHookGlobal("PanelTemplates_DeselectTab", function(tab)
     if tab == Tab and Tab.squareFrame and Tab.squareFrame:IsShown() and Tab.squareFrame.highlight then
         Tab.squareFrame.highlight:Hide()
     end
 end)
 
-hooksecurefunc("CharacterFrame_ShowSubFrame", function(frameName)
+-- CharacterFrame_ShowSubFrame was retired in the retail Character UI rework, so this is absent on
+-- Forever. Hooking it unconditionally threw here and took the rest of this file with it.
+addon.SafeHookGlobal("CharacterFrame_ShowSubFrame", function(frameName)
     if AchievementPanel and AchievementPanel:IsShown() and frameName ~= "HardcoreAchievementsFrame" then
         AchievementPanel._suppressOnHide = true
         AchievementPanel:Hide()
@@ -6024,7 +6071,7 @@ CharacterFrame:HookScript("OnShow", function()
 end)
 
 -- Hook ToggleCharacter to handle CharacterStatsClassic visibility and square frame
-hooksecurefunc("ToggleCharacter", function(tab, onlyShow)
+addon.SafeHookGlobal("ToggleCharacter", function(tab, onlyShow)
     -- When switching to PaperDoll tab, show CharacterStatsClassic if not hidden
     if tab == "PaperDollFrame" then
         if type(_G.CSC_ShowStatsPanel) == "function" then

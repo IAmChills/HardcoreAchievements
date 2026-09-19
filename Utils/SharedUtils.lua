@@ -1,5 +1,5 @@
 local addonName, addon = ...
-local UnitBuff = UnitBuff
+local GetPlayerBuff = addon.GetPlayerBuff
 local UnitClass = UnitClass
 local UnitFactionGroup = UnitFactionGroup
 local GetClassColor = GetClassColor
@@ -86,9 +86,16 @@ end)
 -- Character Panel Tab Management
 -- =========================================================
 
--- Get the Character Frame achievement tab
+-- Get the Character Frame achievement tab.
+-- Only a fallback for when addon.GetTab is unavailable, and only meaningful on clients whose character
+-- panel actually has tabs to count past. Retail has none, so this returns nil rather than erroring.
 local function GetAchievementTab()
-    return _G["CharacterFrameTab" .. (CharacterFrame.numTabs + 1)]
+    if not addon.GetCharacterFrameTabCount then return nil end
+
+    local count = addon.GetCharacterFrameTabCount()
+    if count < 1 then return nil end
+
+    return _G["CharacterFrameTab" .. (count + 1)]
 end
 
 -- Check if tab is the achievement tab
@@ -172,7 +179,8 @@ end
 
 local function IsSelfFound()
     for i = 1, 40 do
-        local name, _, _, _, _, _, _, _, _, spellId = UnitBuff("player", i)
+        -- Via the compat bridge: UnitBuff was removed in retail 11.0 (see Utils\Compat.lua).
+        local name, spellId = GetPlayerBuff(i)
         if not name then break end
         if spellId == 431567 or name == "Self-Found Adventurer" then
             return true
