@@ -1971,6 +1971,34 @@ end
 -- CreateAchToast(iconTextureIdOrPath, "Achievement Title", 10)
 -- CreateAchToast(row.icon or 134400, row.title or "Achievement", row.points or 10)
 
+-- The achievement toast reuses one shared frame, so simultaneous completions (a meta plus the
+-- achievements that satisfied it, or a dungeon finishing several variations on the same kill) used to
+-- overwrite each other and only the last one was ever seen. Queue them and show one at a time.
+-- Guild-first toasts live on their own frame anchored above this one and stay outside this queue, so a
+-- guild first and a regular achievement still appear together.
+-- State and functions live on one table rather than as separate locals: the main chunk is close to
+-- Lua's 200-local-per-function ceiling, and a handful of new file-level locals is enough to breach it.
+local achToast = {
+    HOLD_SEC = 3,
+    FADE_SEC = 0.6,
+    GAP_SEC = 0.25,
+    QUEUE_LIMIT = 5,
+    queue = {},
+    showing = false,
+    -- Identifies the toast on screen so a stale fade or watchdog cannot advance past a newer one.
+    serial = 0,
+}
+
+function achToast.Advance(serial)
+    if not achToast.showing or serial ~= achToast.serial then
+        return
+    end
+    achToast.showing = false
+    if #achToast.queue > 0 and achToast.ShowNext then
+        C_Timer.After(achToast.GAP_SEC, achToast.ShowNext)
+    end
+end
+
 -- Single OnUpdate for toast fade; state on frame (fadeT, fadeDuration) avoids allocating per toast
 local function AchToastFadeOnUpdate(s, elapsed)
     local t = (s.fadeT or 0) + elapsed
@@ -1984,6 +2012,7 @@ local function AchToastFadeOnUpdate(s, elapsed)
         s.fadeDuration = nil
         s:Hide()
         s:SetAlpha(1)
+        achToast.Advance(s.toastSerial)
     end
 end
 
@@ -2130,9 +2159,15 @@ end
 -- Call Achievement Toast
 -- =========================================================
 
-CreateAchToast = function(iconTex, title, pts, achIdOrRow)
+-- announce is true only for the toast that opens a burst, so a batch of completions produces one sound
+-- and one screenshot rather than one of each per achievement.
+function achToast.ShowNow(iconTex, title, pts, achIdOrRow, announce)
     local f = GetOrCreateAchToastFrame()
     f:Hide()
+    -- Clear any fade left running by a toast that was cut short, otherwise this one starts mid-fade.
+    f:SetScript("OnUpdate", nil)
+    f.fadeT = nil
+    f.fadeDuration = nil
     f:SetAlpha(1)
 
     -- Accept fileID/path/Texture object; fallback if nil
@@ -2217,33 +2252,75 @@ CreateAchToast = function(iconTex, title, pts, achIdOrRow)
     f:Show()
 
     --print(ACHIEVEMENT_BROADCAST_SELF:format(title))
-    if not skipBroadcastForRetroactive and addon and addon.PlayAchievementSound then
+    if announce and not skipBroadcastForRetroactive and addon and addon.PlayAchievementSound then
         addon.PlayAchievementSound()
     end
 
-    C_Timer.After(1, function()
-        -- Check if screenshots are disabled before taking screenshot
-        local shouldTakeScreenshot = true
-        if addon and addon.ShouldTakeScreenshot then
-            shouldTakeScreenshot = addon.ShouldTakeScreenshot()
-        else
-            -- Fallback: check setting directly if function doesn't exist yet
-            local _, cdb = GetCharDB()
-            if cdb and cdb.settings and cdb.settings.disableScreenshots then
-                shouldTakeScreenshot = false
+    if announce then
+        C_Timer.After(1, function()
+            -- Check if screenshots are disabled before taking screenshot
+            local shouldTakeScreenshot = true
+            if addon and addon.ShouldTakeScreenshot then
+                shouldTakeScreenshot = addon.ShouldTakeScreenshot()
+            else
+                -- Fallback: check setting directly if function doesn't exist yet
+                local _, cdb = GetCharDB()
+                if cdb and cdb.settings and cdb.settings.disableScreenshots then
+                    shouldTakeScreenshot = false
+                end
             end
-        end
-        
-        if shouldTakeScreenshot then
-            Screenshot()
-        end
+
+            if shouldTakeScreenshot then
+                Screenshot()
+            end
+        end)
+    end
+
+    achToast.serial = achToast.serial + 1
+    local serial = achToast.serial
+    f.toastSerial = serial
+
+    C_Timer.After(achToast.HOLD_SEC, function()
+        if f:IsShown() then f:PlayFade(achToast.FADE_SEC) end
     end)
 
-    holdSeconds = holdSeconds or 3
-    fadeSeconds = fadeSeconds or 0.6
-    C_Timer.After(holdSeconds, function()
-        if f:IsShown() then f:PlayFade(fadeSeconds) end
+    -- The completed fade normally advances the queue. This is the backstop for the toast being hidden
+    -- some other way, so a stuck "showing" flag can never strand the achievements still queued behind it.
+    C_Timer.After(achToast.HOLD_SEC + achToast.FADE_SEC + 0.5, function()
+        achToast.Advance(serial)
     end)
+end
+
+function achToast.ShowNext()
+    local entry = table_remove(achToast.queue, 1)
+    if not entry then
+        achToast.showing = false
+        return
+    end
+    achToast.showing = true
+    achToast.ShowNow(entry.icon, entry.title, entry.points, entry.target, entry.announce)
+end
+
+CreateAchToast = function(iconTex, title, pts, achIdOrRow)
+    if #achToast.queue >= achToast.QUEUE_LIMIT then
+        return
+    end
+
+    -- Nothing on screen and nothing waiting means this toast opens a burst, so it is the one that gets
+    -- the sound and the screenshot. Anything that lands while the queue is draining stays quiet.
+    local opensBurst = (not achToast.showing) and #achToast.queue == 0
+
+    achToast.queue[#achToast.queue + 1] = {
+        icon = iconTex,
+        title = title,
+        points = pts,
+        target = achIdOrRow,
+        announce = opensBurst,
+    }
+
+    if not achToast.showing then
+        achToast.ShowNext()
+    end
 end
 
 -- Shared achievement sound gate: prevent overlapping sound when many completions
@@ -2374,11 +2451,15 @@ end
 --
 -- Coalesce the burst into one pass and remember which achievements actually changed so the follow-up
 -- refresh stays as narrow as it was before.
-local progressFlushPending = false
-local progressDirtyAchIds = {}
+-- Kept on one table for the same reason as achToast above: the main chunk is near Lua's local limit.
+local progressFlush = {
+    pending = false,
+    dirty = {},
+}
 
-local function FlushProgressUpdates()
-    progressFlushPending = false
+function progressFlush.Run()
+    progressFlush.pending = false
+    local progressDirtyAchIds = progressFlush.dirty
 
     -- Only live gameplay progress should queue follow-up completion checks.
     -- Initial login/retroactive passes run their own synchronous completion sweep.
@@ -2453,11 +2534,11 @@ local function SetProgress(achId, key, value)
     if restorationsComplete and not skipBroadcastForRetroactive and not (addon and addon.Initializing) then
         MarkUnsavedAchievementProgress()
         if achId ~= nil then
-            progressDirtyAchIds[achId] = true
+            progressFlush.dirty[achId] = true
         end
-        if not progressFlushPending then
-            progressFlushPending = true
-            C_Timer.After(0, FlushProgressUpdates)
+        if not progressFlush.pending then
+            progressFlush.pending = true
+            C_Timer.After(0, progressFlush.Run)
         end
     end
 end
