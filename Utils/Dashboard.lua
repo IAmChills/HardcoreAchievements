@@ -53,6 +53,9 @@ local TAB_BUTTON_HEIGHT = 34
 local TAB_BUTTON_GAP = 5
 local TAB_HEADER_HEIGHT = (TAB_BUTTON_HEIGHT * 2) + TAB_BUTTON_GAP + 16
 local TAB_HEADER_GAP = 6
+-- Distance from the frame top to the tab header and the main list. Both must agree, or the tab column
+-- and the achievement list start at different heights.
+local DASHBOARD_HEADER_INSET = 150
 local TAB_BUTTON_TEXTURE = "Interface\\AddOns\\HardcoreAchievements\\Images\\dropdown.png"
 local TAB_TEXT_COLOR = { 0.922, 0.871, 0.761 }
 local TAB_TEXT_FONT = "GameFontHighlightSmall"
@@ -3861,11 +3864,10 @@ local function BuildDashboardFrame()
     -- Frozen header row (outside the scroll) so the special Dashboard tab is always visible
     local backdropTemplate = BackdropTemplateMixin and "BackdropTemplate" or nil
     DashboardFrame.TabHeader = CreateFrame("Frame", nil, DashboardFrame, backdropTemplate)
-    if isTBC then
-      DashboardFrame.TabHeader:SetPoint("TOPLEFT", DashboardFrame, "TOPLEFT", 8, -150)
-    else
-      DashboardFrame.TabHeader:SetPoint("TOPLEFT", DashboardFrame, "TOPLEFT", 8, -180)
-    end
+    -- One header height for every version. This used to drop to -180 outside TBC, which left a 30px
+    -- gap under the points block and dragged ClassIcon down with it, since ClassIcon anchors to the
+    -- scroll frame's top edge.
+    DashboardFrame.TabHeader:SetPoint("TOPLEFT", DashboardFrame, "TOPLEFT", 8, -DASHBOARD_HEADER_INSET)
     DashboardFrame.TabHeader:SetWidth(TAB_PANEL_WIDTH)
     DashboardFrame.TabHeader:SetHeight(TAB_HEADER_HEIGHT)
     DashboardFrame.TabHeader:SetFrameStrata("DIALOG")
@@ -4171,11 +4173,7 @@ local function BuildDashboardFrame()
   if not DashboardFrame.Scroll then
     DashboardFrame.Scroll = CreateFrame("ScrollFrame", nil, DashboardFrame, "UIPanelScrollFrameTemplate")
     -- Shift main list right to make space for tab panel
-    if isTBC then
-      DashboardFrame.Scroll:SetPoint("TOPLEFT", DashboardFrame, "TOPLEFT", 8 + TAB_PANEL_WIDTH, -150)
-    else
-      DashboardFrame.Scroll:SetPoint("TOPLEFT", DashboardFrame, "TOPLEFT", 8 + TAB_PANEL_WIDTH, -180)
-    end
+    DashboardFrame.Scroll:SetPoint("TOPLEFT", DashboardFrame, "TOPLEFT", 8 + TAB_PANEL_WIDTH, -DASHBOARD_HEADER_INSET)
     -- Reduced right inset: scrollbar is now a thin line
     DashboardFrame.Scroll:SetPoint("BOTTOMRIGHT", DashboardFrame, "BOTTOMRIGHT", -10, 24)
 
@@ -4316,7 +4314,7 @@ local function BuildDashboardFrame()
   -- Player name text (centered above the points background)
   if not DashboardFrame.PlayerNameText then
     DashboardFrame.PlayerNameText = DashboardFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlightHuge")
-    DashboardFrame.PlayerNameText:SetPoint("TOPLEFT", DashboardFrame.TotalPointsText, "BOTTOMLEFT", 0, -8)
+    DashboardFrame.PlayerNameText:SetPoint("TOPLEFT", DashboardFrame.TotalPointsText, "BOTTOMLEFT", 0, -5)
     DashboardFrame.PlayerNameText:SetJustifyH("LEFT")
     DashboardFrame.PlayerNameText:SetText(GetUnitName('player')) -- Will be updated by UpdatePlayerNameText
     --DashboardFrame.PlayerNameText:SetTextColor(0.42, 0.396, 0.345)
