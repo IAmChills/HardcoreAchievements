@@ -2833,7 +2833,7 @@ end)
 
 -- Function to show welcome message popup on first login or when version changes
 function addon:ShowWelcomeMessage()
-    local Disabled = false
+    local Disabled = true
     local WELCOME_MESSAGE_NUMBER = 7
     local db = EnsureDB()
     db.settings = db.settings or {}
@@ -2858,7 +2858,7 @@ StaticPopupDialogs["Hardcore Achievements Vanilla"] = {
     button2 = "Show QR code",
     timeout = 0,
     whileDead = true,
-    hideOnEscape = true,
+    hideOnEscape = false,
     noCancelOnEscape = true,
     preferredIndex = 3,
     OnAccept = function()
@@ -2881,7 +2881,7 @@ StaticPopupDialogs["Hardcore Achievements TBC"] = {
     button2 = "Show QR code",
     timeout = 0,
     whileDead = true,
-    hideOnEscape = true,
+    hideOnEscape = false,
     noCancelOnEscape = true,
     preferredIndex = 3,
     OnAccept = function()
