@@ -6,25 +6,6 @@ local ClassColor = (addon and addon.GetClassColor())
 local table_insert = table.insert
 
 local Raids = {
-  -- Lower Blackrock Spire (Level 60)
-  {
-    achId = "UBRS",
-    title = "Upper Blackrock Spire",
-    tooltip = "Defeat the bosses of " .. ClassColor .. "Upper Blackrock Spire|r",
-    icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_boss_generaldrakkisath.png", -- 254648
-    points = 50,
-    staticPoints = false,
-    requiredMapId = 229,
-    requiredKills = {
-      [9816] = 1,  -- Pyroguard Emberseer
-      [10429] = 1, -- Warchief Rend Blackhand
-      [10339] = 1, -- Gyth
-      [10430] = 1, -- The Beast
-      [10363] = 1, -- General Drakkisath
-    },
-    bossOrder = {9816, 10429, 10339, 10430, 10363}
-  },
-  
   -- Molten Core (Level 60)
   {
     achId = "MC",

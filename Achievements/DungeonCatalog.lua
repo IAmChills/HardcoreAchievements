@@ -442,6 +442,27 @@ local Dungeons = {
     bossOrder = {9196, 9236, 9237, 10596, 10584, 9736, 10268, 10220, 9568}
   },
 
+  -- Upper Blackrock Spire (10-man dungeon, Level 60)
+  {
+    achId = "UBRS",
+    title = "Upper Blackrock Spire",
+    tooltip = "Defeat the bosses of " .. ClassColor .. "Upper Blackrock Spire|r at level 60 or lower upon entering the dungeon (up to 10 players)",
+    icon = 254648,
+    level = 60,
+    points = 25,
+    staticPoints = false,
+    requiredMapId = 229,
+    maxPartySize = 10,
+    requiredKills = {
+      [9816] = 1,  -- Pyroguard Emberseer
+      [10429] = 1, -- Warchief Rend Blackhand
+      [10339] = 1, -- Gyth
+      [10430] = 1, -- The Beast
+      [10363] = 1, -- General Drakkisath
+    },
+    bossOrder = {9816, 10429, 10339, 10430, 10363}
+  },
+
   -- Stratholme (Both, Level 58-60)
   {
     achId = "STRAT",

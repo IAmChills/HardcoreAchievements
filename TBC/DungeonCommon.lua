@@ -94,6 +94,11 @@ local function DungeonMapIdsMatch(a, b)
     return a ~= nil and b ~= nil and tonumber(a) == tonumber(b)
 end
 
+-- 10-man dungeons (UBRS) convert to raid to fit 6–10 players. A 5-man dungeon still rejects raids.
+local function RaidGroupExceedsDungeonSize(maxPartySize)
+    return IsInRaid() and (maxPartySize or 5) <= 5
+end
+
 -- instanceEntryLevels may use number or string keys depending on API / savedvars restores.
 local function ResolveDungeonEntryLevelsForInstance(rawMapId)
     if rawMapId == nil then return nil end
@@ -157,7 +162,7 @@ local function CheckAchievementEligibility(mapId, achDef, entryData)
     local maxPartySize = achDef.maxPartySize or 5
     local members = GetNumGroupMembers()
     if members > maxPartySize then return false end
-    if IsInRaid() then return false end
+    if RaidGroupExceedsDungeonSize(maxPartySize) then return false end
     
     -- Check faction
     if achDef.faction then
@@ -873,6 +878,7 @@ function DungeonCommon.registerDungeonAchievement(def)
     isHeroicDungeon = def.isHeroicDungeon or false,
     isVariation = def.isVariation,
     baseAchId = def.baseAchId,
+    maxPartySize = def.maxPartySize,
     allowSoloDouble = false,
   })
 
@@ -1412,11 +1418,11 @@ function DungeonCommon.registerDungeonAchievement(def)
   end
 
   local function IsGroupEligible()
-    if IsInRaid() then return false end
     local members = GetNumGroupMembers()
     
     -- Check max party size (from variation or default to 5)
     local maxPartySize = def.maxPartySize or 5
+    if RaidGroupExceedsDungeonSize(maxPartySize) then return false end
     if members > maxPartySize then return false end
 
     local requirePartyLevels = def.isVariation == true

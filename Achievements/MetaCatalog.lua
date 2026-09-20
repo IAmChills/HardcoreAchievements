@@ -52,7 +52,7 @@ local function GetClassicDungeonMasterAchievements()
     local playerFaction = GetPlayerFaction()
     local requiredAchievements = {
         "VC", "WC", "SFK", "BFD", "RFK", "GNOM", "SM",
-        "RFD", "ULD", "ZF", "MARA", "ST", "BRD", "BRS", "STRAT", "DM", "SCHOLO"
+        "RFD", "ULD", "ZF", "MARA", "ST", "BRD", "BRS", "UBRS", "STRAT", "DM", "SCHOLO"
     }
     
     -- Add faction-specific dungeons
@@ -94,7 +94,7 @@ end
 -- Raid Master - requires all raid achievements
 local function GetRaidMasterAchievements()
     return {
-        "UBRS", "MC", "ONY", "BWL", "ZG", "AQ20", "AQ40", "NAXX"
+        "MC", "ONY", "BWL", "ZG", "AQ20", "AQ40", "NAXX"
     }
 end
 

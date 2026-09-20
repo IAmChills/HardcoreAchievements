@@ -297,6 +297,7 @@ local function RegisterAchievementDef(def, overrides)
         isQuest = def.isQuest or false,
         isRaid = def.isRaid or false,
         isHeroicDungeon = def.isHeroicDungeon or false,
+        maxPartySize = def.maxPartySize,
         isMetaAchievement = def.isMetaAchievement or false,
         isContinentExploration = def.isContinentExploration or false,
         isVariation = def.isVariation or false,
