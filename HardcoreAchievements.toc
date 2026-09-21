@@ -1,7 +1,7 @@
 ﻿## Interface: 11509, 20506, 16001
 ## Title: HardcoreAchievements
 ## Author: Chills
-## Version: 2.0.1
+## Version: 2.0.2
 ## Notes: Hardcore achievements system
 ## OptionalDeps: Ace3, CallbackHandler-1.0, LibDataBroker-1.1, LibDBIcon-1.0, LibStub, LibUIDropDownMenu
 ## SavedVariables: HardcoreAchievementsDB
