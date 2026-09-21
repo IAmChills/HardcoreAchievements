@@ -1748,6 +1748,9 @@ end
 
 -- Resolve toast title/icon from stable row/def fields first.
 -- UI frames often lack .title/.icon, and Icon:GetTexture() can return nil for fileIDs.
+
+-- /run HardcoreAchievementsToast(nil, "Test Toast", 10, "TestAchievement")
+-- /run for i=1,5 do HardcoreAchievementsToast(nil, "Test "..i, i*10, "Test"..i) end
 local function GetAchievementToastDisplay(row)
     if not row then
         return 136116, "Achievement", nil
@@ -2674,7 +2677,7 @@ local function InitializeMinimapButton()
                 end
             end,
             OnTooltipShow = function(tooltip)
-                tooltip:AddLine("Hardcore Achievements", 1, 1, 1)
+                tooltip:AddLine("Hardcore Achievements", 1, 0.82, 0)
 
                 tooltip:AddLine("Left-click to open Dashboard", 0.5, 0.5, 0.5)
                 tooltip:AddLine("Right-click to open Leaderboard", 0.5, 0.5, 0.5)

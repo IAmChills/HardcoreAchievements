@@ -1,21 +1,16 @@
 local addonName, addon = ...
 
 -- =========================================================
--- Forever: 4th chrome tab on LegacySystemFrame
+-- Forever: last chrome tab on LegacySystemFrame
 --
--- Blizzard's strip is three Frames on the host itself:
---   LegacyChallengeTab, LegacyTreeTab, LegacyRewardTrackTab
--- plus host.Tabs / host.Pages / host.currentPage.
+-- Blizzard's strip is Frames on the host (LegacyChallengeTab, etc.) plus
+-- host.Tabs / host.Pages. We never join Tabs/Pages (SelectPage mixin crash).
+-- We clone the current last chrome tab and sit under it, so extra Blizzard
+-- tabs later still leave us last.
 -- Classic/TBC never load this file.
 -- =========================================================
 
 addon.IsForeverCharacterUI = true
-
-local BLIZZARD_TAB_FIELDS = {
-    "LegacyChallengeTab",
-    "LegacyTreeTab",
-    "LegacyRewardTrackTab",
-}
 
 local hookedBlizzardTabs = {}
 local modeTab
@@ -99,6 +94,20 @@ local function CopyTextureLook(dst, src)
     dst:SetSize(w, h)
 end
 
+local CHROME_TAB_MAX = 72
+
+local function ChromeTabSize(source)
+    local w = SafeCall(source, "GetWidth") or 32
+    local h = SafeCall(source, "GetHeight") or 32
+    if w <= 0 or w > CHROME_TAB_MAX then
+        w = 32
+    end
+    if h <= 0 or h > CHROME_TAB_MAX then
+        h = 32
+    end
+    return w, h
+end
+
 local function CopyAllPoints(dst, src, srcParent, dstParent)
     dst:ClearAllPoints()
     local n = SafeCall(src, "GetNumPoints") or 0
@@ -117,6 +126,23 @@ local function CopyAllPoints(dst, src, srcParent, dstParent)
     end
 end
 
+local function IsOurTab(tab)
+    return tab == modeTab or (tab and (tab._hcaLegacyTab or tab._hcaModeTab))
+end
+
+local function TabName(tab)
+    return (tab and tab.GetName and tab:GetName()) or ""
+end
+
+local function IsChromeSized(tab)
+    local w = SafeCall(tab, "GetWidth") or 0
+    local h = SafeCall(tab, "GetHeight") or 0
+    if w <= 0 or h <= 0 then
+        return true
+    end
+    return w <= CHROME_TAB_MAX and h <= CHROME_TAB_MAX
+end
+
 local function GetBlizzardTabs(host)
     host = host or GetHostFrame()
     local tabs = {}
@@ -125,40 +151,50 @@ local function GetBlizzardTabs(host)
     end
     local seen = {}
     local function add(tab)
-        if tab and not seen[tab] and tab ~= modeTab then
+        if tab and not seen[tab] and not IsOurTab(tab) and tab ~= host and IsChromeSized(tab) then
             seen[tab] = true
             tabs[#tabs + 1] = tab
         end
-    end
-    for i = 1, #BLIZZARD_TAB_FIELDS do
-        add(host[BLIZZARD_TAB_FIELDS[i]])
     end
     if type(host.Tabs) == "table" then
         for i = 1, #host.Tabs do
             add(host.Tabs[i])
         end
     end
+    -- Future official tabs are likely also host children named *Tab. Ignore
+    -- oversized frames (pages, reward cards) even if they have Icon/Tab in the name.
+    for _, child in ipairs({ host:GetChildren() }) do
+        local name = TabName(child)
+        if name:match("Tab$") and not name:find("Indicator") then
+            add(child)
+        end
+    end
     return tabs
 end
 
+-- Last in the vertical strip: lowest on screen among chrome-sized tabs, else last in host.Tabs.
 local function GetLastBlizzardTab(host)
     host = host or GetHostFrame()
+    local tabs = GetBlizzardTabs(host)
+    local last, lastBottom
+    for i = 1, #tabs do
+        local bottom = SafeCall(tabs[i], "GetBottom")
+        if bottom and (not lastBottom or bottom < lastBottom) then
+            last, lastBottom = tabs[i], bottom
+        end
+    end
+    if last then
+        return last
+    end
     if host and type(host.Tabs) == "table" then
         for i = #host.Tabs, 1, -1 do
-            if host.Tabs[i] and host.Tabs[i] ~= modeTab then
-                return host.Tabs[i]
+            local tab = host.Tabs[i]
+            if tab and not IsOurTab(tab) and IsChromeSized(tab) then
+                return tab
             end
         end
     end
-    local tabs = GetBlizzardTabs(host)
-    local best, bestBottom
-    for i = 1, #tabs do
-        local bottom = SafeCall(tabs[i], "GetBottom")
-        if bottom and (not bestBottom or bottom < bestBottom) then
-            best, bestBottom = tabs[i], bottom
-        end
-    end
-    return best or tabs[#tabs]
+    return tabs[#tabs]
 end
 
 local function TrySetSelected(tab, selected)
@@ -185,8 +221,7 @@ end
 
 local function CloneTab(source, name, parent)
     local tab = CreateFrame("Frame", name, parent)
-    local w = SafeCall(source, "GetWidth") or 32
-    local h = SafeCall(source, "GetHeight") or 32
+    local w, h = ChromeTabSize(source)
     tab:SetSize(w, h)
     tab:SetFrameStrata(source:GetFrameStrata())
     tab:SetFrameLevel((SafeCall(source, "GetFrameLevel") or 1) + 1)
@@ -318,7 +353,7 @@ end
 
 local function GetSafeTabParent(host, lastTab)
     -- Parent to the Legacy frame so the tab hides with it. Never TabIndicators
-    -- (that mixin lays out exactly 3 tabs) and never UIParent (orphan after close).
+    -- (that mixin lays out a fixed tab count) and never UIParent (orphan after close).
     local parent = lastTab and SafeCall(lastTab, "GetParent")
     if parent and parent ~= UIParent and parent ~= host.TabIndicators then
         local name = (parent.GetName and parent:GetName()) or ""
@@ -354,9 +389,8 @@ local function AnchorModeTab(tab)
     tab:SetFrameStrata(host:GetFrameStrata() or "MEDIUM")
     tab:SetFrameLevel((SafeCall(host, "GetFrameLevel") or 1) + 50)
     if lastTab then
-        tab:SetPoint("TOPLEFT", lastTab, "BOTTOMLEFT", 0, 0)
-        local w = SafeCall(lastTab, "GetWidth") or 32
-        local h = SafeCall(lastTab, "GetHeight") or 32
+        tab:SetPoint("TOPLEFT", lastTab, "BOTTOMLEFT", 0, -2)
+        local w, h = ChromeTabSize(lastTab)
         tab:SetSize(w, h)
         tab:SetFrameStrata(lastTab:GetFrameStrata())
         tab:SetFrameLevel((SafeCall(lastTab, "GetFrameLevel") or 1) + 2)
@@ -414,7 +448,7 @@ function addon.CreateLegacyFrameModeTab()
     end)
     SafeSetScript(modeTab, "OnEnter", function(self)
         GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-        GameTooltip:SetText(ACHIEVEMENTS or "Achievements", 1, 1, 1)
+        GameTooltip:SetText(ACHIEVEMENTS or "Achievements", 1, 0.82, 0)
         GameTooltip:Show()
     end)
     SafeSetScript(modeTab, "OnLeave", function()

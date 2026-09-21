@@ -153,55 +153,116 @@ end
 local POINTS_FONT_PATH = "Interface\\AddOns\\HardcoreAchievements\\Fonts\\friz-quadrata-regular.ttf"
 
 -- Minimal scrollbar styling: a thin class-colored line (thumb) with no bulky UI.
+-- Classic/TBC: UIPanelScrollFrameTemplate already wires scrolling. This only restyles
+-- that Slider into a thin class-colored thumb. Forever skips it (Track / SetScrollPercentage).
 local function ApplyClassLineScrollbar(scrollFrame, xInset)
-  if not scrollFrame or not scrollFrame.ScrollBar then return end
-  local scrollBar = scrollFrame.ScrollBar
-  local classR, classG, classB = GetPlayerClassColor()
+  local bar = scrollFrame and scrollFrame.ScrollBar
+  if not bar or bar.SetScrollPercentage or bar.Track then
+    return
+  end
+
   xInset = tonumber(xInset) or 2
+  bar:ClearAllPoints()
+  bar:SetPoint("TOPLEFT", scrollFrame, "TOPRIGHT", -xInset, -16)
+  bar:SetPoint("BOTTOMLEFT", scrollFrame, "BOTTOMRIGHT", -xInset, 16)
+  bar:SetWidth(6)
+  bar:SetAlpha(0.9)
 
-  -- Nudge scrollbar inward (left) without changing its vertical alignment.
-  -- Use the typical UIPanelScrollFrameTemplate anchoring (outside-right) with a small Y inset,
-  -- then apply the requested X inset.
-  local yInset = 16
-  scrollBar:ClearAllPoints()
-  scrollBar:SetPoint("TOPLEFT", scrollFrame, "TOPRIGHT", -xInset, -yInset)
-  scrollBar:SetPoint("BOTTOMLEFT", scrollFrame, "BOTTOMRIGHT", -xInset, yInset)
+  if bar._hcaClassLine then
+    return
+  end
+  bar._hcaClassLine = true
 
-  -- Remove up/down buttons (take up a lot of space visually)
-  local sbName = scrollBar.GetName and scrollBar:GetName() or nil
-  local up = scrollBar.ScrollUpButton or scrollBar.UpButton or (sbName and _G[sbName .. "ScrollUpButton"])
-  local down = scrollBar.ScrollDownButton or scrollBar.DownButton or (sbName and _G[sbName .. "ScrollDownButton"])
-  local function ForceHideButton(btn)
+  local function hideButton(btn)
     if not btn then return end
     btn:Hide()
-    btn:SetAlpha(0)
     btn:EnableMouse(false)
-    -- Some templates re-show these; keep them hidden.
     btn:SetScript("OnShow", btn.Hide)
   end
-  ForceHideButton(up)
-  ForceHideButton(down)
+  hideButton(bar.ScrollUpButton or bar.UpButton)
+  hideButton(bar.ScrollDownButton or bar.DownButton)
 
-  -- Make the bar itself very thin
-  scrollBar:SetWidth(6)
-  scrollBar:SetAlpha(0.9)
-
-  -- Hide any background/track textures (keep thumb only)
-  local regions = { scrollBar:GetRegions() }
-  for _, region in ipairs(regions) do
-    if region and region:IsObjectType("Texture") then
+  local thumb = bar.GetThumbTexture and bar:GetThumbTexture()
+  local regions = { bar:GetRegions() }
+  for i = 1, #regions do
+    local region = regions[i]
+    if region and region ~= thumb and region.IsObjectType and region:IsObjectType("Texture") then
       region:SetTexture(nil)
       region:SetAlpha(0)
     end
   end
 
-  local thumb = scrollBar.GetThumbTexture and scrollBar:GetThumbTexture() or nil
   if thumb then
+    local r, g, b = GetPlayerClassColor()
     thumb:SetTexture("Interface\\Buttons\\WHITE8x8")
     thumb:SetTexCoord(0, 1, 0, 1)
-    thumb:SetVertexColor(classR, classG, classB)
+    thumb:SetVertexColor(r, g, b)
     thumb:SetAlpha(0.95)
     thumb:SetWidth(2)
+  end
+end
+
+-- Forever list is still a classic UIPanel ScrollFrame, not WowScrollBoxList.
+-- ScrollUtil.InitScrollFrameWithScrollBar is the Blizzard helper for that pairing.
+local function HideClassicScrollBar(scroll)
+  if not scroll then
+    return
+  end
+  local oldBar = scroll._hcaClassicScrollBar or scroll.ScrollBar
+  if not oldBar or oldBar == DashboardFrame._hcaRetailScrollBar then
+    return
+  end
+  oldBar:Hide()
+  oldBar:SetAlpha(0)
+  oldBar:EnableMouse(false)
+  oldBar:SetScript("OnShow", oldBar.Hide)
+  if oldBar.SetWidth then
+    oldBar:SetWidth(1)
+  end
+  if oldBar.ScrollUpButton then oldBar.ScrollUpButton:Hide() end
+  if oldBar.ScrollDownButton then oldBar.ScrollDownButton:Hide() end
+  if oldBar.ThumbTexture then oldBar.ThumbTexture:Hide() end
+  scroll._hcaClassicScrollBar = oldBar
+end
+
+local function ApplyForeverRetailScrollBar()
+  if not DashboardFrame or not DashboardFrame._hcaLegacyEmbedded or not DashboardFrame.Scroll then
+    return
+  end
+  if not (ScrollUtil and ScrollUtil.InitScrollFrameWithScrollBar) then
+    return
+  end
+
+  local scroll = DashboardFrame.Scroll
+  HideClassicScrollBar(scroll)
+
+  local bar = DashboardFrame._hcaRetailScrollBar
+  if not bar then
+    local ok, created = pcall(CreateFrame, "EventFrame", nil, DashboardFrame, "MinimalScrollBar")
+    if not ok or not created then
+      return
+    end
+    bar = created
+    if CallbackRegistryMixin and type(CallbackRegistryMixin.OnLoad) == "function" and not bar.executingEvents then
+      pcall(CallbackRegistryMixin.OnLoad, bar)
+    end
+    if type(bar.OnLoad) == "function" then
+      pcall(bar.OnLoad, bar)
+    end
+    DashboardFrame._hcaRetailScrollBar = bar
+  end
+
+  bar:SetParent(DashboardFrame)
+  bar:ClearAllPoints()
+  bar:SetPoint("TOPRIGHT", scroll, "TOPRIGHT", 0, -2)
+  bar:SetPoint("BOTTOMRIGHT", scroll, "BOTTOMRIGHT", 0, 2)
+  bar:SetFrameStrata(scroll:GetFrameStrata() or "MEDIUM")
+  bar:SetFrameLevel((scroll:GetFrameLevel() or 1) + 20)
+  bar:Show()
+
+  if not scroll._hcaRetailScrollHooks then
+    scroll._hcaRetailScrollHooks = true
+    ScrollUtil.InitScrollFrameWithScrollBar(scroll, bar)
   end
 end
 
@@ -3427,13 +3488,13 @@ function DASHBOARD:BuildModernRows(srcRows)
           DashboardFrame.Scroll:EnableMouseWheel(false)
         end
         DashboardFrame.Scroll:SetVerticalScroll(0)
-        if sb then sb:SetValue(0) end
+        if sb and sb.SetValue then sb:SetValue(0) end
       else
         if sb then sb:Show() end
         if DashboardFrame.Scroll.EnableMouseWheel then
           DashboardFrame.Scroll:EnableMouseWheel(true)
         end
-        if sb then sb:SetValue(curV) end
+        if sb and sb.SetValue then sb:SetValue(curV) end
       end
     end
   else
@@ -4952,6 +5013,7 @@ function DASHBOARD.ApplyHostLayout()
   ApplyForeverScrollInset()
 
   ApplyLegacyEmbeddedSkin()
+  ApplyForeverRetailScrollBar()
   return true
 end
 
