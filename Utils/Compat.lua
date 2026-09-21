@@ -18,6 +18,18 @@ local UnitBuff = UnitBuff
 local C_XMLUtil_GetTemplateInfo = C_XMLUtil and C_XMLUtil.GetTemplateInfo
 local select = select
 
+-- Item APIs. GetItemCount and GetItemInfo were moved onto C_Item on retail-based clients
+-- (Forever among them). Many files capture these names into locals at load time, so the
+-- globals have to exist before those files run. Signatures match the Classic globals.
+if C_Item then
+    if type(GetItemCount) ~= "function" and type(C_Item.GetItemCount) == "function" then
+        GetItemCount = C_Item.GetItemCount
+    end
+    if type(GetItemInfo) ~= "function" and type(C_Item.GetItemInfo) == "function" then
+        GetItemInfo = C_Item.GetItemInfo
+    end
+end
+
 --- Reads one of the player's helpful auras by index.
 --- UnitBuff was removed in retail 11.0 in favour of C_UnitAuras. Callers only ever needed the name and
 --- spell id out of the old ten-value return, so this returns just those two.
