@@ -16,8 +16,8 @@ embeds.xml
 # locals at load time, so it has to exist before they run.
 Utils\Compat.lua
 Forever\Restrictions.lua [AllowLoadGameType camelot, mainline]
-Forever\CharacterFrameTab.lua [AllowLoadGameType camelot, mainline]
-Forever\CharacterFramePanel.lua [AllowLoadGameType camelot, mainline]
+Forever\LegacyFrameTab.lua [AllowLoadGameType camelot, mainline]
+Forever\LegacyFramePanel.lua [AllowLoadGameType camelot, mainline]
 
 Functions\GetUHCPreset.lua
 Functions\PlayerIsSolo.lua

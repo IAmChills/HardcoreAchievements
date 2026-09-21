@@ -1084,6 +1084,12 @@ local function HandleSlashCommand(msg)
                 print("|cff008066[Hardcore Achievements]|r Debug mode disabled")
             end
         end
+    elseif command == "" then
+        if addon and addon.Dashboard and addon.Dashboard.Toggle then
+            addon.Dashboard:Toggle()
+        elseif addon and addon.ShowDashboard then
+            addon.ShowDashboard()
+        end
     else
         print("|cff008066[Hardcore Achievements]|r Available commands:")
         print("  |CFFFFD100/hca show|r - Enable and show the custom achievement tab")

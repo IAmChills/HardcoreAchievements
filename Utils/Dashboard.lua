@@ -4,6 +4,7 @@ local DashboardFrame -- Main dashboard frame (standalone window)
 local ICON_SIZE = 60
 local ICON_PADDING = 12
 local GRID_COLS = 7  -- Number of columns in the grid
+local GRID_COLS_FOREVER = 10 -- Wider Forever embed can fit more icons per row
 
 local addonName, addon = ...
 local UnitClass = UnitClass
@@ -56,6 +57,9 @@ local TAB_HEADER_GAP = 6
 -- Distance from the frame top to the tab header and the main list. Both must agree, or the tab column
 -- and the achievement list start at different heights.
 local DASHBOARD_HEADER_INSET = 150
+-- Forever embed: extra space under the points/name header so lists clear the filter dropdown.
+local FOREVER_CONTENT_EXTRA_INSET = 19
+local EMBEDDED_HEADER_INSET = 95
 local TAB_BUTTON_TEXTURE = "Interface\\AddOns\\HardcoreAchievements\\Images\\dropdown.png"
 local TAB_TEXT_COLOR = { 0.922, 0.871, 0.761 }
 local TAB_TEXT_FONT = "GameFontHighlightSmall"
@@ -247,6 +251,14 @@ end
 
 local function UpdateDashboardClassBackground()
   if not DashboardFrame or not DashboardFrame.ClassBackground then
+    return
+  end
+
+  if DashboardFrame._hcaLegacyEmbedded then
+    DashboardFrame.ClassBackground:Hide()
+    if DashboardFrame.SetBackdrop then
+      DashboardFrame:SetBackdrop(nil)
+    end
     return
   end
 
@@ -1985,6 +1997,17 @@ SetDashboardFooterControlsForLeaderboard = function(enabled, playerCount)
   end
   UpdateLayoutCheckboxes(IsModernRowsEnabled())
 
+  if DashboardFrame._hcaLegacyEmbedded then
+    if DashboardFrame.UseCharacterPanelCheckbox then
+      DashboardFrame.UseCharacterPanelCheckbox:Hide()
+      DashboardFrame.UseCharacterPanelCheckbox:EnableMouse(false)
+    end
+    if DashboardFrame.UseCharacterPanelLabel then
+      DashboardFrame.UseCharacterPanelLabel:Hide()
+    end
+    return
+  end
+
   if DashboardFrame.UseCharacterPanelCheckbox then
     DashboardFrame.UseCharacterPanelCheckbox:Show()
     if addon and addon.GetSetting then
@@ -2146,6 +2169,23 @@ local function CreateDashboardIcon(parent)
 end
 
 -- ---------- Layout ----------
+local function GetGridCols()
+  if DashboardFrame and DashboardFrame._hcaLegacyEmbedded then
+    return GRID_COLS_FOREVER
+  end
+  return GRID_COLS
+end
+
+local function ApplyForeverScrollInset()
+  if not DashboardFrame or not DashboardFrame._hcaLegacyEmbedded or not DashboardFrame.Scroll then
+    return
+  end
+  local headerInset = DashboardFrame._hcaLegacyHeaderHeight or EMBEDDED_HEADER_INSET
+  DashboardFrame.Scroll:ClearAllPoints()
+  DashboardFrame.Scroll:SetPoint("TOPLEFT", DashboardFrame, "TOPLEFT", 8 + TAB_PANEL_WIDTH, -(headerInset + FOREVER_CONTENT_EXTRA_INSET))
+  DashboardFrame.Scroll:SetPoint("BOTTOMRIGHT", DashboardFrame, "BOTTOMRIGHT", -10, 24)
+end
+
 local function LayoutIcons(container, icons)
   if not container or not icons then return end
   
@@ -2157,14 +2197,15 @@ local function LayoutIcons(container, icons)
     end
   end
   
+  local cols = GetGridCols()
   local totalIcons = #visibleIcons
-  local rows = math.ceil(totalIcons / GRID_COLS)
+  local rows = math.ceil(totalIcons / cols)
   local startX = ICON_PADDING
   local startY = -ICON_PADDING
   
   for i, icon in ipairs(visibleIcons) do
-    local col = ((i - 1) % GRID_COLS)
-    local row = math.floor((i - 1) / GRID_COLS)
+    local col = ((i - 1) % cols)
+    local row = math.floor((i - 1) / cols)
     
     local x = startX + col * (ICON_SIZE + ICON_PADDING)
     local y = startY - row * (ICON_SIZE + ICON_PADDING)
@@ -3254,6 +3295,7 @@ function DASHBOARD:BuildModernRows(srcRows)
       end
   end
 
+  ApplyForeverScrollInset()
   if isDashboardView and DashboardFrame and DashboardFrame.SummaryRecentHeaderText and DashboardFrame.Scroll then
     if #visibleRows > 0 then
       DashboardFrame.SummaryRecentHeaderText:ClearAllPoints()
@@ -3342,30 +3384,32 @@ function DASHBOARD:BuildModernRows(srcRows)
   if isDashboardView then
     UpdateDashboardProgressOverview(srcRows)
 
-    -- Ensure scroll child height includes progress overview section.
+    -- Content height must match the visible recent rows + progress overview.
+    -- This used to multiply one row by 4, which left a tall empty scroll for 1–2 recents.
     local rowsH = 0
-    do
-      local lastShownRow = nil
-      for i = #self.rows, 1, -1 do
-        if self.rows[i] and self.rows[i]:IsShown() then
-          lastShownRow = self.rows[i]
-          break
-        end
+    local visibleCount = 0
+    local lastShownRow = nil
+    local summaryRowSpacing = 4
+    for i = 1, #self.rows do
+      local row = self.rows[i]
+      if row and row:IsShown() then
+        visibleCount = visibleCount + 1
+        lastShownRow = row
       end
-      if lastShownRow then
-        -- Approx: top header + rows already accounted via LayoutModernRows, just add overview block size.
-        rowsH = (lastShownRow:GetHeight() or 0) * 4
-      end
+    end
+    if visibleCount > 0 then
+      rowsH = visibleCount * (lastShownRow:GetHeight() or 0) + (visibleCount - 1) * summaryRowSpacing
     end
 
     local progH = 0
     if DashboardFrame and DashboardFrame.ProgressContainer and DashboardFrame.ProgressContainer:IsShown() then
-      progH = (DashboardFrame.ProgressHeaderText and DashboardFrame.ProgressHeaderText.GetStringHeight and DashboardFrame.ProgressHeaderText:GetStringHeight()) or 20
-      progH = progH + 10 + (DashboardFrame.ProgressContainer:GetHeight() or 0) + 20
+      local headerH = (DashboardFrame.ProgressHeaderText and DashboardFrame.ProgressHeaderText.GetStringHeight and DashboardFrame.ProgressHeaderText:GetStringHeight()) or 20
+      local gapAbove = lastShownRow and 12 or 0
+      local gapHeaderToBars = 6
+      progH = gapAbove + headerH + gapHeaderToBars + (DashboardFrame.ProgressContainer:GetHeight() or 0)
     end
 
-    local minH = math.max((self.Content:GetHeight() or 1), rowsH + progH + 60)
-    self.Content:SetHeight(minH)
+    self.Content:SetHeight(math.max(rowsH + progH + 8, 1))
     if DashboardFrame and DashboardFrame.Scroll then
       -- Summary can be scrollable (recent rows + progress overview). Only disable scroll input
       -- if there is genuinely no scroll range.
@@ -3409,38 +3453,6 @@ function DASHBOARD:BuildModernRows(srcRows)
       end
     end
   end
-end
-
--- ---------- Layout ----------
-local function LayoutIcons(container, icons)
-  if not container or not icons then return end
-  
-  -- Only layout visible icons
-  local visibleIcons = {}
-  for i, icon in ipairs(icons) do
-    if icon:IsShown() then
-      table_insert(visibleIcons, icon)
-    end
-  end
-  
-  local totalIcons = #visibleIcons
-  local rows = math.ceil(totalIcons / GRID_COLS)
-  local startX = ICON_PADDING
-  local startY = -ICON_PADDING
-  
-  for i, icon in ipairs(visibleIcons) do
-    local col = ((i - 1) % GRID_COLS)
-    local row = math.floor((i - 1) / GRID_COLS)
-    
-    local x = startX + col * (ICON_SIZE + ICON_PADDING)
-    local y = startY - row * (ICON_SIZE + ICON_PADDING)
-    
-    icon:ClearAllPoints()
-    icon:SetPoint("TOPLEFT", container, "TOPLEFT", x, y)
-  end
-
-  local neededH = rows * (ICON_SIZE + ICON_PADDING) + ICON_PADDING
-  container:SetHeight(math.max(neededH, 1))
 end
 
 -- Keep content width synced to the scroll frame so text aligns and doesn't bunch up
@@ -3580,6 +3592,7 @@ function DASHBOARD:Rebuild()
 
   local isLeaderboardTab = DashboardFrame and DashboardFrame.SelectedTabKey == "leaderboard"
   if isLeaderboardTab then
+    ApplyForeverScrollInset()
     BuildDashboardLeaderboardRows()
     UpdateDashboardMultiplierText()
     UpdateTotalPointsText()
@@ -3742,11 +3755,15 @@ end
 local function BuildDashboardFrame()
   if DashboardFrame and DashboardFrame.Scroll and DashboardFrame.Content and DashboardFrame._initialized then return true end
   
-  -- Create standalone dashboard frame (matching UltraHardcore style)
+  -- Create standalone dashboard frame (matching UltraHardcore style).
+  -- On Forever this is later reparented into LegacySystemFrame's achievements page.
   if not DashboardFrame then
     local backdropTemplate = BackdropTemplateMixin and "BackdropTemplate" or nil
-    DashboardFrame = CreateFrame("Frame", "HardcoreAchievementsDashboard", UIParent, backdropTemplate)
-    tinsert(UISpecialFrames, "HardcoreAchievementsDashboard")
+    local host = addon.GetLegacyDashboardHost and addon.GetLegacyDashboardHost()
+    DashboardFrame = CreateFrame("Frame", "HardcoreAchievementsDashboard", host or UIParent, backdropTemplate)
+    if not host then
+      tinsert(UISpecialFrames, "HardcoreAchievementsDashboard")
+    end
     if addon then addon.DashboardFrame = DashboardFrame end
     DashboardFrame:SetSize(700, 640) -- +150px to make room for left-side tab panel
     DashboardFrame:SetPoint("CENTER", UIParent, "CENTER", 0, 30)
@@ -4530,7 +4547,15 @@ local function BuildDashboardFrame()
       end
       UpdateDashboardMultiplierText() -- Update multiplier text when frame is shown
       -- Sync UseCharacterPanel checkbox with current setting (in case it was changed elsewhere)
-      if DashboardFrame.UseCharacterPanelCheckbox and (addon and addon.GetSetting) then
+      if DashboardFrame._hcaLegacyEmbedded then
+        if DashboardFrame.UseCharacterPanelCheckbox then
+          DashboardFrame.UseCharacterPanelCheckbox:Hide()
+          DashboardFrame.UseCharacterPanelCheckbox:EnableMouse(false)
+        end
+        if DashboardFrame.UseCharacterPanelLabel then
+          DashboardFrame.UseCharacterPanelLabel:Hide()
+        end
+      elseif DashboardFrame.UseCharacterPanelCheckbox and (addon and addon.GetSetting) then
         local useCharacterPanel = addon.GetSetting("useCharacterPanel", true)
         DashboardFrame.UseCharacterPanelCheckbox:SetChecked(useCharacterPanel)
       end
@@ -4683,8 +4708,260 @@ local function GetDashboardTabKeyForAchievement(achId)
   return "all"
 end
 
+local function RemoveFromSpecialFrames(frame)
+  if not frame or not UISpecialFrames then
+    return
+  end
+  local name = frame:GetName()
+  if not name then
+    return
+  end
+  for i = #UISpecialFrames, 1, -1 do
+    if UISpecialFrames[i] == name then
+      table.remove(UISpecialFrames, i)
+    end
+  end
+end
+
+local function MatchHostStrata(frame, host)
+  if not frame or not host then
+    return
+  end
+  if frame.SetFrameStrata then
+    frame:SetFrameStrata(host:GetFrameStrata() or "MEDIUM")
+  end
+end
+
+local function ResolveArtRegion(obj)
+  if not obj then
+    return nil
+  end
+  if obj.GetObjectType and obj:GetObjectType() == "Texture" then
+    return obj
+  end
+  if obj.Center and obj.Center.GetObjectType and obj.Center:GetObjectType() == "Texture" then
+    return obj.Center
+  end
+  if obj.Background and obj.Background ~= obj then
+    local nested = ResolveArtRegion(obj.Background)
+    if nested then
+      return nested
+    end
+  end
+  if obj.GetRegions then
+    local regions = { obj:GetRegions() }
+    for i = 1, #regions do
+      local region = regions[i]
+      if region and region.IsObjectType and region:IsObjectType("Texture") then
+        local atlas = region.GetAtlas and region:GetAtlas()
+        local tex = region.GetTexture and region:GetTexture()
+        if (type(atlas) == "string" and atlas ~= "") or tex then
+          return region
+        end
+      end
+    end
+  end
+  return nil
+end
+
+local function ApplyArtLook(dst, src)
+  if not dst or not src then
+    return false
+  end
+  local atlas = src.GetAtlas and src:GetAtlas()
+  if type(atlas) == "string" and atlas ~= "" then
+    pcall(dst.SetAtlas, dst, atlas)
+  else
+    local tex = src.GetTexture and src:GetTexture()
+    if not tex then
+      return false
+    end
+    dst:SetTexture(tex)
+    if src.GetTexCoord then
+      pcall(function()
+        dst:SetTexCoord(src:GetTexCoord())
+      end)
+    end
+  end
+  if src.GetVertexColor then
+    pcall(function()
+      dst:SetVertexColor(src:GetVertexColor())
+    end)
+  end
+  if src.GetBlendMode and dst.SetBlendMode then
+    pcall(function()
+      dst:SetBlendMode(src:GetBlendMode())
+    end)
+  end
+  if src.GetHorizTile and dst.SetHorizTile then
+    pcall(dst.SetHorizTile, dst, src:GetHorizTile())
+  end
+  if src.GetVertTile and dst.SetVertTile then
+    pcall(dst.SetVertTile, dst, src:GetVertTile())
+  end
+  return true
+end
+
+local function EnsureEmbedTexture(key, layer, sublevel)
+  local tex = DashboardFrame[key]
+  if not tex then
+    tex = DashboardFrame:CreateTexture(nil, layer or "BACKGROUND", nil, sublevel or 0)
+    DashboardFrame[key] = tex
+  end
+  return tex
+end
+
+local function HideEmbeddedPanelFill(frame)
+  if not frame then
+    return
+  end
+  if frame.SetBackdropColor then
+    frame:SetBackdropColor(0, 0, 0, 0)
+  end
+  if frame.SetBackdropBorderColor then
+    frame:SetBackdropBorderColor(0, 0, 0, 0)
+  end
+  if frame.Fill then
+    frame.Fill:Hide()
+  end
+  frame:Hide()
+end
+
+local function ApplyLegacyEmbeddedSkin()
+  if not DashboardFrame or not DashboardFrame._hcaLegacyEmbedded then
+    return
+  end
+
+  local headerH = EMBEDDED_HEADER_INSET
+  DashboardFrame._hcaLegacyHeaderHeight = headerH
+
+  if DashboardFrame.BlurOverlay then
+    DashboardFrame.BlurOverlay:SetVertexColor(0.55, 0.38, 0.22)
+  end
+
+  local bodyBg = EnsureEmbedTexture("LegacyBodyBackground", "BACKGROUND", 1)
+  bodyBg:ClearAllPoints()
+  bodyBg:SetPoint("TOPLEFT", DashboardFrame, "TOPLEFT", 0, -20)
+  bodyBg:SetPoint("BOTTOMRIGHT", DashboardFrame, "BOTTOMRIGHT", 0, 0)
+  bodyBg:SetAtlas("Legacy-Challenge-BG")
+  bodyBg:Show()
+
+  local vDiv = EnsureEmbedTexture("LegacyVerticalDivider", "ARTWORK", 0)
+  local vW = 12
+  local splitX = 8 + TAB_PANEL_WIDTH - (vW / 2)
+  vDiv:ClearAllPoints()
+  vDiv:SetPoint("TOPLEFT", DashboardFrame, "TOPLEFT", splitX, -80)
+  vDiv:SetPoint("BOTTOMLEFT", DashboardFrame, "BOTTOMLEFT", splitX, 24)
+  vDiv:SetWidth(vW)
+  vDiv:SetAtlas("Legacy-Tree-Frame-divider-Vertical")
+  vDiv:Show()
+
+  if DashboardFrame.TabHeader and DashboardFrame.TabHeader.SetBackdropColor then
+    DashboardFrame.TabHeader:SetBackdropColor(0, 0, 0, 0)
+    DashboardFrame.TabHeader:SetBackdropBorderColor(0, 0, 0, 0)
+  end
+  if DashboardFrame.TabHeader and DashboardFrame.TabHeader.Fill then
+    DashboardFrame.TabHeader.Fill:Hide()
+  end
+  HideEmbeddedPanelFill(DashboardFrame.TabScrollBackground)
+  HideEmbeddedPanelFill(DashboardFrame.TabScrollBorder)
+  if DashboardFrame.ScrollBackground then
+    DashboardFrame.ScrollBackground:Hide()
+  end
+end
+
+function DASHBOARD.ApplyHostLayout()
+  local host = addon.GetLegacyDashboardHost and addon.GetLegacyDashboardHost()
+  if not host then
+    return false
+  end
+  if not DashboardFrame then
+    BuildDashboardFrame()
+  end
+  if not DashboardFrame then
+    return false
+  end
+
+  DashboardFrame._hcaLegacyEmbedded = true
+  DashboardFrame:SetParent(host)
+  DashboardFrame:ClearAllPoints()
+  DashboardFrame:SetAllPoints(host)
+  DashboardFrame:SetMovable(false)
+  DashboardFrame:EnableMouse(true)
+  DashboardFrame:RegisterForDrag()
+  DashboardFrame:SetScript("OnDragStart", nil)
+  DashboardFrame:SetScript("OnDragStop", nil)
+  DashboardFrame:SetFrameStrata(host:GetFrameStrata() or "MEDIUM")
+  DashboardFrame:SetFrameLevel((host:GetFrameLevel() or 1) + 5)
+  RemoveFromSpecialFrames(DashboardFrame)
+
+  if DashboardFrame.SetBackdrop then
+    DashboardFrame:SetBackdrop(nil)
+  end
+
+  if DashboardFrame.TitleBar then
+    DashboardFrame.TitleBar:Hide()
+    DashboardFrame.TitleBar:EnableMouse(false)
+  end
+  if DashboardFrame.CloseButton then DashboardFrame.CloseButton:Hide() end
+  if DashboardFrame.DividerFrame then DashboardFrame.DividerFrame:Hide() end
+  if DashboardFrame.ClassBackground then DashboardFrame.ClassBackground:Hide() end
+  if DashboardFrame.UseCharacterPanelCheckbox then
+    DashboardFrame.UseCharacterPanelCheckbox:Hide()
+    DashboardFrame.UseCharacterPanelCheckbox:EnableMouse(false)
+  end
+  if DashboardFrame.UseCharacterPanelLabel then
+    DashboardFrame.UseCharacterPanelLabel:Hide()
+  end
+
+  MatchHostStrata(DashboardFrame.TitleBar, host)
+  MatchHostStrata(DashboardFrame.DividerFrame, host)
+  MatchHostStrata(DashboardFrame.TabHeader, host)
+  MatchHostStrata(DashboardFrame.TabScroll, host)
+  MatchHostStrata(DashboardFrame.BlurOverlayFrame, host)
+  MatchHostStrata(DashboardFrame.UIOverlayFrame, host)
+
+  local headerH = EMBEDDED_HEADER_INSET
+  DashboardFrame._hcaLegacyHeaderHeight = headerH
+
+  if DashboardFrame.TotalPointsText then
+    DashboardFrame.TotalPointsText:ClearAllPoints()
+    DashboardFrame.TotalPointsText:SetPoint("TOP", DashboardFrame, "TOP", -15, -26)
+  end
+  if DashboardFrame.PlayerNameText then
+    DashboardFrame.PlayerNameText:ClearAllPoints()
+    DashboardFrame.PlayerNameText:SetPoint("TOPLEFT", DashboardFrame, "TOPLEFT", 60, -35)
+  end
+  if DashboardFrame.MultiplierText then
+    DashboardFrame.MultiplierText:ClearAllPoints()
+    DashboardFrame.MultiplierText:SetPoint("TOPLEFT", DashboardFrame.PlayerNameText, "BOTTOMLEFT", 1, -6)
+  end
+  if DashboardFrame.ClassIcon then
+    DashboardFrame.ClassIcon:ClearAllPoints()
+    DashboardFrame.ClassIcon:SetPoint("TOPRIGHT", DashboardFrame, "TOPRIGHT", -16, -28)
+    DashboardFrame.ClassIcon:SetSize(52, 52)
+  end
+  if DashboardFrame.TabHeader then
+    DashboardFrame.TabHeader:ClearAllPoints()
+    DashboardFrame.TabHeader:SetPoint("TOPLEFT", DashboardFrame, "TOPLEFT", 8, -headerH)
+    DashboardFrame.TabHeader:SetWidth(TAB_PANEL_WIDTH)
+  end
+  if DashboardFrame.TabScroll then
+    DashboardFrame.TabScroll:SetWidth(TAB_PANEL_WIDTH)
+  end
+  ApplyForeverScrollInset()
+
+  ApplyLegacyEmbeddedSkin()
+  return true
+end
+
 -- Show/Hide Dashboard functions
 function DASHBOARD:Show()
+  if addon.ShowLegacyAchievementsPage and not addon._hcaEmbeddingDashboard then
+    if addon.ShowLegacyAchievementsPage() then
+      return
+    end
+  end
   if not DashboardFrame then
     BuildDashboardFrame()
   end
@@ -4719,12 +4996,30 @@ function DASHBOARD:Show()
 end
 
 function DASHBOARD:Hide()
+  if addon.HasLegacyChallengesHost and addon.HasLegacyChallengesHost() and addon.HideLegacyAchievementsPage
+      and not addon._hcaEmbeddingDashboard then
+    local frame = _G.LegacySystemFrame or _G.LegacyChallengesFrame
+    if frame and frame:IsShown() then
+      if HideUIPanel then
+        HideUIPanel(frame)
+      else
+        frame:Hide()
+      end
+    end
+    addon.HideLegacyAchievementsPage()
+    return
+  end
   if DashboardFrame then
     DashboardFrame:Hide()
   end
 end
 
 function DASHBOARD:Toggle()
+  if addon.ToggleLegacyAchievementsPage then
+    if addon.ToggleLegacyAchievementsPage() then
+      return
+    end
+  end
   if DashboardFrame and DashboardFrame:IsShown() then
     self:Hide()
   else
