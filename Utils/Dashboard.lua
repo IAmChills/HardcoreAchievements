@@ -1110,6 +1110,8 @@ local LEADERBOARD_RACE_PORTRAIT_TOKEN = {
   [8] = "Troll",
   [10] = "Bloodelf",
   [11] = "Draenei",
+  [95] = "Skyborne", -- High Order Skyborne (Alliance)
+  [96] = "Skyborne", -- Windshaper Skyborne (Horde)
 }
 
 local function LeaderboardClassCellWithPortrait(classText, raceId, sex)

@@ -45,6 +45,8 @@ local RACE_ID_TO_FILE = {
     [8] = "Troll",
     [10] = "BloodElf",
     [11] = "Draenei",
+    [95] = "Skyborne", -- High Order Skyborne (Alliance)
+    [96] = "Skyborne", -- Windshaper Skyborne (Horde)
 }
 
 local function NormalizeRaceToken(race)

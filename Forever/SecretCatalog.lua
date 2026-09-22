@@ -130,11 +130,11 @@ local Secrets = {
     achId = "Secret004",
     title = "The Last Achievement",
     level = nil,
-    tooltip = string_format("%s... your tale slips quietly into forgotten pages. Only echoes will remember your name now.", GetUnitName("player")),
+    tooltip = string_format("%s... your tale slips quietly into forgotten pages. Only echoes will remember your name now.", addon.GetPlayerShowcaseName()),
     -- When this achievement is linked in chat, prefer the completer/sender name instead of the viewer name.
     -- (The real tooltip is still hidden from viewers who haven't completed it.)
     linkTooltip = function(senderName)
-      return string_format("%s... your tale slips quietly into forgotten pages. Only echoes will remember your name now.", tostring(senderName or ""))
+      return string_format("%s... your tale slips quietly into forgotten pages. Only echoes will remember your name now.", addon.GetPlayerShowcaseName(senderName))
     end,
     icon = 237542,
     points = 0,

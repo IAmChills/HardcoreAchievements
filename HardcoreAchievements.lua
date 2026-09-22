@@ -274,18 +274,50 @@ local function UntrackRowForQuest(row)
     end
 end
 
-local function EnsureDB()
-    if not addon then return nil end
+-- Bind the SavedVariables global on ADDON_LOADED. Creating
+-- HardcoreAchievementsDB = {} during file load writes into a throwaway table
+-- that is then replaced (official clients) or kept empty (if the client
+-- refuses to overwrite an existing global).
+local savedVarsBound = false
+
+local function BindSavedVariables()
     if type(HardcoreAchievementsDB) ~= "table" then
         HardcoreAchievementsDB = {}
     end
-    addon.HardcoreAchievementsDB = HardcoreAchievementsDB
-    addon.HardcoreAchievementsDB.chars = addon.HardcoreAchievementsDB.chars or {}
-    return addon.HardcoreAchievementsDB
+    if addon then
+        addon.HardcoreAchievementsDB = HardcoreAchievementsDB
+    end
+    HardcoreAchievementsDB.chars = HardcoreAchievementsDB.chars or {}
+    savedVarsBound = true
+    return HardcoreAchievementsDB
+end
+
+local function EnsureDB()
+    if not addon then return nil end
+    if savedVarsBound or type(HardcoreAchievementsDB) == "table" then
+        return BindSavedVariables()
+    end
+    -- SavedVariables have not been injected yet. Do not create the global.
+    return nil
+end
+
+local function NormalizePlayerGUID(guid)
+    if guid == nil then
+        return nil
+    end
+    if issecretvalue and issecretvalue(guid) then
+        return nil
+    end
+    local key = tostring(guid)
+    if key == "" or key == "nil" then
+        return nil
+    end
+    return key
 end
 
 local function GetCharDB()
     local db = EnsureDB()
+    if not db then return nil, nil end
     if not playerGUID then return db, nil end
     db.chars[playerGUID] = db.chars[playerGUID] or {
         meta = {},            -- name/realm/class/race/level/faction/lastLogin
@@ -1700,8 +1732,9 @@ local function MarkRowCompleted(row, cdbParam)
     
     -- Broadcast achievement completion (skip for retroactive completions on first load to avoid guild spam)
     if not skipBroadcastForRetroactive then
-        local playerName = UnitName("player")
+        local playerName = (addon and addon.GetPlayerShowcaseName and addon.GetPlayerShowcaseName()) or UnitName("player") or ""
         local achievementTitle = (row.Title and row.Title.GetText and row.Title:GetText()) or row.title or "Unknown Achievement"
+        -- Emote text is prefixed with the full character name by the client, so leave the name slot empty.
         local broadcastMessage = string_format(ACHIEVEMENT_BROADCAST, "", achievementTitle)
         broadcastMessage = broadcastMessage:gsub("^%s+", "")
         SendChatMessage(broadcastMessage, "EMOTE")
@@ -1713,7 +1746,7 @@ local function MarkRowCompleted(row, cdbParam)
             if achIdForLink and type(getBracket) == "function" then
                 link = getBracket(achIdForLink)
             end
-            local guildMessage = string_format(ACHIEVEMENT_BROADCAST, "", link or achievementTitle)
+            local guildMessage = string_format(ACHIEVEMENT_BROADCAST, playerName, link or achievementTitle)
             guildMessage = guildMessage:gsub("^%s+", "")
             SendChatMessage(guildMessage, "GUILD")
         end
@@ -2748,7 +2781,7 @@ initFrame:SetScript("OnEvent", function(self, event, ...)
     end
 
     if event == "PLAYER_LOGIN" then
-        playerGUID = UnitGUID("player")
+        playerGUID = NormalizePlayerGUID(UnitGUID("player"))
 
         local db, cdb = GetCharDB()
         if cdb then
@@ -2818,6 +2851,8 @@ initFrame:SetScript("OnEvent", function(self, event, ...)
     elseif event == "ADDON_LOADED" then
         local loadedName = ...
         if loadedName == "HardcoreAchievements" then
+            BindSavedVariables()
+            playerGUID = playerGUID or NormalizePlayerGUID(UnitGUID("player"))
             C_Timer.After(3, function()
                 addon:ShowWelcomeMessage()
             end)

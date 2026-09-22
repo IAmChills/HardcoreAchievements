@@ -40,6 +40,26 @@ local Dungeons = {
     bossOrder = {11517, 11520, 11518, 11519}
   },
 
+  -- Hall of Thanes (Alliance, Level 13-18)
+  {
+    achId = "HOT",
+    title = "Hall of Thanes",
+    tooltip = "Defeat the bosses of " .. ClassColor .. "Hall of Thanes|r at level 14 or lower upon entering the dungeon",
+    icon = 000000,
+    level = 14,
+    points = 10,
+    staticPoints = false,
+    requiredMapId = 000,
+    faction = FACTION_ALLIANCE,
+    requiredKills = {
+      [261306] = 1, -- Faldrim Anvilmar
+      [261316] = 1, -- Magmatus
+      [261311] = 1, -- Plunder
+      [261319] = 1, -- Durgen Dirgehammer
+    },
+    bossOrder = {261306, 261316, 261311, 261319}
+  },
+
   -- The Deadmines (Alliance, Level 10-20)
   {
     achId = "VC",
@@ -59,6 +79,26 @@ local Dungeons = {
       [639] = 1,   -- Edwin VanCleef
     },
     bossOrder = {644, 643, 1763, 646, 647, 639}
+  },
+
+  -- Ruins of Lordaeron (Horde, Level 15-20)
+  {
+    achId = "ROL",
+    title = "Ruins of Lordaeron",
+    tooltip = "Defeat the bosses of " .. ClassColor .. "Ruins of Lordaeron|r at level 16 or lower upon entering the dungeon",
+    icon = 000000,
+    level = 16,
+    points = 10,
+    staticPoints = false,
+    requiredMapId = 000,
+    faction = FACTION_HORDE,
+    requiredKills = {
+      [0000] = 1, -- Boss 1
+      [0000] = 1, -- Boss 2
+      [0000] = 1, -- Boss 3
+      [0000] = 1, -- Boss 4
+    },
+    bossOrder = {0000, 0000, 0000, 0000}
   },
 
   -- Wailing Caverns (Both, Level 15-25)
@@ -113,6 +153,25 @@ local Dungeons = {
     bossOrder = {3914, 3886, 3887, 4278, 4279, 3872, 4274, 3927, 4275}
   },
 
+  -- Excavation Site: Wetlands (Level 24-29)
+  {
+    achId = "ESW",
+    title = "Excavation Site: Wetlands",
+    tooltip = "Defeat the bosses of " .. ClassColor .. "Excavation Site: Wetlands|r at level 25 or lower upon entering the dungeon",
+    icon = 000000,
+    level = 25,
+    points = 10,
+    staticPoints = false,
+    requiredMapId = 000,
+    requiredKills = {
+      [0000] = 1, -- Boss 1
+      [0000] = 1, -- Boss 2
+      [0000] = 1, -- Boss 3
+      [0000] = 1, -- Boss 4
+    },
+    bossOrder = {0000, 0000, 0000, 0000}
+  },
+
   -- Blackfathom Deeps (Both, Level 20-30)
   {
     achId = "BFD",
@@ -158,6 +217,25 @@ local Dungeons = {
       [1720] = 1,  -- Bruegal Ironknuckle (rare)
     },
     bossOrder = {1696, 1666, 1717, 1663, 1716, 1720}
+  },
+
+  -- City of Dalaran (Level 28-33)
+  {
+    achId = "COD",
+    title = "City of Dalaran",
+    tooltip = "Defeat the bosses of " .. ClassColor .. "City of Dalaran|r at level 33 or lower upon entering the dungeon",
+    icon = 000000,
+    level = 30,
+    points = 10,
+    staticPoints = false,
+    requiredMapId = 000,
+    requiredKills = {
+      [0000] = 1, -- Boss 1
+      [0000] = 1, -- Boss 2
+      [0000] = 1, -- Boss 3
+      [0000] = 1, -- Boss 4
+    },
+    bossOrder = {0000, 0000, 0000, 0000}
   },
 
   -- Razorfen Kraul (Both, Level 25-35)
@@ -224,6 +302,25 @@ local Dungeons = {
   --   bossOrder = {1200, 314, 522, 412}
   -- },
 
+  -- The Drowned City (Level 35-40)
+  {
+    achId = "TDC",
+    title = "The Drowned City",
+    tooltip = "Defeat the bosses of " .. ClassColor .. "The Drowned City|r at level 36 or lower upon entering the dungeon",
+    icon = 000000,
+    level = 36,
+    points = 10,
+    staticPoints = false,
+    requiredMapId = 000,
+    requiredKills = {
+      [0000] = 1, -- Boss 1
+      [0000] = 1, -- Boss 2
+      [0000] = 1, -- Boss 3
+      [0000] = 1, -- Boss 4
+    },
+    bossOrder = {0000, 0000, 0000, 0000}
+  },
+
   -- Scarlet Monastery (Both, Level 28-38)
   {
     achId = "SM",
@@ -273,6 +370,25 @@ local Dungeons = {
       [7356] = 1,  -- Plaguemaw the Rotting (Summoned)
     },
     bossOrder = {7355, 7357, 8567, 7358, 7354, 7356}
+  },
+
+  -- Krol'dok Stronghold (Level 40-45)
+  {
+    achId = "KS",
+    title = "Krol'dok Stronghold",
+    tooltip = "Defeat the bosses of " .. ClassColor .. "Krol'dok Stronghold|r at level 41 or lower upon entering the dungeon",
+    icon = 000000,
+    level = 41,
+    points = 10,
+    staticPoints = false,
+    requiredMapId = 000,
+    requiredKills = {
+      [0000] = 1, -- Boss 1
+      [0000] = 1, -- Boss 2
+      [0000] = 1, -- Boss 3
+      [0000] = 1, -- Boss 4
+    },
+    bossOrder = {0000, 0000, 0000, 0000}
   },
 
   -- Uldaman (Both, Level 35-45)
@@ -331,6 +447,25 @@ local Dungeons = {
     bossOrder = {8127, 7272, 7271, 7796, 7275, 7604, 7795, 7267, 7797, 10081, 10082, 10080}
   },
 
+  -- Alcaz Prison (Level 48-53)
+  {
+    achId = "AP",
+    title = "Alcaz Prison",
+    tooltip = "Defeat the bosses of " .. ClassColor .. "Alcaz Prison|r at level 49 or lower upon entering the dungeon",
+    icon = 000000,
+    level = 49,
+    points = 10,
+    staticPoints = false,
+    requiredMapId = 000,
+    requiredKills = {
+      [0000] = 1, -- Boss 1
+      [0000] = 1, -- Boss 2
+      [0000] = 1, -- Boss 3
+      [0000] = 1, -- Boss 4
+    },
+    bossOrder = {0000, 0000, 0000, 0000}
+  },
+
   -- Maraudon (Both, Level 40-50)
   {
     achId = "MARA",
@@ -376,6 +511,25 @@ local Dungeons = {
       [5709] = 1,  -- Shade of Eranikus
     },
     bossOrder = {8580, 5721, 5720, 5710, 5711, 5719, 5722, 5709}
+  },
+
+  -- Blackmaw Hold (Level 55-60)
+  {
+    achId = "BMH",
+    title = "Blackmaw Hold",
+    tooltip = "Defeat the bosses of " .. ClassColor .. "Blackmaw Hold|r at level 56 or lower upon entering the dungeon",
+    icon = 000000,
+    level = 56,
+    points = 10,
+    staticPoints = false,
+    requiredMapId = 000,
+    requiredKills = {
+      [0000] = 1, -- Boss 1
+      [0000] = 1, -- Boss 2
+      [0000] = 1, -- Boss 3
+      [0000] = 1, -- Boss 4
+    },
+    bossOrder = {0000, 0000, 0000, 0000}
   },
 
   -- Blackrock Depths (Both, Level 52-60)
@@ -440,6 +594,25 @@ local Dungeons = {
       [10584] = true,
     },
     bossOrder = {9196, 9236, 9237, 10596, 10584, 9736, 10268, 10220, 9568}
+  },
+
+  -- Shaper's Terrace (Level 58-60)
+  {
+    achId = "ShaperT",
+    title = "Shaper's Terrace",
+    tooltip = "Defeat the bosses of " .. ClassColor .. "Shaper's Terrace|r at level 56 or lower upon entering the dungeon",
+    icon = 000000,
+    level = 59,
+    points = 10,
+    staticPoints = false,
+    requiredMapId = 000,
+    requiredKills = {
+      [0000] = 1, -- Boss 1
+      [0000] = 1, -- Boss 2
+      [0000] = 1, -- Boss 3
+      [0000] = 1, -- Boss 4
+    },
+    bossOrder = {0000, 0000, 0000, 0000}
   },
 
   -- Upper Blackrock Spire (10-man dungeon, Level 60)

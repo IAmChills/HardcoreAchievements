@@ -29,17 +29,29 @@ local MAX_PAYLOAD_AGE = 300 -- 5 minutes in seconds
 -- Callback registry for Precious completion messages
 local preciousCompletionCallbacks = {}
 
+local function GetAccountDB()
+    if type(HardcoreAchievementsDB) == "table" then
+        if addon then
+            addon.HardcoreAchievementsDB = HardcoreAchievementsDB
+        end
+        return HardcoreAchievementsDB
+    end
+    if addon and type(addon.HardcoreAchievementsDB) == "table" then
+        return addon.HardcoreAchievementsDB
+    end
+    return nil
+end
+
 -- Debug system: Helper functions for debug messages
 local function GetDebugEnabled()
-    if not addon then return false end
-    addon.HardcoreAchievementsDB = addon.HardcoreAchievementsDB or {}
-    return addon.HardcoreAchievementsDB.debugEnabled or false
+    local db = GetAccountDB()
+    return (db and db.debugEnabled) or false
 end
 
 local function SetDebugEnabled(enabled)
-    if not addon then return end
-    addon.HardcoreAchievementsDB = addon.HardcoreAchievementsDB or {}
-    addon.HardcoreAchievementsDB.debugEnabled = enabled and true or false
+    local db = GetAccountDB()
+    if not db then return end
+    db.debugEnabled = enabled and true or false
 end
 
 local function DebugPrint(message)
@@ -52,17 +64,16 @@ if addon then addon.DebugPrint = DebugPrint end
 -- SECURITY: Get admin secret key from database (set by admin via slash command)
 -- This key is NOT in source code and must be set by the admin
 local function GetAdminSecretKey()
-    if not addon then return nil end
-    addon.HardcoreAchievementsDB = addon.HardcoreAchievementsDB or {}
-    return addon.HardcoreAchievementsDB.adminSecretKey
+    local db = GetAccountDB()
+    return db and db.adminSecretKey
 end
 
 -- SECURITY: Set admin secret key (only accessible via slash command)
 local function SetAdminSecretKey(key)
-    if not addon then return false end
-    addon.HardcoreAchievementsDB = addon.HardcoreAchievementsDB or {}
+    local db = GetAccountDB()
+    if not db then return false end
     if key and #key >= 16 then
-        addon.HardcoreAchievementsDB.adminSecretKey = key
+        db.adminSecretKey = key
         return true
     end
     return false

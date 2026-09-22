@@ -29,17 +29,19 @@ local function SetSetting(settingName, value)
     end
 end
 
+-- Options UI is built at file parse time. Do not create the SavedVariables
+-- global here; wait for ADDON_LOADED to bind it.
 local function GetAccountDB()
+    if type(HardcoreAchievementsDB) == "table" then
+        if addon then
+            addon.HardcoreAchievementsDB = HardcoreAchievementsDB
+        end
+        return HardcoreAchievementsDB
+    end
     if addon and type(addon.HardcoreAchievementsDB) == "table" then
         return addon.HardcoreAchievementsDB
     end
-    if type(HardcoreAchievementsDB) ~= "table" then
-        HardcoreAchievementsDB = {}
-    end
-    if addon then
-        addon.HardcoreAchievementsDB = HardcoreAchievementsDB
-    end
-    return HardcoreAchievementsDB
+    return nil
 end
 
 local function IsMinimapButtonShown()
@@ -47,6 +49,9 @@ local function IsMinimapButtonShown()
         return addon.IsMinimapButtonShown()
     end
     local db = GetAccountDB()
+    if not db then
+        return true
+    end
     db.minimap = db.minimap or { hide = false, position = 45 }
     return db.minimap.hide ~= true
 end
@@ -57,6 +62,9 @@ local function SetMinimapButtonShown(shown)
         return
     end
     local db = GetAccountDB()
+    if not db then
+        return
+    end
     db.minimap = db.minimap or { hide = false, position = 45 }
     db.minimap.hide = not shown
     db.hide = not shown

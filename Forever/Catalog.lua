@@ -535,7 +535,7 @@ local Achievements = {
     zone = "Stranglethorn Vale"
 }, {
     achId = "MalletZF",
-    title = string_format("%s the Keeper", GetUnitName("player")),
+    title = string_format("%s the Keeper", addon.GetPlayerShowcaseName()),
     level = 49,
     tooltip = "Obtain the " .. ClassColor .. "Mallet of Zul'Farrak|r before level 50",
     icon = 134559,
@@ -545,7 +545,7 @@ local Achievements = {
     linkUsesSenderTitle = true,
     -- Tooltip title fallback when the visible link text isn't available in the hyperlink handler.
     linkTitle = function(senderName)
-        return string_format("%s the Keeper", tostring(senderName or ""))
+        return string_format("%s the Keeper", addon.GetPlayerShowcaseName(senderName))
     end,
     allowSoloDouble = true,
     customIsCompleted = function() return false end,

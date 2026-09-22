@@ -98,6 +98,12 @@ local ZoneMapIDs = {
     ["Westfall"] = 1436,
     ["Wetlands"] = 1437,
 
+    -- Forever
+    ["Zephra's Isle"] = 0000,
+    ["Mount Hyjal"] = 0000,
+    ["Riverglades"] = 0000,
+    ["Shendralar"] = 0000,
+
     -- Outlands
     ["Blade's Edge Mountains"] = 1949,
     ["Hellfire Peninsula"] = 1944,

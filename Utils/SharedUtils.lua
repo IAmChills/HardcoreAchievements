@@ -72,6 +72,21 @@ local function GetClassColor()
     return cachedClassColor
 end
 
+-- Forever given names include a surname. Titles like "%s the Keeper" should use the first name only.
+local function GetPlayerShowcaseName(name)
+    if name == nil or name == "" then
+        name = (GetUnitName and GetUnitName("player")) or (UnitName and UnitName("player")) or ""
+    end
+    name = tostring(name)
+    if addon and addon.IsForeverCharacterUI then
+        local first = name:match("^([^%s]+)")
+        if first and first ~= "" then
+            return first
+        end
+    end
+    return name
+end
+
 -- Initialize on PLAYER_LOGIN event
 local classColorFrame = CreateFrame("Frame")
 classColorFrame:RegisterEvent("PLAYER_LOGIN")
@@ -615,6 +630,7 @@ end
 if addon then
     addon.GetSetting = GetSetting
     addon.GetClassColor = GetClassColor
+    addon.GetPlayerShowcaseName = GetPlayerShowcaseName
     addon.GetAchievementDisplayValues = GetAchievementDisplayValues
     addon.UpdateCharacterPanelTabVisibility = UpdateCharacterPanelTabVisibility
     addon.SetUseCharacterPanel = SetUseCharacterPanel
