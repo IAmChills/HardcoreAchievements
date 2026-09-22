@@ -407,7 +407,7 @@ local function CreateBackupRestoreFrame()
     -- Instructions text
     local instructionsText = backupPanel:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     instructionsText:SetPoint("TOP", titleText, "BOTTOM", 0, -10)
-    instructionsText:SetText("Copy the text below and save it as a backup. This includes all characters, achievements, progress, and settings.")
+    instructionsText:SetText("Copy the text below and save it as a backup. This includes this character's progress plus account settings and leaderboard data.")
     instructionsText:SetTextColor(0.8, 0.8, 0.8, 1)
     instructionsText:SetWidth(550)
     instructionsText:SetJustifyH("CENTER")
@@ -477,7 +477,7 @@ local function CreateBackupRestoreFrame()
     -- Warning text
     local warningText = restorePanel:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     warningText:SetPoint("TOP", titleText, "BOTTOM", 0, -10)
-    warningText:SetText("|cffff0000WARNING:|r This will replace your entire database including all characters, achievements, progress, and settings. Paste your backup string below and click Import.")
+    warningText:SetText("|cffff0000WARNING:|r This replaces this character's progress and your account settings/leaderboard. Paste your backup string below and click Import.")
     warningText:SetTextColor(1, 0.8, 0.8, 1)
     warningText:SetWidth(550)
     warningText:SetJustifyH("CENTER")
@@ -540,29 +540,27 @@ local function CreateBackupRestoreFrame()
         -- Decode and deserialize (DecodeData handles both new and legacy formats)
         local success, data = addon.DecodeData(text)
         if not success then
-            print("|cffff0000Hardcore Achievements:|r Failed to import database. Invalid backup string.")
+            print("|cffff0000Hardcore Achievements:|r Failed to import database. Invalid backup string" .. (data and (": " .. tostring(data)) or "."))
             return
         end
         
-        -- Validate full database structure
-        if type(data) ~= "table" or not data.chars or type(data.chars) ~= "table" then
-            print("|cffff0000Hardcore Achievements:|r Invalid backup data format. Expected full database structure with 'chars' table.")
-            return
-        end
-        
-        -- Replace the entire database (write to SavedVariables global so it persists)
-        if addon and addon.HardcoreAchievementsDB then
-            HardcoreAchievementsDB = data
-            if addon then addon.HardcoreAchievementsDB = HardcoreAchievementsDB end
-            
-            print("|cff00ff00Hardcore Achievements:|r Full database imported successfully! All characters and settings have been restored.")
-            print("|cffffd100Hardcore Achievements:|r Reloading UI...")
-            
-            frame:Hide()
-            ReloadUI()
-        else
+        local applyBackup = addon and addon.ApplySavedVariablesBackup
+        if type(applyBackup) ~= "function" then
             print("|cffff0000Hardcore Achievements:|r Database not available.")
+            return
         end
+
+        local applied, err = applyBackup(data)
+        if not applied then
+            print("|cffff0000Hardcore Achievements:|r " .. tostring(err or "Invalid backup data format."))
+            return
+        end
+
+        print("|cff00ff00Hardcore Achievements:|r Database imported successfully! Character progress and account settings have been restored.")
+        print("|cffffd100Hardcore Achievements:|r Reloading UI...")
+
+        frame:Hide()
+        ReloadUI()
     end)
     
     -- Store references
@@ -573,9 +571,11 @@ local function CreateBackupRestoreFrame()
     return frame
 end
 
--- Function to export full account database
+-- Function to export account + current character SavedVariables
 local function ExportDatabase()
-    if not addon or not addon.HardcoreAchievementsDB then
+    local buildBackup = addon and addon.BuildSavedVariablesBackup
+    local payload = type(buildBackup) == "function" and buildBackup() or nil
+    if not payload then
         print("|cffff0000Hardcore Achievements:|r No database found.")
         return
     end
@@ -590,7 +590,7 @@ local function ExportDatabase()
 
     -- Do the expensive serialization off the main UI thread using a coroutine + C_Timer
     local co = coroutine.create(function()
-        local encoded = addon.EncodeData(addon.HardcoreAchievementsDB)
+        local encoded = addon.EncodeData(payload)
 
         -- Yield back to UI thread so we can update the edit box safely
         coroutine.yield(encoded)

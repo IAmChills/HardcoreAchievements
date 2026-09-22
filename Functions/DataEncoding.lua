@@ -69,10 +69,10 @@ local function DecodeData(encoded)
     -- Clean input
     encoded = string.gsub(encoded, '%s+', '')
 
-    -- New format: !HCA:1!...
-    local _, _, encodeVersion, payload = encoded:find("^(!HCA:(%d+)!)(.+)$")
+    -- New format: !HCA:1!...  (%d+ must not be its own capture or payload shifts to "1")
+    local encodeVersion, payload = encoded:match("^!HCA:(%d+)!(.+)$")
     if encodeVersion then
-        encodeVersion = tonumber(encodeVersion:match("%d+"))
+        encodeVersion = tonumber(encodeVersion)
         if encodeVersion == 1 then
             local decoded = LibDeflate:DecodeForPrint(payload)
             if not decoded then

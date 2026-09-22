@@ -274,11 +274,74 @@ local function UntrackRowForQuest(row)
     end
 end
 
--- Bind the SavedVariables global on ADDON_LOADED. Creating
--- HardcoreAchievementsDB = {} during file load writes into a throwaway table
--- that is then replaced (official clients) or kept empty (if the client
--- refuses to overwrite an existing global).
+-- Bind SavedVariables globals on ADDON_LOADED. Creating them during file load
+-- writes into a throwaway table that is then replaced (official clients) or
+-- kept empty (if the client refuses to overwrite an existing global).
+-- Account: HardcoreAchievementsDB (leaderboard, guild-first, minimap, account settings).
+-- Character: HardcoreAchievementsCharDB (completions, progress, per-char settings).
+-- Helpers live on one table so this chunk stays under Lua 5.1's 200-local limit.
 local savedVarsBound = false
+local sv = {}
+
+function sv.deepCopy(value)
+    if type(value) ~= "table" then
+        return value
+    end
+    local copy = {}
+    for k, v in pairs(value) do
+        copy[k] = sv.deepCopy(v)
+    end
+    return copy
+end
+
+function sv.hasEntries(t)
+    return type(t) == "table" and next(t) ~= nil
+end
+
+function sv.hasProgress(rec)
+    if type(rec) ~= "table" then
+        return false
+    end
+    if sv.hasEntries(rec.achievements) then return true end
+    if sv.hasEntries(rec.progress) then return true end
+    if sv.hasEntries(rec.settings) then return true end
+    if sv.hasEntries(rec.dungeonEntryLevels) then return true end
+    if sv.hasEntries(rec.stats) then return true end
+    if type(rec.eventLogLines) == "table" and #rec.eventLogLines > 0 then return true end
+    return false
+end
+
+function sv.shape(cdb)
+    if type(cdb) ~= "table" then
+        return cdb
+    end
+    cdb.meta = cdb.meta or {}
+    cdb.achievements = cdb.achievements or {}
+    cdb.progress = cdb.progress or {}
+    cdb.settings = cdb.settings or {}
+    cdb.eventLogLines = cdb.eventLogLines or {}
+    return cdb
+end
+
+function sv.copyRecord(dst, src)
+    if type(dst) ~= "table" or type(src) ~= "table" then
+        return
+    end
+    for k, v in pairs(src) do
+        dst[k] = sv.deepCopy(v)
+    end
+    sv.shape(dst)
+end
+
+function sv.bindChar()
+    if type(HardcoreAchievementsCharDB) ~= "table" then
+        HardcoreAchievementsCharDB = {}
+    end
+    if addon then
+        addon.HardcoreAchievementsCharDB = HardcoreAchievementsCharDB
+    end
+    return sv.shape(HardcoreAchievementsCharDB)
+end
 
 local function BindSavedVariables()
     if type(HardcoreAchievementsDB) ~= "table" then
@@ -289,15 +352,34 @@ local function BindSavedVariables()
     end
     HardcoreAchievementsDB.chars = HardcoreAchievementsDB.chars or {}
     savedVarsBound = true
+    sv.bindChar()
     return HardcoreAchievementsDB
 end
 
+-- Read-only until ADDON_LOADED. Do not create either global here.
 local function EnsureDB()
     if not addon then return nil end
-    if savedVarsBound or type(HardcoreAchievementsDB) == "table" then
-        return BindSavedVariables()
+    if type(HardcoreAchievementsDB) == "table" then
+        if addon then
+            addon.HardcoreAchievementsDB = HardcoreAchievementsDB
+        end
+        HardcoreAchievementsDB.chars = HardcoreAchievementsDB.chars or {}
+        return HardcoreAchievementsDB
     end
-    -- SavedVariables have not been injected yet. Do not create the global.
+    return nil
+end
+
+function sv.ensureChar()
+    if not addon then return nil end
+    if savedVarsBound then
+        return sv.bindChar()
+    end
+    if type(HardcoreAchievementsCharDB) == "table" then
+        if addon then
+            addon.HardcoreAchievementsCharDB = HardcoreAchievementsCharDB
+        end
+        return sv.shape(HardcoreAchievementsCharDB)
+    end
     return nil
 end
 
@@ -315,18 +397,132 @@ local function NormalizePlayerGUID(guid)
     return key
 end
 
+function sv.migrateDungeon(db, cdb)
+    if not (db and cdb) then
+        return
+    end
+    if sv.hasEntries(cdb.dungeonEntryLevels) then
+        db.dungeonEntryLevels = nil
+        if cdb.dungeonLastInstanceMapId ~= nil then
+            db.dungeonLastInstanceMapId = nil
+        end
+        return
+    end
+    if sv.hasEntries(db.dungeonEntryLevels) then
+        cdb.dungeonEntryLevels = sv.deepCopy(db.dungeonEntryLevels)
+    end
+    if cdb.dungeonLastInstanceMapId == nil and db.dungeonLastInstanceMapId ~= nil then
+        cdb.dungeonLastInstanceMapId = db.dungeonLastInstanceMapId
+    end
+end
+
+function sv.migrateCharSlot(db, cdb)
+    if not (db and cdb) then
+        return
+    end
+    sv.migrateDungeon(db, cdb)
+    if not playerGUID or type(db.chars) ~= "table" then
+        return
+    end
+    local src = db.chars[playerGUID]
+    if type(src) ~= "table" then
+        return
+    end
+    -- Keep the account slot until a later login loads CharDB from disk with data.
+    -- That way a crash (or missing write) on the first logout does not drop the only copy.
+    if sv.hasProgress(cdb) then
+        db.chars[playerGUID] = nil
+        return
+    end
+    if sv.hasProgress(src) then
+        sv.copyRecord(cdb, src)
+    end
+end
+
 local function GetCharDB()
     local db = EnsureDB()
-    if not db then return nil, nil end
-    if not playerGUID then return db, nil end
-    db.chars[playerGUID] = db.chars[playerGUID] or {
-        meta = {},            -- name/realm/class/race/level/faction/lastLogin
-		achievements = {},    -- [id] = { completed=true, completedAt=time(), level=nn, mapID=123 }
-		progress = {},
-        settings = {},
-        eventLogLines = {},   -- troubleshooting log (Dashboard → Log); per character
+    local cdb = sv.ensureChar()
+    if savedVarsBound and cdb then
+        sv.migrateCharSlot(db, cdb)
+    end
+    return db, cdb
+end
+
+function sv.findLegacyChar(chars, guid, name, realm)
+    if type(chars) ~= "table" then
+        return nil
+    end
+    if guid and type(chars[guid]) == "table" then
+        return chars[guid]
+    end
+    if not name then
+        return nil
+    end
+    local found, count = nil, 0
+    for _, rec in pairs(chars) do
+        if type(rec) == "table" and rec.meta and rec.meta.name == name then
+            if not realm or rec.meta.realm == realm then
+                count = count + 1
+                found = rec
+            end
+        end
+    end
+    if count == 1 then
+        return found
+    end
+    return nil
+end
+
+function sv.buildBackup()
+    local db = EnsureDB()
+    local cdb = sv.ensureChar()
+    if not db then
+        return nil
+    end
+    return {
+        format = 2,
+        account = db,
+        character = cdb or {},
     }
-    return db, db.chars[playerGUID]
+end
+
+function sv.applyBackup(data)
+    if type(data) ~= "table" then
+        return false, "Invalid backup data."
+    end
+
+    local accountData, characterData
+    if tonumber(data.format) == 2 then
+        if type(data.account) ~= "table" then
+            return false, "Invalid backup data format."
+        end
+        accountData = data.account
+        characterData = data.character
+    elseif type(data.chars) == "table" then
+        accountData = data
+        local name = UnitName and UnitName("player")
+        local realm = GetRealmName and GetRealmName()
+        characterData = sv.findLegacyChar(data.chars, playerGUID, name, realm)
+        if characterData then
+            characterData = sv.deepCopy(characterData)
+        end
+    else
+        return false, "Invalid backup data format."
+    end
+
+    HardcoreAchievementsDB = accountData
+    HardcoreAchievementsCharDB = type(characterData) == "table" and characterData or {}
+    if addon then
+        addon.HardcoreAchievementsDB = HardcoreAchievementsDB
+        addon.HardcoreAchievementsCharDB = HardcoreAchievementsCharDB
+    end
+    savedVarsBound = true
+    HardcoreAchievementsDB.chars = HardcoreAchievementsDB.chars or {}
+    sv.shape(HardcoreAchievementsCharDB)
+    if playerGUID then
+        HardcoreAchievementsDB.chars[playerGUID] = nil
+    end
+    return true
 end
 
 -- Cleanup function to remove incorrectly completed level bracket achievements
@@ -2385,11 +2581,9 @@ if addon then addon.IsLevelMilestone = IsLevelMilestone end
 
 local function ApplySelfFoundBonus()
     if not IsSelfFound() then return end
-    if not addon or not addon.HardcoreAchievementsDB or not addon.HardcoreAchievementsDB.chars then return end
     if not AchievementPanel or not AchievementPanel.achievements then return end
 
-    local guid = UnitGUID("player")
-    local charData = addon.HardcoreAchievementsDB.chars[guid]
+    local _, charData = GetCharDB()
     if not charData or not charData.achievements then return end
 
     -- Build a fast lookup table instead of scanning all rows per achievement.
@@ -2594,6 +2788,8 @@ if addon then
     addon.SetProgress = SetProgress
     addon.ClearProgress = ClearProgress
     addon.GetCharDB = GetCharDB
+    addon.BuildSavedVariablesBackup = sv.buildBackup
+    addon.ApplySavedVariablesBackup = sv.applyBackup
     addon.GetTab = function()
         -- Retail Forever uses CharacterFrameModeTabN in the side strip; the classic bottom tab is hidden.
         return addon.CharacterFrameModeTab or Tab

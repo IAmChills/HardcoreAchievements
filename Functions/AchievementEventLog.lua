@@ -1,5 +1,5 @@
 -- Troubleshooting log: plain text lines with timestamps, persisted per character:
--- HardcoreAchievementsDB.chars[playerGUID].eventLogLines (SavedVariables).
+-- HardcoreAchievementsCharDB.eventLogLines (SavedVariablesPerCharacter).
 -- View: Dashboard → "Log" tab (no standalone window).
 local addonName, addon = ...
 if not addon then return end
@@ -26,11 +26,14 @@ loginFrame:SetScript("OnEvent", function(_, event)
 end)
 
 local function ensureGlobalDb()
-    if type(HardcoreAchievementsDB) ~= "table" then
-        HardcoreAchievementsDB = {}
+    if type(HardcoreAchievementsDB) == "table" then
+        addon.HardcoreAchievementsDB = HardcoreAchievementsDB
+        return HardcoreAchievementsDB
     end
-    addon.HardcoreAchievementsDB = HardcoreAchievementsDB
-    return HardcoreAchievementsDB
+    if addon and type(addon.HardcoreAchievementsDB) == "table" then
+        return addon.HardcoreAchievementsDB
+    end
+    return nil
 end
 
 -- One-time: old builds stored eventLogLines on the root DB; move into current character when empty.
