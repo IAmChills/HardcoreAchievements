@@ -3191,24 +3191,14 @@ local function UpdateDashboardProgressOverview(srcRows)
   allBar:SetPoint("TOPRIGHT", container, "TOPRIGHT", 0, 0)
 
   -- Columns under the All bar
-  local leftKeys = { "quest", "dungeon" }
+  local leftKeys, rightKeys
   if isTBC then
-    table_insert(leftKeys, "heroic_dungeon")
+    leftKeys = { "quest", "dungeon", "heroic_dungeon", "raid", "guild" }
+    rightKeys = { "profession", "reputation", "exploration", "secret" }
   else
-    table_insert(leftKeys, "profession")
+    leftKeys = { "quest", "dungeon", "profession", "raid" }
+    rightKeys = { "reputation", "exploration", "secret", "guild" }
   end
-  local moreLeft = { "raid", "guild" }
-  for _, k in ipairs(moreLeft) do table_insert(leftKeys, k) end
-
-  local rightKeys = { }
-  if isTBC then
-    table_insert(rightKeys, "profession")
-    table_insert(rightKeys, "reputation")
-  else
-    table_insert(rightKeys, "reputation")
-  end
-  table_insert(rightKeys, "exploration")
-  table_insert(rightKeys, "secret")
 
   local function LayoutColumn(keys, side)
     for i, key in ipairs(keys) do
