@@ -99,10 +99,10 @@ local ZoneMapIDs = {
     ["Wetlands"] = 1437,
 
     -- Forever
-    ["Zephra's Isle"] = 0000,
-    ["Mount Hyjal"] = 0000,
-    ["Riverglades"] = 0000,
-    ["Shendralar"] = 0000,
+    ["Zephra's Isle"] = 2521,
+    ["Mount Hyjal"] = 2482,
+    ["Riverglades"] = 2548,
+    ["Shen'Dralas"] = 2652,
 
     -- Outlands
     ["Blade's Edge Mountains"] = 1949,
@@ -296,6 +296,16 @@ local LocationMap = {
     ["Moonglade"] = {
         ["Nighthaven"] = {x = 0.51, y = 0.54},
     },
+    ["Mount Hyjal"] = {
+        ["Tainted Foothills"] = {x = 0.00, y = 0.00},
+        ["Felblood Scar"] = {x = 0.00, y = 0.00},
+        ["Malorned's Retreat"] = {x = 0.00, y = 0.00},
+        ["Elderwild"] = {x = 0.00, y = 0.00},
+        ["Mourning's Rest"] = {x = 0.00, y = 0.00},
+        ["Cradle of Tranquility"] = {x = 0.00, y = 0.00},
+        ["Dae'gun"] = {x = 0.00, y = 0.00},
+        ["Summit of Eternity"] = {x = 0.00, y = 0.00},
+    },
     ["Mulgore"] = {
         ["Red Cloud Mesa"] = {x = 0.49, y = 0.79},
         ["Bloodhoof Village"] = {x = 0.51, y = 0.62},
@@ -313,6 +323,15 @@ local LocationMap = {
     },
     ["Orgrimmar"] = {
         ["Orgrimmar"] = {x = 0.50, y = 0.50},
+    },
+    ["Shen'Dralas"] = {
+        ["Valley of Bones"] = {x = 0.00, y = 0.00},
+        ["Evenshade's Overlook"] = {x = 0.00, y = 0.00},
+        ["Bristleback Retreat"] = {x = 0.00, y = 0.00},
+        ["Magram Front"] = {x = 0.00, y = 0.00},
+        ["Outcast Hideaway"] = {x = 0.00, y = 0.00},
+        ["Shen'dralas"] = {x = 0.00, y = 0.00},
+        ["Forlorn Gardens"] = {x = 0.00, y = 0.00},
     },
     ["Silithus"] = {
         ["Southwind Village"] = {x = 0.63, y = 0.48},
@@ -680,6 +699,15 @@ local LocationMap = {
         ["Lakeridge Highway"] = {x = 0.34, y = 0.76},
         ["Three Corners"] = {x = 0.16, y = 0.72},
     },
+    ["Riverglades"] = {
+        ["Twilight's Shroud"] = {x = 0.00, y = 0.00},
+        ["Sunnyglade"] = {x = 0.00, y = 0.00},
+        ["Wheeler's Grange"] = {x = 0.00, y = 0.00},
+        ["Farholde Keep"] = {x = 0.00, y = 0.00},
+        ["Rog'mar"] = {x = 0.00, y = 0.00},
+        ["Bolder'ok"] = {x = 0.00, y = 0.00},
+        ["Powderfuse Port"] = {x = 0.00, y = 0.00},
+    },
     ["Searing Gorge"] = {
         ["Firewatch Ridge"] = {x = 0.29, y = 0.34},
         ["Blackchar Cave"] = {x = 0.26, y = 0.76},
@@ -996,6 +1024,29 @@ local LocationMap = {
         ["Darkcrest Shore"] = {x = 0.70, y = 0.81},
         ["Umbrafen Village"] = {x = 0.83, y = 0.83},
         ["Zabra'jin"] = {x = 0.32, y = 0.50},
+    },
+
+    -- ==================== FOREVER ====================
+    ["Zephra's Isle"] = {
+        ["Valanaar"] = {x = 0.62, y = 0.77},
+        ["Overlook Standing Stones"] = {x = 0.48, y = 0.69},
+        ["Windfield Orchard"] = {x = 0.47, y = 0.82},
+        ["Gustberry Lowlands"] = {x = 0.63, y = 0.67},
+        ["Falaath Village"] = {x = 0.50, y = 0.56},
+        ["Shen'dar Village"] = {x = 0.46, y = 0.44},
+        ["Shen'dar Highlands"] = {x = 0.37, y = 0.51},
+        ["Windsong Standing Stones"] = {x = 0.46, y = 0.39},
+        ["West Pylong Watchtower"] = {x = 0.40, y = 0.63},
+        ["East Pylong Watchtower"] = {x = 0.69, y = 0.67},
+        ["Thendal Village"] = {x = 0.42, y = 0.22},
+        --["Thendal Standing Stones"] = {x = 0.49, y = 0.19},
+        --["Thendal Grove"] = {x = 0.39, y = 0.30},
+        ["Shrine of Akir"] = {x = 0.61, y = 0.51},
+        ["Rohashi Spires"] = {x = 0.71, y = 0.50}, -- may not be available as it's floating spires through a portal
+        ["Shadowgale Forest"] = {x = 0.59, y = 0.38},
+        ["Ruins of Bana'Aethal"] = {x = 0.59, y = 0.30},
+        ["Windsong Lake"] = {x = 0.52, y = 0.47},
+        ["Fairweather Stables"] = {x = 0.54, y = 0.81},
     },
 }
 

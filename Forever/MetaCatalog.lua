@@ -94,7 +94,8 @@ end
 -- Raid Master - requires all raid achievements
 local function GetRaidMasterAchievements()
     return {
-        "MC", "ONY", "BWL", "ZG", "AQ20", "AQ40", "NAXX"
+        --"MC", "ONY", "BWL", "ZG", "AQ20", "AQ40", "NAXX"
+        "ONY"
     }
 end
 

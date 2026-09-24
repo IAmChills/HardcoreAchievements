@@ -141,8 +141,10 @@ local KalimdorExplorationZones = {
   { zone = "Felwood", title = "Felwood", icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_Zone_Felwood.png", points = 10 },
   { zone = "Feralas", title = "Feralas", icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_Zone_Feralas.png", points = 10 },
   { zone = "Moonglade", title = "Moonglade", icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Spell_Arcane_TeleportMoonglade.png", points = 10 },
+  { zone = "Mount Hyjal", title = "Mount Hyjal", icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_Zone_MountHyjal.png", points = 10 },
   { zone = "Mulgore", title = "Mulgore", icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_Zone_Mulgore_01.png", points = 10 },
   --{ zone = "Orgrimmar", title = "Orgrimmar", icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_Zone_XXX.png", points = 0 },
+  { zone = "Shen'Dralar", title = "Shen'Dralar", icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_Zone_ShenDralas.png", points = 10 },
   { zone = "Silithus", title = "Silithus", icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_Zone_Silithus_01.png", points = 10 },
   { zone = "Stonetalon Mountains", title = "Stonetalon Mountains", icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_Zone_Stonetalon_01.png", points = 10 },
   { zone = "Tanaris", title = "Tanaris", icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_Zone_Tanaris_01.png", points = 10 },
@@ -170,6 +172,7 @@ local EasternKingdomsExplorationZones = {
   --{ zone = "Ironforge", title = "Ironforge", icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_Zone_XXX.png", points = 0 },
   { zone = "Loch Modan", title = "Loch Modan", icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_Zone_LochModan.png", points = 10 },
   { zone = "Redridge Mountains", title = "Redridge Mountains", icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_Zone_RedridgeMountains.png", points = 10 },
+  { zone = "Riverglades", title = "Riverglades", icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_Zone_Riverglades.png", points = 10 },
   { zone = "Searing Gorge", title = "Searing Gorge", icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_Zone_SearingGorge_01.png", points = 10 },
   { zone = "Silverpine Forest", title = "Silverpine Forest", icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_Zone_Silverpine_01.png", points = 10 },
   --{ zone = "Stormwind City", title = "Stormwind City", icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_Zone_XXX.png", points = 0 },
@@ -181,6 +184,7 @@ local EasternKingdomsExplorationZones = {
   { zone = "Western Plaguelands", title = "Western Plaguelands", icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_Zone_WesternPlaguelands_01.png", points = 10 },
   { zone = "Westfall", title = "Westfall", icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_Zone_WestFall_01.png", points = 10 },
   { zone = "Wetlands", title = "Wetlands", icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_Zone_Wetlands_01.png", points = 10 },
+  { zone = "Zephra's Isle", title = "Zephra's Isle", icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_Zone_ZephrasIsle.png", points = 10 },
 }
 
 local KalimdorContinentAchievement = {
