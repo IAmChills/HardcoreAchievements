@@ -2222,6 +2222,8 @@ local achToast = {
     showing = false,
     -- Identifies the toast on screen so a stale fade or watchdog cannot advance past a newer one.
     serial = 0,
+    BG = "Interface\\AddOns\\HardcoreAchievements\\Images\\AchievementFrame.png",
+    ICON_FRAME = "Interface\\AddOns\\HardcoreAchievements\\Images\\AchievementIconFrame.png",
 }
 
 function achToast.Advance(serial)
@@ -2257,133 +2259,71 @@ local function GetOrCreateAchToastFrame()
     end
 
     local f = CreateFrame("Frame", "AchToast", UIParent)
-    f:SetSize(320, 92)
-    f:SetPoint("CENTER", 0, -280)
+    f:SetSize(320, 92) -- 92 for bronze, 100 for dark bronze
+    f:SetPoint("CENTER", 0, -400) -- previously -280
     f:Hide()
     f:SetFrameStrata("TOOLTIP")
 
-    -- Background
     local bg = f:CreateTexture(nil, "BACKGROUND")
     bg:SetAllPoints()
-    -- Try atlas first; fallback to file + coords (same crop your XML used)
-    local ok = bg.SetAtlas and bg:SetAtlas("UI-Achievement-Alert-Background", true)
-    if not ok then
-        bg:SetTexture("Interface\\AchievementFrame\\UI-Achievement-Alert-Background")
-        bg:SetTexCoord(0, 0.605, 0, 0.703)
-    else
-        bg:SetTexCoord(0, 1, 0, 1)
-    end
-    f.bg = bg
+    bg:SetTexture(achToast.BG)
 
-    -- Icon group
     local iconFrame = CreateFrame("Frame", nil, f)
-    iconFrame:SetSize(40, 40)
-    iconFrame:SetPoint("LEFT", f, "LEFT", 6, 0)
+    iconFrame:SetSize(64, 64)
+    iconFrame:SetPoint("LEFT", f, "LEFT", 0, 0) -- 0 for bronze, 6 for dark bronze
 
     local icon = iconFrame:CreateTexture(nil, "ARTWORK")
-    icon:ClearAllPoints()
-    icon:SetPoint("CENTER", iconFrame, "CENTER", 0, 0) -- move up 2px
-    icon:SetSize(40, 43)
+    icon:SetPoint("CENTER", iconFrame, "CENTER", 2, 0)
+    icon:SetSize(50, 50)
     icon:SetTexCoord(0.05, 1, 0.05, 1)
-    iconFrame.tex = icon
-
     f.icon = icon
-    f.iconFrame = iconFrame
 
     local iconOverlay = iconFrame:CreateTexture(nil, "OVERLAY")
-    iconOverlay:SetTexture("Interface\\AchievementFrame\\UI-Achievement-IconFrame")
-    iconOverlay:SetTexCoord(0, 0.5625, 0, 0.5625)
-    iconOverlay:SetSize(72, 72)
-    iconOverlay:SetPoint("CENTER", iconFrame, "CENTER", -1, 2)
+    iconOverlay:SetTexture(achToast.ICON_FRAME)
+    iconOverlay:SetAllPoints(iconFrame)
 
-    -- Title (Achievement name)
     local name = f:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-    name:SetPoint("CENTER", f, "CENTER", 10, 0)
+    name:SetPoint("CENTER", f, "CENTER", 10, 0) -- 0 for bronze, 6 for dark bronze
     name:SetJustifyH("CENTER")
-    name:SetText("")
     f.name = name
 
-    -- "Achievement Unlocked" small label (optional)
-    local unlocked = f:CreateFontString(nil, "OVERLAY", "GameFontBlackTiny")
-    unlocked:SetPoint("TOP", f, "TOP", 7, -26)
+    local unlocked = f:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    unlocked:SetPoint("TOP", f, "TOP", 12, -22) -- -22 for bronze, -19 for dark bronze
     unlocked:SetText(ACHIEVEMENT_UNLOCKED)
-    f.unlocked = unlocked
 
-    -- Shield & points
-    local shield = CreateFrame("Frame", nil, f)
-    shield:SetSize(64, 64)
-    shield:SetPoint("RIGHT", f, "RIGHT", -10, -4)
-
-    local shieldIcon = shield:CreateTexture(nil, "BACKGROUND")
-    shieldIcon:SetTexture("Interface\\AchievementFrame\\UI-Achievement-Shields")
-    shieldIcon:SetSize(56, 52)
-    shieldIcon:SetPoint("TOPRIGHT", 1, 0)
-    shieldIcon:SetTexCoord(0, 0.5, 0, 0.45)
-    f.shieldIcon = shieldIcon
-
-    local points = shield:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    points:SetPoint("CENTER", 4, 5)
-    points:SetText("")
+    local points = f:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    points:SetPoint("CENTER", f, "RIGHT", -31, 2) -- -31, 2 for bronze, -32, 9 for dark bronze
     f.points = points
 
-    -- Simple fade-out (no UIParent fades)
     function f:PlayFade(duration)
         self.fadeT = 0
         self.fadeDuration = duration
         self:SetScript("OnUpdate", AchToastFadeOnUpdate)
     end
 
-    local function AttachModelOverlayClipped(parentFrame, texture)
-        -- Create a clipper frame to constrain the model to the texture's bounds
-        local clipper = CreateFrame("Frame", nil, parentFrame)
-        clipper:SetClipsChildren(true)
-        clipper:SetFrameStrata(parentFrame:GetFrameStrata())
-        clipper:SetFrameLevel(parentFrame:GetFrameLevel() + 3)
+    local clipper = CreateFrame("Frame", nil, f)
+    clipper:SetClipsChildren(true)
+    clipper:SetFrameLevel(f:GetFrameLevel() + 3)
+    clipper:SetSize(420, 42)
+    clipper:SetPoint("CENTER", bg, "CENTER", 20, 0)
+    local model = CreateFrame("PlayerModel", nil, clipper)
+    model:SetAllPoints(clipper)
+    model:SetAlpha(0.55)
+    model:SetModel(166349)
+    model:SetModelScale(0.8)
+    f.shineModel = model
 
-        -- Get the texture's size and adjust
-        local width, height = texture:GetSize()
-        clipper:SetSize(width + 100, height - 50)
-
-        -- Center the clipper on the texture to keep it aligned
-        clipper:SetPoint("CENTER", texture, "CENTER", 20, 0)
-
-        -- Create the model inside the clipper
-        local model = CreateFrame("PlayerModel", nil, clipper)
-        model:SetAllPoints(clipper)
-        model:SetAlpha(0.55)
-        model:SetModel(166349) -- Default holy light cone
-        model:SetModelScale(0.8)
-        model:Show()
-
-        -- Model plays once
-        C_Timer.After(2.5, function()
-            model:Hide()
-            --if model:IsShown() then model:PlayFade(0.6) end
-        end)
-
-        -- Store references for potential tweaks
-        parentFrame.modelOverlayClipped = { clipper = clipper, model = model }
-
-        return clipper, model
-    end
-
-    AttachModelOverlayClipped(f, f.bg)
-
-    -- Make the toast clickable
     f:EnableMouse(true)
-    
-    -- Mouse button handler opens the dashboard (OnMouseUp for left button)
     f:SetScript("OnMouseUp", function(self, button)
-        if button == "LeftButton" then
-            if self.achId and addon and addon.OpenDashboardToAchievement then
-                addon.OpenDashboardToAchievement(self.achId)
-            elseif addon and addon.Dashboard and addon.Dashboard.Toggle then
-                addon.Dashboard:Toggle()
-            elseif addon and addon.ShowDashboard then
-                addon.ShowDashboard()
-            else
-                ShowHardcoreAchievementWindow()
-            end
+        if button ~= "LeftButton" then
+            return
+        end
+        if self.achId and addon and addon.OpenDashboardToAchievement then
+            addon.OpenDashboardToAchievement(self.achId)
+        elseif addon and addon.Dashboard and addon.Dashboard.Toggle then
+            addon.Dashboard:Toggle()
+        else
+            ShowHardcoreAchievementWindow()
         end
     end)
 
@@ -2456,37 +2396,29 @@ function achToast.ShowNow(iconTex, title, pts, achIdOrRow, announce)
         end
     end
 
-    -- these exist because we exposed them in the factory
     f.achId = achId
     f.icon:SetTexture(tex)
     f.name:SetText(title or "")
-    
-    -- Show shield icon for 0-point achievements, otherwise show points text
+
     if finalPoints == 0 then
         f.points:SetText("")
         f.points:Hide()
-        if f.shieldIcon then
-            f.shieldIcon:SetTexture("Interface\\AchievementFrame\\UI-Achievement-Shields-Nopoints")
-            f.shieldIcon:SetTexCoord(0, 0.5, 0, 0.45)
-        end
     else
         f.points:SetText(tostring(finalPoints))
         f.points:Show()
-        if f.shieldIcon then
-            f.shieldIcon:SetTexture("Interface\\AchievementFrame\\UI-Achievement-Shields")
-            f.shieldIcon:SetTexCoord(0, 0.5, 0, 0.45)
-        end
     end
 
-    -- Store achievement data for click handler
-    f.achId = achId
-    f.achTitle = title
-    f.achIcon = tex
-    f.achPoints = finalPoints
+    if f.shineModel then
+        f.shineModel:Show()
+        C_Timer.After(2.5, function()
+            if f.shineModel then
+                f.shineModel:Hide()
+            end
+        end)
+    end
 
     f:Show()
 
-    --print(ACHIEVEMENT_BROADCAST_SELF:format(title))
     if announce and not skipBroadcastForRetroactive and addon and addon.PlayAchievementSound then
         addon.PlayAchievementSound()
     end

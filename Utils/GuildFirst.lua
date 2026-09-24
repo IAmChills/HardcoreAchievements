@@ -72,6 +72,9 @@ local string_match = string.match
 -- Guild-first toast (own frame above main achievement toast so both are visible)
 -- ---------------------------------------------------------------------------------------------------------------------
 
+local GUILD_FIRST_TOAST_BG = "Interface\\AddOns\\HardcoreAchievements\\Images\\AchievementFrame.png"
+local GUILD_FIRST_TOAST_ICON_FRAME = "Interface\\AddOns\\HardcoreAchievements\\Images\\AchievementIconFrame.png"
+
 local guildFirstToastFrame = nil
 
 -- Single OnUpdate for fade; state on frame (fadeT, fadeDuration) avoids allocating a new function per toast
@@ -95,58 +98,41 @@ local function CreateGuildFirstToast()
         return guildFirstToastFrame
     end
     local f = CreateFrame("Frame", nil, UIParent)
-    f:SetSize(320, 92)
-    f:SetPoint("CENTER", 0, -180)
+    f:SetSize(320, 92) -- 92 for bronze, 100 for dark bronze
+    f:SetPoint("CENTER", 0, -300) -- previously -180
     f:Hide()
     f:SetFrameStrata("TOOLTIP")
     f:SetFrameLevel(100)
 
     local bg = f:CreateTexture(nil, "BACKGROUND")
     bg:SetAllPoints()
-    if bg.SetAtlas and bg:SetAtlas("UI-Achievement-Alert-Background", true) then
-        bg:SetTexCoord(0, 1, 0, 1)
-    else
-        bg:SetTexture("Interface\\AchievementFrame\\UI-Achievement-Alert-Background")
-        bg:SetTexCoord(0, 0.605, 0, 0.703)
-    end
+    bg:SetTexture(GUILD_FIRST_TOAST_BG)
 
     local iconFrame = CreateFrame("Frame", nil, f)
-    iconFrame:SetSize(40, 40)
-    iconFrame:SetPoint("LEFT", f, "LEFT", 6, 0)
+    iconFrame:SetSize(64, 64)
+    iconFrame:SetPoint("LEFT", f, "LEFT", 0, 0) -- 0 for bronze, 6 for dark bronze
+
     local icon = iconFrame:CreateTexture(nil, "ARTWORK")
-    icon:SetPoint("CENTER", iconFrame, "CENTER", 0, 0)
-    icon:SetSize(40, 43)
+    icon:SetPoint("CENTER", iconFrame, "CENTER", 2, 0)
+    icon:SetSize(50, 50)
     icon:SetTexCoord(0.05, 1, 0.05, 1)
     f.icon = icon
 
-    local overlay = iconFrame:CreateTexture(nil, "OVERLAY")
-    overlay:SetTexture("Interface\\AchievementFrame\\UI-Achievement-IconFrame")
-    overlay:SetTexCoord(0, 0.5625, 0, 0.5625)
-    overlay:SetSize(72, 72)
-    overlay:SetPoint("CENTER", iconFrame, "CENTER", -1, 2)
+    local iconOverlay = iconFrame:CreateTexture(nil, "OVERLAY")
+    iconOverlay:SetTexture(GUILD_FIRST_TOAST_ICON_FRAME)
+    iconOverlay:SetAllPoints(iconFrame)
 
     local name = f:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-    name:SetPoint("CENTER", f, "CENTER", 10, 0)
+    name:SetPoint("CENTER", f, "CENTER", 10, 0) -- 0 for bronze, 6 for dark bronze
     name:SetJustifyH("CENTER")
-    name:SetText("")
     f.name = name
 
-    local unlocked = f:CreateFontString(nil, "OVERLAY", "GameFontBlackTiny")
-    unlocked:SetPoint("TOP", f, "TOP", 7, -26)
+    local unlocked = f:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    unlocked:SetPoint("TOP", f, "TOP", 12, -22) -- -22 for bronze, -19 for dark bronze
     unlocked:SetText(ACHIEVEMENT_UNLOCKED or "Achievement Unlocked")
 
-    local shield = CreateFrame("Frame", nil, f)
-    shield:SetSize(64, 64)
-    shield:SetPoint("RIGHT", f, "RIGHT", -10, -4)
-    local shieldIcon = shield:CreateTexture(nil, "BACKGROUND")
-    shieldIcon:SetTexture("Interface\\AchievementFrame\\UI-Achievement-Shields")
-    shieldIcon:SetSize(56, 52)
-    shieldIcon:SetPoint("TOPRIGHT", 1, 0)
-    shieldIcon:SetTexCoord(0, 0.5, 0, 0.45)
-    f.shieldIcon = shieldIcon
-    local points = shield:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    points:SetPoint("CENTER", 4, 5)
-    points:SetText("")
+    local points = f:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    points:SetPoint("CENTER", f, "RIGHT", -31, 2) -- -31, 2 for bronze, -32, 9 for dark bronze
     f.points = points
 
     function f:PlayFade(duration)
@@ -155,20 +141,29 @@ local function CreateGuildFirstToast()
         self:SetScript("OnUpdate", GuildFirstToastFadeOnUpdate)
     end
 
+    local clipper = CreateFrame("Frame", nil, f)
+    clipper:SetClipsChildren(true)
+    clipper:SetFrameLevel(f:GetFrameLevel() + 3)
+    clipper:SetSize(420, 42)
+    clipper:SetPoint("CENTER", bg, "CENTER", 20, 0)
+    local model = CreateFrame("PlayerModel", nil, clipper)
+    model:SetAllPoints(clipper)
+    model:SetAlpha(0.55)
+    model:SetModel(166349)
+    model:SetModelScale(0.8)
+    f.shineModel = model
+
     f:EnableMouse(true)
     f:SetScript("OnMouseUp", function(self, button)
-        if button == "LeftButton" then
-            if self.achId and addon and addon.OpenDashboardToAchievement then
-                addon.OpenDashboardToAchievement(self.achId)
-            elseif addon and addon.Dashboard and addon.Dashboard.Toggle then
-                addon.Dashboard:Toggle()
-            elseif addon and addon.ShowDashboard then
-                addon.ShowDashboard()
-            elseif ShowHardcoreAchievementWindow then
-                ShowHardcoreAchievementWindow()
-            elseif ShowAchievementWindow then
-                ShowAchievementWindow()
-            end
+        if button ~= "LeftButton" then
+            return
+        end
+        if self.achId and addon and addon.OpenDashboardToAchievement then
+            addon.OpenDashboardToAchievement(self.achId)
+        elseif addon and addon.Dashboard and addon.Dashboard.Toggle then
+            addon.Dashboard:Toggle()
+        elseif addon and addon.ShowDashboard then
+            addon.ShowDashboard()
         end
     end)
 
@@ -181,6 +176,9 @@ local function ShowGuildFirstToast(iconTex, title, pts, achId)
     C_Timer.After(0.05, function()
         local f = CreateGuildFirstToast()
         f:Hide()
+        f:SetScript("OnUpdate", nil)
+        f.fadeT = nil
+        f.fadeDuration = nil
         f:SetAlpha(1)
         f.achId = achId
         local tex = iconTex
@@ -194,17 +192,17 @@ local function ShowGuildFirstToast(iconTex, title, pts, achId)
         if finalPoints == 0 then
             f.points:SetText("")
             f.points:Hide()
-            if f.shieldIcon then
-                f.shieldIcon:SetTexture("Interface\\AchievementFrame\\UI-Achievement-Shields-Nopoints")
-                f.shieldIcon:SetTexCoord(0, 0.5, 0, 0.45)
-            end
         else
             f.points:SetText(tostring(finalPoints))
             f.points:Show()
-            if f.shieldIcon then
-                f.shieldIcon:SetTexture("Interface\\AchievementFrame\\UI-Achievement-Shields")
-                f.shieldIcon:SetTexCoord(0, 0.5, 0, 0.45)
-            end
+        end
+        if f.shineModel then
+            f.shineModel:Show()
+            C_Timer.After(2.5, function()
+                if f.shineModel then
+                    f.shineModel:Hide()
+                end
+            end)
         end
         f:Show()
         if type(PlayAchievementSound) == "function" then
@@ -217,6 +215,9 @@ local function ShowGuildFirstToast(iconTex, title, pts, achId)
         end)
     end)
 end
+
+-- Toast-only global for /run testing (not part of HardcoreAchievements.Hooks).
+if _G and type(ShowGuildFirstToast) == "function" then _G.HardcoreAchievementsShowGuildFirstToast = ShowGuildFirstToast end
 
 -- ---------------------------------------------------------------------------------------------------------------------
 -- Utilities
