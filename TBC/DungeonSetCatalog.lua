@@ -7,21 +7,6 @@ local table_insert = table.insert
 
 local DungeonSets = {
   -- Archival level caps (inactive): strip the leading `--` on `level` lines below and pass `def.level` from DungeonSetCommon into CreateAchievementRow to restore max-level behavior.
-  -- RUINS OF LORDERON
-  {
-    achId = "RotmendersSet",
-    title = "Rotmender's Raiment Set",
-    -- level = 24,
-    tooltip = "Equip the " .. ClassColor .. "Rotmender's Raiment Set|r",
-    icon = 132723,
-    points = 50,
-    requiredItems = {286978, 286980, 271207, 271214, 286979},
-    itemOrder = {286978, 286980, 271207, 271214, 286979},
-    class = {"PRIEST", "MAGE", "WARLOCK"},
-    zone = "Ruins of Lorderon",
-    staticPoints = true,
-  },
-  
   -- DEADMINES
   {
     achId = "DefiasSet",
@@ -37,7 +22,7 @@ local DungeonSets = {
     staticPoints = true,
   },
 
-  -- WAINING CAVERNS
+  -- WAILING CAVERNS
   {
     achId = "ViperSet",
     title = "Embrace of the Viper Set",
