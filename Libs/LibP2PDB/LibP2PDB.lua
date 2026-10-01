@@ -24,7 +24,7 @@
 -- LibP2PDB: A lightweight, embeddable library for peer-to-peer distributed-database synchronization in WoW addons.
 ------------------------------------------------------------------------------------------------------------------------
 
-local MAJOR, MINOR = "LibP2PDB", 14
+local MAJOR, MINOR = "LibP2PDB", 15
 assert(LibStub, MAJOR .. " requires LibStub")
 
 --- @class LibP2PDB Main library class.
@@ -57,7 +57,7 @@ local LibDeflate = LibStub("LibDeflate", true)
 -- Local Lua References
 ------------------------------------------------------------------------------------------------------------------------
 
-local assert, print = assert, print
+local assert, print, pcall, xpcall = assert, print, pcall, xpcall
 local type, ipairs, pairs, rawequal = type, ipairs, pairs, rawequal
 local min, max, abs, floor, ceil, sin, log = min, max, abs, floor, ceil, sin, log
 local bnot, band, bor, bxor, lshift, rshift = bit.bnot, bit.band, bit.bor, bit.bxor, bit.lshift, bit.rshift
@@ -84,7 +84,7 @@ local InActiveBattlefield
 if C_PvP and C_PvP.IsActiveBattlefield then
     InActiveBattlefield = C_PvP.IsActiveBattlefield
 else
-    InActiveBattlefield = InActiveBattlefield --- @type fun(): boolean
+    InActiveBattlefield = _G.InActiveBattlefield --[[@as fun(): boolean]]
 end
 
 ------------------------------------------------------------------------------------------------------------------------
@@ -795,6 +795,7 @@ local priv = Private.New(assert(UnitName("player"), "unable to get player name")
 
 --- @class LibP2PDB.Compressor Compressor interface for compressing/decompressing data.
 --- @field Compress fun(self: LibP2PDB.Compressor, str: string): string Compresses a string.
+--- @field CompressDigest? fun(self: LibP2PDB.Compressor, str: string): string Compresses a digest string using an optional faster strategy.
 --- @field Decompress fun(self: LibP2PDB.Compressor, str: string): string? Decompresses a string, restoring the original string.
 
 --- @class LibP2PDB.Encoder Encoder interface for encoding/decoding data.
@@ -964,6 +965,10 @@ function LibP2PDB:NewDatabase(desc)
                 Compress = function(self, str)
                     return (LibDeflate:CompressDeflate(str))
                 end,
+                CompressDigest = function(self, str)
+                    -- Use a fast compression level with Huffman-only strategy for digest purposes
+                    return (LibDeflate:CompressDeflate(str, { level = 1, strategy = "huffman_only" }))
+                end,
                 Decompress = function(self, str)
                     local data = LibDeflate:DecompressDeflate(str)
                     if data then
@@ -997,9 +1002,11 @@ function LibP2PDB:NewDatabase(desc)
                 -- addition to NULL and will just truncate the message if they are present.
                 channelCodec = LibDeflate:CreateCodec("\000\010\013", "\001", ""),
                 EncodeForChannel = function(self, str)
+                    --- @cast self LibP2PDB.DefaultEncoder
                     return self.channelCodec:Encode(str)
                 end,
                 DecodeFromChannel = function(self, str)
+                    --- @cast self LibP2PDB.DefaultEncoder
                     local data = self.channelCodec:Decode(str)
                     if data then
                         return data
@@ -1962,9 +1969,17 @@ function LibP2PDB:EstimateOptimalRowsPerChunk(db, tableName)
 
     -- Serialize and compress using the same pipeline as Private:Send
     local state = { dbi.version, dbi.clock, { [tableName] = rowStateMap } } --- @type LibP2PDB.DBState
-    local serialized = dbi.serializer:Serialize(state)
+    local success, serialized = pcall(dbi.serializer.Serialize, dbi.serializer, state)
+    if not success then
+        ReportError(dbi, "serializer failed for prefix '%s': %s", dbi.prefix, serialized)
+        return nil
+    end
     if not serialized then return nil end
-    local compressed = dbi.compressor:Compress(serialized)
+    local success, compressed = pcall(dbi.compressor.Compress, dbi.compressor, serialized)
+    if not success then
+        ReportError(dbi, "compressor failed for prefix '%s': %s", dbi.prefix, compressed)
+        return nil
+    end
     if not compressed then return nil end
 
     -- optimal = rows that fit in 4KB = rowCount * 4096 / compressedSize
@@ -2100,7 +2115,7 @@ end
 --- Serialize data using the database's serializer.
 --- @param db LibP2PDB.DBHandle Database handle.
 --- @param data any Data to serialize.
---- @return string serialized The serialized string representation of the data.
+--- @return string? serialized The serialized string representation, or nil if serialization fails.
 function LibP2PDB:Serialize(db, data)
     assert(IsEmptyTable(db), "db must be an empty table")
 
@@ -2109,7 +2124,12 @@ function LibP2PDB:Serialize(db, data)
     assert(dbi, "db is not a recognized database handle")
 
     -- Serialize the data
-    return dbi.serializer:Serialize(data)
+    local success, serialized = pcall(dbi.serializer.Serialize, dbi.serializer, data)
+    if not success then
+        ReportError(dbi, "serializer failed for prefix '%s': %s", dbi.prefix, serialized)
+        return nil
+    end
+    return serialized
 end
 
 --- Deserialize data using the database's serializer.
@@ -2124,13 +2144,18 @@ function LibP2PDB:Deserialize(db, str)
     assert(dbi, "db is not a recognized database handle")
 
     -- Deserialize the string
-    return dbi.serializer:Deserialize(str)
+    local success, data = pcall(dbi.serializer.Deserialize, dbi.serializer, str)
+    if not success then
+        ReportError(dbi, "deserializer failed for prefix '%s': %s", dbi.prefix, data)
+        return nil
+    end
+    return data
 end
 
 --- Decompress a string using the database's compressor.
 --- @param db LibP2PDB.DBHandle Database handle.
 --- @param str string Compressed string to decompress.
---- @return string decompressed The decompressed string.
+--- @return string? compressed The compressed string, or nil if compression fails.
 function LibP2PDB:Compress(db, str)
     assert(IsEmptyTable(db), "db must be an empty table")
 
@@ -2139,7 +2164,12 @@ function LibP2PDB:Compress(db, str)
     assert(dbi, "db is not a recognized database handle")
 
     -- Compress the data
-    return dbi.compressor:Compress(str)
+    local success, compressed = pcall(dbi.compressor.Compress, dbi.compressor, str)
+    if not success then
+        ReportError(dbi, "compressor failed for prefix '%s': %s", dbi.prefix, compressed)
+        return nil
+    end
+    return compressed
 end
 
 --- Decompress a string using the database's compressor.
@@ -2154,14 +2184,19 @@ function LibP2PDB:Decompress(db, str)
     assert(dbi, "db is not a recognized database handle")
 
     -- Decompress the data
-    return dbi.compressor:Decompress(str)
+    local success, decompressed = pcall(dbi.compressor.Decompress, dbi.compressor, str)
+    if not success then
+        ReportError(dbi, "decompressor failed for prefix '%s': %s", dbi.prefix, decompressed)
+        return nil
+    end
+    return decompressed
 end
 
 --- Encode a string for safe transmission over WoW chat channels, using the database's encoder.
 --- This prepares data for sending via chat channels by escaping unsafe characters.
 --- @param db LibP2PDB.DBHandle Database handle.
 --- @param str string Input string to encode.
---- @return string encoded The encoded string safe for transmission.
+--- @return string? encoded The encoded string, or nil if encoding fails.
 function LibP2PDB:EncodeForChannel(db, str)
     assert(IsEmptyTable(db), "db must be an empty table")
 
@@ -2170,7 +2205,12 @@ function LibP2PDB:EncodeForChannel(db, str)
     assert(dbi, "db is not a recognized database handle")
 
     -- Encode the data
-    return dbi.encoder:EncodeForChannel(str)
+    local success, encoded = pcall(dbi.encoder.EncodeForChannel, dbi.encoder, str)
+    if not success then
+        ReportError(dbi, "encoder failed for prefix '%s': %s", dbi.prefix, encoded)
+        return nil
+    end
+    return encoded
 end
 
 --- Decode a string received from WoW chat channels, using the database's encoder.
@@ -2186,14 +2226,19 @@ function LibP2PDB:DecodeFromChannel(db, str)
     assert(dbi, "db is not a recognized database handle")
 
     -- Decode the data
-    return dbi.encoder:DecodeFromChannel(str)
+    local success, decoded = pcall(dbi.encoder.DecodeFromChannel, dbi.encoder, str)
+    if not success then
+        ReportError(dbi, "decoder failed for prefix '%s': %s", dbi.prefix, decoded)
+        return nil
+    end
+    return decoded
 end
 
 --- Encode a string for safe display or persistence, using the database's encoder.
 --- This prepares data for printing to chat windows or saving in saved variables.
 --- @param db LibP2PDB.DBHandle Database handle.
 --- @param str string Input string to encode.
---- @return string encoded The encoded string safe for printing.
+--- @return string? encoded The encoded string, or nil if encoding fails.
 function LibP2PDB:EncodeForPrint(db, str)
     assert(IsEmptyTable(db), "db must be an empty table")
 
@@ -2202,7 +2247,12 @@ function LibP2PDB:EncodeForPrint(db, str)
     assert(dbi, "db is not a recognized database handle")
 
     -- Encode the data
-    return dbi.encoder:EncodeForPrint(str)
+    local success, encoded = pcall(dbi.encoder.EncodeForPrint, dbi.encoder, str)
+    if not success then
+        ReportError(dbi, "encoder failed for prefix '%s': %s", dbi.prefix, encoded)
+        return nil
+    end
+    return encoded
 end
 
 --- Decode a string previously encoded for display or persistence, using the database's encoder.
@@ -2218,7 +2268,12 @@ function LibP2PDB:DecodeFromPrint(db, str)
     assert(dbi, "db is not a recognized database handle")
 
     -- Decode the data
-    return dbi.encoder:DecodeFromPrint(str)
+    local success, decoded = pcall(dbi.encoder.DecodeFromPrint, dbi.encoder, str)
+    if not success then
+        ReportError(dbi, "decoder failed for prefix '%s': %s", dbi.prefix, decoded)
+        return nil
+    end
+    return decoded
 end
 
 --- Sanitize a string for printing in WoW chat channels.
@@ -3260,19 +3315,41 @@ end
 --- @param target LibP2PDB.PeerName? Target peer name, only required for WHISPER channel.
 --- @param priority LibP2PDB.CommPriority The priority of the message.
 function Private:Send(dbi, data, channel, target, priority)
-    local serialized = dbi.serializer:Serialize(data)
+    local success, serialized = pcall(dbi.serializer.Serialize, dbi.serializer, data)
+    if not success then
+        ReportError(dbi, "serializer failed for prefix '%s': %s", dbi.prefix, serialized)
+        return
+    end
     if not serialized then
         ReportError(dbi, "failed to serialize data for prefix '%s'", dbi.prefix)
         return
     end
 
-    local compressed = dbi.compressor:Compress(serialized)
+    -- Use digest-specific compression when supported; otherwise use the general compressor.
+    -- Large digest payloads may benefit from a specialized compression strategy.
+    local compressor = dbi.compressor
+    local compress = compressor.Compress
+    if type(data) == "table" and data[1] == CommMessageType.DigestResponse then
+        local compressDigest = compressor.CompressDigest
+        if compressDigest then
+            compress = compressDigest
+        end
+    end
+    local success, compressed = pcall(compress, compressor, serialized)
+    if not success then
+        ReportError(dbi, "compressor failed for prefix '%s': %s", dbi.prefix, compressed)
+        return
+    end
     if not compressed then
         ReportError(dbi, "failed to compress data for prefix '%s'", dbi.prefix)
         return
     end
 
-    local encoded = dbi.encoder:EncodeForChannel(compressed)
+    local success, encoded = pcall(dbi.encoder.EncodeForChannel, dbi.encoder, compressed)
+    if not success then
+        ReportError(dbi, "encoder failed for prefix '%s': %s", dbi.prefix, encoded)
+        return
+    end
     if not encoded then
         ReportError(dbi, "failed to encode data for prefix '%s'", dbi.prefix)
         return
@@ -3299,19 +3376,31 @@ end
 --- @param channels string[]? Optional list of additional channels to broadcast on.
 --- @param priority LibP2PDB.CommPriority The priority of the message.
 function Private:Broadcast(dbi, data, channels, priority)
-    local serialized = dbi.serializer:Serialize(data)
+    local success, serialized = pcall(dbi.serializer.Serialize, dbi.serializer, data)
+    if not success then
+        ReportError(dbi, "serializer failed for prefix '%s': %s", dbi.prefix, serialized)
+        return
+    end
     if not serialized then
         ReportError(dbi, "failed to serialize message for prefix '%s'", dbi.prefix)
         return
     end
 
-    local compressed = dbi.compressor:Compress(serialized)
+    local success, compressed = pcall(dbi.compressor.Compress, dbi.compressor, serialized)
+    if not success then
+        ReportError(dbi, "compressor failed for prefix '%s': %s", dbi.prefix, compressed)
+        return
+    end
     if not compressed then
         ReportError(dbi, "failed to compress message for prefix '%s'", dbi.prefix)
         return
     end
 
-    local encoded = dbi.encoder:EncodeForChannel(compressed)
+    local success, encoded = pcall(dbi.encoder.EncodeForChannel, dbi.encoder, compressed)
+    if not success then
+        ReportError(dbi, "encoder failed for prefix '%s': %s", dbi.prefix, encoded)
+        return
+    end
     if not encoded then
         ReportError(dbi, "failed to encode message for prefix '%s'", dbi.prefix)
         return
@@ -3358,19 +3447,31 @@ end
 --- @param dbi LibP2PDB.DBInstance Database instance.
 --- @param data any The message data to send.
 function Private:BroadcastChatChannel(dbi, data)
-    local serialized = dbi.serializer:Serialize(data)
+    local success, serialized = pcall(dbi.serializer.Serialize, dbi.serializer, data)
+    if not success then
+        ReportError(dbi, "serializer failed for prefix '%s': %s", dbi.prefix, serialized)
+        return
+    end
     if not serialized then
         ReportError(dbi, "failed to serialize data for prefix '%s'", dbi.prefix)
         return
     end
 
-    local compressed = dbi.compressor:Compress(serialized)
+    local success, compressed = pcall(dbi.compressor.Compress, dbi.compressor, serialized)
+    if not success then
+        ReportError(dbi, "compressor failed for prefix '%s': %s", dbi.prefix, compressed)
+        return
+    end
     if not compressed then
         ReportError(dbi, "failed to compress data for prefix '%s'", dbi.prefix)
         return
     end
 
-    local encoded = dbi.encoder:EncodeForPrint(compressed)
+    local success, encoded = pcall(dbi.encoder.EncodeForPrint, dbi.encoder, compressed)
+    if not success then
+        ReportError(dbi, "encoder failed for prefix '%s': %s", dbi.prefix, encoded)
+        return
+    end
     if not encoded then
         ReportError(dbi, "failed to encode data for prefix '%s'", dbi.prefix)
         return
@@ -3493,7 +3594,11 @@ function Private:OnCommReceived(prefix, encoded, channel, sender)
         return
     end
 
-    local compressed = dbi.encoder:DecodeFromChannel(encoded)
+    local success, compressed = pcall(dbi.encoder.DecodeFromChannel, dbi.encoder, encoded)
+    if not success then
+        ReportError(dbi, "decoder failed for message from %s prefix '%s' channel '%s': %s", sender, dbi.prefix, channel, compressed)
+        return
+    end
     if not compressed then
         ReportError(dbi, "failed to decode message from %s prefix '%s' channel '%s'", sender, prefix, channel)
         return
@@ -3552,7 +3657,11 @@ function Private:OnChatMsgChannel(msg, channel, sender)
     end
 
     -- Decode from print-safe encoding (EncodeForPrint) used by the chat channel send path
-    local compressed = dbi.encoder:DecodeFromPrint(encoded)
+    local success, compressed = pcall(dbi.encoder.DecodeFromPrint, dbi.encoder, encoded)
+    if not success then
+        ReportError(dbi, "decoder failed for message from %s prefix '%s' channel '%s': %s", sender, dbi.prefix, channel, compressed)
+        return
+    end
     if not compressed then
         return
     end
@@ -3571,13 +3680,21 @@ function Private:HandleCompressedMessage(dbi, compressed, channel, sender)
         return
     end
 
-    local serialized = dbi.compressor:Decompress(compressed)
+    local success, serialized = pcall(dbi.compressor.Decompress, dbi.compressor, compressed)
+    if not success then
+        ReportError(dbi, "decompressor failed for message from %s prefix '%s' channel '%s': %s", sender, dbi.prefix, channel, serialized)
+        return
+    end
     if not serialized then
         ReportError(dbi, "failed to decompress message from %s prefix '%s' channel '%s'", sender, dbi.prefix, channel)
         return
     end
 
-    local obj = dbi.serializer:Deserialize(serialized)
+    local success, obj = pcall(dbi.serializer.Deserialize, dbi.serializer, serialized)
+    if not success then
+        ReportError(dbi, "deserializer failed for message from %s prefix '%s' channel '%s': %s", sender, dbi.prefix, channel, obj)
+        return
+    end
     if not obj then
         ReportError(dbi, "failed to deserialize message from %s prefix '%s' channel '%s': %s", sender, dbi.prefix, channel, Dump(obj))
         return
@@ -10696,13 +10813,13 @@ local PerformanceTests = {
         ProfileEnd("LibP2PDB:ImportDatabase")
         PrintProfileMarker("LibP2PDB:ImportDatabase", "ImportDatabase")
 
-        local serialized = LibP2PDB:Serialize(db, state)
+        local serialized = LibP2PDB:Serialize(db, state) --- @cast serialized string
         Print("Database (%d rows) serialized: %s (%s)", sampleCount, FormatSize(#serialized), FormatSize(#serialized / sampleCount, true))
-        local compressed = LibP2PDB:Compress(db, serialized)
+        local compressed = LibP2PDB:Compress(db, serialized) --- @cast compressed string
         Print("Database (%d rows) compressed: %s (%s)", sampleCount, FormatSize(#compressed), FormatSize(#compressed / sampleCount, true))
-        local encodedForChannel = LibP2PDB:EncodeForChannel(db, compressed)
+        local encodedForChannel = LibP2PDB:EncodeForChannel(db, compressed) --- @cast encodedForChannel string
         Print("Database (%d rows) encoded for channel: %s (%s)", sampleCount, FormatSize(#encodedForChannel), FormatSize(#encodedForChannel / sampleCount, true))
-        local encodedForPrint = LibP2PDB:EncodeForPrint(db, compressed)
+        local encodedForPrint = LibP2PDB:EncodeForPrint(db, compressed) --- @cast encodedForPrint string
         Print("Database (%d rows) encoded for print: %s (%s)", sampleCount, FormatSize(#encodedForPrint), FormatSize(#encodedForPrint / sampleCount, true))
     end,
 

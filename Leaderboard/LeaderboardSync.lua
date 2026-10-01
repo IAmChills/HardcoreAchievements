@@ -529,7 +529,7 @@ function Sync:Initialize()
         db = LibP2PDB:NewDatabase({
             prefix = DB_PREFIX,
             version = DB_VERSION,
-            compressor = addon.LibP2PDBFastCompressor,
+            onError = addon.LibP2PDBOnError,
             onMigrateDB = OnMigrateDB,
             onMigrateRow = OnMigrateRow,
         })

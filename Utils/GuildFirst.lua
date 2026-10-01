@@ -572,7 +572,7 @@ local function EnsureDBForScope(scopeKey)
         db = LibP2PDB:NewDatabase({
             prefix = prefix,
             version = 1,
-            compressor = addon and addon.LibP2PDBFastCompressor,
+            onError = addon and addon.LibP2PDBOnError,
         })
         created = true
     end
