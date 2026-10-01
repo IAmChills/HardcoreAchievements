@@ -199,6 +199,17 @@ local Achievements = {
     faction = FACTION_ALLIANCE,
     zone = "Feralas"
 }, {
+    achId = "OttoFalcon",
+    title = "Bring Me Their Heads!",
+    level = 44,
+    tooltip = "Complete " .. ClassColor .. "Wanted! Otto and Falconcrest|r before level 45",
+    icon = 134166,
+    points = 10,
+    requiredQuestId = 685,
+    targetNpcId = {2599, 2597},
+    faction = FACTION_ALLIANCE,
+    zone = "Arathi Highlands"
+}, {
     achId = "DragonkinMenace",
     title = "Wrath of the Dragonkin",
     level = 53,
