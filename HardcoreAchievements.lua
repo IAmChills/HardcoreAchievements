@@ -278,7 +278,8 @@ end
 -- writes into a throwaway table that is then replaced (official clients) or
 -- kept empty (if the client refuses to overwrite an existing global).
 -- Account: HardcoreAchievementsDB (leaderboard, guild-first, minimap, account settings).
--- Character: HardcoreAchievementsCharDB (completions, progress, per-char settings).
+-- Character: HardcoreAchievementsCharDB keyed by player GUID. A GUID mismatch
+-- offers migrate (rekey the table) or start new (keep the old table, add a new one).
 -- Helpers live on one table so this chunk stays under Lua 5.1's 200-local limit.
 local savedVarsBound = false
 local sv = {}
@@ -333,6 +334,125 @@ function sv.copyRecord(dst, src)
     sv.shape(dst)
 end
 
+function sv.isPlayerGuidKey(key)
+    return type(key) == "string" and string.find(key, "^Player%-") ~= nil
+end
+
+function sv.otherGuid(outer, skipGuid)
+    if type(outer) ~= "table" then
+        return nil
+    end
+    local best, bestLogin
+    for k, rec in pairs(outer) do
+        if sv.isPlayerGuidKey(k) and k ~= skipGuid and type(rec) == "table" then
+            local login = rec.meta and tonumber(rec.meta.lastLogin) or 0
+            if not best or login >= (bestLogin or 0) then
+                best = k
+                bestLogin = login
+            end
+        end
+    end
+    return best
+end
+
+function sv.wrapLegacy(outer, guid)
+    if type(outer) ~= "table" or not guid then
+        return nil
+    end
+    local rec = {}
+    for k, v in pairs(outer) do
+        rec[k] = v
+    end
+    for k in pairs(rec) do
+        outer[k] = nil
+    end
+    outer[guid] = sv.shape(rec)
+    rec.meta.guid = guid
+    return rec
+end
+
+function sv.writeCurrentMeta(cdb)
+    if type(cdb) ~= "table" then
+        return
+    end
+    cdb.meta = cdb.meta or {}
+    cdb.meta.name = UnitName and UnitName("player") or cdb.meta.name
+    cdb.meta.realm = GetRealmName and GetRealmName() or cdb.meta.realm
+    cdb.meta.className = UnitClass and UnitClass("player") or cdb.meta.className
+    cdb.meta.race = UnitRace and UnitRace("player") or cdb.meta.race
+    cdb.meta.level = UnitLevel and UnitLevel("player") or cdb.meta.level
+    cdb.meta.faction = UnitFactionGroup and UnitFactionGroup("player") or cdb.meta.faction
+    cdb.meta.lastLogin = time()
+    if playerGUID then
+        cdb.meta.guid = playerGUID
+    end
+end
+
+function sv.getActiveRecord(outer)
+    if type(outer) ~= "table" then
+        return nil
+    end
+    local guid = playerGUID
+    if guid and type(outer[guid]) == "table" then
+        sv.conflictFromGuid = nil
+        return sv.shape(outer[guid])
+    end
+
+    local stored = sv.otherGuid(outer, guid)
+    if not guid then
+        if stored then
+            return sv.shape(outer[stored])
+        end
+        return sv.shape(outer)
+    end
+
+    if stored and sv.hasProgress(outer[stored]) then
+        sv.conflictFromGuid = stored
+        return sv.shape(outer[stored])
+    end
+
+    if stored then
+        outer[guid] = sv.shape({})
+        outer[guid].meta.guid = guid
+        sv.conflictFromGuid = nil
+        return outer[guid]
+    end
+
+    sv.conflictFromGuid = nil
+    return sv.wrapLegacy(outer, guid)
+end
+
+function sv.showGuidConflictPopup()
+    if sv.conflictFromGuid and StaticPopup_Show then
+        StaticPopup_Show("Hardcore Achievements GUID Mismatch")
+    end
+end
+
+function sv.confirmMigrate()
+    local outer = HardcoreAchievementsCharDB
+    local fromGuid = sv.conflictFromGuid
+    if type(outer) ~= "table" or not playerGUID or not fromGuid then
+        return
+    end
+    if fromGuid ~= playerGUID and type(outer[fromGuid]) == "table" then
+        outer[playerGUID] = outer[fromGuid]
+        outer[fromGuid] = nil
+    end
+    sv.conflictFromGuid = nil
+    sv.writeCurrentMeta(sv.shape(outer[playerGUID]))
+end
+
+function sv.confirmStartNew()
+    local outer = HardcoreAchievementsCharDB
+    if type(outer) ~= "table" or not playerGUID then
+        return
+    end
+    outer[playerGUID] = sv.shape({})
+    sv.writeCurrentMeta(outer[playerGUID])
+    sv.conflictFromGuid = nil
+    ReloadUI()
+end
+
 function sv.bindChar()
     if type(HardcoreAchievementsCharDB) ~= "table" then
         HardcoreAchievementsCharDB = {}
@@ -340,7 +460,7 @@ function sv.bindChar()
     if addon then
         addon.HardcoreAchievementsCharDB = HardcoreAchievementsCharDB
     end
-    return sv.shape(HardcoreAchievementsCharDB)
+    return sv.getActiveRecord(HardcoreAchievementsCharDB)
 end
 
 local function BindSavedVariables()
@@ -378,7 +498,7 @@ function sv.ensureChar()
         if addon then
             addon.HardcoreAchievementsCharDB = HardcoreAchievementsCharDB
         end
-        return sv.shape(HardcoreAchievementsCharDB)
+        return sv.getActiveRecord(HardcoreAchievementsCharDB)
     end
     return nil
 end
@@ -442,7 +562,7 @@ end
 local function GetCharDB()
     local db = EnsureDB()
     local cdb = sv.ensureChar()
-    if savedVarsBound and cdb then
+    if savedVarsBound and cdb and not sv.conflictFromGuid then
         sv.migrateCharSlot(db, cdb)
     end
     return db, cdb
@@ -475,14 +595,14 @@ end
 
 function sv.buildBackup()
     local db = EnsureDB()
-    local cdb = sv.ensureChar()
     if not db then
         return nil
     end
+    sv.ensureChar()
     return {
         format = 2,
         account = db,
-        character = cdb or {},
+        character = type(HardcoreAchievementsCharDB) == "table" and HardcoreAchievementsCharDB or {},
     }
 end
 
@@ -518,9 +638,12 @@ function sv.applyBackup(data)
     end
     savedVarsBound = true
     HardcoreAchievementsDB.chars = HardcoreAchievementsDB.chars or {}
-    sv.shape(HardcoreAchievementsCharDB)
+    sv.getActiveRecord(HardcoreAchievementsCharDB)
     if playerGUID then
         HardcoreAchievementsDB.chars[playerGUID] = nil
+    end
+    if sv.conflictFromGuid then
+        sv.showGuidConflictPopup()
     end
     return true
 end
@@ -2912,22 +3035,18 @@ initFrame:SetScript("OnEvent", function(self, event, ...)
         playerGUID = NormalizePlayerGUID(UnitGUID("player"))
 
         local db, cdb = GetCharDB()
-        if cdb then
+        if sv.conflictFromGuid then
+            C_Timer.After(0.5, function()
+                sv.showGuidConflictPopup()
+            end)
+        elseif cdb then
             -- Ensure settings table exists
             cdb.settings = cdb.settings or {}
             -- Default showCustomTab to true (visible by default, synced with useCharacterPanel)
             if cdb.settings.showCustomTab == nil then
                 cdb.settings.showCustomTab = true
             end
-            local name, realm = UnitName("player"), GetRealmName()
-            local className = UnitClass("player")
-            cdb.meta.name      = name
-            cdb.meta.realm     = realm
-            cdb.meta.className = className
-            cdb.meta.race      = UnitRace("player")
-            cdb.meta.level     = UnitLevel("player")
-            cdb.meta.faction   = UnitFactionGroup("player")
-            cdb.meta.lastLogin = time()
+            sv.writeCurrentMeta(cdb)
             
             -- Clean up incorrectly completed level bracket achievements (lightweight, can run immediately)
             CleanupIncorrectLevelAchievements()
@@ -2971,6 +3090,9 @@ initFrame:SetScript("OnEvent", function(self, event, ...)
 
         -- One-time initial options frame for new characters (no initialSetupDone flag)
         C_Timer.After(1, function()
+            if sv.conflictFromGuid then
+                return
+            end
             if addon and addon.ShowInitialOptionsIfNeeded then
                 addon.ShowInitialOptionsIfNeeded()
             end
@@ -3052,6 +3174,57 @@ StaticPopupDialogs["Hardcore Achievements TBC"] = {
         else
             OpenOptionsPanel()
         end
+    end,
+}
+
+StaticPopupDialogs["Hardcore Achievements GUID Mismatch"] = {
+    text = "|cff008066Hardcore Achievements|r\n\nSaved achievement progress was found under this character but belongs to a different ID. This is normal if you have rerolled your character or transferred your character to a new server.\n\nWould you like to migrate all progress to this character, or start new progress for this character?",
+    button1 = "Migrate",
+    button2 = "Start New",
+    timeout = 0,
+    whileDead = true,
+    hideOnEscape = false,
+    noCancelOnEscape = true,
+    preferredIndex = 3,
+    OnAccept = function()
+        StaticPopup_Show("Hardcore Achievements GUID Migrate Confirm")
+    end,
+    OnCancel = function()
+        StaticPopup_Show("Hardcore Achievements GUID Start New Confirm")
+    end,
+}
+
+StaticPopupDialogs["Hardcore Achievements GUID Migrate Confirm"] = {
+    text = "Are you sure you want to migrate achievement progress to this character? This action cannot be undone.",
+    button1 = "Yes",
+    button2 = "Cancel",
+    timeout = 0,
+    whileDead = true,
+    hideOnEscape = false,
+    noCancelOnEscape = true,
+    preferredIndex = 3,
+    OnAccept = function()
+        sv.confirmMigrate()
+    end,
+    OnCancel = function()
+        StaticPopup_Show("Hardcore Achievements GUID Mismatch")
+    end,
+}
+
+StaticPopupDialogs["Hardcore Achievements GUID Start New Confirm"] = {
+    text = "Are you sure you want to start new progress on this character? This action cannot be undone.",
+    button1 = "Yes",
+    button2 = "Cancel",
+    timeout = 0,
+    whileDead = true,
+    hideOnEscape = false,
+    noCancelOnEscape = true,
+    preferredIndex = 3,
+    OnAccept = function()
+        sv.confirmStartNew()
+    end,
+    OnCancel = function()
+        StaticPopup_Show("Hardcore Achievements GUID Mismatch")
     end,
 }
 
