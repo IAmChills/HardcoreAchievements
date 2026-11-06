@@ -964,6 +964,10 @@ local function registerDungeonAchievement(def)
   ---------------------------------------
 
   local function GetNpcIdFromGUID(guid)
+    -- Same result as strsplit for a plain GUID. Returns nil for a secret GUID instead of erroring.
+    if addon.ParseCreatureNpcId then
+      return addon.ParseCreatureNpcId(guid)
+    end
     if not guid then return nil end
     local npcId = select(6, strsplit("-", guid))
     npcId = npcId and tonumber(npcId) or nil
@@ -1067,8 +1071,12 @@ local function registerDungeonAchievement(def)
   end
 
   local function BuildKillToken(destGUID, npcId)
-    if destGUID and destGUID ~= "" then
-      return tostring(destGUID)
+    -- A secret GUID cannot be persisted, and the encounter key is not a real GUID. Fall through to the
+    -- map/achievement/npc token, which is what dedupes a boss credited without one.
+    if type(destGUID) == "string" and destGUID ~= ""
+        and not (addon.IsSecretValue and addon.IsSecretValue(destGUID))
+        and destGUID:sub(1, 10) ~= "Encounter:" then
+      return destGUID
     end
     if npcId then
       return tostring(requiredMapId or 0) .. ":" .. tostring(achId) .. ":" .. tostring(npcId)
@@ -1518,7 +1526,7 @@ local function registerDungeonAchievement(def)
   ---------------------------------------
 
   -- Create the tracker function dynamically
-  local function KillTracker(destGUID)
+  local function KillTracker(destGUID, npcIdHint)
     if not IsOnRequiredMap() then 
       return false 
     end
@@ -1527,7 +1535,7 @@ local function registerDungeonAchievement(def)
       return false
     end
 
-    local npcId = GetNpcIdFromGUID(destGUID)
+    local npcId = tonumber(npcIdHint) or GetNpcIdFromGUID(destGUID)
     if not npcId or not IsTrackedBoss(npcId) then
       return false
     end
@@ -1586,7 +1594,13 @@ local function registerDungeonAchievement(def)
           end
         end
     end
-    if addon and type(addon.SendDungeonBossCreditMessage) == "function" and killToken then
+    local chatRestricted = false
+    if C_RestrictedActions and Enum and Enum.AddOnRestrictionType
+        and C_RestrictedActions.IsAddOnRestrictionActive then
+      local ok, active = pcall(C_RestrictedActions.IsAddOnRestrictionActive, Enum.AddOnRestrictionType.Chat)
+      chatRestricted = ok and not (addon.IsSecretValue and addon.IsSecretValue(active)) and active == true
+    end
+    if addon and type(addon.SendDungeonBossCreditMessage) == "function" and killToken and not chatRestricted then
       addon.SendDungeonBossCreditMessage(achId, requiredMapId, npcId, killToken)
     end
 

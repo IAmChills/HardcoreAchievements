@@ -25,18 +25,16 @@ local addonName, addon = ...
 -- =========================================================
 
 -- Separately from blocked events, this client has the 12.0 secret value system. Tainted code may store
--- a secret in a variable or table field and pass it along, but comparing, concatenating or indexing with
--- one is a hard error. Confirmed by probe: UnitDetailedThreatSituation returns secrets during combat.
--- Per Blizzard's docs UnitName does the same for non-player units in combat, and UnitHealth/UnitPower
--- can too, so anything that reads combat state needs to expect it.
+-- a secret in a variable or table field and pass it along, but comparing, doing arithmetic, or using one
+-- as a table key or index is a hard error. Concatenating a secret string is allowed; type() is allowed.
 --
--- Test with issecretvalue(v) before touching a value, and C_Secrets.ShouldUnitThreatValuesBeSecret to
--- decide up front whether threat logic is worth attempting at all.
+-- Creature GUIDs are secret on addon-restricted maps (dungeons and raids) and plain in the open world.
+-- Player, party, and raid GUIDs are not secret. UnitThreatSituation's number can be secret, but nil still
+-- means "not on the threat table", so type(status) == "number" is a legal presence test. UnitLevel,
+-- UnitIsTapDenied, UnitIsPlayer, and UnitPlayerControlled are plain. UnitInRange is always secret.
 --
--- This is why the combat log being blocked is currently hiding a second problem rather than being the
--- whole story: Functions\PlayerIsSolo.lua and Functions\IsGroupEligibleForAchievement.lua compare threat
--- percentages numerically, and those comparisons only run off the back of combat log events. Restore kill
--- tracking without guarding them and they will start erroring in combat.
+-- Forever\KillTracking.lua replaces PlayerIsSolo and IsGroupEligibleForAchievement before the shared
+-- achievement code captures them, so the Classic percentage comparisons never run on this client.
 
 addon.Restrictions = addon.Restrictions or {}
 
@@ -44,6 +42,8 @@ addon.Restrictions = addon.Restrictions or {}
 -- solo verification has to reach its verdict without comparing threat numbers.
 addon.Restrictions.secretValues = true
 
--- No PARTY_KILL and no damage-event attribution. Kill credit, overkill checks, and the external-player
--- solo verification in Functions\PlayerIsSolo.lua all have to be rebuilt from the allowed events above.
+-- No combat log. PARTY_KILL still exists as its own frame event (attacker GUID, target GUID); whether
+-- this client accepted the registration is recorded by Forever\KillTracking.lua.
 addon.Restrictions.combatLog = true
+addon.Restrictions.partyKillEvent = false
+addon.Restrictions.encounterEndEvent = false

@@ -303,3 +303,25 @@ function addon.ResolveTemplate(...)
     end
     return nil
 end
+
+--- True when `value` is a Midnight secret. Always false on clients without the secret-value system,
+--- so Classic and TBC callers can use it without a version check.
+function addon.IsSecretValue(value)
+    return issecretvalue and issecretvalue(value) or false
+end
+
+--- NPC id from a unit GUID.
+--- Plain creature, vehicle, and other hyphenated GUIDs keep the historical strsplit result, so Classic
+--- and TBC behaviour is unchanged. Secret GUIDs return nil instead of erroring. "Encounter:<id>" is the
+--- synthetic key Forever uses when an encounter payload identifies a boss without a usable GUID.
+function addon.ParseCreatureNpcId(guid)
+    if type(guid) ~= "string" or addon.IsSecretValue(guid) then
+        return nil
+    end
+    local fromEncounter = guid:match("^Encounter:(%d+)$")
+    if fromEncounter then
+        return tonumber(fromEncounter)
+    end
+    local npcId = select(6, strsplit("-", guid))
+    return npcId and tonumber(npcId) or nil
+end

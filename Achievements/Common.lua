@@ -30,6 +30,10 @@ local select = select
 local GetPlayerPresetFromSettings = addon and addon.GetPlayerPresetFromSettings
 
 local function getNpcIdFromGUID(guid)
+    -- Same result as strsplit for a plain GUID. Returns nil for a secret GUID instead of erroring.
+    if addon.ParseCreatureNpcId then
+        return addon.ParseCreatureNpcId(guid)
+    end
     if not guid then
         return nil
     end
@@ -696,12 +700,12 @@ function M.registerQuestAchievement(cfg)
             lastKillLogGUID, lastKillLogTime = guid, now
             addon.EventLogAdd(msg)
         end
-        local killFunc = function(destGUID)
+        local killFunc = function(destGUID, npcIdHint)
             if state.completed or not belowMax() then
                 return false
             end
             
-            local destId = getNpcIdFromGUID(destGUID)
+            local destId = tonumber(npcIdHint) or getNpcIdFromGUID(destGUID)
             local progressTable = GetProgress()
             local killValidated = false
             local idNum = nil -- For REQUIRED_KILLS

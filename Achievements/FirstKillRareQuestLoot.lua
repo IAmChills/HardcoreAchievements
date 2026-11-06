@@ -18,6 +18,10 @@ local CreateFrame = CreateFrame
 local GetItemCount = GetItemCount
 
 local function getNpcIdFromGUID(guid)
+    -- Same result as strsplit for a plain GUID. Returns nil for a secret GUID instead of erroring.
+    if addon.ParseCreatureNpcId then
+        return addon.ParseCreatureNpcId(guid)
+    end
     if not guid then return nil end
     local _, _, _, _, _, npcId = strsplit("-", guid)
     return npcId and tonumber(npcId) or nil

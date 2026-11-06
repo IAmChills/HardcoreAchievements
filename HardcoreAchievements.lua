@@ -2049,14 +2049,18 @@ local function MarkRowCompleted(row, cdbParam)
         Profession.NotifyRowCompleted(row)
     end
     
-    -- Broadcast achievement completion (skip for retroactive completions on first load to avoid guild spam)
+    -- Broadcast achievement completion (skip for retroactive completions on first load to avoid guild spam).
+    -- Forever rejects EMOTE from addon code unless a key or click caused the call, and completion runs
+    -- from a timer, so the emote is skipped there. Guild chat is unchanged.
     if not skipBroadcastForRetroactive then
         local playerName = (addon and addon.GetPlayerShowcaseName and addon.GetPlayerShowcaseName()) or UnitName("player") or ""
         local achievementTitle = (row.Title and row.Title.GetText and row.Title:GetText()) or row.title or "Unknown Achievement"
-        -- Emote text is prefixed with the full character name by the client, so leave the name slot empty.
-        local broadcastMessage = string_format(ACHIEVEMENT_BROADCAST, "", achievementTitle)
-        broadcastMessage = broadcastMessage:gsub("^%s+", "")
-        SendChatMessage(broadcastMessage, "EMOTE")
+        if not (addon and addon.Restrictions and addon.Restrictions.combatLog) then
+            -- Emote text is prefixed with the full character name by the client, so leave the name slot empty.
+            local broadcastMessage = string_format(ACHIEVEMENT_BROADCAST, "", achievementTitle)
+            broadcastMessage = broadcastMessage:gsub("^%s+", "")
+            SendChatMessage(broadcastMessage, "EMOTE")
+        end
 
         if (addon and addon.ShouldAnnounceInGuildChat) and addon.ShouldAnnounceInGuildChat() and IsInGuild() then
             local link = nil
@@ -4907,6 +4911,12 @@ do
         addon.AchEvt = achEvt
         -- Track recently processed kills to prevent duplicate processing
         local recentKills = {}
+        -- Cross-path dedupe between a GUID kill and ENCOUNTER_END for the same boss death. Stored on
+        -- the frame so this block does not add locals: the file is at Lua's 200-local limit. Keyed by
+        -- npcId and only consulted by the other path, so repeated open-world kills of one npcId are
+        -- unaffected. Bosses do not respawn inside the 10 second window.
+        achEvt.guidClaimedAt = {}
+        achEvt.encounterClaimedAt = {}
         local function clearRecentKill(destGUID)
             C_Timer.After(1, function()
                 recentKills[destGUID] = nil
@@ -5009,14 +5019,15 @@ do
         local _lastGuid = nil
         local _lastNpcId = nil
         local function getNpcIdFromGUID(guid)
-            if not guid then
+            if not guid or (addon.IsSecretValue and addon.IsSecretValue(guid)) then
                 return nil
             end
             if guid == _lastGuid then
                 return _lastNpcId
             end
-            local _, _, _, _, _, npcId = strsplit("-", guid)
-            local result = npcId and tonumber(npcId) or nil
+            -- ParseCreatureNpcId matches the historical strsplit for plain GUIDs and also accepts the
+            -- "Encounter:<npcId>" key Forever uses when a boss kill has no readable GUID.
+            local result = addon.ParseCreatureNpcId and addon.ParseCreatureNpcId(guid) or nil
             _lastGuid = guid
             _lastNpcId = result
             return result
@@ -5298,6 +5309,7 @@ do
             local tracked = npcKillTrackContext(npcId)
             return tracked
         end
+        addon.IsNpcTrackedForAchievement = isNpcTrackedForAchievement
 
         -- Module-level table reused across calls to avoid per-call allocation and GC pressure.
         -- Safe because callers iterate the result synchronously before the next CLEU event fires.
@@ -5488,7 +5500,7 @@ do
 
             local anyAwarded = false
             for _, row in ipairs(rowsWithTracker) do
-                if row.killTracker(destGUID) then
+                if row.killTracker(destGUID, npcId) then
                     MarkRowCompleted(row)
                     local iconTex = (row.frame and row.frame.Icon and row.frame.Icon.GetTexture and row.frame.Icon:GetTexture()) or row.icon or 136116
                     local titleText = (row.frame and row.frame.Title and row.frame.Title.GetText and row.frame.Title:GetText()) or row.title or "Achievement"
@@ -5512,8 +5524,18 @@ do
         end
 
         local function processKill(destGUID, npcId)
-            if not destGUID or recentKills[destGUID] then
+            if not destGUID or (addon.IsSecretValue and addon.IsSecretValue(destGUID)) or recentKills[destGUID] then
                 return
+            end
+
+            local isEncounter = type(destGUID) == "string" and destGUID:sub(1, 10) == "Encounter:"
+            local now = GetTime()
+            if not isEncounter and npcId and achEvt.encounterClaimedAt[npcId]
+                and (now - achEvt.encounterClaimedAt[npcId]) < 10 then
+                return
+            end
+            if not isEncounter and npcId then
+                achEvt.guidClaimedAt[npcId] = now
             end
 
             -- Capture solo status synchronously while game state is current
@@ -5544,27 +5566,40 @@ do
         end
         
         -- Entry point for clients that cannot register COMBAT_LOG_EVENT_UNFILTERED (Forever). The caller
-        -- decides credit itself, because the npcTapDenied and npcsInCombat gates the PARTY_KILL branch
-        -- relies on are fed by combat log events that never arrive there. See Forever\KillTracking.lua.
+        -- decides credit itself. The rare/quest-loot hook is the caller's job: PARTY_KILL runs it for
+        -- every creature, while the UNIT_DIED fallback must not. See Forever\KillTracking.lua.
         if addon then
-            addon.AwardKillFromExternalSource = function(destGUID)
-                if type(destGUID) ~= "string" or destGUID:sub(1, 9) ~= "Creature-" then
+            addon.AwardKillFromExternalSource = function(destGUID, npcIdHint)
+                if type(destGUID) ~= "string" or (addon.IsSecretValue and addon.IsSecretValue(destGUID)) then
+                    return false
+                end
+                if destGUID:sub(1, 9) ~= "Creature-" then
                     return false
                 end
 
-                local npcId = getNpcIdFromGUID(destGUID)
+                local npcId = tonumber(npcIdHint) or getNpcIdFromGUID(destGUID)
                 if not npcId then
                     return false
                 end
 
-                -- Same order as the PARTY_KILL branch: the rare/quest-loot hook runs before processKill.
-                local onRareQuestLootKill = addon.FirstKillRareQuestLoot_OnPartyKill
-                if onRareQuestLootKill then
-                    onRareQuestLootKill(destGUID)
-                end
-
                 processKill(destGUID, npcId)
                 clearCombatTrackingForGUID(destGUID)
+                return true
+            end
+
+            -- Boss credit from ENCOUNTER_END, which identifies the creature without a GUID. The dungeon
+            -- kill tracker still applies the player's level, party size, and average-party-level snapshot.
+            addon.AwardKillFromEncounter = function(_, creatureID)
+                creatureID = tonumber(creatureID)
+                if not creatureID then
+                    return false
+                end
+                local now = GetTime()
+                if achEvt.guidClaimedAt[creatureID] and (now - achEvt.guidClaimedAt[creatureID]) < 10 then
+                    return false
+                end
+                achEvt.encounterClaimedAt[creatureID] = now
+                processKill("Encounter:" .. creatureID, creatureID)
                 return true
             end
         end
