@@ -376,8 +376,12 @@ function sv.writeCurrentMeta(cdb)
         return
     end
     cdb.meta = cdb.meta or {}
-    cdb.meta.name = UnitName and UnitName("player") or cdb.meta.name
-    cdb.meta.realm = GetRealmName and GetRealmName() or cdb.meta.realm
+    cdb.meta.name = (addon.GetPlayerFullName and addon.GetPlayerFullName())
+        or (UnitName and UnitName("player"))
+        or cdb.meta.name
+    cdb.meta.realm = (addon.GetPlayerRealmLabel and addon.GetPlayerRealmLabel())
+        or (GetRealmName and GetRealmName())
+        or cdb.meta.realm
     cdb.meta.className = UnitClass and UnitClass("player") or cdb.meta.className
     cdb.meta.race = UnitRace and UnitRace("player") or cdb.meta.race
     cdb.meta.level = UnitLevel and UnitLevel("player") or cdb.meta.level
@@ -2910,10 +2914,17 @@ local minimapRegistered = false
 local function EnsureMinimapDB()
     local db = EnsureDB()
     if not db then return nil end
-    db.minimap = db.minimap or { hide = false, position = 45 }
+    db.minimap = db.minimap or { hide = false, minimapPos = 45 }
     if db.minimap.hide == nil then
         db.minimap.hide = false
     end
+    if db.minimap.minimapPos == nil then
+        db.minimap.minimapPos = 45
+    end
+    -- Drop legacy root keys from when LibDBIcon was registered against the account DB.
+    db.minimapPos = nil
+    db.hide = nil
+    db.minimap.position = nil
     return db, db.minimap
 end
 
@@ -2939,6 +2950,14 @@ local function InitializeMinimapButton()
             text = "HardcoreAchievements",
             icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\HardcoreAchievementsButton.png",
             OnClick = function(self, button)
+                -- Forever hosts dashboard/leaderboard on LegacySystemFrame; opening it
+                -- during combat lockdown raises ADDON_ACTION_BLOCKED.
+                if addon and addon.IsForeverCharacterUI and InCombatLockdown and InCombatLockdown()
+                    and ((button == "LeftButton" and not IsShiftKeyDown())
+                        or (button == "RightButton" and not IsShiftKeyDown())) then
+                    print("|cff008066[Hardcore Achievements]|r Cannot open during combat.")
+                    return
+                end
                 if button == "LeftButton" and not IsShiftKeyDown() then
                     -- Always open Dashboard, regardless of useCharacterPanel setting
                     if addon and addon.Dashboard and addon.Dashboard.Toggle then
@@ -2986,23 +3005,21 @@ local function InitializeMinimapButton()
         })
     end
 
-    -- Register once; then show.
+    -- Register once against db.minimap so hide + minimapPos live in one table.
     if not minimapRegistered then
-        LDBIcon:Register("HardcoreAchievements", minimapDataObject, db)
+        LDBIcon:Register("HardcoreAchievements", minimapDataObject, minimapDB)
         minimapRegistered = true
     end
     LDBIcon:Show("HardcoreAchievements")
 end
 
 local function SetMinimapButtonShown(shown)
-    local db, minimapDB = EnsureMinimapDB()
-    if not db or not minimapDB then return end
+    local _, minimapDB = EnsureMinimapDB()
+    if not minimapDB then return end
 
-    local hide = not shown
-    minimapDB.hide = hide
-    db.hide = hide
+    minimapDB.hide = not shown
 
-    if hide then
+    if minimapDB.hide then
         if LDBIcon then
             LDBIcon:Hide("HardcoreAchievements")
         end

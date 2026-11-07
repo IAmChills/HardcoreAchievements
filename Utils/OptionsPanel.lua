@@ -52,7 +52,7 @@ local function IsMinimapButtonShown()
     if not db then
         return true
     end
-    db.minimap = db.minimap or { hide = false, position = 45 }
+    db.minimap = db.minimap or { hide = false, minimapPos = 45 }
     return db.minimap.hide ~= true
 end
 
@@ -65,9 +65,8 @@ local function SetMinimapButtonShown(shown)
     if not db then
         return
     end
-    db.minimap = db.minimap or { hide = false, position = 45 }
+    db.minimap = db.minimap or { hide = false, minimapPos = 45 }
     db.minimap.hide = not shown
-    db.hide = not shown
 end
 
 -- Helper function to check if screenshots are disabled (called before Screenshot in HardcoreAchievements.lua)

@@ -1134,8 +1134,8 @@ local function GetLeaderboardLocalCharacterKey()
     if lb and lb.GetLeaderboardRowKey then
         return lb.GetLeaderboardRowKey()
     end
-    local name, realm = UnitName("player")
-    realm = realm or GetRealmName()
+    local name = (addon.GetPlayerFullName and addon.GetPlayerFullName()) or UnitName("player")
+    local realm = (addon.GetPlayerRealmLabel and addon.GetPlayerRealmLabel()) or GetRealmName()
     if not name or name == "" then
         return nil
     end
@@ -1164,7 +1164,8 @@ local function CanLeaderboardInvite(name, rowData)
   if not rowData or rowData.online ~= true then
     return false
   end
-  if (rowData.realm or "") ~= (GetRealmName() or "") then
+  local myRealm = (addon.GetPlayerRealmLabel and addon.GetPlayerRealmLabel()) or GetRealmName() or ""
+  if (rowData.realm or "") ~= myRealm then
     return false
   end
   if (rowData.faction or "") ~= (UnitFactionGroup("player") or "") then
@@ -1663,7 +1664,8 @@ local function BindLeaderboardRowData(row, rowData, localCharacterKey, viewerGui
     row.tooltipLines[#row.tooltipLines + 1] = GetLeaderboardTooltipLine("Guild", rowData.guild)
   end
   if rowData.realm ~= "" then
-    row.tooltipLines[#row.tooltipLines + 1] = GetLeaderboardTooltipLine("Realm", rowData.realm)
+    local realmLabel = (addon.IsForeverClient and addon.IsForeverClient()) and "Ruleset" or "Realm"
+    row.tooltipLines[#row.tooltipLines + 1] = GetLeaderboardTooltipLine(realmLabel, rowData.realm)
   end
   local ver = rowData.version
   if (not ver or ver == "" or ver == "0.0.0") and localCharacterKey and rowData.key == localCharacterKey then
@@ -1989,7 +1991,7 @@ SetDashboardFooterControlsForLeaderboard = function(enabled, playerCount)
     end
 
     setupScopeCheckbox(list, "Guild", "guild")
-    setupScopeCheckbox(grid, "Realm", "realm")
+    setupScopeCheckbox(grid, (addon.IsForeverClient and addon.IsForeverClient()) and "Ruleset" or "Realm", "realm")
     setupScopeCheckbox(solo, "Faction", "faction")
     if deadScope then
       deadScope:Show()
@@ -5012,6 +5014,9 @@ end
 -- Show/Hide Dashboard functions
 function DASHBOARD:Show()
   if addon.ShowLegacyAchievementsPage and not addon._hcaEmbeddingDashboard then
+    if InCombatLockdown and InCombatLockdown() then
+      return
+    end
     if addon.ShowLegacyAchievementsPage() then
       return
     end

@@ -427,9 +427,10 @@ local function OnPresenceValidate(key, data, context)
 end
 
 --- Old "Name-Realm" row key used before switching to UnitGUID; migrate once to the GUID key.
+--- Forever must not treat UnitName's surname as a realm.
 local function LegacyNameRealmKey()
-    local name, realm = UnitName("player")
-    realm = realm or GetRealmName()
+    local name = (addon.GetPlayerFullName and addon.GetPlayerFullName()) or UnitName("player")
+    local realm = (addon.GetPlayerRealmLabel and addon.GetPlayerRealmLabel()) or GetRealmName()
     if not name or name == "" then
         return nil
     end
@@ -636,8 +637,8 @@ function Sync:BuildLocalRow(options)
     end
 
     return {
-        name = name,
-        realm = GetRealmName() or "",
+        name = (addon.GetPlayerFullName and addon.GetPlayerFullName()) or name,
+        realm = (addon.GetPlayerRealmLabel and addon.GetPlayerRealmLabel()) or GetRealmName() or "",
         guild = GuildForPublish(options.publishReason),
         faction = UnitFactionGroup("player") or "",
         class = classEnglish,
@@ -659,6 +660,9 @@ function Sync:BuildLocalRow(options)
 end
 
 function Sync:PublishLocal(reason)
+    if addon.IsForeverChatRestricted and addon.IsForeverChatRestricted() then
+        return false
+    end
     if not LibP2PDB or not self.db then
         return false
     end

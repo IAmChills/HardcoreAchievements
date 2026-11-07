@@ -47,3 +47,11 @@ addon.Restrictions.secretValues = true
 addon.Restrictions.combatLog = true
 addon.Restrictions.partyKillEvent = false
 addon.Restrictions.encounterEndEvent = false
+
+-- Forever is realmless: GetRealmName() can return an internal shard label
+-- ("CAMWOW US2 Realm 3 PvE"). Leaderboard and guild-first scope use
+-- addon.GetPlayerRealmLabel() so peers share a ruleset (Normal / PvP / Roleplay / Roleplay PvP).
+-- UnitName's second return is a surname, not a realm — never use it as one.
+--
+-- Enum.AddOnRestrictionType.Chat, when active, blocks SendAddonMessage. Leaderboard sync
+-- (LibP2PDB over PARTY/GUILD/YELL) cannot run then; PublishLocal logs once and skips.

@@ -50,9 +50,39 @@ function addon.RunForeverProbe()
     RestrictionState("Encounter", restriction and restriction.Encounter)
     RestrictionState("Map", restriction and restriction.Map)
     RestrictionState("Chat", restriction and restriction.Chat)
+    Line("GetRealmName=" .. tostring(GetRealmName and GetRealmName()))
+    Line("ruleset=" .. tostring(addon.GetPlayerRulesetLabel and addon.GetPlayerRulesetLabel()))
+    Line("fullName=" .. tostring(addon.GetPlayerFullName and addon.GetPlayerFullName()))
+    local first, second = UnitName("player")
+    Line("UnitName first=" .. tostring(first) .. " second=" .. tostring(second))
+
+    local inGroup = IsInGroup and IsInGroup()
+    local members = GetNumGroupMembers and GetNumGroupMembers() or 0
+    Line("grouped=" .. tostring(inGroup) .. " members=" .. tostring(members)
+        .. " guild=" .. tostring(IsInGuild and IsInGuild()))
+    Line("chatRestricted=" .. tostring(addon.IsForeverChatRestricted and addon.IsForeverChatRestricted()))
+
+    local lb = addon.Leaderboard
+    local sync = lb and lb.Sync
+    local rowCount = 0
+    if lb and lb.GetDB then
+        local rows = lb:GetDB().rows
+        if type(rows) == "table" then
+            for _ in pairs(rows) do
+                rowCount = rowCount + 1
+            end
+        end
+    end
+    Line("leaderboardSync=" .. tostring(sync ~= nil)
+        .. " rows=" .. tostring(rowCount)
+        .. " libP2PDB=" .. tostring(LibStub and LibStub("LibP2PDB", true) ~= nil))
+    if sync and sync.PublishLocal then
+        local published = sync:PublishLocal("probe")
+        Line("publishLocal=" .. tostring(published))
+    end
 
     if not UnitExists("target") then
-        Line("no target")
+        Line("no combat target (optional for kill probe)")
         return
     end
 

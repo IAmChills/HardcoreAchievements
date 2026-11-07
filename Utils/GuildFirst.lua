@@ -274,8 +274,8 @@ end
 --- @param scope string|table|nil Scope from achievement definition
 --- @return string? scopeKey Returns nil if scope is invalid or player can't participate
 local function GetScopeKey(scope)
-    local realm = GetRealmName()
-    if realm == "" then
+    local realm = (addon.GetPlayerRealmLabel and addon.GetPlayerRealmLabel()) or GetRealmName()
+    if not realm or realm == "" then
         return nil
     end
 
@@ -1035,8 +1035,8 @@ local function NotifyGuildScopeChanged()
 end
 
 local function RefreshGuildScope()
-    local realm = GetRealmName()
-    if realm == "" then return end
+    local realm = (addon.GetPlayerRealmLabel and addon.GetPlayerRealmLabel()) or GetRealmName()
+    if not realm or realm == "" then return end
 
     local guildName = GetGuildName()
     local newKey = (guildName and guildName ~= "") and ("Guild@" .. guildName .. "@" .. realm) or nil
@@ -1108,8 +1108,8 @@ initFrame:SetScript("OnEvent", function(_, event)
     end
 
     -- Pre-init server-first (always available)
-    local realm = GetRealmName()
-    if realm ~= "" then
+    local realm = (addon.GetPlayerRealmLabel and addon.GetPlayerRealmLabel()) or GetRealmName()
+    if realm and realm ~= "" then
         EnsureDBForScope("Server@" .. realm)
     end
 

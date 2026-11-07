@@ -1075,6 +1075,21 @@ local function HandleSlashCommand(msg)
         else
             print("|cffff0000[Hardcore Achievements]|r Achievement leaderboard is not available yet.")
         end
+    elseif command == "probe" then
+        if addon and addon.RunForeverProbe then
+            addon.RunForeverProbe()
+        else
+            print("|cff008066[Hardcore Achievements]|r /hca probe is only available on the Forever client")
+        end
+    elseif command == "killdebug" then
+        if not (addon and addon.SetForeverKillDebug) then
+            print("|cff008066[Hardcore Achievements]|r /hca killdebug is only available on the Forever client")
+        else
+            local sub = args[2] and string.lower(args[2]) or ""
+            local enable = sub == "on" or (sub ~= "off" and not addon.ForeverKillDebug)
+            addon.SetForeverKillDebug(enable)
+            print("|cff008066[Hardcore Achievements]|r Kill debug " .. (enable and "enabled" or "disabled"))
+        end
     elseif command == "debug" then
         -- Debug toggle command
         if args[2] and string.lower(args[2]) == "on" then

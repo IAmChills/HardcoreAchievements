@@ -124,7 +124,15 @@ local function RestoreBlizzardContent(frame)
         return
     end
     local current = frame.currentPage or frame.CurrentPage
-    if current and current ~= achievementsPage and current.Show then
+    -- Forever stores a 1-based page index, not a frame.
+    if type(current) == "number" then
+        if type(frame.SelectPage) == "function" then
+            pcall(frame.SelectPage, frame, current)
+            return
+        end
+        current = type(frame.Pages) == "table" and frame.Pages[current] or nil
+    end
+    if current and current ~= achievementsPage and type(current) == "table" and current.Show then
         current:Show()
         return
     end
@@ -292,6 +300,10 @@ function addon.ShowLegacyAchievementsPage()
     if showingPage then
         return true
     end
+    -- Forever LegacySystemFrame cannot be opened safely during combat lockdown.
+    if InCombatLockdown and InCombatLockdown() then
+        return false
+    end
     showingPage = true
     addon._hcaShowingLegacyPage = true
     wantAchievements = true
@@ -362,6 +374,10 @@ function addon.HideLegacyAchievementsPage()
 end
 
 function addon.ToggleLegacyAchievementsPage()
+    -- Swallow the click in combat so callers do not fall through to a standalone open.
+    if InCombatLockdown and InCombatLockdown() then
+        return true
+    end
     TryLoadLegacyAddon()
     local frame = GetHostFrame()
     if not frame then

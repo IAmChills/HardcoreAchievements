@@ -325,3 +325,94 @@ function addon.ParseCreatureNpcId(guid)
     local npcId = select(6, strsplit("-", guid))
     return npcId and tonumber(npcId) or nil
 end
+
+--- Forever TOC loads Restrictions.lua; Classic/TBC never do.
+function addon.IsForeverClient()
+    return addon.Restrictions and addon.Restrictions.combatLog and true or false
+end
+
+local function ForeverTokenInRealm(raw, token)
+    if type(raw) ~= "string" or raw == "" then
+        return false
+    end
+    local lower = raw:lower()
+    return lower:find("%f[%w]" .. token .. "%f[%W]") ~= nil
+        or lower:find("^" .. token .. "%f[%W]") ~= nil
+        or lower:find("%f[%w]" .. token .. "$") ~= nil
+end
+
+--- Forever is realmless: players pick a ruleset (Normal / PvP / Roleplay / Roleplay PvP).
+--- Prefer C_GameRules when present; otherwise infer from GetRealmName()'s shard label.
+function addon.GetPlayerRulesetLabel()
+    local gameRule = Enum and Enum.GameRule
+    local isActive = C_GameRules and C_GameRules.IsGameRuleActive
+    if type(isActive) == "function" and gameRule then
+        local pvp = gameRule.PvPRuleset and isActive(gameRule.PvPRuleset)
+        local rp = gameRule.RPRuleset and isActive(gameRule.RPRuleset)
+        if pvp and rp then
+            return "Roleplay PvP"
+        end
+        if rp then
+            return "Roleplay"
+        end
+        if pvp then
+            return "PvP"
+        end
+        return "Normal"
+    end
+
+    local raw = (GetRealmName and GetRealmName()) or ""
+    local hasPvP = ForeverTokenInRealm(raw, "pvp")
+    local hasRP = ForeverTokenInRealm(raw, "rp") or ForeverTokenInRealm(raw, "roleplay")
+    if hasRP and hasPvP then
+        return "Roleplay PvP"
+    end
+    if hasRP then
+        return "Roleplay"
+    end
+    if hasPvP then
+        return "PvP"
+    end
+    if ForeverTokenInRealm(raw, "pve") or ForeverTokenInRealm(raw, "normal") then
+        return "Normal"
+    end
+    return raw ~= "" and raw or "Normal"
+end
+
+--- Leaderboard / meta "realm" value. Forever stores the ruleset; Classic/TBC keep GetRealmName().
+function addon.GetPlayerRealmLabel()
+    if addon.IsForeverClient() then
+        return addon.GetPlayerRulesetLabel()
+    end
+    return (GetRealmName and GetRealmName()) or ""
+end
+
+--- Forever UnitName's second return is a surname, not a realm. Prefer GetUnitName's full name.
+function addon.GetPlayerFullName()
+    if GetUnitName then
+        local full = GetUnitName("player", false) or GetUnitName("player", true)
+        if type(full) == "string" and full ~= "" then
+            return full
+        end
+    end
+    local first, second = UnitName("player")
+    if type(first) ~= "string" or first == "" then
+        return nil
+    end
+    if addon.IsForeverClient() and type(second) == "string" and second ~= "" then
+        return first .. " " .. second
+    end
+    return first
+end
+
+function addon.IsForeverChatRestricted()
+    if not addon.IsForeverClient() then
+        return false
+    end
+    local restriction = Enum and Enum.AddOnRestrictionType and Enum.AddOnRestrictionType.Chat
+    if not (C_RestrictedActions and C_RestrictedActions.IsAddOnRestrictionActive and restriction) then
+        return false
+    end
+    local ok, active = pcall(C_RestrictedActions.IsAddOnRestrictionActive, restriction)
+    return ok and active and true or false
+end
