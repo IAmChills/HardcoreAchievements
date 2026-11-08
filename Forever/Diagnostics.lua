@@ -61,6 +61,10 @@ function addon.RunForeverProbe()
     Line("grouped=" .. tostring(inGroup) .. " members=" .. tostring(members)
         .. " guild=" .. tostring(IsInGuild and IsInGuild()))
     Line("chatRestricted=" .. tostring(addon.IsForeverChatRestricted and addon.IsForeverChatRestricted()))
+    if addon.EnsureHCACommChannel then
+        addon.EnsureHCACommChannel()
+    end
+    Line("HCA channel index=" .. tostring(addon.GetHCACommChannelIndex and addon.GetHCACommChannelIndex()))
 
     local lb = addon.Leaderboard
     local sync = lb and lb.Sync

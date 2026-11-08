@@ -790,7 +790,7 @@ local function CreateOptionsPanel()
     -- Credits text
     local creditsText = panel:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
     creditsText:SetPoint("TOPLEFT", creditsCategoryTitle, "BOTTOMLEFT", 0, -8)
-    creditsText:SetText("Special thanks to:\n\n|cffff8000Viviway|r for the help with the addon and the overall UI design.\n|cffff8000Tulhur|r for the help with tracking down bugs and all his suggestions.\n|cffff8000BonniesDad|r for supplying the Ultra Hardcore addon and allowing Hardcore Achivements to thrive.\n|cffff8000CDank|r for creating the Hardcore TBC community and spreading the word about Hardcore Achivements.\n|cffff8000mocktail|r for creating the Hardcore addon and allowing Hardcore Achivements to thrive.")
+    creditsText:SetText("Special thanks to:\n\n|cffff8000Viviway|r for the help with the addon and the overall UI design.\n|cffff8000Tulhur|r for the help with tracking down bugs and all his suggestions.\n|cffff8000BonniesDad|r for supplying the Ultra Hardcore addon and allowing Hardcore Achivements to thrive.\n|cffff8000CDank|r for creating the Hardcore TBC community and spreading the word about Hardcore Achivements.\n|cffff8000Hardcore Team|r for creating the Hardcore addon and allowing Hardcore Achivements to thrive.\n|cffff8000Erunehtar|r for the help with the addon and the Libraries.")
     creditsText:SetTextColor(0.8, 0.8, 0.8, 1)
     creditsText:SetWidth(600)
     creditsText:SetJustifyH("LEFT")

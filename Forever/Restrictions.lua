@@ -54,4 +54,8 @@ addon.Restrictions.encounterEndEvent = false
 -- UnitName's second return is a surname, not a realm — never use it as one.
 --
 -- Enum.AddOnRestrictionType.Chat, when active, blocks SendAddonMessage. Leaderboard sync
--- (LibP2PDB over PARTY/GUILD/YELL) cannot run then; PublishLocal logs once and skips.
+-- cannot run then; PublishLocal returns false quietly.
+--
+-- Forever\CommChannel.lua joins custom chat channel "HCA". LeaderboardSync passes
+-- channels = { "HCA" } into LibP2PDB:NewDatabase so broadcasts also go CHANNEL by name
+-- (plus stock GUILD/PARTY/RAID/YELL). Classic omits channels; CHANNEL is Classic-disabled.

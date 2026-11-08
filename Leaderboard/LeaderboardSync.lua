@@ -527,9 +527,16 @@ function Sync:Initialize()
 
     local db = LibP2PDB:GetDatabase(DB_PREFIX)
     if not db then
+        -- Forever: also broadcast on custom chat channel "HCA" (name, not index).
+        -- Stock GUILD/PARTY/RAID/YELL stay enabled. Classic omits channels (CHANNEL blocked).
+        local channels
+        if addon.Restrictions and addon.Restrictions.combatLog then
+            channels = { addon.HCA_COMM_CHANNEL_NAME or "HCA" }
+        end
         db = LibP2PDB:NewDatabase({
             prefix = DB_PREFIX,
             version = DB_VERSION,
+            channels = channels,
             onError = addon.LibP2PDBOnError,
             onMigrateDB = OnMigrateDB,
             onMigrateRow = OnMigrateRow,
