@@ -51,15 +51,18 @@ local QUEST_HORDE_ORDERED = {
 local function GetClassicDungeonMasterAchievements()
     local playerFaction = GetPlayerFaction()
     local requiredAchievements = {
-        "VC", "WC", "SFK", "BFD", "RFK", "GNOM", "SM",
-        "RFD", "ULD", "ZF", "MARA", "ST", "BRD", "BRS", "UBRS", "STRAT", "DM", "SCHOLO"
+        "VC", "WC", "SFK", "ESW", "BFD", "RFK", "GNOM", "TDC", "SM", "RFD", "KS", "ULD", "ZF",
+        "AP", "MARA", "ST", "BMH", "BRD", "BRS", "SHT", "UBRS", "STRAT", "DM", "SCHOLO"
     }
     
     -- Add faction-specific dungeons
     if playerFaction == FACTION_HORDE then
         table_insert(requiredAchievements, 1, "RFC")  -- Add at the beginning
+        table_insert(requiredAchievements, 3, "ROL")  -- Add after VC
     elseif playerFaction == FACTION_ALLIANCE then
+        table_insert(requiredAchievements, 1, "HOT")  -- Add at the beginning
         table_insert(requiredAchievements, 6, "STOCK")  -- Add after BFD
+        table_insert(requiredAchievements, 7, "COD")  -- Add after STOCK
     end
     
     return requiredAchievements

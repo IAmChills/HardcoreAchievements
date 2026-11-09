@@ -1377,6 +1377,20 @@ local function registerDungeonAchievement(def)
       [10504] = "Lord Alexei Barov",
       [10502] = "Lady Illucia Barov",
       [1853] = "Darkmaster Gandling",
+      -- Forever dungeons
+      [261306] = "Faldrim Anvilmar",
+      [261316] = "Magmatus",
+      [261311] = "Plunder",
+      [261319] = "Durgen Dirgehammer",
+      [250483] = "Witherfang",
+      [250660] = "The Baron",
+      [256035] = "Viktor the Vile",
+      [250631] = "The Abandoned",
+      [256097] = "Bjork",
+      [250657] = "Rath'mael",
+      [260322] = "Saltspine",
+      [260325] = "Shadetooth",
+      [260326] = "Relic Guardian",
       -- [1200] = "Morbent Fel", -- Duskwood Achievement
       -- [314] = "Eliza", -- Duskwood Achievement
       -- [522] = "Mor'Ladim", -- Duskwood Achievement

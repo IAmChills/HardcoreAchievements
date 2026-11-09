@@ -144,7 +144,7 @@ local KalimdorExplorationZones = {
   { zone = "Mount Hyjal", title = "Mount Hyjal", icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_Zone_MountHyjal.png", points = 10 },
   { zone = "Mulgore", title = "Mulgore", icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_Zone_Mulgore_01.png", points = 10 },
   --{ zone = "Orgrimmar", title = "Orgrimmar", icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_Zone_XXX.png", points = 0 },
-  { zone = "Shen'Dralar", title = "Shen'Dralar", icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_Zone_ShenDralas.png", points = 10 },
+  { zone = "Shen'Dralas", title = "Shen'Dralas", icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_Zone_ShenDralas.png", points = 10 },
   { zone = "Silithus", title = "Silithus", icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_Zone_Silithus_01.png", points = 10 },
   { zone = "Stonetalon Mountains", title = "Stonetalon Mountains", icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_Zone_Stonetalon_01.png", points = 10 },
   { zone = "Tanaris", title = "Tanaris", icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_Zone_Tanaris_01.png", points = 10 },
