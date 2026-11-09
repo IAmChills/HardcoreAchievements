@@ -296,6 +296,22 @@ function M.registerQuestAchievement(cfg)
         return true -- no level cap
     end
 
+    -- New kills use the live player level. levelAtAccept must not let an over-cap kill
+    -- count after the row already failed. Re-kills are allowed only if an under-cap
+    -- levelAtKill was already banked (solo/points refresh after a valid kill).
+    local function canRecordKillAtCurrentLevel()
+        if not MAX_LEVEL or MAX_LEVEL <= 0 then
+            return true
+        end
+        local currentLevel = UnitLevel("player") or 1
+        if currentLevel <= MAX_LEVEL then
+            return true
+        end
+        local progressTable = GetProgress()
+        local levelAtKill = progressTable and tonumber(progressTable.levelAtKill)
+        return levelAtKill ~= nil and levelAtKill <= MAX_LEVEL
+    end
+
     local function setProg(key, val)
         if addon and addon.SetProgress then
             addon.SetProgress(ACH_ID, key, val)
@@ -701,7 +717,7 @@ function M.registerQuestAchievement(cfg)
             addon.EventLogAdd(msg)
         end
         local killFunc = function(destGUID, npcIdHint)
-            if state.completed or not belowMax() then
+            if state.completed or not canRecordKillAtCurrentLevel() then
                 return false
             end
             

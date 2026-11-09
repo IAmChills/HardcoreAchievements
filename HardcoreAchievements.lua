@@ -1088,9 +1088,33 @@ local function IsRowOutleveledImpl(row)
     local questID = row.requiredQuestId or (row._def and row._def.requiredQuestId)
     local questInLog, questReadyForTurnIn = GetQuestLogState(questID)
 
-    -- If the quest is complete and ready to turn in, leveling afterward is still valid.
+    -- Kill/accept level that still counts as under the cap (nil if none / over cap).
+    -- An over-cap levelAtKill wins over levelAtAccept so a late kill cannot revive a fail.
+    local function underCapProgressLevel()
+        if not progress or not row.maxLevel then
+            return nil
+        end
+        local levelAtKill = tonumber(progress.levelAtKill)
+        if levelAtKill then
+            if levelAtKill <= row.maxLevel then
+                return levelAtKill
+            end
+            return nil
+        end
+        local levelAtAccept = tonumber(progress.levelAtAccept)
+        if levelAtAccept and levelAtAccept <= row.maxLevel then
+            return levelAtAccept
+        end
+        return nil
+    end
+
+    -- Quest objectives ready to turn in: leveling after that is still valid only if we have
+    -- under-cap progress. An over-cap kill/accept must not revive an already-failed row.
     if isOverLevel and questID and not (progress and progress.quest) and questReadyForTurnIn then
-        return false
+        if underCapProgressLevel() then
+            return false
+        end
+        return true
     end
 
     -- Check if there's pending turn-in progress (kill completed but quest not turned in)
@@ -1128,9 +1152,14 @@ local function IsRowOutleveledImpl(row)
                     return true -- Mark as outleveled/failed
                 end
                 
-                -- If quest is still in quest log, keep achievement available
+                -- Quest still in log: stay available only if the kill itself was under the cap.
+                -- Over-cap kills after a fail must not flip the row back to available.
                 if questID and questInLog then
-                    return false
+                    local levelAtKill = tonumber(progress.levelAtKill)
+                    if levelAtKill and levelAtKill <= row.maxLevel then
+                        return false
+                    end
+                    return isOverLevel
                 end
             end
         end
