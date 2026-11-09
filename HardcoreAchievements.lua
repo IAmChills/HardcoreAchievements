@@ -2083,10 +2083,9 @@ local function MarkRowCompleted(row, cdbParam)
     end
     
     -- Broadcast achievement completion (skip for retroactive completions on first load to avoid guild spam).
-    -- Forever rejects EMOTE from addon code unless a key or click caused the call, and completion runs
-    -- from a timer, so the emote is skipped there. Guild chat is unchanged.
-    -- Name slot stays empty: emote is client-prefixed, guild chat already shows the sender. Using
-    -- GetPlayerShowcaseName() here re-injected the Forever first name into the sentence.
+    -- Forever blocks automated EMOTE (needs a hardware event); Classic still sends here.
+    -- Forever queues the emote onto the toast and sends it from the toast click handler instead.
+    -- Guild chat is allowed on both clients. Name slot stays empty: emote is client-prefixed.
     if not skipBroadcastForRetroactive then
         local achievementTitle = (row.Title and row.Title.GetText and row.Title:GetText()) or row.title or "Unknown Achievement"
         if not (addon and addon.IsForeverClient and addon.IsForeverClient()) then
@@ -2491,6 +2490,12 @@ local function GetOrCreateAchToastFrame()
         if button ~= "LeftButton" then
             return
         end
+        -- Forever: EMOTE requires a hardware event; this click is that event.
+        local pendingEmote = self.pendingEmote
+        if pendingEmote then
+            self.pendingEmote = nil
+            SendChatMessage(pendingEmote, "EMOTE")
+        end
         if self.achId and addon and addon.OpenDashboardToAchievement then
             addon.OpenDashboardToAchievement(self.achId)
         elseif addon and addon.Dashboard and addon.Dashboard.Toggle then
@@ -2572,6 +2577,13 @@ function achToast.ShowNow(iconTex, title, pts, achIdOrRow, announce)
     f.achId = achId
     f.icon:SetTexture(tex)
     f.name:SetText(title or "")
+
+    -- Forever cannot auto-emote from the award path; stash text for the toast click handler.
+    f.pendingEmote = nil
+    if not skipBroadcastForRetroactive and addon and addon.IsForeverClient and addon.IsForeverClient() then
+        local broadcastMessage = string_format(ACHIEVEMENT_BROADCAST, "", title or "Unknown Achievement")
+        f.pendingEmote = broadcastMessage:gsub("^%s+", "")
+    end
 
     if finalPoints == 0 then
         f.points:SetText("")
