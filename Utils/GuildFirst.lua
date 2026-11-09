@@ -131,10 +131,6 @@ local function CreateGuildFirstToast()
     unlocked:SetPoint("TOP", f, "TOP", 12, -22) -- -22 for bronze, -19 for dark bronze
     unlocked:SetText(ACHIEVEMENT_UNLOCKED or "Achievement Unlocked")
 
-    local points = f:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    points:SetPoint("CENTER", f, "RIGHT", -31, 2) -- -31, 2 for bronze, -32, 9 for dark bronze
-    f.points = points
-
     function f:PlayFade(duration)
         self.fadeT = 0
         self.fadeDuration = duration
@@ -146,12 +142,28 @@ local function CreateGuildFirstToast()
     clipper:SetFrameLevel(f:GetFrameLevel() + 3)
     clipper:SetSize(420, 42)
     clipper:SetPoint("CENTER", bg, "CENTER", 20, 0)
+    clipper:EnableMouse(false)
     local model = CreateFrame("PlayerModel", nil, clipper)
     model:SetAllPoints(clipper)
     model:SetAlpha(0.55)
     model:SetModel(166349)
     model:SetModelScale(0.8)
+    model:EnableMouse(false)
     f.shineModel = model
+
+    local pointsFrame = CreateFrame("Frame", nil, f)
+    pointsFrame:SetAllPoints(f)
+    pointsFrame:SetFrameLevel(f:GetFrameLevel() + 4)
+    pointsFrame:EnableMouse(false)
+    local points = pointsFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    points:SetPoint("CENTER", f, "RIGHT", -31, 2) -- -31, 2 for bronze, -32, 9 for dark bronze
+    f.points = points
+    local noPoints = pointsFrame:CreateTexture(nil, "OVERLAY")
+    noPoints:SetTexture("Interface\\AddOns\\HardcoreAchievements\\Images\\noPoints.png")
+    noPoints:SetSize(14, 18)
+    noPoints:SetPoint("CENTER", f, "RIGHT", -31, 2)
+    noPoints:Hide()
+    f.noPoints = noPoints
 
     f:EnableMouse(true)
     f:SetScript("OnMouseUp", function(self, button)
@@ -192,7 +204,9 @@ local function ShowGuildFirstToast(iconTex, title, pts, achId)
         if finalPoints == 0 then
             f.points:SetText("")
             f.points:Hide()
+            f.noPoints:Show()
         else
+            f.noPoints:Hide()
             f.points:SetText(tostring(finalPoints))
             f.points:Show()
         end
