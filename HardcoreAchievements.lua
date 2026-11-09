@@ -2085,12 +2085,11 @@ local function MarkRowCompleted(row, cdbParam)
     -- Broadcast achievement completion (skip for retroactive completions on first load to avoid guild spam).
     -- Forever rejects EMOTE from addon code unless a key or click caused the call, and completion runs
     -- from a timer, so the emote is skipped there. Guild chat is unchanged.
+    -- Name slot stays empty: emote is client-prefixed, guild chat already shows the sender. Using
+    -- GetPlayerShowcaseName() here re-injected the Forever first name into the sentence.
     if not skipBroadcastForRetroactive then
-        local playerName = (addon and addon.GetPlayerShowcaseName and addon.GetPlayerShowcaseName()) or UnitName("player") or ""
         local achievementTitle = (row.Title and row.Title.GetText and row.Title:GetText()) or row.title or "Unknown Achievement"
         if not (addon and addon.IsForeverClient and addon.IsForeverClient()) then
-            -- Emote text is prefixed with the full character name by the client, so leave the name slot empty.
-            -- Forever rejects insecure EMOTE from timer-driven completion; guild announce still runs below.
             local broadcastMessage = string_format(ACHIEVEMENT_BROADCAST, "", achievementTitle)
             broadcastMessage = broadcastMessage:gsub("^%s+", "")
             SendChatMessage(broadcastMessage, "EMOTE")
@@ -2103,7 +2102,7 @@ local function MarkRowCompleted(row, cdbParam)
             if achIdForLink and type(getBracket) == "function" then
                 link = getBracket(achIdForLink)
             end
-            local guildMessage = string_format(ACHIEVEMENT_BROADCAST, playerName, link or achievementTitle)
+            local guildMessage = string_format(ACHIEVEMENT_BROADCAST, "", link or achievementTitle)
             guildMessage = guildMessage:gsub("^%s+", "")
             SendChatMessage(guildMessage, "GUILD")
         end
