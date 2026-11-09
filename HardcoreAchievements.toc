@@ -1,7 +1,7 @@
 ﻿## Interface: 11509, 20506, 16001
 ## Title: HardcoreAchievements
 ## Author: Chills
-## Version: 2.0.5
+## Version: 2.0.6
 ## Notes: Hardcore achievements system
 ## OptionalDeps: Ace3, CallbackHandler-1.0, LibDataBroker-1.1, LibDBIcon-1.0, LibStub, LibUIDropDownMenu
 ## SavedVariables: HardcoreAchievementsDB
@@ -17,6 +17,7 @@ embeds.xml
 # locals at load time, so it has to exist before they run.
 Utils\Compat.lua
 Forever\Restrictions.lua [AllowLoadGameType camelot, mainline]
+Forever\CommChannel.lua [AllowLoadGameType camelot, mainline]
 Forever\LegacyFrameTab.lua [AllowLoadGameType camelot, mainline]
 Forever\LegacyFramePanel.lua [AllowLoadGameType camelot, mainline]
 

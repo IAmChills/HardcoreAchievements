@@ -3,7 +3,12 @@ local addonName, addon = ...
 -- =========================================================
 -- Forever addon restrictions
 --
--- Forever carries over retail's "addon disarmament" rules. Confirmed by probe on this client:
+-- Forever identity is addon.IsForeverClient() (Interface 16xxx) in Utils\Compat.lua.
+-- This file only records capability flags for that client. TOC still gates the load with
+-- AllowLoadGameType camelot/mainline; the IsForeverClient guard below also keeps real
+-- retail from picking up these flags if the mainline TOC tag loads this file there.
+--
+-- Confirmed by probe on this client:
 --
 --   COMBAT_LOG_EVENT_UNFILTERED    blocked
 --   CHAT_MSG_COMBAT_HOSTILE_DEATH  blocked
@@ -18,11 +23,11 @@ local addonName, addon = ...
 -- These flags exist to switch on replacement code paths, not to silence errors. The blocked
 -- registrations are deliberately left in place so the gap stays visible instead of turning into
 -- achievements that quietly never progress.
---
--- This has to be decided by the TOC rather than in Lua: GetExpansionLevel reports account entitlement
--- (0 here), and every capability probe that separates Forever from real retail also matches real
--- retail, where the combat log is permitted. So this file is gated to Forever's game type.
 -- =========================================================
+
+if not (addon and addon.IsForeverClient and addon.IsForeverClient()) then
+    return
+end
 
 -- Separately from blocked events, this client has the 12.0 secret value system. Tainted code may store
 -- a secret in a variable or table field and pass it along, but comparing, doing arithmetic, or using one

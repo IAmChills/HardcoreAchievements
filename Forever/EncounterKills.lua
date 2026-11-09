@@ -12,7 +12,7 @@ local addonName, addon = ...
 -- Raid rows have no kill tracker; they continue to complete from BOSS_KILL.
 -- =========================================================
 
-if not (addon and addon.Restrictions and addon.Restrictions.combatLog) then
+if not (addon and addon.IsForeverClient and addon.IsForeverClient()) then
     return
 end
 

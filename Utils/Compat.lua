@@ -4,9 +4,8 @@ local addonName, addon = ...
 -- Cross-version API bridge
 --
 -- Forever runs on the retail API surface but does not identify itself as retail: GetExpansionLevel()
--- reports 0, the same as Classic Era. Anything that branches on a version number is therefore wrong on
--- at least one client. Everything here probes for the function or template it needs instead, so a
--- client is treated as retail because it behaves like retail, not because of what it calls itself.
+-- reports 0, the same as Classic Era. Prefer capability probes for API shape. Forever identity itself
+-- is the Interface band 16000–16999 (see IsForeverClient); do not use expansion level for that.
 --
 -- This file is shared rather than forked on purpose. A fork is the right answer when a whole feature
 -- works differently (see Forever\NPCTooltip.lua); it is the wrong answer for a one-call API rename,
@@ -326,9 +325,12 @@ function addon.ParseCreatureNpcId(guid)
     return npcId and tonumber(npcId) or nil
 end
 
---- Forever TOC loads Restrictions.lua; Classic/TBC never do.
+--- Forever clients use Interface 16xxx (see ## Interface in the TOC). Classic Era is 11xxx,
+--- TBC Classic is 20xxx, modern retail is 11xxxx+. Prefer this over Restrictions.combatLog when
+--- the question is "are we on Forever?", not "is the combat log blocked?".
 function addon.IsForeverClient()
-    return addon.Restrictions and addon.Restrictions.combatLog and true or false
+    local interfaceVersion = tonumber(select(4, GetBuildInfo())) or 0
+    return interfaceVersion >= 16000 and interfaceVersion < 17000
 end
 
 local function ForeverTokenInRealm(raw, token)

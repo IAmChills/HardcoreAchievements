@@ -2088,8 +2088,9 @@ local function MarkRowCompleted(row, cdbParam)
     if not skipBroadcastForRetroactive then
         local playerName = (addon and addon.GetPlayerShowcaseName and addon.GetPlayerShowcaseName()) or UnitName("player") or ""
         local achievementTitle = (row.Title and row.Title.GetText and row.Title:GetText()) or row.title or "Unknown Achievement"
-        if not (addon and addon.Restrictions and addon.Restrictions.combatLog) then
+        if not (addon and addon.IsForeverClient and addon.IsForeverClient()) then
             -- Emote text is prefixed with the full character name by the client, so leave the name slot empty.
+            -- Forever rejects insecure EMOTE from timer-driven completion; guild announce still runs below.
             local broadcastMessage = string_format(ACHIEVEMENT_BROADCAST, "", achievementTitle)
             broadcastMessage = broadcastMessage:gsub("^%s+", "")
             SendChatMessage(broadcastMessage, "EMOTE")
@@ -5652,7 +5653,8 @@ do
 
         achEvt:RegisterEvent("GROUP_ROSTER_UPDATE")
         achEvt:RegisterEvent("UNIT_PET")
-        -- Forever forbids this for insecure addons, and asking anyway reports ADDON_ACTION_FORBIDDEN
+        -- Forever forbids this for insecure addons, and asking anyway reports ADDON_ACTION_FORBIDDEN.
+        -- Restrictions.combatLog is the capability flag; IsForeverClient is the product identity.
         if not (addon.Restrictions and addon.Restrictions.combatLog) then
             achEvt:RegisterEvent("COMBAT_LOG_EVENT_UNFILTERED")
         end

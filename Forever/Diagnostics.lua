@@ -7,7 +7,7 @@ local addonName, addon = ...
 -- secrecy of the values kill tracking depends on. Nothing here is compared, persisted, or used to award.
 -- =========================================================
 
-if not (addon and addon.Restrictions and addon.Restrictions.combatLog) then
+if not (addon and addon.IsForeverClient and addon.IsForeverClient()) then
     return
 end
 
@@ -40,6 +40,9 @@ local function RestrictionState(name, enumValue)
 end
 
 function addon.RunForeverProbe()
+    local interfaceVersion = tonumber(select(4, GetBuildInfo())) or 0
+    Line("IsForeverClient=" .. tostring(addon.IsForeverClient and addon.IsForeverClient())
+        .. " interface=" .. tostring(interfaceVersion))
     local inInstance, instanceType = IsInInstance()
     Line("instance=" .. tostring(inInstance) .. " type=" .. tostring(instanceType))
     Line("PARTY_KILL registered=" .. tostring(addon.Restrictions.partyKillEvent)

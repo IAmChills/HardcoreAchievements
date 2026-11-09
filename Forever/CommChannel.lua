@@ -12,7 +12,7 @@ local addonName, addon = ...
 -- not assigned chat index 1 ahead of them.
 -- =========================================================
 
-if not (addon and addon.Restrictions and addon.Restrictions.combatLog) then
+if not (addon and addon.IsForeverClient and addon.IsForeverClient()) then
     return
 end
 

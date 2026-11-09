@@ -18,7 +18,7 @@ local addonName, addon = ...
 -- This file loads before Achievements\Common.lua so the overrides below are the functions it captures.
 -- =========================================================
 
-if not (addon and addon.Restrictions and addon.Restrictions.combatLog) then
+if not (addon and addon.IsForeverClient and addon.IsForeverClient()) then
     return
 end
 

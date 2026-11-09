@@ -530,7 +530,7 @@ function Sync:Initialize()
         -- Forever: also broadcast on custom chat channel "HCA" (name, not index).
         -- Stock GUILD/PARTY/RAID/YELL stay enabled. Classic omits channels (CHANNEL blocked).
         local channels
-        if addon.Restrictions and addon.Restrictions.combatLog then
+        if addon.IsForeverClient and addon.IsForeverClient() then
             channels = { addon.HCA_COMM_CHANNEL_NAME or "HCA" }
         end
         db = LibP2PDB:NewDatabase({
