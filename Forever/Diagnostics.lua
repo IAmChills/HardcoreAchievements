@@ -40,7 +40,8 @@ local function RestrictionState(name, enumValue)
 end
 
 function addon.RunForeverProbe()
-    local interfaceVersion = tonumber(select(4, GetBuildInfo())) or 0
+    local _, _, _, tocversion = GetBuildInfo()
+    local interfaceVersion = tonumber(tocversion) or 0
     Line("IsForeverClient=" .. tostring(addon.IsForeverClient and addon.IsForeverClient())
         .. " interface=" .. tostring(interfaceVersion))
     local inInstance, instanceType = IsInInstance()

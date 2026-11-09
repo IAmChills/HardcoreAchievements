@@ -329,7 +329,10 @@ end
 --- TBC Classic is 20xxx, modern retail is 11xxxx+. Prefer this over Restrictions.combatLog when
 --- the question is "are we on Forever?", not "is the combat log blocked?".
 function addon.IsForeverClient()
-    local interfaceVersion = tonumber(select(4, GetBuildInfo())) or 0
+    -- Parentheses / locals matter: select() forwards every trailing return into tonumber,
+    -- and tonumber's optional 2nd arg is a numeric base.
+    local _, _, _, tocversion = GetBuildInfo()
+    local interfaceVersion = tonumber(tocversion) or 0
     return interfaceVersion >= 16000 and interfaceVersion < 17000
 end
 
