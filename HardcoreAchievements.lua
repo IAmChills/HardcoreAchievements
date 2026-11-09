@@ -2856,11 +2856,57 @@ function progressFlush.Run()
     end
 end
 
+-- Keys that represent real saved progress worth prompting a reload.
+-- Level/entry metadata is rewritten often on login and must not false-trigger the banner.
+local UNSAVED_PROGRESS_KEYS = {
+    killed = true,
+    quest = true,
+    counts = true,
+    eligibleCounts = true,
+    completed = true,
+    pointsAtKill = true,
+    soloKill = true,
+    soloQuest = true,
+    ineligibleKill = true,
+    itemOwned = true,
+    firstKillRareState = true,
+    extraCreditPoints = true,
+    extraCreditKills = true,
+}
+
+local function ProgressValuesEqual(a, b)
+    if a == b then
+        return true
+    end
+    if type(a) ~= "table" or type(b) ~= "table" then
+        return false
+    end
+    for k, v in pairs(a) do
+        if type(v) == "table" then
+            if not ProgressValuesEqual(v, b[k]) then
+                return false
+            end
+        elseif b[k] ~= v then
+            return false
+        end
+    end
+    for k in pairs(b) do
+        if a[k] == nil then
+            return false
+        end
+    end
+    return true
+end
+
 local function SetProgress(achId, key, value)
     local _, cdb = GetCharDB()
     if not cdb then return end
     cdb.progress = cdb.progress or {}
     local p = cdb.progress[achId] or {}
+    -- Login/zone/quest handlers often rewrite the same values; ignore no-ops.
+    if ProgressValuesEqual(p[key], value) then
+        return
+    end
     p[key] = value
     p.updatedAt = time()
     -- Only set levelAt for progress-related keys (kills, quests, counts, etc.)
@@ -2872,7 +2918,9 @@ local function SetProgress(achId, key, value)
     cdb.progress[achId] = p
 
     if restorationsComplete and not skipBroadcastForRetroactive and not (addon and addon.Initializing) then
-        MarkUnsavedAchievementProgress()
+        if UNSAVED_PROGRESS_KEYS[key] then
+            MarkUnsavedAchievementProgress()
+        end
         if achId ~= nil then
             progressFlush.dirty[achId] = true
         end
@@ -6631,7 +6679,16 @@ do
         if Profession then Profession.RefreshAll() end
         if InvalidateAchievementRuntimeIndex then InvalidateAchievementRuntimeIndex() end
 
-        addon.Initializing = false
+        -- Keep Initializing true through the next frame so deferred login timers
+        -- (quest top-up, exploration metas, profession refresh) do not arm the
+        -- unsaved-progress banner for no-op settle work.
+        if C_Timer and C_Timer.After then
+            C_Timer.After(0, function()
+                addon.Initializing = false
+            end)
+        else
+            addon.Initializing = false
+        end
         print("|cff008066[Hardcore Achievements]|r |cffffd100All achievements loaded!|r")
 
         if addon.Leaderboard and addon.Leaderboard.ScheduleCompletionStatsRebuild then
