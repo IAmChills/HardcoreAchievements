@@ -106,13 +106,14 @@ local function OnCombatLogEvent()
     -- Early-exit first: most CLEU events arrive when the player has no target.
     -- CleanupHelpers iterates helpersByTarget and must not run on every event needlessly.
     local currentTargetGUID = UnitGUID("target")
-    if not currentTargetGUID then return end
+    if not currentTargetGUID or IsSecret(currentTargetGUID) then return end
 
     local now = GetTime()
     CleanupHelpers(now)
 
     local _, subEvent, _, srcGUID, _, srcFlags, _, destGUID = CombatLogGetCurrentEventInfo()
     if not damageEvents[subEvent] then return end
+    if IsSecret(destGUID) or IsSecret(srcGUID) then return end
     if destGUID ~= currentTargetGUID then return end
 
     -- Only count other PLAYERS (not you). Pets/guardians/dummies are *not* flagged as players.
@@ -130,7 +131,7 @@ end
 -- Query helpers cache for the current target
 ---------------------------------------
 local function OtherPlayersRecentlyHelped(targetGUID)
-    if not targetGUID then return false end
+    if not targetGUID or IsSecret(targetGUID) then return false end
     local now = GetTime()
     CleanupHelpers(now)
     local bucket = helpersByTarget[targetGUID]
@@ -290,11 +291,16 @@ end
 -- Check solo status for a specific GUID (used during combat tracking)
 ---------------------------------------
 local function CheckSoloStatusForGUID(targetGUID)
-    if not targetGUID then return false end
+    if not targetGUID or IsSecret(targetGUID) then return false end
     
     -- Try to find the unit by GUID (check target first, then nameplate)
     local mobUnit = nil
-    if PlainBool(UnitExists("target"), false) and UnitGUID("target") == targetGUID then
+    local currentTargetGUID = UnitGUID("target")
+    if PlainBool(UnitExists("target"), false)
+        and currentTargetGUID
+        and not IsSecret(currentTargetGUID)
+        and currentTargetGUID == targetGUID
+    then
         mobUnit = "target"
     else
         -- Try to find via nameplate (limited in Classic, but worth trying)
@@ -360,7 +366,7 @@ local function PlayerIsSolo()
         end
         
         local targetGUID = UnitGUID(mobUnit)
-        if targetGUID then
+        if targetGUID and not IsSecret(targetGUID) then
             -- Try to use cached/stored status first
             local isSolo = CheckSoloStatusForGUID(targetGUID)
             if isSolo ~= nil then
@@ -409,7 +415,7 @@ local function PlayerIsSolo()
 end
 
 local function PlayerIsSoloForGUID(targetGUID)
-    if not targetGUID then return nil end
+    if not targetGUID or IsSecret(targetGUID) then return nil end
     
     local status = soloStatusByGUID[targetGUID]
     if not status then return nil end
@@ -426,10 +432,12 @@ local function PlayerIsSoloForGUID(targetGUID)
 end
 
 local function PlayerIsSolo_UpdateStatusForGUID(targetGUID)
-    if not targetGUID then return end
+    if not targetGUID or IsSecret(targetGUID) then return end
     
     -- Only update if target exists and matches GUID
-    if PlainBool(UnitExists("target"), false) and UnitGUID("target") == targetGUID then
+    local currentTargetGUID = UnitGUID("target")
+    if IsSecret(currentTargetGUID) then return end
+    if PlainBool(UnitExists("target"), false) and currentTargetGUID == targetGUID then
         local isSolo = CheckSoloStatusForGUID(targetGUID)
         if isSolo ~= nil then
             local now = GetTime()
@@ -447,7 +455,7 @@ end
 local function UpdateSoloStatusForCurrentTarget()
     if PlainBool(UnitExists("target"), false) and PlainBool(UnitAffectingCombat("player"), false) then
         local targetGUID = UnitGUID("target")
-        if targetGUID then
+        if targetGUID and not IsSecret(targetGUID) then
             PlayerIsSolo_UpdateStatusForGUID(targetGUID)
         end
     end
@@ -457,8 +465,11 @@ end
 -- Event frame: CLEU is handled by the main achEvt frame (HardcoreAchievements.lua)
 -- to avoid double dispatch. PlayerIsSolo_OnCombatLogEvent is exported so achEvt
 -- can call it within its own CLEU handler.
+-- Global on purpose: Forever\KillTracking.lua unregisters this frame after it
+-- replaces the Classic solo helpers (a file-local frame was invisible to it).
 ---------------------------------------
-local PlayerIsSolo_EventFrame = PlayerIsSolo_EventFrame or CreateFrame("Frame")
+_G.PlayerIsSolo_EventFrame = _G.PlayerIsSolo_EventFrame or CreateFrame("Frame")
+local PlayerIsSolo_EventFrame = _G.PlayerIsSolo_EventFrame
 PlayerIsSolo_EventFrame:UnregisterAllEvents()
 -- CLEU intentionally NOT registered here — achEvt calls PlayerIsSolo_OnCombatLogEvent directly.
 PlayerIsSolo_EventFrame:RegisterEvent("UNIT_THREAT_SITUATION_UPDATE")

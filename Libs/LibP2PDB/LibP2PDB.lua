@@ -3430,8 +3430,11 @@ function Private:Broadcast(dbi, data, channels, priority)
     end
 
     for _, channel in ipairs(channels or {}) do
-        --- @cast priority "ALERT"|"BULK"|"NORMAL"
-        AceComm.SendCommMessage(self, dbi.prefix, encoded, channel, nil, priority)
+        local chanID = GetChannelName(channel)
+        if chanID and chanID > 0 then
+            --- @cast priority "ALERT"|"BULK"|"NORMAL"
+            AceComm.SendCommMessage(self, dbi.prefix, encoded, "CHANNEL", chanID, priority)
+        end
     end
 
     -- local numFriends = C_FriendList.GetNumFriends()

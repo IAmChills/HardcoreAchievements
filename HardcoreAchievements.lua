@@ -2299,62 +2299,18 @@ local function RestoreCompletionsFromDB()
     end
 end
 
-local function ToggleAchievementCharacterFrameTab()
-    if addon.ToggleLegacyAchievementsPage and addon.ToggleLegacyAchievementsPage() then
+-- Single toggle for keybind, minimap, /hca, toast/tracker fallbacks.
+-- Dashboard:Toggle already routes Forever through LegacySystemFrame when that host exists.
+-- Classic CharacterFrame tab clicks still use ShowAchievementTab directly.
+local function ToggleHardcoreAchievementsUI()
+    if addon and addon.IsForeverCharacterUI and InCombatLockdown and InCombatLockdown() then
+        print("|cff008066[Hardcore Achievements]|r Cannot open during combat.")
         return
     end
-    if addon.IsForeverCharacterUI then
-        if addon.Dashboard and addon.Dashboard.Toggle then
-            addon.Dashboard:Toggle()
-        end
-        return
-    end
-
-    local isShown = CharacterFrame and CharacterFrame:IsShown() and
-                   (AchievementPanel and AchievementPanel:IsShown() or (Tab and Tab.squareFrame and Tab.squareFrame:IsShown()))
-    -- Resolve at call time: addon.ShowAchievementTab is set later in this file
-    local ShowAchievementTab = addon and addon.ShowAchievementTab
-    if isShown then
-        CharacterFrame:Hide()
-    elseif not CharacterFrame:IsShown() then
-        CharacterFrame:Show()
-        if type(ShowAchievementTab) == "function" then ShowAchievementTab() end
-    else
-        if CharacterFrame:IsShown() and type(ShowAchievementTab) == "function" then
-            ShowAchievementTab()
-        end
-    end
-end
-
-local function ShowHardcoreAchievementWindow()
-    if addon.ToggleLegacyAchievementsPage and addon.ToggleLegacyAchievementsPage() then
-        return
-    end
-    -- Forever + classic UI restorer: no character-frame tab. Dashboard only.
-    if addon.IsForeverCharacterUI then
-        if addon.Dashboard and addon.Dashboard.Toggle then
-            addon.Dashboard:Toggle()
-        end
-        return
-    end
-
-    local _, cdb = GetCharDB()
-    -- Check if user wants to use Character Panel instead of Dashboard (default is Character Panel)
-    local useCharacterPanel = true
-    if cdb and cdb.settings and cdb.settings.useCharacterPanel ~= nil then
-        useCharacterPanel = cdb.settings.useCharacterPanel
-    end
-    if useCharacterPanel then
-        -- Use Character Panel tab (old behavior)
-        ToggleAchievementCharacterFrameTab()
-    else
-        -- Default: Use Dashboard (standalone window)
-        if addon and addon.Dashboard and addon.Dashboard.Toggle then
-            addon.Dashboard:Toggle()
-        else
-            -- Fallback to Character Panel if Dashboard not available
-            ToggleAchievementCharacterFrameTab()
-        end
+    if addon and addon.Dashboard and addon.Dashboard.Toggle then
+        addon.Dashboard:Toggle()
+    elseif addon and addon.ShowDashboard then
+        addon.ShowDashboard()
     end
 end
 
@@ -2498,10 +2454,8 @@ local function GetOrCreateAchToastFrame()
         end
         if self.achId and addon and addon.OpenDashboardToAchievement then
             addon.OpenDashboardToAchievement(self.achId)
-        elseif addon and addon.Dashboard and addon.Dashboard.Toggle then
-            addon.Dashboard:Toggle()
         else
-            ShowHardcoreAchievementWindow()
+            ToggleHardcoreAchievementsUI()
         end
     end)
 
@@ -2975,7 +2929,7 @@ if addon then
         return cdb.settings
     end
     addon.MarkRowCompleted = MarkRowCompleted
-    addon.ShowAchievementWindow = ShowHardcoreAchievementWindow
+    addon.ShowAchievementWindow = ToggleHardcoreAchievementsUI
     addon.GetTotalPoints = GetTotalPoints
     addon.AchievementCount = AchievementCount
     addon.UpdateTotalPoints = UpdateTotalPoints
@@ -3010,6 +2964,11 @@ end
 if addon then addon.OpenOptionsPanel = OpenOptionsPanel end
 
 BINDING_NAME_HCA_TOGGLE = "Toggle Achievements"
+
+-- Bindings.xml runs in the global env.
+function HardcoreAchievements_Toggle()
+    ToggleHardcoreAchievementsUI()
+end
 
 -- Lazily initialize minimap button resources on demand.
 local LDB, LDBIcon, minimapDataObject
@@ -3063,15 +3022,7 @@ local function InitializeMinimapButton()
                     return
                 end
                 if button == "LeftButton" and not IsShiftKeyDown() then
-                    -- Always open Dashboard, regardless of useCharacterPanel setting
-                    if addon and addon.Dashboard and addon.Dashboard.Toggle then
-                        addon.Dashboard:Toggle()
-                    elseif addon and addon.ShowDashboard then
-                        addon.ShowDashboard()
-                    else
-                        -- Fallback to Character Panel if Dashboard not available
-                        ShowHardcoreAchievementWindow()
-                    end
+                    ToggleHardcoreAchievementsUI()
                 elseif button == "RightButton" and IsShiftKeyDown() then
                     -- Shift-right-click to open options panel
                     OpenOptionsPanel()
@@ -5090,26 +5041,35 @@ do
         local _cachedPetOwnerByGUID = {}
 
         local function RebuildPartyGUIDCache()
-            _cachedPlayerGUID = UnitGUID("player")
+            -- Forever: pet (and sometimes other) GUIDs can be secret and cannot be used as table keys.
+            local isSecret = addon and addon.IsSecretValue
+            local function plainGUID(unit)
+                if not UnitExists(unit) then
+                    return nil
+                end
+                local guid = UnitGUID(unit)
+                if not guid or (isSecret and isSecret(guid)) then
+                    return nil
+                end
+                return guid
+            end
+
+            _cachedPlayerGUID = plainGUID("player")
             for k in pairs(_cachedPartyGUIDs) do _cachedPartyGUIDs[k] = nil end
             for k in pairs(_cachedPetOwnerByGUID) do _cachedPetOwnerByGUID[k] = nil end
             if _cachedPlayerGUID then _cachedPartyGUIDs[_cachedPlayerGUID] = true end
-            if UnitExists("pet") then
-                local g = UnitGUID("pet")
-                if g then _cachedPetOwnerByGUID[g] = _cachedPlayerGUID end
+            local petGUID = plainGUID("pet")
+            if petGUID then
+                _cachedPetOwnerByGUID[petGUID] = _cachedPlayerGUID
             end
             if GetNumGroupMembers() > 1 then
                 for i = 1, 4 do
-                    local u = "party" .. i
-                    if UnitExists(u) then
-                        local g = UnitGUID(u)
-                        if g then
-                            _cachedPartyGUIDs[g] = true
-                            local pu = "party" .. i .. "pet"
-                            if UnitExists(pu) then
-                                local pg = UnitGUID(pu)
-                                if pg then _cachedPetOwnerByGUID[pg] = g end
-                            end
+                    local g = plainGUID("party" .. i)
+                    if g then
+                        _cachedPartyGUIDs[g] = true
+                        local pg = plainGUID("party" .. i .. "pet")
+                        if pg then
+                            _cachedPetOwnerByGUID[pg] = g
                         end
                     end
                 end
@@ -5155,12 +5115,16 @@ do
         end
 
         local function getPetOwnerGUID(sourceGUID)
-            if not sourceGUID then return nil end
+            if not sourceGUID or (addon.IsSecretValue and addon.IsSecretValue(sourceGUID)) then
+                return nil
+            end
             return _cachedPetOwnerByGUID[sourceGUID]
         end
 
         local function isPlayerOrPartyMember(guid)
-            if not guid then return false end
+            if not guid or (addon.IsSecretValue and addon.IsSecretValue(guid)) then
+                return false
+            end
             return _cachedPartyGUIDs[guid] == true
         end
         
@@ -5545,7 +5509,9 @@ do
         end
 
         local function isPlayerPartyOrPetSource(sourceGUID)
-            if not sourceGUID then return false end
+            if not sourceGUID or (addon.IsSecretValue and addon.IsSecretValue(sourceGUID)) then
+                return false
+            end
             return _cachedPartyGUIDs[sourceGUID] == true
                 or _cachedPetOwnerByGUID[sourceGUID] ~= nil
         end
@@ -6221,7 +6187,9 @@ do
                 -- Check for "MessageToKarazhan" achievement when speaking to Archmage Leryda
                 local npcName = UnitName("npc")
                 local playerLevel = UnitLevel("player")
-                if npcName == "Archmage Leryda" and playerLevel <= 60 then
+                -- Forever: NPC names can be secret on restricted maps; comparing them errors.
+                if npcName and not (addon.IsSecretValue and addon.IsSecretValue(npcName))
+                    and npcName == "Archmage Leryda" and playerLevel <= 60 then
                     for _, row in ipairs(addon.AchievementRowModel or {}) do
                         local id = row and (row.id or row.achId)
                         if row and (not row.completed) and id == "MessageToKarazhan" then
@@ -6527,7 +6495,7 @@ local function ShowAchievementTab()
 
     -- AchievementPanel.PortraitCover:Show()
 end
--- Export so ToggleAchievementCharacterFrameTab and square frame can call at click time
+-- CharacterFrame tab / square-frame clicks use this directly (not the Dashboard toggle).
 if addon then addon.ShowAchievementTab = ShowAchievementTab end
 
 Tab:SetScript("OnClick", ShowAchievementTab)

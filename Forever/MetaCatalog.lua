@@ -52,7 +52,7 @@ local function GetClassicDungeonMasterAchievements()
     local playerFaction = GetPlayerFaction()
     local requiredAchievements = {
         "VC", "WC", "SFK", "ESW", "BFD", "RFK", "GNOM", "TDC", "SM", "RFD", "KS", "ULD", "ZF",
-        "AP", "MARA", "ST", "BMH", "BRD", "BRS", "SHT", "UBRS", "STRAT", "DM", "SCHOLO"
+        "AP", "MARA", "ST", "BMH", "BRD", "LBRS", "SHT", "UBRS", "STRAT", "DM", "SCHOLO"
     }
     
     -- Add faction-specific dungeons

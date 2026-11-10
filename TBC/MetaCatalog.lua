@@ -55,7 +55,7 @@ local function GetTBCDungeonMasterAchievements()
   local playerFaction = GetPlayerFaction()
   local requiredAchievements = {
     "VC", "WC", "SFK", "BFD", "RFK", "GNOM", "SM",
-    "RFD", "ULD", "ZF", "MARA", "ST", "BRD", "BRS", "UBRS", "STRAT", "DM", "SCHOLO",
+    "RFD", "ULD", "ZF", "MARA", "ST", "BRD", "LBRS", "UBRS", "STRAT", "DM", "SCHOLO",
     -- TBC dungeons
     "RAMPARTS", "BLOODFURNACE", "SLAVEPENS", "UNDERBOG", "MANATOMBS", "AC",
     "OLDHILLSBRAD", "SETHEKK", "BLACKMORASS", "MECHANAR", "SHATTEREDHALLS",

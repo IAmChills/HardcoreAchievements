@@ -11,6 +11,12 @@ local table_insert = table.insert
 
 local function GetNPCIdFromGUID(guid)
     if not guid then return nil end
+    if addon and addon.ParseCreatureNpcId then
+        return addon.ParseCreatureNpcId(guid)
+    end
+    if addon and addon.IsSecretValue and addon.IsSecretValue(guid) then
+        return nil
+    end
     local npcId = select(6, strsplit("-", guid))
     return npcId and tonumber(npcId) or nil
 end
@@ -70,9 +76,17 @@ end
 -- classic OnTooltipSetUnit script below, and TooltipDataProcessor on retail (Forever\NPCTooltip.lua).
 local function AppendNPCAchievementLines(tooltip, unit)
     if not tooltip or not unit then return end
+    -- Forever world-cursor tooltips can hand back a secret unit token; UnitGUID rejects those
+    -- from tainted code ("Secret values are only allowed during untainted execution").
+    if addon and addon.IsSecretValue and addon.IsSecretValue(unit) then
+        return
+    end
 
-    local guid = UnitGUID(unit)
-    if not guid then return end
+    local ok, guid = pcall(UnitGUID, unit)
+    if not ok or not guid then return end
+    if addon and addon.IsSecretValue and addon.IsSecretValue(guid) then
+        return
+    end
 
     -- Only process NPCs (not players, pets, etc.)
     local npcId = GetNPCIdFromGUID(guid)

@@ -45,7 +45,7 @@ local Dungeons = {
     achId = "HOT",
     title = "Hall of Thanes",
     tooltip = "Defeat the bosses of " .. ClassColor .. "Hall of Thanes|r at level 14 or lower upon entering the dungeon",
-    icon = 000000,
+    icon = 2102434,
     level = 14,
     points = 10,
     staticPoints = false,
@@ -60,13 +60,38 @@ local Dungeons = {
     bossOrder = {261306, 261316, 261311, 261319}
   },
 
+  -- Ruins of Lordaeron (Horde, Level 15-22)
+  {
+    achId = "ROL",
+    title = "Ruins of Lordaeron",
+    tooltip = "Defeat the bosses of " .. ClassColor .. "Ruins of Lordaeron|r at level 18 or lower upon entering the dungeon",
+    icon = 135983,
+    level = 18,
+    points = 10,
+    staticPoints = false,
+    requiredMapId = 2999,
+    faction = FACTION_HORDE,
+    requiredKills = {
+      [250483] = 1, -- Witherfang
+      [250660] = 1, -- The Baron
+      [256035] = 1, -- Viktor the Vile
+      [250631] = 1, -- The Abandoned
+      [256097] = 1, -- Bjork
+      [250657] = 1, -- Rath'mael
+    },
+    extraCreditKills = {
+      [255699] = 1, -- Lordaeron Captain (rare)
+    },
+    bossOrder = {250483, 250660, 256035, 250631, 256097, 250657, 255699}
+  },
+
   -- The Deadmines (Alliance, Level 10-20)
   {
     achId = "VC",
     title = DUNGEON_FLOOR_THEDEADMINES1,
     tooltip = "Defeat the bosses of " .. ClassColor .. ""..DUNGEON_FLOOR_THEDEADMINES1.."|r at level 19 or lower upon entering the dungeon",
     icon = 236409,
-    level = 19,
+    level = 20,
     points = 10,
     staticPoints = false,
     requiredMapId = 36,
@@ -79,26 +104,6 @@ local Dungeons = {
       [639] = 1,   -- Edwin VanCleef
     },
     bossOrder = {644, 643, 1763, 646, 647, 639}
-  },
-
-  -- Ruins of Lordaeron (Horde, Level 15-20)
-  {
-    achId = "ROL",
-    title = "Ruins of Lordaeron",
-    tooltip = "Defeat the bosses of " .. ClassColor .. "Ruins of Lordaeron|r at level 16 or lower upon entering the dungeon",
-    icon = 000000,
-    level = 16,
-    points = 10,
-    staticPoints = false,
-    requiredMapId = 000,
-    faction = FACTION_HORDE,
-    requiredKills = {
-      [0000] = 1, -- Boss 1
-      [0000] = 1, -- Boss 2
-      [0000] = 1, -- Boss 3
-      [0000] = 1, -- Boss 4
-    },
-    bossOrder = {0000, 0000, 0000, 0000}
   },
 
   -- Wailing Caverns (Both, Level 15-25)
@@ -124,16 +129,16 @@ local Dungeons = {
     extraCreditKills = {
       [5912] = 1,  -- Deviate Faerie Dragon (rare)
     },
-    bossOrder = {3671, 3653, 3669, 3670, 3674, 5912, 3673, 5775, 3654}
+    bossOrder = {3671, 3653, 3669, 3670, 3674, 3673, 5775, 3654, 5912}
   },
 
   -- Shadowfang Keep (Both, Level 18-25)
   {
     achId = "SFK",
     title = "Shadowfang Keep",
-    tooltip = "Defeat the bosses of " .. ClassColor .. "Shadowfang Keep|r at level 24 or lower upon entering the dungeon",
+    tooltip = "Defeat the bosses of " .. ClassColor .. "Shadowfang Keep|r at level 23 or lower upon entering the dungeon",
     icon = 254646,
-    level = 24,
+    level = 23,
     points = 10,
     staticPoints = false,
     requiredMapId = 33,
@@ -150,26 +155,25 @@ local Dungeons = {
     extraCreditKills = {
       [3872] = 1,  -- Deathsworn Captain (rare)
     },
-    bossOrder = {3914, 3886, 3887, 4278, 4279, 3872, 4274, 3927, 4275}
+    bossOrder = {3914, 3886, 3887, 4278, 4279, 4274, 3927, 4275, 3872}
   },
 
   -- Excavation Site: Wetlands (Level 24-29)
   {
     achId = "ESW",
     title = "Excavation Site: Wetlands",
-    tooltip = "Defeat the bosses of " .. ClassColor .. "Excavation Site: Wetlands|r at level 25 or lower upon entering the dungeon",
-    icon = 000000,
-    level = 25,
+    tooltip = "Defeat the bosses of " .. ClassColor .. "Excavation Site: Wetlands|r at level 29 or lower upon entering the dungeon",
+    icon = 254109,
+    level = 29,
     points = 10,
     staticPoints = false,
     requiredMapId = 000,
     requiredKills = {
-      [0000] = 1, -- Boss 1
-      [0000] = 1, -- Boss 2
-      [0000] = 1, -- Boss 3
-      [0000] = 1, -- Boss 4
+      [260322] = 1, -- Saltspine
+      [260325] = 1, -- Shadetooth
+      [260326] = 1, -- Relic Guardian
     },
-    bossOrder = {0000, 0000, 0000, 0000}
+    bossOrder = {260322, 260325, 260326}
   },
 
   -- Blackfathom Deeps (Both, Level 20-30)
@@ -223,19 +227,25 @@ local Dungeons = {
   {
     achId = "COD",
     title = "City of Dalaran",
-    tooltip = "Defeat the bosses of " .. ClassColor .. "City of Dalaran|r at level 33 or lower upon entering the dungeon",
-    icon = 000000,
-    level = 30,
+    tooltip = "Defeat the bosses of " .. ClassColor .. "City of Dalaran|r at level 31 or lower upon entering the dungeon",
+    icon = 799786,
+    level = 31,
     points = 10,
     staticPoints = false,
     requiredMapId = 000,
     requiredKills = {
-      [0000] = 1, -- Boss 1
-      [0000] = 1, -- Boss 2
-      [0000] = 1, -- Boss 3
-      [0000] = 1, -- Boss 4
+      [247126] = 1, -- Atrexis the Grave Knight
+      [245999] = 1, -- Arcane Anomaly
+      [246003] = 1, -- Fel Ancient
+      [246017] = 1, -- Unstable Sentinel
+      [246008] = 1, -- Mana Devourer
+      [246016] = 1, -- Arcanic Enigma
+      [246020] = 1, -- Shade of the Archmage
     },
-    bossOrder = {0000, 0000, 0000, 0000}
+    extraCreditKills = {
+      [247032] = 1, -- Lyn the Ignored (rare)
+    },
+    bossOrder = {247126, 245999, 246003, 246017, 246008, 246016, 246020, 247032}
   },
 
   -- Razorfen Kraul (Both, Level 25-35)
@@ -279,7 +289,7 @@ local Dungeons = {
     extraCreditKills = {
       [6228] = 1,  -- Dark Iron Ambassador (rare)
     },
-    bossOrder = {7361, 7079, 6235, 6229, 6228, 7800}
+    bossOrder = {7361, 7079, 6235, 6229, 7800, 6228}
   },
 
   --  -- Potential Duskwood Achievement (Alliance)
@@ -306,19 +316,26 @@ local Dungeons = {
   {
     achId = "TDC",
     title = "The Drowned City",
-    tooltip = "Defeat the bosses of " .. ClassColor .. "The Drowned City|r at level 36 or lower upon entering the dungeon",
-    icon = 000000,
-    level = 36,
+    tooltip = "Defeat the bosses of " .. ClassColor .. "The Drowned City|r at level 37 or lower upon entering the dungeon",
+    icon = 2399269,
+    level = 37,
     points = 10,
     staticPoints = false,
     requiredMapId = 000,
     requiredKills = {
-      [0000] = 1, -- Boss 1
-      [0000] = 1, -- Boss 2
-      [0000] = 1, -- Boss 3
-      [0000] = 1, -- Boss 4
+      [258905] = 1, -- Zul'alai
+      [258924] = 1, -- Var'taka
+      [260042] = 1, -- Captain Dreadrise
+      [269586] = 1, -- Deathless Marrow
+      [263886] = 1, -- Primeval Elemental
+      [260274] = 1, -- Min'loth the Serpent
     },
-    bossOrder = {0000, 0000, 0000, 0000}
+    extraCreditKills = {
+      [264177] = 1, -- Gill (rare)
+      [264172] = 1, -- Umbra (rare)
+      [260468] = 1, -- "Pyromancer" Braxton (rare)
+    },
+    bossOrder = {258905, 258924, 260042, 269586, 263886, 260274, 264177, 264172, 260468}
   },
 
   -- Scarlet Monastery (Both, Level 28-38)
@@ -346,7 +363,7 @@ local Dungeons = {
       [6488] = 1,  -- Fallen Champion (rare)
       [6489] = 1,  -- Ironspine (rare)
     },
-    bossOrder = {3983, 4543, 6490, 6488, 6489, 3974, 6487, 3975, 4542, 3976, 3977}
+    bossOrder = {3983, 4543, 3974, 6487, 3975, 4542, 3976, 3977, 6490, 6488, 6489}
   },
 
   -- Razorfen Downs (Both, Level 35-45)
@@ -376,19 +393,21 @@ local Dungeons = {
   {
     achId = "KS",
     title = "Krol'dok Stronghold",
-    tooltip = "Defeat the bosses of " .. ClassColor .. "Krol'dok Stronghold|r at level 41 or lower upon entering the dungeon",
-    icon = 000000,
-    level = 41,
+    tooltip = "Defeat the bosses of " .. ClassColor .. "Krol'dok Stronghold|r at level 43 or lower upon entering the dungeon",
+    icon = 237299,
+    level = 43,
     points = 10,
     staticPoints = false,
     requiredMapId = 000,
     requiredKills = {
-      [0000] = 1, -- Boss 1
-      [0000] = 1, -- Boss 2
-      [0000] = 1, -- Boss 3
-      [0000] = 1, -- Boss 4
+      [258966] = 1, -- Slavecrusher Grox
+      [258972] = 1, -- Twilight Commander Zarmok
+      [259281] = 1, -- War Handler Ashka
+      [258964] = 1, -- Nar'gurk
+      [264773] = 1, -- Bossman Toof
+      [258968] = 1, -- Overlord Mugg
     },
-    bossOrder = {0000, 0000, 0000, 0000}
+    bossOrder = {258966, 258972, 259281, 258964, 264773, 258968}
   },
 
   -- Uldaman (Both, Level 35-45)
@@ -403,7 +422,6 @@ local Dungeons = {
     requiredMapId = 70,
     requiredKills = {
       [6910] = 1,  -- Revelosh
-      --[6906] = 1,  -- Baelog (horde only)
       [7228] = 1,  -- Ironaya
       [7023] = 1,  -- Obsidian Sentinel
       [7206] = 1,  -- Ancient Stone Keeper
@@ -411,11 +429,14 @@ local Dungeons = {
       [4854] = 1,  -- Grimlok
       [2748] = 1,  -- Archaedas
     },
+    extraCreditKills = {
+      ["The Lost Dwarves"] = {6906, 6907, 6908},  -- The Lost Dwarves (any one of the three) HORDE ONLY
+    },
     -- Archaedas pedestals need 3 players; omit from Duo/Solo variations
     minPartySizeForBoss = {
       [2748] = 3,
     },
-    bossOrder = {6910, 7228, 7023, 7206, 7291, 4854, 2748}
+    bossOrder = {6910, 7228, 7023, 7206, 7291, 4854, 2748, "The Lost Dwarves"}
   },
 
   -- Zul'Farrak (Both, Level 44-54)
@@ -440,39 +461,21 @@ local Dungeons = {
       [7797] = 1,  -- Ruuzlu
     },
     extraCreditKills = {
+      [7273] = 1,   -- Gahz'rilla
       [10081] = 1,  -- Dustwraith (rare)
       [10082] = 1,  -- Zerillis (rare)
       [10080] = 1,  -- Sandarr Dunereaver (rare)
     },
-    bossOrder = {8127, 7272, 7271, 7796, 7275, 7604, 7795, 7267, 7797, 10081, 10082, 10080}
-  },
-
-  -- Alcaz Prison (Level 48-53)
-  {
-    achId = "AP",
-    title = "Alcaz Prison",
-    tooltip = "Defeat the bosses of " .. ClassColor .. "Alcaz Prison|r at level 49 or lower upon entering the dungeon",
-    icon = 000000,
-    level = 49,
-    points = 10,
-    staticPoints = false,
-    requiredMapId = 000,
-    requiredKills = {
-      [0000] = 1, -- Boss 1
-      [0000] = 1, -- Boss 2
-      [0000] = 1, -- Boss 3
-      [0000] = 1, -- Boss 4
-    },
-    bossOrder = {0000, 0000, 0000, 0000}
+    bossOrder = {8127, 7272, 7271, 7796, 7275, 7604, 7795, 7267, 7797, 7273, 10081, 10082, 10080}
   },
 
   -- Maraudon (Both, Level 40-50)
   {
     achId = "MARA",
     title = "Maraudon",
-    tooltip = "Defeat the bosses of " .. ClassColor .. "Maraudon|r at level 50 or lower upon entering the dungeon",
+    tooltip = "Defeat the bosses of " .. ClassColor .. "Maraudon|r at level 49 or lower upon entering the dungeon",
     icon = 236432,
-    level = 50,
+    level = 49,
     points = 10,
     staticPoints = false,
     requiredMapId = 349,
@@ -489,13 +492,33 @@ local Dungeons = {
     bossOrder = {13282, 12258, 12236, 12225, 12203, 13601, 13596, 12201}
   },
 
+  -- Alcaz Prison (Level 48-53)
+  {
+    achId = "AP",
+    title = "Alcaz Prison",
+    tooltip = "Defeat the bosses of " .. ClassColor .. "Alcaz Prison|r at level 52 or lower upon entering the dungeon",
+    icon = 236234,
+    level = 52,
+    points = 10,
+    staticPoints = false,
+    requiredMapId = 000,
+    requiredKills = {
+      [255391] = 1, -- Overseer Wrex
+      [256236] = 1, -- The Questioner
+      [255997] = 1, -- Tidemistress Ca'zass
+      [257016] = 1, -- Katerina the Cleaner
+      [255702] = 1, -- Blazeroar
+    },
+    bossOrder = {255391, 256236, 255997, 257016, 255702}
+  },
+
   -- The Temple of Atal'Hakkar (Both, Level 50-60)
   {
     achId = "ST",
     title = DUNGEON_FLOOR_THETEMPLEOFATALHAKKAR1,
-    tooltip = "Defeat the bosses of " .. ClassColor .. ""..DUNGEON_FLOOR_THETEMPLEOFATALHAKKAR1.."|r at level 54 or lower upon entering the dungeon",
+    tooltip = "Defeat the bosses of " .. ClassColor .. ""..DUNGEON_FLOOR_THETEMPLEOFATALHAKKAR1.."|r at level 53 or lower upon entering the dungeon",
     icon = 236434,
-    level = 54,
+    level = 53,
     points = 10,
     staticPoints = false,
     requiredMapId = 109,
@@ -507,29 +530,36 @@ local Dungeons = {
       [5711] = 1,  -- Ogom the Wretched
       [5719] = 1,  -- Morphaz
       [5722] = 1,  -- Hazzas
-      --[8443] = 1,  -- Avatar of Hakkar
+      [8443] = 1,  -- Avatar of Hakkar
       [5709] = 1,  -- Shade of Eranikus
     },
-    bossOrder = {8580, 5721, 5720, 5710, 5711, 5719, 5722, 5709}
+    bossOrder = {8580, 5721, 5720, 5710, 5711, 5719, 5722, 8443, 5709}
   },
 
   -- Blackmaw Hold (Level 55-60)
   {
     achId = "BMH",
     title = "Blackmaw Hold",
-    tooltip = "Defeat the bosses of " .. ClassColor .. "Blackmaw Hold|r at level 56 or lower upon entering the dungeon",
-    icon = 000000,
-    level = 56,
+    tooltip = "Defeat the bosses of " .. ClassColor .. "Blackmaw Hold|r at level 58 or lower upon entering the dungeon",
+    icon = 840942,
+    level = 58,
     points = 10,
     staticPoints = false,
     requiredMapId = 000,
     requiredKills = {
-      [0000] = 1, -- Boss 1
-      [0000] = 1, -- Boss 2
-      [0000] = 1, -- Boss 3
-      [0000] = 1, -- Boss 4
+      [247206] = 1, -- Impaan the Imprisoner
+      [247198] = 1, -- Bonesnout the Unbroken
+      [247195] = 1, -- Withermaw
+      [247209] = 1, -- Elder Shaman Bloodmane
+      [247207] = 1, -- Blackmaw Behemoth
+      [247231] = 1, -- Unbound Spirit
+      [247234] = 1, -- Varrox Bleakhoof
     },
-    bossOrder = {0000, 0000, 0000, 0000}
+    extraCreditKills = {
+      [269104] = 1, -- Moontouched Wanderer (rare)
+      [269111] = 1, -- Gortek the Apprentice (rare)
+    },
+    bossOrder = {247206, 247198, 247195, 247209, 247207, 247231, 247234, 269104, 269111}
   },
 
   -- Blackrock Depths (Both, Level 52-60)
@@ -554,20 +584,24 @@ local Dungeons = {
       [9017] = 1,  -- Lord Incendius
       [9056] = 1,  -- Fineous Darkvire
       [9041] = 1,  -- Warder Stilgiss
-      [9042] = 1,  -- Verek
       [9156] = 1,  -- Ambassador Flamelash
+      ["The Seven"] = {9034, 9035, 9036, 9037, 9038, 9039, 9040},  -- The Seven (any one of the seven) Hate'rel, Anger'rel, Vile'rel, Gloom'rel, Seeth'rel, Doom'rel, Dope'rel
       [9938] = 1,  -- Magmus
       [9019] = 1,  -- Emperor Dagran Thaurissan
     },
     extraCreditKills = {
+      [9537] = 1,  -- Hurley Blackbreath
+      [9502] = 1,  -- Phalanx
+      [9543] = 1,  -- Ribbly Screwspigot
+      [9499] = 1,  -- Plugger Spazzring
       [8929] = 1,  -- Princess Moira Bronzebeard
     },
-    bossOrder = {9025, 9016, 9319, 9018, "Ring Of Law", 9024, 9033, 8983, 9017, 9056, 9041, 9042, 9156, 9938, 8929, 9019}
+    bossOrder = {9025, 9016, 9319, 9018, "Ring Of Law", 9024, 9033, 8983, 9017, 9056, 9041, 9156, "The Seven", 9938, 9019, 9537, 9502, 9543, 9499, 8929}
   },
 
   -- Blackrock Spire (Both, Level 55-60)
   {
-    achId = "BRS",
+    achId = "LBRS",
     title = "Lower Blackrock Spire",
     tooltip = "Defeat the bosses of " .. ClassColor .. "Lower Blackrock Spire|r at level 59 or lower upon entering the dungeon",
     icon = 236429,
@@ -598,21 +632,30 @@ local Dungeons = {
 
   -- Shaper's Terrace (Level 58-60)
   {
-    achId = "ShaperT",
+    achId = "SHT",
     title = "Shaper's Terrace",
-    tooltip = "Defeat the bosses of " .. ClassColor .. "Shaper's Terrace|r at level 56 or lower upon entering the dungeon",
-    icon = 000000,
-    level = 59,
+    tooltip = "Defeat the bosses of " .. ClassColor .. "Shaper's Terrace|r at level 60 or lower upon entering the dungeon",
+    icon = 254088,
+    level = 60,
     points = 10,
     staticPoints = false,
     requiredMapId = 000,
     requiredKills = {
-      [0000] = 1, -- Boss 1
-      [0000] = 1, -- Boss 2
-      [0000] = 1, -- Boss 3
-      [0000] = 1, -- Boss 4
+      [253201] = 1, -- Titanosaur
+      ["Ravasaur Hunters"] = {0000, 0000, 0000},  -- Ravasaur Hunters (any one of the six)
+      [261812] = 1, -- Thunderhoof
+      [261813] = 1, -- Venomridge
+      [262127] = 1, -- Direhorn Matriarch
+      [261974] = 1, -- Cinder
+      [262297] = 1, -- Snowtalon
+      [262081] = 1, -- Bolt
+      [272561] = 1, -- Vitrix
+      [261809] = 1, -- Nanaya
     },
-    bossOrder = {0000, 0000, 0000, 0000}
+    extraCreditKills = {
+      [261993] = 1, -- King Op (rare)
+    },
+    bossOrder = {253201, "Ravasaur Hunters", 261812, 261813, 262127, 261974, 262297, 262081, 272561, 261809, 261993}
   },
 
   -- Upper Blackrock Spire (10-man dungeon, Level 60)
@@ -629,11 +672,13 @@ local Dungeons = {
     requiredKills = {
       [9816] = 1,  -- Pyroguard Emberseer
       [10429] = 1, -- Warchief Rend Blackhand
-      [10339] = 1, -- Gyth
       [10430] = 1, -- The Beast
       [10363] = 1, -- General Drakkisath
     },
-    bossOrder = {9816, 10429, 10339, 10430, 10363}
+    extraCreditKills = {
+      [10509] = 1, -- Jed Runewatcher
+    },
+    bossOrder = {9816, 10429, 10430, 10363, 10509}
   },
 
   -- Stratholme (Both, Level 58-60)
@@ -683,7 +728,6 @@ local Dungeons = {
     staticPoints = false,
     requiredMapId = 429,
     requiredKills = {
-      [14354] = 1, -- Pusillin
       [14327] = 1, -- Lethtendris
       [13280] = 1, -- Hydrospawn
       [11490] = 1, -- Zevrim Thornhoof
@@ -702,9 +746,10 @@ local Dungeons = {
       [11486] = 1, -- Prince Tortheldrin
     },
     extraCreditKills = {
+      [14354] = 1, -- Pusillin
       [11467] = 1, -- Tsu'zee (rare)
     },
-    bossOrder = {14354, 14327, 13280, 11490, 11492, 14326, 14322, 14321, 14323, 14325, 14324, 11501, 11489, 11487, 11467, 11488, 11496, 11486}
+    bossOrder = {14327, 13280, 11490, 11492, 14326, 14322, 14321, 14323, 14325, 14324, 11501, 11489, 11487, 11488, 11496, 11486, 14354, 11467}
   },
 
   -- Scholomance (Both, Level 58-60)
@@ -734,7 +779,7 @@ local Dungeons = {
     extraCreditKills = {
       [10506] = 1, -- Kirtonos the Herald (summoned)
     },
-    bossOrder = {10506, 10503, 11622, 10433, 10432, 10508, 10505, 11261, 10901, 10507, 10504, 10502, 1853}
+    bossOrder = {10503, 11622, 10433, 10432, 10508, 10505, 11261, 10901, 10507, 10504, 10502, 1853, 10506}
   }
 }
 

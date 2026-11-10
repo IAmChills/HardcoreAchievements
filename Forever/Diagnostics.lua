@@ -136,6 +136,12 @@ function addon.RunForeverProbe()
         Threat("party1", "party1", "target")
     end
 
+    if type(guid) ~= "string" or IsSecret(guid) then
+        -- GetKillRecord cannot key on secret GUIDs; dungeon/raid bosses use ENCOUNTER_END instead.
+        Line("no participation record (target GUID secret; open-world GUID tracking only)")
+        return
+    end
+
     local record = addon.GetKillRecord and addon.GetKillRecord(guid)
     if record then
         local count = 0

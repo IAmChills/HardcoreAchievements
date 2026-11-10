@@ -24,6 +24,9 @@ TooltipDataProcessor.AddTooltipPostCall(Enum.TooltipDataType.Unit, function(tool
 
     local _, unit = tooltip:GetUnit()
     if not unit then return end
+    if addon.IsSecretValue and addon.IsSecretValue(unit) then
+        return
+    end
 
     append(tooltip, unit)
 end)

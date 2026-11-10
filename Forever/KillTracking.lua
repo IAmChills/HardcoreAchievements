@@ -465,13 +465,19 @@ addon.PlayerIsSoloForGUID = PlayerIsSoloForGUID
 addon.PlayerIsSolo_UpdateStatusForGUID = function() end
 addon.IsGroupEligibleForAchievement = IsGroupEligibleForAchievement
 addon.GetKillRecord = function(guid)
+    -- Instance creature GUIDs are secret and cannot be used as table keys.
+    if type(guid) ~= "string" or IsSecret(guid) then
+        return nil
+    end
     return records[guid]
 end
 
 -- The Classic threat frame compares percentages and would error on secret values. It has nothing to
--- observe here anyway, because the combat log never arrives.
-if PlayerIsSolo_EventFrame then
-    PlayerIsSolo_EventFrame:UnregisterAllEvents()
+-- observe here anyway, because the combat log never arrives. PlayerIsSolo.lua exposes this frame
+-- globally so Forever can tear it down after replacing the solo helpers.
+if _G.PlayerIsSolo_EventFrame then
+    _G.PlayerIsSolo_EventFrame:UnregisterAllEvents()
+    _G.PlayerIsSolo_EventFrame:SetScript("OnEvent", nil)
 end
 
 local tracker = CreateFrame("Frame")
