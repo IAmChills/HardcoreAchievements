@@ -1111,7 +1111,9 @@ local function HandleSlashCommand(msg)
             end
         end
     elseif command == "" then
-        if addon and addon.Dashboard and addon.Dashboard.Toggle then
+        if addon and addon.ShowAchievementWindow then
+            addon.ShowAchievementWindow()
+        elseif addon and addon.Dashboard and addon.Dashboard.Toggle then
             addon.Dashboard:Toggle()
         elseif addon and addon.ShowDashboard then
             addon.ShowDashboard()

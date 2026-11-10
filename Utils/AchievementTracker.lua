@@ -1489,18 +1489,10 @@ local function GetAchievementLine(self, index)
                     local achId = line.achievementId
                     if achId and addon and addon.OpenDashboardToAchievement then
                         addon.OpenDashboardToAchievement(achId)
+                    elseif addon and addon.ShowAchievementWindow then
+                        addon.ShowAchievementWindow()
                     elseif addon and addon.Dashboard and addon.Dashboard.Toggle then
                         addon.Dashboard:Toggle()
-                    else
-                        local ShowDashboard = addon and addon.ShowDashboard
-                        if type(ShowDashboard) == "function" then
-                            ShowDashboard()
-                        else
-                            local ShowAchievementWindow = addon and addon.ShowAchievementWindow
-                            if type(ShowAchievementWindow) == "function" then
-                                ShowAchievementWindow()
-                            end
-                        end
                     end
                 end
             end

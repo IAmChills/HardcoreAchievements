@@ -44,7 +44,6 @@ end
 local addonName, addon = ...
 local MarkRowCompleted = addon and addon.MarkRowCompleted
 local ApplyFilter = addon and addon.ApplyFilter
-local ShowAchievementWindow = addon and (addon.ShowAchievementWindow or addon.ShowAchievementTab)
 local PlayAchievementSound = addon and addon.PlayAchievementSound
 
 local M = {}
