@@ -454,6 +454,11 @@ function sv.confirmStartNew()
     outer[playerGUID] = sv.shape({})
     sv.writeCurrentMeta(outer[playerGUID])
     sv.conflictFromGuid = nil
+    -- Drop any leftover account-slot copy so migrateCharSlot cannot resurrect old progress
+    -- into this intentionally blank CharDB after ReloadUI.
+    if type(HardcoreAchievementsDB) == "table" and type(HardcoreAchievementsDB.chars) == "table" then
+        HardcoreAchievementsDB.chars[playerGUID] = nil
+    end
     ReloadUI()
 end
 
@@ -1866,6 +1871,14 @@ local function MarkRowCompleted(row, cdbParam)
     if IsAchievementAlreadyCompleted(row) then
         return
     end
+
+    local cdb = (type(cdbParam) == "table" and cdbParam) or select(2, GetCharDB())
+    local id = row and (row.achId or row.id)
+    -- Permanent admin delete tombstone: block normal re-earn until unbanned / admin re-awards.
+    if id and cdb and cdb.deletedByAdmin and cdb.deletedByAdmin[tostring(id)] then
+        return
+    end
+
     row.completed = true
     _outleveledCache[row] = false  -- completed rows are never outleveled
     InvalidateCachedAchievementStats()
@@ -1876,10 +1889,9 @@ local function MarkRowCompleted(row, cdbParam)
 
     -- Title color will be set by UpdatePointsDisplay
     
-    local _, cdb = GetCharDB()
     local wasSolo = false
     if cdb then
-        local id = row.achId or row.id or (row.Title and row.Title:GetText()) or ("row"..tostring(row))
+        id = id or (row.Title and row.Title:GetText()) or ("row"..tostring(row))
         cdb.progress = cdb.progress or {}
         local progress = cdb.progress[id]
         
