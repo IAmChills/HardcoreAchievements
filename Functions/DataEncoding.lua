@@ -10,18 +10,15 @@ local addonName, addon = ...
 local configForLS = { errorOnUnserializableType = false }
 local configForDeflate = { level = 1 } -- speed over size for UI backup encode
 
--- LibP2PDB gossip can serialize large digests/row chunks and compress them on the same
--- frame as AceComm decompress. Level 1 still times out there; level 0 (store) is CPU-safe.
--- Wire format remains raw Deflate (compatible with default peers).
-local configForP2PDeflate = { level = 0 }
-local LibP2PDBFastCompressor = {
-    Compress = function(_, str)
-        return (LibDeflate:CompressDeflate(str, configForP2PDeflate))
-    end,
-    Decompress = function(_, str)
-        return LibDeflate:DecompressDeflate(str)
-    end,
-}
+-- LibP2PDB 15 wraps codec failures in pcall and only reports them if onError is set.
+local function LibP2PDBOnError(errMsg, stack)
+    if addon and addon.DebugPrint then
+        addon.DebugPrint("LibP2PDB: " .. tostring(errMsg))
+        if stack and stack ~= "" then
+            addon.DebugPrint(tostring(stack))
+        end
+    end
+end
 
 -- Cache for repeated encodings of the same data (cleared after 5 minutes)
 local compressedCache = {}
@@ -69,10 +66,10 @@ local function DecodeData(encoded)
     -- Clean input
     encoded = string.gsub(encoded, '%s+', '')
 
-    -- New format: !HCA:1!...
-    local _, _, encodeVersion, payload = encoded:find("^(!HCA:(%d+)!)(.+)$")
+    -- New format: !HCA:1!...  (%d+ must not be its own capture or payload shifts to "1")
+    local encodeVersion, payload = encoded:match("^!HCA:(%d+)!(.+)$")
     if encodeVersion then
-        encodeVersion = tonumber(encodeVersion:match("%d+"))
+        encodeVersion = tonumber(encodeVersion)
         if encodeVersion == 1 then
             local decoded = LibDeflate:DecodeForPrint(payload)
             if not decoded then
@@ -116,5 +113,5 @@ end
 if addon then
     addon.EncodeData = EncodeData
     addon.DecodeData = DecodeData
-    addon.LibP2PDBFastCompressor = LibP2PDBFastCompressor
+    addon.LibP2PDBOnError = LibP2PDBOnError
 end

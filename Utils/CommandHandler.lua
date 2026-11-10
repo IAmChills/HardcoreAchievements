@@ -29,17 +29,29 @@ local MAX_PAYLOAD_AGE = 300 -- 5 minutes in seconds
 -- Callback registry for Precious completion messages
 local preciousCompletionCallbacks = {}
 
+local function GetAccountDB()
+    if type(HardcoreAchievementsDB) == "table" then
+        if addon then
+            addon.HardcoreAchievementsDB = HardcoreAchievementsDB
+        end
+        return HardcoreAchievementsDB
+    end
+    if addon and type(addon.HardcoreAchievementsDB) == "table" then
+        return addon.HardcoreAchievementsDB
+    end
+    return nil
+end
+
 -- Debug system: Helper functions for debug messages
 local function GetDebugEnabled()
-    if not addon then return false end
-    addon.HardcoreAchievementsDB = addon.HardcoreAchievementsDB or {}
-    return addon.HardcoreAchievementsDB.debugEnabled or false
+    local db = GetAccountDB()
+    return (db and db.debugEnabled) or false
 end
 
 local function SetDebugEnabled(enabled)
-    if not addon then return end
-    addon.HardcoreAchievementsDB = addon.HardcoreAchievementsDB or {}
-    addon.HardcoreAchievementsDB.debugEnabled = enabled and true or false
+    local db = GetAccountDB()
+    if not db then return end
+    db.debugEnabled = enabled and true or false
 end
 
 local function DebugPrint(message)
@@ -52,17 +64,16 @@ if addon then addon.DebugPrint = DebugPrint end
 -- SECURITY: Get admin secret key from database (set by admin via slash command)
 -- This key is NOT in source code and must be set by the admin
 local function GetAdminSecretKey()
-    if not addon then return nil end
-    addon.HardcoreAchievementsDB = addon.HardcoreAchievementsDB or {}
-    return addon.HardcoreAchievementsDB.adminSecretKey
+    local db = GetAccountDB()
+    return db and db.adminSecretKey
 end
 
 -- SECURITY: Set admin secret key (only accessible via slash command)
 local function SetAdminSecretKey(key)
-    if not addon then return false end
-    addon.HardcoreAchievementsDB = addon.HardcoreAchievementsDB or {}
+    local db = GetAccountDB()
+    if not db then return false end
     if key and #key >= 16 then
-        addon.HardcoreAchievementsDB.adminSecretKey = key
+        db.adminSecretKey = key
         return true
     end
     return false
@@ -941,8 +952,15 @@ local function HandleSlashCommand(msg)
             if cdb then cdb.showCustomTab = true end
         end
         
-        -- Immediately show the custom tab
-        local tab = _G["CharacterFrameTab" .. (CharacterFrame.numTabs + 1)]
+        -- Immediately show the custom tab. Prefer the direct getter; the name lookup only works on
+        -- clients whose character panel populates numTabs, which retail does not.
+        local tab = (addon and addon.GetTab and addon.GetTab()) or nil
+        if not tab and addon and addon.GetCharacterFrameTabCount then
+            local count = addon.GetCharacterFrameTabCount()
+            if count >= 1 then
+                tab = _G["CharacterFrameTab" .. (count + 1)]
+            end
+        end
         if tab and tab:GetText() and tab:GetText():find("Achievements") then
             tab:Show()
             tab:SetScript("OnClick", function(self)
@@ -1057,6 +1075,21 @@ local function HandleSlashCommand(msg)
         else
             print("|cffff0000[Hardcore Achievements]|r Achievement leaderboard is not available yet.")
         end
+    elseif command == "probe" then
+        if addon and addon.RunForeverProbe then
+            addon.RunForeverProbe()
+        else
+            print("|cff008066[Hardcore Achievements]|r /hca probe is only available on the Forever client")
+        end
+    elseif command == "killdebug" then
+        if not (addon and addon.SetForeverKillDebug) then
+            print("|cff008066[Hardcore Achievements]|r /hca killdebug is only available on the Forever client")
+        else
+            local sub = args[2] and string.lower(args[2]) or ""
+            local enable = sub == "on" or (sub ~= "off" and not addon.ForeverKillDebug)
+            addon.SetForeverKillDebug(enable)
+            print("|cff008066[Hardcore Achievements]|r Kill debug " .. (enable and "enabled" or "disabled"))
+        end
     elseif command == "debug" then
         -- Debug toggle command
         if args[2] and string.lower(args[2]) == "on" then
@@ -1076,6 +1109,14 @@ local function HandleSlashCommand(msg)
             else
                 print("|cff008066[Hardcore Achievements]|r Debug mode disabled")
             end
+        end
+    elseif command == "" then
+        if addon and addon.ShowAchievementWindow then
+            addon.ShowAchievementWindow()
+        elseif addon and addon.Dashboard and addon.Dashboard.Toggle then
+            addon.Dashboard:Toggle()
+        elseif addon and addon.ShowDashboard then
+            addon.ShowDashboard()
         end
     else
         print("|cff008066[Hardcore Achievements]|r Available commands:")

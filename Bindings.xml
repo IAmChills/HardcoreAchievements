@@ -1,5 +1,5 @@
 <Bindings>
 	<Binding name="HCA_TOGGLE" category = "Hardcore Achievements">
-		ShowHardcoreAchievementWindow()
+		HardcoreAchievements_Toggle()
 	</Binding>
 </Bindings>

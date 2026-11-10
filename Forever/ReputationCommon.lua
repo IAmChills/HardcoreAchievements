@@ -1,0 +1,323 @@
+---------------------------------------
+-- Reputation Achievement Common Module
+---------------------------------------
+local ReputationCommon = {}
+
+local addonName, addon = ...
+local UnitClass = UnitClass
+local CreateFrame = CreateFrame
+local C_Timer = C_Timer
+
+---------------------------------------
+-- Shared UPDATE_FACTION dispatch
+---------------------------------------
+-- UPDATE_FACTION arrives in bursts while questing. Previously every reputation achievement owned
+-- its own event frame and re-ran its own GetNumFactions() scan on each event, so a single burst
+-- cost dozens of full reputation-list walks. All achievements now share one frame, one cached
+-- faction scan, and one debounced pass.
+
+local registrars = {}
+local factionIdSet = nil
+local passPending = false
+local passWantsChecks = false
+local sharedEventFrame = nil
+
+local function GetFactionIdSet()
+  if factionIdSet then
+    return factionIdSet
+  end
+  local set = {}
+  for i = 1, addon.GetNumFactionEntries() do
+    local factionID, _, isHeader = addon.GetFactionEntryByIndex(i)
+    if not isHeader and factionID then
+      set[factionID] = true
+    end
+  end
+  factionIdSet = set
+  return set
+end
+
+local function RunRegistrarPass()
+  passPending = false
+  local runChecks = passWantsChecks
+  passWantsChecks = false
+  -- Drop the cached scan once per pass; the first registrar rebuilds it and the rest reuse it.
+  factionIdSet = nil
+  for i = 1, #registrars do
+    local entry = registrars[i]
+    if runChecks then
+      entry.check()
+    end
+    entry.register()
+  end
+end
+
+local function QueueRegistrarPass(wantsChecks)
+  if wantsChecks then
+    passWantsChecks = true
+  end
+  if passPending then
+    return
+  end
+  passPending = true
+  if C_Timer and C_Timer.After then
+    C_Timer.After(0.5, RunRegistrarPass)
+  else
+    RunRegistrarPass()
+  end
+end
+
+local function EnsureSharedEventFrame()
+  if sharedEventFrame then
+    return
+  end
+  sharedEventFrame = CreateFrame("Frame")
+  sharedEventFrame:RegisterEvent("PLAYER_LOGIN")
+  sharedEventFrame:RegisterEvent("ADDON_LOADED")
+  sharedEventFrame:RegisterEvent("UPDATE_FACTION")
+  sharedEventFrame:SetScript("OnEvent", function(_, event)
+    factionIdSet = nil
+    QueueRegistrarPass(event == "UPDATE_FACTION")
+  end)
+end
+
+---------------------------------------
+-- Registration Function
+---------------------------------------
+
+local function registerReputationAchievement(def)
+  local achId = def.achId
+  local title = def.title or ""
+  local tooltip = def.tooltip or ""
+  local icon = def.icon
+  local points = def.points or 0
+  local factionId = def.factionId -- Faction ID (required)
+  local staticPoints = def.staticPoints or false
+  local class = def.class -- Optional class restriction
+
+  -- Always register the def (eligibility still gates the character-frame row).
+  def.isReputation = true
+  if addon and addon.RegisterAchievementDef then
+    addon.RegisterAchievementDef(def, { level = nil })
+  end
+  
+  -- Create unique variable names
+  local rowVarName = achId .. "_Row"
+  local registerFuncName = "Register" .. achId
+  
+  ---------------------------------------
+  -- Helper Functions
+  ---------------------------------------
+
+  -- Get character database with fallback
+  local function GetCharDB()
+    return (addon and addon.GetCharDB and addon.GetCharDB()) or (function() return nil, nil end)()
+  end
+
+  -- Check if achievement was already completed in database
+  local function WasAlreadyCompleted()
+    local _, cdb = GetCharDB()
+    return cdb and cdb.achievements and cdb.achievements[achId] and cdb.achievements[achId].completed
+  end
+
+  -- Get faction standing ID (8 = Exalted)
+  local function GetFactionStanding()
+    return addon.GetFactionStandingById(factionId)
+  end
+
+  -- Check if player has the faction and is exalted
+  -- Uses factionId to check standing via C_Reputation.GetFactionDataByID()
+  local function IsExalted()
+    local standing = GetFactionStanding()
+    return standing == 8
+  end
+  
+  -- Check if player has the faction in their list (even if not exalted).
+  -- Reads the shared faction scan so dozens of achievements cost one walk, not one each.
+  local function HasFaction()
+    return GetFactionIdSet()[factionId] == true
+  end
+  
+  ---------------------------------------
+  -- Tooltip Management
+  ---------------------------------------
+
+  local function UpdateTooltip()
+    local row = addon[rowVarName]
+    if not row then return end
+    local baseTooltip = tooltip or ""
+    row.tooltip = baseTooltip
+
+    local frame = row.frame
+    if not frame then
+      if addon and addon.AddRowUIInit then
+        addon.AddRowUIInit(row, function()
+          C_Timer.After(0, UpdateTooltip)
+        end)
+      end
+      return
+    end
+    frame.tooltip = baseTooltip
+    if addon and addon.BindAchievementRowTooltip then
+      addon.BindAchievementRowTooltip(frame)
+    end
+  end
+  
+  -- Mark achievement as completed and optionally show toast
+  local function MarkCompletionAndShowToast(row, showToast)
+    if not row or not (addon and addon.MarkRowCompleted) then
+      return
+    end
+
+    if showToast and addon and addon.CompleteAchievementWithToast then
+      addon.CompleteAchievementWithToast(row)
+    elseif addon and addon.MarkRowCompleted then
+      addon.MarkRowCompleted(row)
+    else
+      row.completed = true
+    end
+  end
+
+  -- Check if achievement should be completed (no progress saving - just check directly)
+  local function CheckCompletion()
+    -- First check database to see if achievement was previously completed
+    if WasAlreadyCompleted() then
+      return true
+    end
+    
+    -- Check if row is already marked as completed
+    local row = addon[rowVarName]
+    if row and row.completed then
+      return true
+    end
+    
+    -- Check if player is exalted
+    if IsExalted() then
+      return true
+    end
+    
+    return false
+  end
+  
+  -- Reputation tracker (called on UPDATE_FACTION events)
+  local function ReputationTracker()
+    -- Check if achievement should be completed
+    if CheckCompletion() then
+      local row = addon[rowVarName]
+      -- Only show toast if this is a new completion (not loading from database)
+      local showToast = not WasAlreadyCompleted()
+      MarkCompletionAndShowToast(row, showToast)
+      UpdateTooltip()
+      return true
+    end
+    
+    UpdateTooltip()
+    return false
+  end
+  
+  -- Store the tracker function globally for the main system
+  -- Note: The bridge will call this on UPDATE_FACTION events
+  -- Tracker function is passed directly to CreateAchievementRow and stored on row
+  
+  -- Register functions in local registry to reduce global pollution
+  if addon and addon.RegisterAchievementFunction then
+    addon.RegisterAchievementFunction(achId, "IsCompleted", function() 
+      return CheckCompletion()
+    end)
+  end
+  
+  -- Check eligibility - only show if player has the faction in their list and matches class (if specified)
+  local function IsEligible()
+    -- Only register if the player has this faction in their reputation list
+    if not HasFaction() then
+      return false
+    end
+    
+    -- Class: use class file tokens ("MAGE","WARRIOR","ROGUE",...)
+    if class then
+      local _, classFile = UnitClass("player")
+      if classFile ~= class then
+        return false
+      end
+    end
+    
+    return true
+  end
+  
+  ---------------------------------------
+  -- Registration Logic
+  ---------------------------------------
+
+  addon[registerFuncName] = function()
+    if not (addon and addon.CreateAchievementRow) then return end
+    if addon[rowVarName] then return end
+    
+    -- Check if player is eligible for this achievement (has the faction)
+    if not IsEligible() then return end
+    
+    addon[rowVarName] = addon.CreateAchievementRow(
+      nil,
+      achId,
+      title,
+      tooltip,
+      icon,
+      nil, -- No level for reputation achievements
+      points,
+      nil, -- No kill tracker for reputation
+      nil, -- No quest tracker for reputation
+      staticPoints,
+      nil, -- No zone for reputation achievements
+      def
+    )
+    
+    -- Store faction ID on the row for easy access
+    addon[rowVarName].factionId = factionId
+    
+    -- Load completion status from database on registration
+    if WasAlreadyCompleted() then
+      -- Achievement was previously completed - mark row as completed without showing toast
+      MarkCompletionAndShowToast(addon[rowVarName], false)
+    elseif CheckCompletion() then
+      -- Achievement should be completed now (player is exalted) - mark and show toast
+      MarkCompletionAndShowToast(addon[rowVarName], true)
+    end
+    
+    -- Update tooltip after creation to ensure it shows current progress
+    C_Timer.After(0.1, UpdateTooltip)
+  end
+  
+  -- Auto-register the achievement immediately if the panel is ready
+  if addon and addon.CreateAchievementRow then
+    addon[registerFuncName]()
+  end
+  
+  -- Join the shared event pass instead of creating a frame per achievement.
+  registrars[#registrars + 1] = {
+    register = function()
+      addon[registerFuncName]()
+    end,
+    check = function()
+      if CheckCompletion() then
+        local row = addon[rowVarName]
+        -- Only show toast if this is a new completion (not loading from database)
+        local showToast = not WasAlreadyCompleted()
+        MarkCompletionAndShowToast(row, showToast)
+      end
+    end,
+  }
+  EnsureSharedEventFrame()
+  
+  if _G.CharacterFrame and _G.CharacterFrame.HookScript then
+    CharacterFrame:HookScript("OnShow", function()
+      addon[registerFuncName]()
+    end)
+  end
+end
+
+---------------------------------------
+-- Module Export
+---------------------------------------
+
+ReputationCommon.registerReputationAchievement = registerReputationAchievement
+
+if addon then addon.ReputationCommon = ReputationCommon end

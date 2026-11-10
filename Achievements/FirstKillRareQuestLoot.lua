@@ -18,6 +18,10 @@ local CreateFrame = CreateFrame
 local GetItemCount = GetItemCount
 
 local function getNpcIdFromGUID(guid)
+    -- Same result as strsplit for a plain GUID. Returns nil for a secret GUID instead of erroring.
+    if addon.ParseCreatureNpcId then
+        return addon.ParseCreatureNpcId(guid)
+    end
     if not guid then return nil end
     local _, _, _, _, _, npcId = strsplit("-", guid)
     return npcId and tonumber(npcId) or nil
@@ -236,6 +240,16 @@ local function onBagUpdateDelayed()
     end
 end
 
+-- PARTY_KILL is delivered by the single COMBAT_LOG_EVENT_UNFILTERED frame in
+-- HardcoreAchievements.lua. Registering a second CLEU frame here would parse every combat log
+-- event twice, which is hundreds of extra parses per second during AoE.
+if addon then
+    addon.FirstKillRareQuestLoot_OnPartyKill = function(destGUID)
+        if #rules == 0 then return end
+        onPartyKill(destGUID)
+    end
+end
+
 local f = CreateFrame("Frame")
 f:RegisterEvent("PLAYER_LOGIN")
 f:SetScript("OnEvent", function(_, event, ...)
@@ -244,17 +258,11 @@ f:SetScript("OnEvent", function(_, event, ...)
         if #rules == 0 then
             return
         end
-        f:RegisterEvent("COMBAT_LOG_EVENT_UNFILTERED")
         f:RegisterEvent("BAG_UPDATE_DELAYED")
         return
     end
 
-    if event == "COMBAT_LOG_EVENT_UNFILTERED" then
-        local _, subevent, _, _, _, _, _, destGUID = CombatLogGetCurrentEventInfo()
-        if subevent == "PARTY_KILL" and destGUID then
-            onPartyKill(destGUID)
-        end
-    elseif event == "BAG_UPDATE_DELAYED" then
+    if event == "BAG_UPDATE_DELAYED" then
         onBagUpdateDelayed()
     end
 end)

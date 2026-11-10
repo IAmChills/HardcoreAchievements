@@ -290,8 +290,8 @@ function Leaderboard.GetLeaderboardRowKey()
     if type(guid) == "string" and guid ~= "" then
         return guid
     end
-    local name, realm = UnitName("player")
-    realm = realm or GetRealmName()
+    local name = (addon.GetPlayerFullName and addon.GetPlayerFullName()) or UnitName("player")
+    local realm = (addon.GetPlayerRealmLabel and addon.GetPlayerRealmLabel()) or GetRealmName()
     if not name or name == "" then
         return nil
     end
@@ -517,6 +517,9 @@ function Leaderboard:Refresh()
 end
 
 function Leaderboard:Toggle()
+    if addon and addon.IsForeverCharacterUI and InCombatLockdown and InCombatLockdown() then
+        return
+    end
     local dashboardFrame = addon and addon.DashboardFrame
     if dashboardFrame and dashboardFrame:IsShown() and dashboardFrame.SelectedTabKey == "leaderboard" then
         StopVisibleSyncLoop()
@@ -531,6 +534,9 @@ function Leaderboard:Toggle()
 end
 
 function Leaderboard:Show()
+    if addon and addon.IsForeverCharacterUI and InCombatLockdown and InCombatLockdown() then
+        return
+    end
     addon._hcaOpenDashboardTabKey = "leaderboard"
     if addon.Dashboard and addon.Dashboard.Show then
         addon.Dashboard:Show()

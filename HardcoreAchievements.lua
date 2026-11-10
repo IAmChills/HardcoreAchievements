@@ -88,6 +88,17 @@ local CreateAchToast
 -- When true, MarkRowCompleted skips emote/guild broadcast (first run after login = retroactive completions)
 local skipBroadcastForRetroactive = false
 
+-- GuildFirst replays its persisted claims through MarkRowCompleted at login, which would re-announce
+-- wins the player earned long ago. Returns the previous value so callers restore it rather than
+-- assuming they are the only one suppressing.
+if addon then
+    addon.SetSkipAchievementBroadcast = function(skip)
+        local previous = skipBroadcastForRetroactive
+        skipBroadcastForRetroactive = skip and true or false
+        return previous
+    end
+end
+
 -- Achievement function registry to reduce global pollution
 local AchievementFunctionRegistry = {}
 
@@ -263,27 +274,382 @@ local function UntrackRowForQuest(row)
     end
 end
 
-local function EnsureDB()
-    if not addon then return nil end
+-- Bind SavedVariables globals on ADDON_LOADED. Creating them during file load
+-- writes into a throwaway table that is then replaced (official clients) or
+-- kept empty (if the client refuses to overwrite an existing global).
+-- Account: HardcoreAchievementsDB (leaderboard, guild-first, minimap, account settings).
+-- Character: HardcoreAchievementsCharDB keyed by player GUID. A GUID mismatch
+-- offers migrate (rekey the table) or start new (keep the old table, add a new one).
+-- Helpers live on one table so this chunk stays under Lua 5.1's 200-local limit.
+local savedVarsBound = false
+local sv = {}
+
+function sv.deepCopy(value)
+    if type(value) ~= "table" then
+        return value
+    end
+    local copy = {}
+    for k, v in pairs(value) do
+        copy[k] = sv.deepCopy(v)
+    end
+    return copy
+end
+
+function sv.hasEntries(t)
+    return type(t) == "table" and next(t) ~= nil
+end
+
+function sv.hasProgress(rec)
+    if type(rec) ~= "table" then
+        return false
+    end
+    if sv.hasEntries(rec.achievements) then return true end
+    if sv.hasEntries(rec.progress) then return true end
+    if sv.hasEntries(rec.settings) then return true end
+    if sv.hasEntries(rec.dungeonEntryLevels) then return true end
+    if sv.hasEntries(rec.stats) then return true end
+    if type(rec.eventLogLines) == "table" and #rec.eventLogLines > 0 then return true end
+    return false
+end
+
+function sv.shape(cdb)
+    if type(cdb) ~= "table" then
+        return cdb
+    end
+    cdb.meta = cdb.meta or {}
+    cdb.achievements = cdb.achievements or {}
+    cdb.progress = cdb.progress or {}
+    cdb.settings = cdb.settings or {}
+    cdb.eventLogLines = cdb.eventLogLines or {}
+    return cdb
+end
+
+function sv.copyRecord(dst, src)
+    if type(dst) ~= "table" or type(src) ~= "table" then
+        return
+    end
+    for k, v in pairs(src) do
+        dst[k] = sv.deepCopy(v)
+    end
+    sv.shape(dst)
+end
+
+function sv.isPlayerGuidKey(key)
+    return type(key) == "string" and string.find(key, "^Player%-") ~= nil
+end
+
+function sv.otherGuid(outer, skipGuid)
+    if type(outer) ~= "table" then
+        return nil
+    end
+    local best, bestLogin
+    for k, rec in pairs(outer) do
+        if sv.isPlayerGuidKey(k) and k ~= skipGuid and type(rec) == "table" then
+            local login = rec.meta and tonumber(rec.meta.lastLogin) or 0
+            if not best or login >= (bestLogin or 0) then
+                best = k
+                bestLogin = login
+            end
+        end
+    end
+    return best
+end
+
+function sv.wrapLegacy(outer, guid)
+    if type(outer) ~= "table" or not guid then
+        return nil
+    end
+    local rec = {}
+    for k, v in pairs(outer) do
+        rec[k] = v
+    end
+    for k in pairs(rec) do
+        outer[k] = nil
+    end
+    outer[guid] = sv.shape(rec)
+    rec.meta.guid = guid
+    return rec
+end
+
+function sv.writeCurrentMeta(cdb)
+    if type(cdb) ~= "table" then
+        return
+    end
+    cdb.meta = cdb.meta or {}
+    cdb.meta.name = (addon.GetPlayerFullName and addon.GetPlayerFullName())
+        or (UnitName and UnitName("player"))
+        or cdb.meta.name
+    cdb.meta.realm = (addon.GetPlayerRealmLabel and addon.GetPlayerRealmLabel())
+        or (GetRealmName and GetRealmName())
+        or cdb.meta.realm
+    cdb.meta.className = UnitClass and UnitClass("player") or cdb.meta.className
+    cdb.meta.race = UnitRace and UnitRace("player") or cdb.meta.race
+    cdb.meta.level = UnitLevel and UnitLevel("player") or cdb.meta.level
+    cdb.meta.faction = UnitFactionGroup and UnitFactionGroup("player") or cdb.meta.faction
+    cdb.meta.lastLogin = time()
+    if playerGUID then
+        cdb.meta.guid = playerGUID
+    end
+end
+
+function sv.getActiveRecord(outer)
+    if type(outer) ~= "table" then
+        return nil
+    end
+    local guid = playerGUID
+    if guid and type(outer[guid]) == "table" then
+        sv.conflictFromGuid = nil
+        return sv.shape(outer[guid])
+    end
+
+    local stored = sv.otherGuid(outer, guid)
+    if not guid then
+        if stored then
+            return sv.shape(outer[stored])
+        end
+        return sv.shape(outer)
+    end
+
+    if stored and sv.hasProgress(outer[stored]) then
+        sv.conflictFromGuid = stored
+        return sv.shape(outer[stored])
+    end
+
+    if stored then
+        outer[guid] = sv.shape({})
+        outer[guid].meta.guid = guid
+        sv.conflictFromGuid = nil
+        return outer[guid]
+    end
+
+    sv.conflictFromGuid = nil
+    return sv.wrapLegacy(outer, guid)
+end
+
+function sv.showGuidConflictPopup()
+    if sv.conflictFromGuid and StaticPopup_Show then
+        StaticPopup_Show("Hardcore Achievements GUID Mismatch")
+    end
+end
+
+function sv.confirmMigrate()
+    local outer = HardcoreAchievementsCharDB
+    local fromGuid = sv.conflictFromGuid
+    if type(outer) ~= "table" or not playerGUID or not fromGuid then
+        return
+    end
+    if fromGuid ~= playerGUID and type(outer[fromGuid]) == "table" then
+        outer[playerGUID] = outer[fromGuid]
+        outer[fromGuid] = nil
+    end
+    sv.conflictFromGuid = nil
+    sv.writeCurrentMeta(sv.shape(outer[playerGUID]))
+end
+
+function sv.confirmStartNew()
+    local outer = HardcoreAchievementsCharDB
+    if type(outer) ~= "table" or not playerGUID then
+        return
+    end
+    outer[playerGUID] = sv.shape({})
+    sv.writeCurrentMeta(outer[playerGUID])
+    sv.conflictFromGuid = nil
+    ReloadUI()
+end
+
+function sv.bindChar()
+    if type(HardcoreAchievementsCharDB) ~= "table" then
+        HardcoreAchievementsCharDB = {}
+    end
+    if addon then
+        addon.HardcoreAchievementsCharDB = HardcoreAchievementsCharDB
+    end
+    return sv.getActiveRecord(HardcoreAchievementsCharDB)
+end
+
+local function BindSavedVariables()
     if type(HardcoreAchievementsDB) ~= "table" then
         HardcoreAchievementsDB = {}
     end
-    addon.HardcoreAchievementsDB = HardcoreAchievementsDB
-    addon.HardcoreAchievementsDB.chars = addon.HardcoreAchievementsDB.chars or {}
-    return addon.HardcoreAchievementsDB
+    if addon then
+        addon.HardcoreAchievementsDB = HardcoreAchievementsDB
+    end
+    HardcoreAchievementsDB.chars = HardcoreAchievementsDB.chars or {}
+    savedVarsBound = true
+    sv.bindChar()
+    return HardcoreAchievementsDB
+end
+
+-- Read-only until ADDON_LOADED. Do not create either global here.
+local function EnsureDB()
+    if not addon then return nil end
+    if type(HardcoreAchievementsDB) == "table" then
+        if addon then
+            addon.HardcoreAchievementsDB = HardcoreAchievementsDB
+        end
+        HardcoreAchievementsDB.chars = HardcoreAchievementsDB.chars or {}
+        return HardcoreAchievementsDB
+    end
+    return nil
+end
+
+function sv.ensureChar()
+    if not addon then return nil end
+    if savedVarsBound then
+        return sv.bindChar()
+    end
+    if type(HardcoreAchievementsCharDB) == "table" then
+        if addon then
+            addon.HardcoreAchievementsCharDB = HardcoreAchievementsCharDB
+        end
+        return sv.getActiveRecord(HardcoreAchievementsCharDB)
+    end
+    return nil
+end
+
+local function NormalizePlayerGUID(guid)
+    if guid == nil then
+        return nil
+    end
+    if issecretvalue and issecretvalue(guid) then
+        return nil
+    end
+    local key = tostring(guid)
+    if key == "" or key == "nil" then
+        return nil
+    end
+    return key
+end
+
+function sv.migrateDungeon(db, cdb)
+    if not (db and cdb) then
+        return
+    end
+    if sv.hasEntries(cdb.dungeonEntryLevels) then
+        db.dungeonEntryLevels = nil
+        if cdb.dungeonLastInstanceMapId ~= nil then
+            db.dungeonLastInstanceMapId = nil
+        end
+        return
+    end
+    if sv.hasEntries(db.dungeonEntryLevels) then
+        cdb.dungeonEntryLevels = sv.deepCopy(db.dungeonEntryLevels)
+    end
+    if cdb.dungeonLastInstanceMapId == nil and db.dungeonLastInstanceMapId ~= nil then
+        cdb.dungeonLastInstanceMapId = db.dungeonLastInstanceMapId
+    end
+end
+
+function sv.migrateCharSlot(db, cdb)
+    if not (db and cdb) then
+        return
+    end
+    sv.migrateDungeon(db, cdb)
+    if not playerGUID or type(db.chars) ~= "table" then
+        return
+    end
+    local src = db.chars[playerGUID]
+    if type(src) ~= "table" then
+        return
+    end
+    -- Keep the account slot until a later login loads CharDB from disk with data.
+    -- That way a crash (or missing write) on the first logout does not drop the only copy.
+    if sv.hasProgress(cdb) then
+        db.chars[playerGUID] = nil
+        return
+    end
+    if sv.hasProgress(src) then
+        sv.copyRecord(cdb, src)
+    end
 end
 
 local function GetCharDB()
     local db = EnsureDB()
-    if not playerGUID then return db, nil end
-    db.chars[playerGUID] = db.chars[playerGUID] or {
-        meta = {},            -- name/realm/class/race/level/faction/lastLogin
-		achievements = {},    -- [id] = { completed=true, completedAt=time(), level=nn, mapID=123 }
-		progress = {},
-        settings = {},
-        eventLogLines = {},   -- troubleshooting log (Dashboard → Log); per character
+    local cdb = sv.ensureChar()
+    if savedVarsBound and cdb and not sv.conflictFromGuid then
+        sv.migrateCharSlot(db, cdb)
+    end
+    return db, cdb
+end
+
+function sv.findLegacyChar(chars, guid, name, realm)
+    if type(chars) ~= "table" then
+        return nil
+    end
+    if guid and type(chars[guid]) == "table" then
+        return chars[guid]
+    end
+    if not name then
+        return nil
+    end
+    local found, count = nil, 0
+    for _, rec in pairs(chars) do
+        if type(rec) == "table" and rec.meta and rec.meta.name == name then
+            if not realm or rec.meta.realm == realm then
+                count = count + 1
+                found = rec
+            end
+        end
+    end
+    if count == 1 then
+        return found
+    end
+    return nil
+end
+
+function sv.buildBackup()
+    local db = EnsureDB()
+    if not db then
+        return nil
+    end
+    sv.ensureChar()
+    return {
+        format = 2,
+        account = db,
+        character = type(HardcoreAchievementsCharDB) == "table" and HardcoreAchievementsCharDB or {},
     }
-    return db, db.chars[playerGUID]
+end
+
+function sv.applyBackup(data)
+    if type(data) ~= "table" then
+        return false, "Invalid backup data."
+    end
+
+    local accountData, characterData
+    if tonumber(data.format) == 2 then
+        if type(data.account) ~= "table" then
+            return false, "Invalid backup data format."
+        end
+        accountData = data.account
+        characterData = data.character
+    elseif type(data.chars) == "table" then
+        accountData = data
+        local name = UnitName and UnitName("player")
+        local realm = GetRealmName and GetRealmName()
+        characterData = sv.findLegacyChar(data.chars, playerGUID, name, realm)
+        if characterData then
+            characterData = sv.deepCopy(characterData)
+        end
+    else
+        return false, "Invalid backup data format."
+    end
+
+    HardcoreAchievementsDB = accountData
+    HardcoreAchievementsCharDB = type(characterData) == "table" and characterData or {}
+    if addon then
+        addon.HardcoreAchievementsDB = HardcoreAchievementsDB
+        addon.HardcoreAchievementsCharDB = HardcoreAchievementsCharDB
+    end
+    savedVarsBound = true
+    HardcoreAchievementsDB.chars = HardcoreAchievementsDB.chars or {}
+    sv.getActiveRecord(HardcoreAchievementsCharDB)
+    if playerGUID then
+        HardcoreAchievementsDB.chars[playerGUID] = nil
+    end
+    if sv.conflictFromGuid then
+        sv.showGuidConflictPopup()
+    end
+    return true
 end
 
 -- Cleanup function to remove incorrectly completed level bracket achievements
@@ -573,32 +939,68 @@ end
 
 local function GetQuestLogState(questID)
     if not questID then return false, false end
-
-    if GetQuestLogIndexByID then
-        local logIndex = GetQuestLogIndexByID(questID)
-        if logIndex and logIndex > 0 then
-            if GetQuestLogTitle then
-                local _, _, _, isHeader, _, isComplete, _, questIDFromLog = GetQuestLogTitle(logIndex)
-                if not isHeader and questIDFromLog == questID then
-                    return true, (isComplete == 1 or isComplete == true)
-                end
-            end
-            return true, false
-        end
+    -- Via the compat bridge, which probes for whichever quest log API this client kept: the Classic
+    -- globals this used to call directly are absent on retail-based clients (see Utils\Compat.lua).
+    if addon and addon.GetQuestLogState then
+        return addon.GetQuestLogState(questID)
     end
-
-    if GetNumQuestLogEntries and GetQuestLogTitle then
-        local numEntries = GetNumQuestLogEntries()
-        for i = 1, numEntries do
-            local _, _, _, isHeader, _, isComplete, _, questIDFromLog = GetQuestLogTitle(i)
-            if not isHeader and questIDFromLog == questID then
-                return true, (isComplete == 1 or isComplete == true)
-            end
-        end
-    end
-
     return false, false
 end
+
+--- Guild-first claims are exclusive: once another player wins one, nobody else can ever earn it.
+--- Those rows stay listed so players can see what was taken, so this describes the claim rather
+--- than hiding the row. Returns nil when the entry is unclaimed or when we are one of the winners.
+---
+--- Solo claims name the winner. Party/raid claims stay anonymous on purpose: the record stores only
+--- the claimant's name next to a peer-ID list, so naming one of up to forty winners would read as
+--- though they took it alone.
+---
+--- Gated on GuildFirst_DefById so the rest of the catalog never pays for a claim lookup.
+--- @return string? label, number? claimedAt
+local function GetGuildFirstClaimedLabel(achId, row)
+    achId = achId or (row and (row.achId or row.id))
+    if not achId then return nil end
+    local key = tostring(achId)
+
+    local defs = addon and addon.GuildFirst_DefById
+    if not (defs and defs[key]) then return nil end
+
+    local GuildFirst = addon and addon.GuildFirst
+    if not GuildFirst or type(GuildFirst.IsClaimed) ~= "function" then return nil end
+
+    local isClaimed, winner = GuildFirst:IsClaimed(key, row)
+    if not isClaimed or type(winner) ~= "table" then return nil end
+
+    local isWinner = false
+    if type(GuildFirst.IsWinnerRecord) == "function" then
+        isWinner = GuildFirst:IsWinnerRecord(winner) == true
+    else
+        isWinner = tostring(winner.winnerGUID or "") == (UnitGUID("player") or "")
+    end
+    if isWinner then return nil end
+
+    local claimedAt = tonumber(winner.claimedAt)
+
+    -- winnerPeerID is a ';' delimited peer list; admin overrides carry a single winnerGUID instead.
+    local winnerCount = 0
+    local encoded = winner.winnerPeerID or winner.winnerGUID
+    if type(encoded) == "string" then
+        for _ in string.gmatch(encoded, "[^;]+") do
+            winnerCount = winnerCount + 1
+        end
+    end
+    if winnerCount > 1 then
+        return "Claimed", claimedAt
+    end
+
+    local name = winner.winnerName
+    if type(name) ~= "string" or name == "" then
+        return "Claimed", claimedAt
+    end
+    return "Claimed by " .. name, claimedAt
+end
+
+if addon then addon.GetGuildFirstClaimedLabel = GetGuildFirstClaimedLabel end
 
 local function IsRowOutleveledImpl(row)
     if not row or row.completed then return false end
@@ -616,6 +1018,13 @@ local function IsRowOutleveledImpl(row)
         if addon and addon.IsLevelMilestone and addon.IsLevelMilestone(achId) then
             return false
         end
+    end
+
+    -- A guild first won by someone else is permanently out of reach, so it reads as failed instead
+    -- of sitting in the available list forever. Guild firsts carry no maxLevel, so this has to run
+    -- before the no-maxLevel early return below.
+    if GetGuildFirstClaimedLabel(achId, row) then
+        return true
     end
     
     -- Achievements without a maxLevel normally stay available forever.
@@ -679,9 +1088,33 @@ local function IsRowOutleveledImpl(row)
     local questID = row.requiredQuestId or (row._def and row._def.requiredQuestId)
     local questInLog, questReadyForTurnIn = GetQuestLogState(questID)
 
-    -- If the quest is complete and ready to turn in, leveling afterward is still valid.
+    -- Kill/accept level that still counts as under the cap (nil if none / over cap).
+    -- An over-cap levelAtKill wins over levelAtAccept so a late kill cannot revive a fail.
+    local function underCapProgressLevel()
+        if not progress or not row.maxLevel then
+            return nil
+        end
+        local levelAtKill = tonumber(progress.levelAtKill)
+        if levelAtKill then
+            if levelAtKill <= row.maxLevel then
+                return levelAtKill
+            end
+            return nil
+        end
+        local levelAtAccept = tonumber(progress.levelAtAccept)
+        if levelAtAccept and levelAtAccept <= row.maxLevel then
+            return levelAtAccept
+        end
+        return nil
+    end
+
+    -- Quest objectives ready to turn in: leveling after that is still valid only if we have
+    -- under-cap progress. An over-cap kill/accept must not revive an already-failed row.
     if isOverLevel and questID and not (progress and progress.quest) and questReadyForTurnIn then
-        return false
+        if underCapProgressLevel() then
+            return false
+        end
+        return true
     end
 
     -- Check if there's pending turn-in progress (kill completed but quest not turned in)
@@ -719,9 +1152,14 @@ local function IsRowOutleveledImpl(row)
                     return true -- Mark as outleveled/failed
                 end
                 
-                -- If quest is still in quest log, keep achievement available
+                -- Quest still in log: stay available only if the kill itself was under the cap.
+                -- Over-cap kills after a fail must not flip the row back to available.
                 if questID and questInLog then
-                    return false
+                    local levelAtKill = tonumber(progress.levelAtKill)
+                    if levelAtKill and levelAtKill <= row.maxLevel then
+                        return false
+                    end
+                    return isOverLevel
                 end
             end
         end
@@ -773,20 +1211,21 @@ local function PositionRowBorder(row)
     
     row.Border:ClearAllPoints()
     row.Border:SetPoint("TOPLEFT", row, "TOPLEFT", -4, 0)
-    row.Border:SetSize(295, 43)
+    local borderW, highlightRight = 295, -20
+    row.Border:SetSize(borderW, 43)
     row.Border:Show()
     
     if row.Background then
         row.Background:ClearAllPoints()
         row.Background:SetPoint("TOPLEFT", row, "TOPLEFT", -4, 0)
-        row.Background:SetSize(295, 43)
+        row.Background:SetSize(borderW, 43)
         row.Background:Show()
     end
 
     if row.highlight then
         row.highlight:ClearAllPoints()
         row.highlight:SetPoint("TOPLEFT", row, "TOPLEFT", -4, 0)
-        row.highlight:SetPoint("BOTTOMRIGHT", row, "BOTTOMRIGHT", -20, -1)
+        row.highlight:SetPoint("BOTTOMRIGHT", row, "BOTTOMRIGHT", highlightRight, -1)
     end
 end
 
@@ -813,6 +1252,36 @@ local function FormatTimestamp(timestamp)
     end
 end
 
+-- Resolves a display title for log output. Callers that already hold a row pass it in; the
+-- stored-failure trackers and kill handlers only have an id, so fall back to the registered
+-- definition and then the row model before printing the raw id.
+local function GetAchievementTitle(achId, row)
+    if row then
+        local rowTitle = (row.Title and row.Title.GetText and row.Title:GetText()) or row.title
+        if type(rowTitle) == "string" and rowTitle ~= "" then
+            return rowTitle
+        end
+    end
+    if achId == nil then return "Unknown" end
+    local key = tostring(achId)
+    local defs = addon and addon.AchievementDefs
+    local def = defs and (defs[key] or defs[achId])
+    if def and type(def.title) == "string" and def.title ~= "" then
+        return def.title
+    end
+    for _, r in ipairs((addon and addon.AchievementRowModel) or {}) do
+        if r.id == achId or r.achId == achId or tostring(r.id or r.achId) == key then
+            if type(r.title) == "string" and r.title ~= "" then
+                return r.title
+            end
+            break
+        end
+    end
+    return key
+end
+
+if addon then addon.GetAchievementTitle = GetAchievementTitle end
+
 local function EnsureFailureTimestamp(achId, row)
     if not achId then return nil end
     local _, cdb = GetCharDB()
@@ -823,15 +1292,24 @@ local function EnsureFailureTimestamp(achId, row)
         rec = {}
         cdb.achievements[achId] = rec
     end
+    local becameFailed = false
     if not rec.completed and not rec.failedAt then
         rec.failedAt = time()
+        becameFailed = true
         if addon and addon.EventLogAdd then
-            local title = (row and row.Title and row.Title.GetText and row.Title:GetText()) or (row and row.title) or tostring(achId)
-            addon.EventLogAdd("Achievement |cffff0000failed|r (no longer available): " .. tostring(title))
+            addon.EventLogAdd("Achievement |cffff0000failed|r (no longer available): " .. GetAchievementTitle(achId, row))
         end
     end
     if rec.failedAt and not rec.failed then
         rec.failed = true
+        becameFailed = true
+    end
+    -- IsRowOutleveled memoizes per row object and is otherwise only wiped on level, zone and
+    -- quest events. Stored-failure achievements (the Ridiculous set) fail on jumps, XP gain and
+    -- equipment changes, none of which touch those events, so without this the row keeps
+    -- reporting the cached "available" result until the next reload.
+    if becameFailed then
+        InvalidateOutleveledCacheForAchId(achId)
     end
     return rec.failedAt
 end
@@ -855,6 +1333,8 @@ if addon then
     addon.EnsureFailureTimestamp = EnsureFailureTimestamp
     addon.FormatTimestamp = FormatTimestamp
     addon.IsRowOutleveled = IsRowOutleveled
+    addon.InvalidateOutleveledCache = InvalidateOutleveledCache
+    addon.InvalidateOutleveledCacheForAchId = InvalidateOutleveledCacheForAchId
 end
 
 -- Returns the list of achievement rows. Prefer model (populated at load) so tracker/dashboard work
@@ -966,9 +1446,12 @@ local function AchievementCount()
             local isExploration = def and def.isExploration
             local isRidiculous = def and def.isRidiculous
             local isSecret = def and def.isSecret
+            -- Guild firsts are visible in their own tab but only one player per guild can ever win
+            -- each one, so counting the unclaimed ones would cap everyone below 100%.
+            local isGuildFirst = def and def.isGuildFirst
             local excludeFromCount = def and def.excludeFromCount
             -- Note: isRaid is Core (index 4), so it always counts - don't exclude it
-            local shouldCount = not hiddenByProfession and not hiddenUntilComplete and not excludeFromCount and (not isVariation or row.completed) and (not isDungeonSet or row.completed) and (not isReputation or row.completed) and (not isExploration or row.completed) and (not isRidiculous or row.completed) and (not isSecret or row.completed)
+            local shouldCount = not hiddenByProfession and not hiddenUntilComplete and not excludeFromCount and (not isVariation or row.completed) and (not isDungeonSet or row.completed) and (not isReputation or row.completed) and (not isExploration or row.completed) and (not isRidiculous or row.completed) and (not isSecret or row.completed) and (not isGuildFirst or row.completed)
             
             if shouldCount then
                 total = total + 1
@@ -1124,7 +1607,7 @@ local function SortAchievementRows()
     end
 
     AchievementPanel.Content:SetHeight(math.max(totalHeight + 16, AchievementPanel.Scroll:GetHeight() or 0))
-    AchievementPanel.Scroll:UpdateScrollChildRect()
+    pcall(AchievementPanel.Scroll.UpdateScrollChildRect, AchievementPanel.Scroll)
 end
 
 -- Function to update points display and checkmark based on state
@@ -1520,9 +2003,13 @@ local function MarkRowCompleted(row, cdbParam)
         
         -- Fire hook event for other addons
         if addon and addon.Hooks then
-            -- Get aggregate statistics (after completion, so counts are up-to-date)
-            local completedCount, totalCount = AchievementCount()
-            local totalPoints = GetTotalPoints()
+            -- Get aggregate statistics (after completion, so counts are up-to-date).
+            -- Via the cached accessor: UpdateTotalPoints above already walked every row, and the
+            -- leaderboard publish this hook kicks off reads the same tuple, so going through the
+            -- cache turns three full scans into one.
+            local stats = GetCachedAchievementStats()
+            local completedCount, totalCount = stats.completed, stats.total
+            local totalPoints = stats.points
             
             local achievementData = {
                 achievementId = id,
@@ -1595,13 +2082,17 @@ local function MarkRowCompleted(row, cdbParam)
         Profession.NotifyRowCompleted(row)
     end
     
-    -- Broadcast achievement completion (skip for retroactive completions on first load to avoid guild spam)
+    -- Broadcast achievement completion (skip for retroactive completions on first load to avoid guild spam).
+    -- Forever blocks automated EMOTE (needs a hardware event); Classic still sends here.
+    -- Forever queues the emote onto the toast and sends it from the toast click handler instead.
+    -- Guild chat is allowed on both clients. Name slot stays empty: emote is client-prefixed.
     if not skipBroadcastForRetroactive then
-        local playerName = UnitName("player")
         local achievementTitle = (row.Title and row.Title.GetText and row.Title:GetText()) or row.title or "Unknown Achievement"
-        local broadcastMessage = string_format(ACHIEVEMENT_BROADCAST, "", achievementTitle)
-        broadcastMessage = broadcastMessage:gsub("^%s+", "")
-        SendChatMessage(broadcastMessage, "EMOTE")
+        if not (addon and addon.IsForeverClient and addon.IsForeverClient()) then
+            local broadcastMessage = string_format(ACHIEVEMENT_BROADCAST, "", achievementTitle)
+            broadcastMessage = broadcastMessage:gsub("^%s+", "")
+            SendChatMessage(broadcastMessage, "EMOTE")
+        end
 
         if (addon and addon.ShouldAnnounceInGuildChat) and addon.ShouldAnnounceInGuildChat() and IsInGuild() then
             local link = nil
@@ -1645,6 +2136,9 @@ end
 
 -- Resolve toast title/icon from stable row/def fields first.
 -- UI frames often lack .title/.icon, and Icon:GetTexture() can return nil for fileIDs.
+
+-- /run HardcoreAchievementsToast(nil, "Test Toast", 10, "TestAchievement")
+-- /run for i=1,5 do HardcoreAchievementsToast(nil, "Test "..i, i*10, "Test"..i) end
 local function GetAchievementToastDisplay(row)
     if not row then
         return 136116, "Achievement", nil
@@ -1805,41 +2299,18 @@ local function RestoreCompletionsFromDB()
     end
 end
 
-local function ToggleAchievementCharacterFrameTab()
-    local isShown = CharacterFrame and CharacterFrame:IsShown() and
-                   (AchievementPanel and AchievementPanel:IsShown() or (Tab and Tab.squareFrame and Tab.squareFrame:IsShown()))
-    -- Resolve at call time: addon.ShowAchievementTab is set later in this file
-    local ShowAchievementTab = addon and addon.ShowAchievementTab
-    if isShown then
-        CharacterFrame:Hide()
-    elseif not CharacterFrame:IsShown() then
-        CharacterFrame:Show()
-        if type(ShowAchievementTab) == "function" then ShowAchievementTab() end
-    else
-        if CharacterFrame:IsShown() and type(ShowAchievementTab) == "function" then
-            ShowAchievementTab()
-        end
+-- Single toggle for keybind, minimap, /hca, toast/tracker fallbacks.
+-- Dashboard:Toggle already routes Forever through LegacySystemFrame when that host exists.
+-- Classic CharacterFrame tab clicks still use ShowAchievementTab directly.
+local function ToggleHardcoreAchievementsUI()
+    if addon and addon.IsForeverCharacterUI and InCombatLockdown and InCombatLockdown() then
+        print("|cff008066[Hardcore Achievements]|r Cannot open during combat.")
+        return
     end
-end
-
-local function ShowHardcoreAchievementWindow()
-    local _, cdb = GetCharDB()
-    -- Check if user wants to use Character Panel instead of Dashboard (default is Character Panel)
-    local useCharacterPanel = true
-    if cdb and cdb.settings and cdb.settings.useCharacterPanel ~= nil then
-        useCharacterPanel = cdb.settings.useCharacterPanel
-    end
-    if useCharacterPanel then
-        -- Use Character Panel tab (old behavior)
-        ToggleAchievementCharacterFrameTab()
-    else
-        -- Default: Use Dashboard (standalone window)
-        if addon and addon.Dashboard and addon.Dashboard.Toggle then
-            addon.Dashboard:Toggle()
-        else
-            -- Fallback to Character Panel if Dashboard not available
-            ToggleAchievementCharacterFrameTab()
-        end
+    if addon and addon.Dashboard and addon.Dashboard.Toggle then
+        addon.Dashboard:Toggle()
+    elseif addon and addon.ShowDashboard then
+        addon.ShowDashboard()
     end
 end
 
@@ -1849,6 +2320,36 @@ end
 -- Usage:
 -- CreateAchToast(iconTextureIdOrPath, "Achievement Title", 10)
 -- CreateAchToast(row.icon or 134400, row.title or "Achievement", row.points or 10)
+
+-- The achievement toast reuses one shared frame, so simultaneous completions (a meta plus the
+-- achievements that satisfied it, or a dungeon finishing several variations on the same kill) used to
+-- overwrite each other and only the last one was ever seen. Queue them and show one at a time.
+-- Guild-first toasts live on their own frame anchored above this one and stay outside this queue, so a
+-- guild first and a regular achievement still appear together.
+-- State and functions live on one table rather than as separate locals: the main chunk is close to
+-- Lua's 200-local-per-function ceiling, and a handful of new file-level locals is enough to breach it.
+local achToast = {
+    HOLD_SEC = 3,
+    FADE_SEC = 0.6,
+    GAP_SEC = 0.25,
+    QUEUE_LIMIT = 5,
+    queue = {},
+    showing = false,
+    -- Identifies the toast on screen so a stale fade or watchdog cannot advance past a newer one.
+    serial = 0,
+    BG = "Interface\\AddOns\\HardcoreAchievements\\Images\\AchievementFrame.png",
+    ICON_FRAME = "Interface\\AddOns\\HardcoreAchievements\\Images\\AchievementIconFrame.png",
+}
+
+function achToast.Advance(serial)
+    if not achToast.showing or serial ~= achToast.serial then
+        return
+    end
+    achToast.showing = false
+    if #achToast.queue > 0 and achToast.ShowNext then
+        C_Timer.After(achToast.GAP_SEC, achToast.ShowNext)
+    end
+end
 
 -- Single OnUpdate for toast fade; state on frame (fadeT, fadeDuration) avoids allocating per toast
 local function AchToastFadeOnUpdate(s, elapsed)
@@ -1863,6 +2364,7 @@ local function AchToastFadeOnUpdate(s, elapsed)
         s.fadeDuration = nil
         s:Hide()
         s:SetAlpha(1)
+        achToast.Advance(s.toastSerial)
     end
 end
 
@@ -1872,133 +2374,88 @@ local function GetOrCreateAchToastFrame()
     end
 
     local f = CreateFrame("Frame", "AchToast", UIParent)
-    f:SetSize(320, 92)
-    f:SetPoint("CENTER", 0, -280)
+    f:SetSize(320, 92) -- 92 for bronze, 100 for dark bronze
+    f:SetPoint("CENTER", 0, -400) -- previously -280
     f:Hide()
     f:SetFrameStrata("TOOLTIP")
 
-    -- Background
     local bg = f:CreateTexture(nil, "BACKGROUND")
     bg:SetAllPoints()
-    -- Try atlas first; fallback to file + coords (same crop your XML used)
-    local ok = bg.SetAtlas and bg:SetAtlas("UI-Achievement-Alert-Background", true)
-    if not ok then
-        bg:SetTexture("Interface\\AchievementFrame\\UI-Achievement-Alert-Background")
-        bg:SetTexCoord(0, 0.605, 0, 0.703)
-    else
-        bg:SetTexCoord(0, 1, 0, 1)
-    end
-    f.bg = bg
+    bg:SetTexture(achToast.BG)
 
-    -- Icon group
     local iconFrame = CreateFrame("Frame", nil, f)
-    iconFrame:SetSize(40, 40)
-    iconFrame:SetPoint("LEFT", f, "LEFT", 6, 0)
+    iconFrame:SetSize(64, 64)
+    iconFrame:SetPoint("LEFT", f, "LEFT", 0, 0) -- 0 for bronze, 6 for dark bronze
 
     local icon = iconFrame:CreateTexture(nil, "ARTWORK")
-    icon:ClearAllPoints()
-    icon:SetPoint("CENTER", iconFrame, "CENTER", 0, 0) -- move up 2px
-    icon:SetSize(40, 43)
+    icon:SetPoint("CENTER", iconFrame, "CENTER", 2, 0)
+    icon:SetSize(50, 50)
     icon:SetTexCoord(0.05, 1, 0.05, 1)
-    iconFrame.tex = icon
-
     f.icon = icon
-    f.iconFrame = iconFrame
 
     local iconOverlay = iconFrame:CreateTexture(nil, "OVERLAY")
-    iconOverlay:SetTexture("Interface\\AchievementFrame\\UI-Achievement-IconFrame")
-    iconOverlay:SetTexCoord(0, 0.5625, 0, 0.5625)
-    iconOverlay:SetSize(72, 72)
-    iconOverlay:SetPoint("CENTER", iconFrame, "CENTER", -1, 2)
+    iconOverlay:SetTexture(achToast.ICON_FRAME)
+    iconOverlay:SetAllPoints(iconFrame)
 
-    -- Title (Achievement name)
     local name = f:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-    name:SetPoint("CENTER", f, "CENTER", 10, 0)
+    name:SetPoint("CENTER", f, "CENTER", 10, 0) -- 0 for bronze, 6 for dark bronze
     name:SetJustifyH("CENTER")
-    name:SetText("")
     f.name = name
 
-    -- "Achievement Unlocked" small label (optional)
-    local unlocked = f:CreateFontString(nil, "OVERLAY", "GameFontBlackTiny")
-    unlocked:SetPoint("TOP", f, "TOP", 7, -26)
+    local unlocked = f:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    unlocked:SetPoint("TOP", f, "TOP", 12, -22) -- -22 for bronze, -19 for dark bronze
     unlocked:SetText(ACHIEVEMENT_UNLOCKED)
-    f.unlocked = unlocked
 
-    -- Shield & points
-    local shield = CreateFrame("Frame", nil, f)
-    shield:SetSize(64, 64)
-    shield:SetPoint("RIGHT", f, "RIGHT", -10, -4)
-
-    local shieldIcon = shield:CreateTexture(nil, "BACKGROUND")
-    shieldIcon:SetTexture("Interface\\AchievementFrame\\UI-Achievement-Shields")
-    shieldIcon:SetSize(56, 52)
-    shieldIcon:SetPoint("TOPRIGHT", 1, 0)
-    shieldIcon:SetTexCoord(0, 0.5, 0, 0.45)
-    f.shieldIcon = shieldIcon
-
-    local points = shield:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    points:SetPoint("CENTER", 4, 5)
-    points:SetText("")
-    f.points = points
-
-    -- Simple fade-out (no UIParent fades)
     function f:PlayFade(duration)
         self.fadeT = 0
         self.fadeDuration = duration
         self:SetScript("OnUpdate", AchToastFadeOnUpdate)
     end
 
-    local function AttachModelOverlayClipped(parentFrame, texture)
-        -- Create a clipper frame to constrain the model to the texture's bounds
-        local clipper = CreateFrame("Frame", nil, parentFrame)
-        clipper:SetClipsChildren(true)
-        clipper:SetFrameStrata(parentFrame:GetFrameStrata())
-        clipper:SetFrameLevel(parentFrame:GetFrameLevel() + 3)
+    local clipper = CreateFrame("Frame", nil, f)
+    clipper:SetClipsChildren(true)
+    clipper:SetFrameLevel(f:GetFrameLevel() + 3)
+    clipper:SetSize(420, 42)
+    clipper:SetPoint("CENTER", bg, "CENTER", 20, 0)
+    clipper:EnableMouse(false)
+    local model = CreateFrame("PlayerModel", nil, clipper)
+    model:SetAllPoints(clipper)
+    model:SetAlpha(0.55)
+    model:SetModel(166349)
+    model:SetModelScale(0.8)
+    model:EnableMouse(false)
+    f.shineModel = model
 
-        -- Get the texture's size and adjust
-        local width, height = texture:GetSize()
-        clipper:SetSize(width + 100, height - 50)
+    -- Points must be above the shine model or Forever draws the model over them.
+    local pointsFrame = CreateFrame("Frame", nil, f)
+    pointsFrame:SetAllPoints(f)
+    pointsFrame:SetFrameLevel(f:GetFrameLevel() + 4)
+    pointsFrame:EnableMouse(false)
+    local points = pointsFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    points:SetPoint("CENTER", f, "RIGHT", -31, 2) -- -31, 2 for bronze, -32, 9 for dark bronze
+    f.points = points
+    local noPoints = pointsFrame:CreateTexture(nil, "OVERLAY")
+    noPoints:SetTexture("Interface\\AddOns\\HardcoreAchievements\\Images\\noPoints.png")
+    noPoints:SetSize(14, 18)
+    noPoints:SetPoint("CENTER", f, "RIGHT", -31, 2)
+    noPoints:Hide()
+    f.noPoints = noPoints
 
-        -- Center the clipper on the texture to keep it aligned
-        clipper:SetPoint("CENTER", texture, "CENTER", 20, 0)
-
-        -- Create the model inside the clipper
-        local model = CreateFrame("PlayerModel", nil, clipper)
-        model:SetAllPoints(clipper)
-        model:SetAlpha(0.55)
-        model:SetModel(166349) -- Default holy light cone
-        model:SetModelScale(0.8)
-        model:Show()
-
-        -- Model plays once
-        C_Timer.After(2.5, function()
-            model:Hide()
-            --if model:IsShown() then model:PlayFade(0.6) end
-        end)
-
-        -- Store references for potential tweaks
-        parentFrame.modelOverlayClipped = { clipper = clipper, model = model }
-
-        return clipper, model
-    end
-
-    AttachModelOverlayClipped(f, f.bg)
-
-    -- Make the toast clickable
     f:EnableMouse(true)
-    
-    -- Mouse button handler opens the dashboard (OnMouseUp for left button)
     f:SetScript("OnMouseUp", function(self, button)
-        if button == "LeftButton" then
-            if self.achId and addon and addon.OpenDashboardToAchievement then
-                addon.OpenDashboardToAchievement(self.achId)
-            elseif addon and addon.Dashboard and addon.Dashboard.Toggle then
-                addon.Dashboard:Toggle()
-            elseif addon and addon.ShowDashboard then
-                addon.ShowDashboard()
-            else
-                ShowHardcoreAchievementWindow()
-            end
+        if button ~= "LeftButton" then
+            return
+        end
+        -- Forever: EMOTE requires a hardware event; this click is that event.
+        local pendingEmote = self.pendingEmote
+        if pendingEmote then
+            self.pendingEmote = nil
+            SendChatMessage(pendingEmote, "EMOTE")
+        end
+        if self.achId and addon and addon.OpenDashboardToAchievement then
+            addon.OpenDashboardToAchievement(self.achId)
+        else
+            ToggleHardcoreAchievementsUI()
         end
     end)
 
@@ -2009,9 +2466,15 @@ end
 -- Call Achievement Toast
 -- =========================================================
 
-CreateAchToast = function(iconTex, title, pts, achIdOrRow)
+-- announce is true only for the toast that opens a burst, so a batch of completions produces one sound
+-- and one screenshot rather than one of each per achievement.
+function achToast.ShowNow(iconTex, title, pts, achIdOrRow, announce)
     local f = GetOrCreateAchToastFrame()
     f:Hide()
+    -- Clear any fade left running by a toast that was cut short, otherwise this one starts mid-fade.
+    f:SetScript("OnUpdate", nil)
+    f.fadeT = nil
+    f.fadeDuration = nil
     f:SetAlpha(1)
 
     -- Accept fileID/path/Texture object; fallback if nil
@@ -2065,64 +2528,107 @@ CreateAchToast = function(iconTex, title, pts, achIdOrRow)
         end
     end
 
-    -- these exist because we exposed them in the factory
     f.achId = achId
     f.icon:SetTexture(tex)
     f.name:SetText(title or "")
-    
-    -- Show shield icon for 0-point achievements, otherwise show points text
+
+    -- Forever cannot auto-emote from the award path; stash text for the toast click handler.
+    f.pendingEmote = nil
+    if not skipBroadcastForRetroactive and addon and addon.IsForeverClient and addon.IsForeverClient() then
+        local broadcastMessage = string_format(ACHIEVEMENT_BROADCAST, "", title or "Unknown Achievement")
+        f.pendingEmote = broadcastMessage:gsub("^%s+", "")
+    end
+
     if finalPoints == 0 then
         f.points:SetText("")
         f.points:Hide()
-        if f.shieldIcon then
-            f.shieldIcon:SetTexture("Interface\\AchievementFrame\\UI-Achievement-Shields-Nopoints")
-            f.shieldIcon:SetTexCoord(0, 0.5, 0, 0.45)
-        end
+        f.noPoints:Show()
     else
+        f.noPoints:Hide()
         f.points:SetText(tostring(finalPoints))
         f.points:Show()
-        if f.shieldIcon then
-            f.shieldIcon:SetTexture("Interface\\AchievementFrame\\UI-Achievement-Shields")
-            f.shieldIcon:SetTexCoord(0, 0.5, 0, 0.45)
-        end
     end
 
-    -- Store achievement data for click handler
-    f.achId = achId
-    f.achTitle = title
-    f.achIcon = tex
-    f.achPoints = finalPoints
+    if f.shineModel then
+        f.shineModel:Show()
+        C_Timer.After(2.5, function()
+            if f.shineModel then
+                f.shineModel:Hide()
+            end
+        end)
+    end
 
     f:Show()
 
-    --print(ACHIEVEMENT_BROADCAST_SELF:format(title))
-    if not skipBroadcastForRetroactive and addon and addon.PlayAchievementSound then
+    if announce and not skipBroadcastForRetroactive and addon and addon.PlayAchievementSound then
         addon.PlayAchievementSound()
     end
 
-    C_Timer.After(1, function()
-        -- Check if screenshots are disabled before taking screenshot
-        local shouldTakeScreenshot = true
-        if addon and addon.ShouldTakeScreenshot then
-            shouldTakeScreenshot = addon.ShouldTakeScreenshot()
-        else
-            -- Fallback: check setting directly if function doesn't exist yet
-            local _, cdb = GetCharDB()
-            if cdb and cdb.settings and cdb.settings.disableScreenshots then
-                shouldTakeScreenshot = false
+    if announce then
+        C_Timer.After(1, function()
+            -- Check if screenshots are disabled before taking screenshot
+            local shouldTakeScreenshot = true
+            if addon and addon.ShouldTakeScreenshot then
+                shouldTakeScreenshot = addon.ShouldTakeScreenshot()
+            else
+                -- Fallback: check setting directly if function doesn't exist yet
+                local _, cdb = GetCharDB()
+                if cdb and cdb.settings and cdb.settings.disableScreenshots then
+                    shouldTakeScreenshot = false
+                end
             end
-        end
-        
-        if shouldTakeScreenshot then
-            Screenshot()
-        end
+
+            if shouldTakeScreenshot then
+                Screenshot()
+            end
+        end)
+    end
+
+    achToast.serial = achToast.serial + 1
+    local serial = achToast.serial
+    f.toastSerial = serial
+
+    C_Timer.After(achToast.HOLD_SEC, function()
+        if f:IsShown() then f:PlayFade(achToast.FADE_SEC) end
     end)
 
-    holdSeconds = holdSeconds or 3
-    fadeSeconds = fadeSeconds or 0.6
-    C_Timer.After(holdSeconds, function()
-        if f:IsShown() then f:PlayFade(fadeSeconds) end
+    -- The completed fade normally advances the queue. This is the backstop for the toast being hidden
+    -- some other way, so a stuck "showing" flag can never strand the achievements still queued behind it.
+    C_Timer.After(achToast.HOLD_SEC + achToast.FADE_SEC + 0.5, function()
+        achToast.Advance(serial)
     end)
+end
+
+function achToast.ShowNext()
+    local entry = table_remove(achToast.queue, 1)
+    if not entry then
+        achToast.showing = false
+        return
+    end
+    achToast.showing = true
+    achToast.ShowNow(entry.icon, entry.title, entry.points, entry.target, entry.announce)
+end
+
+CreateAchToast = function(iconTex, title, pts, achIdOrRow)
+    if #achToast.queue >= achToast.QUEUE_LIMIT then
+        return
+    end
+
+    -- Nothing on screen and nothing waiting means this toast opens a burst, so it is the one that gets
+    -- the sound and the screenshot. Anything that lands while the queue is draining stays quiet.
+    local opensBurst = (not achToast.showing) and #achToast.queue == 0
+
+    achToast.queue[#achToast.queue + 1] = {
+        icon = iconTex,
+        title = title,
+        points = pts,
+        target = achIdOrRow,
+        announce = opensBurst,
+    }
+
+    if not achToast.showing then
+        achToast.ShowNext()
+    end
 end
 
 -- Shared achievement sound gate: prevent overlapping sound when many completions
@@ -2148,11 +2654,9 @@ if addon then addon.IsLevelMilestone = IsLevelMilestone end
 
 local function ApplySelfFoundBonus()
     if not IsSelfFound() then return end
-    if not addon or not addon.HardcoreAchievementsDB or not addon.HardcoreAchievementsDB.chars then return end
     if not AchievementPanel or not AchievementPanel.achievements then return end
 
-    local guid = UnitGUID("player")
-    local charData = addon.HardcoreAchievementsDB.chars[guid]
+    local _, charData = GetCharDB()
     if not charData or not charData.achievements then return end
 
     -- Build a fast lookup table instead of scanning all rows per achievement.
@@ -2245,11 +2749,130 @@ local function GetProgress(achId)
     return cdb.progress[achId]
 end
 
+-- A single boss kill fans out into a lot of SetProgress calls. Every dungeon variation tracking that
+-- boss (base, Solo, Duo, Trio) separately stores counts, points-at-kill and a three-part entry-level
+-- snapshot, which is roughly 5-7 writes each, so 20-plus writes for one kill. Each write used to
+-- queue its own next-frame pass, and every pass ran CheckPendingCompletions across the whole
+-- catalog, meaning one kill could probe tens of thousands of rows in a single frame.
+--
+-- Coalesce the burst into one pass and remember which achievements actually changed so the follow-up
+-- refresh stays as narrow as it was before.
+-- Kept on one table for the same reason as achToast above: the main chunk is near Lua's local limit.
+local progressFlush = {
+    pending = false,
+    dirty = {},
+}
+
+function progressFlush.Run()
+    progressFlush.pending = false
+    local progressDirtyAchIds = progressFlush.dirty
+
+    -- Only live gameplay progress should queue follow-up completion checks.
+    -- Initial login/retroactive passes run their own synchronous completion sweep.
+    -- One sweep covers every achievement touched during the burst.
+    if addon and addon.CheckPendingCompletions then
+        addon.CheckPendingCompletions()
+    end
+
+    -- Resolve every dirty achievement in one pass over the model rather than one pass each.
+    local dirtyRows = nil
+    local resolved = nil
+    for _, r in ipairs((addon and addon.AchievementRowModel) or {}) do
+        local matched = nil
+        if r.id ~= nil and progressDirtyAchIds[r.id] then
+            matched = r.id
+        elseif r.achId ~= nil and progressDirtyAchIds[r.achId] then
+            matched = r.achId
+        end
+        if matched ~= nil then
+            dirtyRows = dirtyRows or {}
+            dirtyRows[#dirtyRows + 1] = r
+            resolved = resolved or {}
+            resolved[matched] = true
+        end
+    end
+
+    -- Progress can flip failed <-> available (e.g. kills done, quest still in log).
+    -- Clear only the affected achievements' cached rows so other results stay hot.
+    local needsFullOutleveledRefresh = false
+    local anyUnresolved = false
+    for achId in pairs(progressDirtyAchIds) do
+        progressDirtyAchIds[achId] = nil
+        local dirtyUiRow = InvalidateOutleveledCacheForAchId(achId)
+        if dirtyUiRow then
+            ApplyOutleveledStyle(dirtyUiRow)
+        else
+            needsFullOutleveledRefresh = true
+        end
+        if not (resolved and resolved[achId]) then
+            anyUnresolved = true
+        end
+    end
+
+    if needsFullOutleveledRefresh then
+        RefreshOutleveledAll()
+    else
+        RefreshAuxiliaryViews()
+    end
+
+    -- Partial refresh: only recalculate the rows whose progress just changed. An achievement we
+    -- could not resolve to a model row means we cannot narrow it, so fall back to the full pass.
+    if addon and addon.RefreshAllAchievementPoints then
+        addon.RefreshAllAchievementPoints((not anyUnresolved) and dirtyRows or nil)
+    end
+end
+
+-- Keys that represent real saved progress worth prompting a reload.
+-- Level/entry metadata is rewritten often on login and must not false-trigger the banner.
+local UNSAVED_PROGRESS_KEYS = {
+    killed = true,
+    quest = true,
+    counts = true,
+    eligibleCounts = true,
+    completed = true,
+    pointsAtKill = true,
+    soloKill = true,
+    soloQuest = true,
+    ineligibleKill = true,
+    itemOwned = true,
+    firstKillRareState = true,
+    extraCreditPoints = true,
+    extraCreditKills = true,
+}
+
+local function ProgressValuesEqual(a, b)
+    if a == b then
+        return true
+    end
+    if type(a) ~= "table" or type(b) ~= "table" then
+        return false
+    end
+    for k, v in pairs(a) do
+        if type(v) == "table" then
+            if not ProgressValuesEqual(v, b[k]) then
+                return false
+            end
+        elseif b[k] ~= v then
+            return false
+        end
+    end
+    for k in pairs(b) do
+        if a[k] == nil then
+            return false
+        end
+    end
+    return true
+end
+
 local function SetProgress(achId, key, value)
     local _, cdb = GetCharDB()
     if not cdb then return end
     cdb.progress = cdb.progress or {}
     local p = cdb.progress[achId] or {}
+    -- Login/zone/quest handlers often rewrite the same values; ignore no-ops.
+    if ProgressValuesEqual(p[key], value) then
+        return
+    end
     p[key] = value
     p.updatedAt = time()
     -- Only set levelAt for progress-related keys (kills, quests, counts, etc.)
@@ -2261,37 +2884,24 @@ local function SetProgress(achId, key, value)
     cdb.progress[achId] = p
 
     if restorationsComplete and not skipBroadcastForRetroactive and not (addon and addon.Initializing) then
-        MarkUnsavedAchievementProgress()
-        C_Timer.After(0, function()
-            -- Only live gameplay progress should queue follow-up completion checks.
-            -- Initial login/retroactive passes run their own synchronous completion sweep.
-            addon.CheckPendingCompletions()
-
-            -- Progress can flip failed ↔ available (e.g. kills done, quest still in log).
-            -- Clear only this achievement's cached rows so other results stay hot.
-            local dirtyUiRow = InvalidateOutleveledCacheForAchId(achId)
-            if dirtyUiRow then
-                ApplyOutleveledStyle(dirtyUiRow)
-                RefreshAuxiliaryViews()
-            else
-                RefreshOutleveledAll()
-            end
-
-            -- Partial refresh: only recalculate the row whose progress just changed
-            -- instead of looping all achievements on every kill/quest event.
-            if addon.RefreshAllAchievementPoints then
-                local dirtyRow = nil
-                for _, r in ipairs(addon.AchievementRowModel or {}) do
-                    if (r.id == achId or r.achId == achId) then
-                        dirtyRow = r
-                        break
-                    end
-                end
-                addon.RefreshAllAchievementPoints(dirtyRow and {dirtyRow} or nil)
-            end
-        end)
+        if UNSAVED_PROGRESS_KEYS[key] then
+            MarkUnsavedAchievementProgress()
+        end
+        if achId ~= nil then
+            progressFlush.dirty[achId] = true
+        end
+        if not progressFlush.pending then
+            progressFlush.pending = true
+            C_Timer.After(0, progressFlush.Run)
+        end
     end
 end
+
+-- Forward declaration. The exports below close over Tab, and the character panel tab is not built until
+-- much later in this file; without declaring the local up here those closures would capture the global
+-- of the same name instead, which is nil. addon.GetTab() silently returned nil on every client because
+-- of that, and callers fell through to fragile CharacterFrame.numTabs lookups.
+local Tab
 
 -- Export API on addon for achievement modules and other addon files
 if addon then
@@ -2299,7 +2909,12 @@ if addon then
     addon.SetProgress = SetProgress
     addon.ClearProgress = ClearProgress
     addon.GetCharDB = GetCharDB
-    addon.GetTab = function() return Tab end
+    addon.BuildSavedVariablesBackup = sv.buildBackup
+    addon.ApplySavedVariablesBackup = sv.applyBackup
+    addon.GetTab = function()
+        -- Retail Forever uses CharacterFrameModeTabN in the side strip; the classic bottom tab is hidden.
+        return addon.CharacterFrameModeTab or Tab
+    end
     addon.HideVerticalTab = function()
         if Tab and Tab.squareFrame then
             Tab.squareFrame:Hide()
@@ -2314,7 +2929,7 @@ if addon then
         return cdb.settings
     end
     addon.MarkRowCompleted = MarkRowCompleted
-    addon.ShowAchievementWindow = ShowHardcoreAchievementWindow
+    addon.ShowAchievementWindow = ToggleHardcoreAchievementsUI
     addon.GetTotalPoints = GetTotalPoints
     addon.AchievementCount = AchievementCount
     addon.UpdateTotalPoints = UpdateTotalPoints
@@ -2350,6 +2965,11 @@ if addon then addon.OpenOptionsPanel = OpenOptionsPanel end
 
 BINDING_NAME_HCA_TOGGLE = "Toggle Achievements"
 
+-- Bindings.xml runs in the global env.
+function HardcoreAchievements_Toggle()
+    ToggleHardcoreAchievementsUI()
+end
+
 -- Lazily initialize minimap button resources on demand.
 local LDB, LDBIcon, minimapDataObject
 local minimapRegistered = false
@@ -2357,10 +2977,17 @@ local minimapRegistered = false
 local function EnsureMinimapDB()
     local db = EnsureDB()
     if not db then return nil end
-    db.minimap = db.minimap or { hide = false, position = 45 }
+    db.minimap = db.minimap or { hide = false, minimapPos = 45 }
     if db.minimap.hide == nil then
         db.minimap.hide = false
     end
+    if db.minimap.minimapPos == nil then
+        db.minimap.minimapPos = 45
+    end
+    -- Drop legacy root keys from when LibDBIcon was registered against the account DB.
+    db.minimapPos = nil
+    db.hide = nil
+    db.minimap.position = nil
     return db, db.minimap
 end
 
@@ -2386,16 +3013,16 @@ local function InitializeMinimapButton()
             text = "HardcoreAchievements",
             icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\HardcoreAchievementsButton.png",
             OnClick = function(self, button)
+                -- Forever hosts dashboard/leaderboard on LegacySystemFrame; opening it
+                -- during combat lockdown raises ADDON_ACTION_BLOCKED.
+                if addon and addon.IsForeverCharacterUI and InCombatLockdown and InCombatLockdown()
+                    and ((button == "LeftButton" and not IsShiftKeyDown())
+                        or (button == "RightButton" and not IsShiftKeyDown())) then
+                    print("|cff008066[Hardcore Achievements]|r Cannot open during combat.")
+                    return
+                end
                 if button == "LeftButton" and not IsShiftKeyDown() then
-                    -- Always open Dashboard, regardless of useCharacterPanel setting
-                    if addon and addon.Dashboard and addon.Dashboard.Toggle then
-                        addon.Dashboard:Toggle()
-                    elseif addon and addon.ShowDashboard then
-                        addon.ShowDashboard()
-                    else
-                        -- Fallback to Character Panel if Dashboard not available
-                        ShowHardcoreAchievementWindow()
-                    end
+                    ToggleHardcoreAchievementsUI()
                 elseif button == "RightButton" and IsShiftKeyDown() then
                     -- Shift-right-click to open options panel
                     OpenOptionsPanel()
@@ -2412,7 +3039,7 @@ local function InitializeMinimapButton()
                 end
             end,
             OnTooltipShow = function(tooltip)
-                tooltip:AddLine("Hardcore Achievements", 1, 1, 1)
+                tooltip:AddLine("Hardcore Achievements", 1, 0.82, 0)
 
                 tooltip:AddLine("Left-click to open Dashboard", 0.5, 0.5, 0.5)
                 tooltip:AddLine("Right-click to open Leaderboard", 0.5, 0.5, 0.5)
@@ -2433,23 +3060,21 @@ local function InitializeMinimapButton()
         })
     end
 
-    -- Register once; then show.
+    -- Register once against db.minimap so hide + minimapPos live in one table.
     if not minimapRegistered then
-        LDBIcon:Register("HardcoreAchievements", minimapDataObject, db)
+        LDBIcon:Register("HardcoreAchievements", minimapDataObject, minimapDB)
         minimapRegistered = true
     end
     LDBIcon:Show("HardcoreAchievements")
 end
 
 local function SetMinimapButtonShown(shown)
-    local db, minimapDB = EnsureMinimapDB()
-    if not db or not minimapDB then return end
+    local _, minimapDB = EnsureMinimapDB()
+    if not minimapDB then return end
 
-    local hide = not shown
-    minimapDB.hide = hide
-    db.hide = hide
+    minimapDB.hide = not shown
 
-    if hide then
+    if minimapDB.hide then
         if LDBIcon then
             LDBIcon:Hide("HardcoreAchievements")
         end
@@ -2483,25 +3108,21 @@ initFrame:SetScript("OnEvent", function(self, event, ...)
     end
 
     if event == "PLAYER_LOGIN" then
-        playerGUID = UnitGUID("player")
+        playerGUID = NormalizePlayerGUID(UnitGUID("player"))
 
         local db, cdb = GetCharDB()
-        if cdb then
+        if sv.conflictFromGuid then
+            C_Timer.After(0.5, function()
+                sv.showGuidConflictPopup()
+            end)
+        elseif cdb then
             -- Ensure settings table exists
             cdb.settings = cdb.settings or {}
             -- Default showCustomTab to true (visible by default, synced with useCharacterPanel)
             if cdb.settings.showCustomTab == nil then
                 cdb.settings.showCustomTab = true
             end
-            local name, realm = UnitName("player"), GetRealmName()
-            local className = UnitClass("player")
-            cdb.meta.name      = name
-            cdb.meta.realm     = realm
-            cdb.meta.className = className
-            cdb.meta.race      = UnitRace("player")
-            cdb.meta.level     = UnitLevel("player")
-            cdb.meta.faction   = UnitFactionGroup("player")
-            cdb.meta.lastLogin = time()
+            sv.writeCurrentMeta(cdb)
             
             -- Clean up incorrectly completed level bracket achievements (lightweight, can run immediately)
             CleanupIncorrectLevelAchievements()
@@ -2545,6 +3166,9 @@ initFrame:SetScript("OnEvent", function(self, event, ...)
 
         -- One-time initial options frame for new characters (no initialSetupDone flag)
         C_Timer.After(1, function()
+            if sv.conflictFromGuid then
+                return
+            end
             if addon and addon.ShowInitialOptionsIfNeeded then
                 addon.ShowInitialOptionsIfNeeded()
             end
@@ -2553,6 +3177,8 @@ initFrame:SetScript("OnEvent", function(self, event, ...)
     elseif event == "ADDON_LOADED" then
         local loadedName = ...
         if loadedName == "HardcoreAchievements" then
+            BindSavedVariables()
+            playerGUID = playerGUID or NormalizePlayerGUID(UnitGUID("player"))
             C_Timer.After(3, function()
                 addon:ShowWelcomeMessage()
             end)
@@ -2562,8 +3188,8 @@ end)
 
 -- Function to show welcome message popup on first login or when version changes
 function addon:ShowWelcomeMessage()
-    local Disabled = false
-    local WELCOME_MESSAGE_NUMBER = 5
+    local Disabled = true
+    local WELCOME_MESSAGE_NUMBER = 7
     local db = EnsureDB()
     db.settings = db.settings or {}
     
@@ -2580,37 +3206,102 @@ function addon:ShowWelcomeMessage()
     end
 end
 
--- Define the welcome message popup
+-- Define the welcome message popup (MOTD)
 StaticPopupDialogs["Hardcore Achievements Vanilla"] = {
-    text = "|cff008066Hardcore Achievements|r\n\nLeaderboard performance issues have been |cff00ff00resolved|r. I have optimized the code and added a row limit to prevent lag and frame drops.\n\nPlease report any issues or feedback on Discord.",
+    text = "|cff008066Hardcore Achievements|r\n\nThe Discord link has been updated.\n\nhttps://discord.gg/BemPAE2y8h",
     button1 = "Okay",
-    --button2 = "Show Me!",
+    button2 = "Show QR code",
     timeout = 0,
     whileDead = true,
-    hideOnEscape = true,
+    hideOnEscape = false,
+    noCancelOnEscape = true,
     preferredIndex = 3,
     OnAccept = function()
         -- Popup automatically closes
     end,
-    --OnCancel = function()
-        -- Popup automatically closes
-    --end,
+    OnCancel = function()
+        -- button2 only. Escape must not run this (cinematic skip also presses Escape).
+        local showDiscord = addon and addon.ShowDiscordFrame
+        if showDiscord then
+            showDiscord()
+        else
+            OpenOptionsPanel()
+        end
+    end,
 }
 
 StaticPopupDialogs["Hardcore Achievements TBC"] = {
-    text = "|cff008066Hardcore Achievements|r\n\nLeaderboard performance issues have been |cff00ff00resolved|r. I have optimized the code and added a row limit to prevent lag and frame drops.\n\nPlease report any issues or feedback on Discord.",
+    text = "|cff008066Hardcore Achievements|r\n\nThe Discord link has been updated.\n\nhttps://discord.gg/BemPAE2y8h",
     button1 = "Okay",
-    --button2 = "Show Me!",
+    button2 = "Show QR code",
     timeout = 0,
     whileDead = true,
-    hideOnEscape = true,
+    hideOnEscape = false,
+    noCancelOnEscape = true,
     preferredIndex = 3,
     OnAccept = function()
         -- Popup automatically closes
     end,
-    --OnCancel = function()
-        -- Popup automatically closes
-    --end,
+    OnCancel = function()
+        -- button2 only. Escape must not run this (cinematic skip also presses Escape).
+        local showDiscord = addon and addon.ShowDiscordFrame
+        if showDiscord then
+            showDiscord()
+        else
+            OpenOptionsPanel()
+        end
+    end,
+}
+
+StaticPopupDialogs["Hardcore Achievements GUID Mismatch"] = {
+    text = "|cff008066Hardcore Achievements|r\n\nSaved achievement progress was found under this character but belongs to a different ID. This is normal if you have rerolled your character or transferred your character to a new server.\n\nWould you like to migrate all progress to this character, or start new progress for this character?",
+    button1 = "Migrate",
+    button2 = "Start New",
+    timeout = 0,
+    whileDead = true,
+    hideOnEscape = false,
+    noCancelOnEscape = true,
+    preferredIndex = 3,
+    OnAccept = function()
+        StaticPopup_Show("Hardcore Achievements GUID Migrate Confirm")
+    end,
+    OnCancel = function()
+        StaticPopup_Show("Hardcore Achievements GUID Start New Confirm")
+    end,
+}
+
+StaticPopupDialogs["Hardcore Achievements GUID Migrate Confirm"] = {
+    text = "Are you sure you want to migrate achievement progress to this character? This action cannot be undone.",
+    button1 = "Yes",
+    button2 = "Cancel",
+    timeout = 0,
+    whileDead = true,
+    hideOnEscape = false,
+    noCancelOnEscape = true,
+    preferredIndex = 3,
+    OnAccept = function()
+        sv.confirmMigrate()
+    end,
+    OnCancel = function()
+        StaticPopup_Show("Hardcore Achievements GUID Mismatch")
+    end,
+}
+
+StaticPopupDialogs["Hardcore Achievements GUID Start New Confirm"] = {
+    text = "Are you sure you want to start new progress on this character? This action cannot be undone.",
+    button1 = "Yes",
+    button2 = "Cancel",
+    timeout = 0,
+    whileDead = true,
+    hideOnEscape = false,
+    noCancelOnEscape = true,
+    preferredIndex = 3,
+    OnAccept = function()
+        sv.confirmStartNew()
+    end,
+    OnCancel = function()
+        StaticPopup_Show("Hardcore Achievements GUID Mismatch")
+    end,
 }
 
 -- =========================================================
@@ -2620,12 +3311,14 @@ StaticPopupDialogs["Hardcore Achievements TBC"] = {
 -- Constants
 local TabName = (addonName or "HardcoreAchievements") .. "Tab"
 
--- Create and configure the subframe
-local Tab = CreateFrame("Button" , TabName, CharacterFrame, "CharacterFrameTabButtonTemplate")
 -- Don't set position here - let LoadTabPosition handle it after CharacterFrame is fully initialized
-Tab:SetText(ACHIEVEMENTS)
-PanelTemplates_TabResize(Tab, 0)
-PanelTemplates_DeselectTab(Tab)
+Tab = addon.CreatePanelTab(TabName, CharacterFrame or UIParent, ACHIEVEMENTS)
+if addon.IsForeverCharacterUI then
+    -- Forever never uses a CharacterFrame tab. Achievements open on Legacy Challenges.
+    Tab:Hide()
+    Tab:EnableMouse(false)
+    Tab:SetAlpha(0)
+end
 
 -- Draggable "curl" behavior for Achievements tab (bottom + right edges only)
 -- Tab persistence functions
@@ -2664,6 +3357,20 @@ local function SaveTabPosition()
 end
 
 function LoadTabPosition()
+    -- Forever: never place a CharacterFrame tab. Achievements open on Legacy Challenges.
+    if addon.IsForeverCharacterUI then
+        if Tab then
+            Tab:Hide()
+            Tab:EnableMouse(false)
+            Tab:SetAlpha(0)
+            if Tab.squareFrame then
+                Tab.squareFrame:Hide()
+                Tab.squareFrame:EnableMouse(false)
+            end
+        end
+        return
+    end
+
     local db = EnsureDB()
     if db.tabSettings and db.tabSettings.mode and db.tabSettings.position then
         local savedMode = db.tabSettings.mode
@@ -2768,8 +3475,13 @@ function LoadTabPosition()
                 end
             else
                 -- Hardcore default: bottom mode
-                local Tabs = CharacterFrame.numTabs
-                Tab:SetPoint("RIGHT", _G["CharacterFrameTab"..Tabs], "RIGHT", 43, 0)
+                local lastTab = addon.GetLastCharacterFrameTab()
+                if lastTab then
+                    Tab:SetPoint("RIGHT", lastTab, "RIGHT", 43, 0)
+                else
+                    -- No Blizzard tabs to sit beside, so anchor to the panel's bottom edge instead.
+                    Tab:SetPoint("BOTTOMLEFT", CharacterFrame, "BOTTOMLEFT", 10, 8)
+                end
                 Tab:SetAlpha(1)
                 Tab:EnableMouse(true)
                 Tab.mode = "bottom"
@@ -2787,6 +3499,7 @@ function LoadTabPosition()
                     Tab.squareFrame:Show()
                 else
                     Tab:SetAlpha(1)
+                    Tab:EnableMouse(true)
                     Tab:Show()
                 end
             else
@@ -2882,8 +3595,8 @@ do
         local squareFrame = CreateFrame("Button", nil, UIParent) -- Parent to UIParent instead of Tab; use Button for clicks/drag
         squareFrame:SetSize(SQUARE_SIZE, SQUARE_SIZE)
         squareFrame:SetHitRectInsets(0, 30, 0, 0) -- shrink hitbox by 30px from right edge
-        squareFrame:SetFrameStrata("BACKGROUND") -- Move to background strata
-        squareFrame:SetFrameLevel(1) -- Low frame level to appear below borders
+        squareFrame:SetFrameStrata("HIGH")
+        squareFrame:SetFrameLevel(10)
         squareFrame:Hide()
         
         -- Background - Stat background texture only
@@ -3088,8 +3801,12 @@ do
         -- Anchor to bottom by default so first frame is stable
         if mode == "bottom" then
             -- Use RIGHT anchor to preserve 1-pixel offset (same as default horizontal position)
-            local Tabs = CharacterFrame.numTabs
-            self:SetPoint("RIGHT", _G["CharacterFrameTab"..Tabs], "RIGHT", 43, 0)
+            local lastTab = addon.GetLastCharacterFrameTab()
+            if lastTab then
+                self:SetPoint("RIGHT", lastTab, "RIGHT", 43, 0)
+            else
+                self:SetPoint("BOTTOMLEFT", CharacterFrame, "BOTTOMLEFT", 10, 8)
+            end
         else
             self:SetPoint("TOPRIGHT", CharacterFrame, "TOPRIGHT", 25, 0)
         end
@@ -3131,8 +3848,12 @@ do
                 SwitchTabMode("bottom")
                 s:ClearAllPoints()
                 -- Re-anchor using RIGHT anchor to preserve 1-pixel offset (same as default horizontal position)
-                local Tabs = CharacterFrame.numTabs
-                s:SetPoint("RIGHT", _G["CharacterFrameTab"..Tabs], "RIGHT", 43, 0)
+                local lastTab = addon.GetLastCharacterFrameTab()
+                if lastTab then
+                    s:SetPoint("RIGHT", lastTab, "RIGHT", 43, 0)
+                else
+                    s:SetPoint("BOTTOMLEFT", CharacterFrame, "BOTTOMLEFT", 10, 8)
+                end
             end
 
             if mode == "bottom" then
@@ -3171,6 +3892,13 @@ do
     end)
 end
 -- === end draggable curl behavior ===
+
+if addon.IsForeverCharacterUI then
+    -- The drag block above re-enables mouse on the classic tab; Forever never uses that tab.
+    Tab:Hide()
+    Tab:EnableMouse(false)
+    Tab:SetAlpha(0)
+end
  
 local function EnsureAchievementPanelCreated()
     if AchievementPanel then
@@ -3218,8 +3946,8 @@ local function HideCharacterFrameContentsForCombat()
             CharacterFrame:EnableMouse(false)
             characterFrameHiddenForCombat = true
 
-            if CharacterFrame.numTabs then
-                for i = 1, CharacterFrame.numTabs do
+            do
+                for i = 1, addon.GetCharacterFrameTabCount() do
                     local tab = _G["CharacterFrameTab"..i]
                     if tab and tab:IsShown() then
                         tab._hc_prevAlpha = tab:GetAlpha()
@@ -3253,8 +3981,8 @@ local function RestoreCharacterFrameAfterCombat()
             CharacterFrame:EnableMouse(true)
         end
 
-        if CharacterFrame.numTabs then
-            for i = 1, CharacterFrame.numTabs do
+        do
+            for i = 1, addon.GetCharacterFrameTabCount() do
                 local tab = _G["CharacterFrameTab"..i]
                 if tab then
                     tab:SetAlpha(tab._hc_prevAlpha or 1)
@@ -3361,30 +4089,8 @@ local function ApplyFilter()
         if row.hiddenByProfession then
             shouldShow = false
         end
-        -- Hide GuildFirst achievements that are already claimed by someone else.
-        -- IMPORTANT: only apply this to achievements explicitly marked as GuildFirst,
-        -- otherwise we'll do unnecessary checks (and spam debug) for the entire catalog.
-        if not row.completed and row._def and row._def.isGuildFirst then
-            local achId = row.id or row.achId
-            local GuildFirst = addon and addon.GuildFirst
-            if achId and GuildFirst then
-                local isClaimed, winner = GuildFirst:IsClaimed(tostring(achId), row)
-                if isClaimed and winner then
-                    local isWinner = false
-                    if type(GuildFirst.IsWinnerRecord) == "function" then
-                        isWinner = GuildFirst:IsWinnerRecord(winner) == true
-                    else
-                        local myGUID = UnitGUID("player") or ""
-                        isWinner = tostring(winner.winnerGUID or "") == myGUID
-                    end
-                    if not isWinner then
-                        -- Claimed by someone else - silently fail (hide)
-                        if addon and addon.DebugPrint then addon.DebugPrint("[Filter] Hiding achievement '" .. tostring(achId) .. "' - already claimed by " .. tostring(winner.winnerName or "?") .. " (silent fail)") end
-                        shouldShow = false
-                    end
-                end
-            end
-        end
+        -- Guild firsts claimed by another player stay visible so everyone can see what was taken.
+        -- IsRowOutleveled reports them as failed, so the status filter above already governs them.
         
         -- Hide/show achievements based on checkbox filter
         if row._def then
@@ -3450,6 +4156,11 @@ local function ApplyFilter()
             elseif def.isSecret then
                 -- Secret: check index 14
                 if not ShouldShowByCheckboxFilter(def, isCompleted, 14, nil) then
+                    shouldShow = false
+                end
+            elseif def.isGuildFirst then
+                -- Guild First: check index 15
+                if not ShouldShowByCheckboxFilter(def, isCompleted, 15, nil) then
                     shouldShow = false
                 end
             else
@@ -3641,7 +4352,9 @@ AchievementPanel.Scroll:SetScript("OnMouseWheel", function(self, delta)
     self:SetVerticalScroll(newV)
 
     local sb = self.ScrollBar or (self:GetName() and _G[self:GetName().."ScrollBar"])
-    if sb then sb:SetValue(newV) end
+    if sb and sb.SetValue then
+        pcall(sb.SetValue, sb, newV)
+    end
 end)
 
 AchievementPanel.Scroll:SetScript("OnScrollRangeChanged", function(self, xRange, yRange)
@@ -3654,8 +4367,12 @@ AchievementPanel.Scroll:SetScript("OnScrollRangeChanged", function(self, xRange,
     end
     local sb = self.ScrollBar or (self:GetName() and _G[self:GetName().."ScrollBar"])
     if sb then
-        sb:SetMinMaxValues(0, yRange)
-        sb:SetValue(self:GetVerticalScroll())
+        if sb.SetMinMaxValues then
+            pcall(sb.SetMinMaxValues, sb, 0, yRange)
+        end
+        if sb.SetValue then
+            pcall(sb.SetValue, sb, self:GetVerticalScroll())
+        end
     end
 end)
 
@@ -3682,6 +4399,7 @@ BR:SetTexture("Interface\\PaperDollInfoFrame\\UI-Character-General-BottomRight")
 BR:SetPoint("TOPLEFT", BL, "TOPRIGHT", 0, 0)
 BR:SetPoint("LEFT", TR, "LEFT", 0, 0)
 BR:SetPoint("BOTTOMRIGHT", AchievementPanel, "BOTTOMRIGHT", 2, -1)
+AchievementPanel._hcaClassicParchment = { TL, TR, BL, BR }
 
     -- Storage for UI row frames (built lazily from the model)
     AchievementPanel.achievements = AchievementPanel.achievements or {}
@@ -3707,7 +4425,8 @@ local function CreateAchievementRowFromData(data, index)
         data.achId, data.title, data.tooltip, data.icon, data.level, data.points, data.killTracker, data.questTracker, data.staticPoints, data.zone, data.def
     local rowParent = AchievementPanel and AchievementPanel.Content or AchievementPanel
     local row = CreateFrame("Frame", nil, rowParent)
-    row:SetSize(310, 42)
+    local rowWidth = 310
+    row:SetSize(rowWidth, 42)
     row:SetClipsChildren(false)
     if index == 1 then
         row:SetPoint("TOPLEFT", rowParent, "TOPLEFT", 0, 0)
@@ -4264,6 +4983,12 @@ do
         addon.AchEvt = achEvt
         -- Track recently processed kills to prevent duplicate processing
         local recentKills = {}
+        -- Cross-path dedupe between a GUID kill and ENCOUNTER_END for the same boss death. Stored on
+        -- the frame so this block does not add locals: the file is at Lua's 200-local limit. Keyed by
+        -- npcId and only consulted by the other path, so repeated open-world kills of one npcId are
+        -- unaffected. Bosses do not respawn inside the 10 second window.
+        achEvt.guidClaimedAt = {}
+        achEvt.encounterClaimedAt = {}
         local function clearRecentKill(destGUID)
             C_Timer.After(1, function()
                 recentKills[destGUID] = nil
@@ -4306,6 +5031,8 @@ do
         -- Debounce flags for events that burst (multiple fires per frame).
         local _pendingExplorationCheck = false
         local _pendingAuraCheck = false
+        local _pendingInventoryCheck = false
+        local _pendingFactionCheck = false
 
         -- Party/pet GUID cache — rebuilt on GROUP_ROSTER_UPDATE/PLAYER_ENTERING_WORLD/UNIT_PET.
         -- Eliminates 20-30 UnitExists/UnitGUID calls per damage event in isPlayerPartyOrPetSource.
@@ -4314,26 +5041,35 @@ do
         local _cachedPetOwnerByGUID = {}
 
         local function RebuildPartyGUIDCache()
-            _cachedPlayerGUID = UnitGUID("player")
+            -- Forever: pet (and sometimes other) GUIDs can be secret and cannot be used as table keys.
+            local isSecret = addon and addon.IsSecretValue
+            local function plainGUID(unit)
+                if not UnitExists(unit) then
+                    return nil
+                end
+                local guid = UnitGUID(unit)
+                if not guid or (isSecret and isSecret(guid)) then
+                    return nil
+                end
+                return guid
+            end
+
+            _cachedPlayerGUID = plainGUID("player")
             for k in pairs(_cachedPartyGUIDs) do _cachedPartyGUIDs[k] = nil end
             for k in pairs(_cachedPetOwnerByGUID) do _cachedPetOwnerByGUID[k] = nil end
             if _cachedPlayerGUID then _cachedPartyGUIDs[_cachedPlayerGUID] = true end
-            if UnitExists("pet") then
-                local g = UnitGUID("pet")
-                if g then _cachedPetOwnerByGUID[g] = _cachedPlayerGUID end
+            local petGUID = plainGUID("pet")
+            if petGUID then
+                _cachedPetOwnerByGUID[petGUID] = _cachedPlayerGUID
             end
             if GetNumGroupMembers() > 1 then
                 for i = 1, 4 do
-                    local u = "party" .. i
-                    if UnitExists(u) then
-                        local g = UnitGUID(u)
-                        if g then
-                            _cachedPartyGUIDs[g] = true
-                            local pu = "party" .. i .. "pet"
-                            if UnitExists(pu) then
-                                local pg = UnitGUID(pu)
-                                if pg then _cachedPetOwnerByGUID[pg] = g end
-                            end
+                    local g = plainGUID("party" .. i)
+                    if g then
+                        _cachedPartyGUIDs[g] = true
+                        local pg = plainGUID("party" .. i .. "pet")
+                        if pg then
+                            _cachedPetOwnerByGUID[pg] = g
                         end
                     end
                 end
@@ -4364,26 +5100,31 @@ do
         local _lastGuid = nil
         local _lastNpcId = nil
         local function getNpcIdFromGUID(guid)
-            if not guid then
+            if not guid or (addon.IsSecretValue and addon.IsSecretValue(guid)) then
                 return nil
             end
             if guid == _lastGuid then
                 return _lastNpcId
             end
-            local _, _, _, _, _, npcId = strsplit("-", guid)
-            local result = npcId and tonumber(npcId) or nil
+            -- ParseCreatureNpcId matches the historical strsplit for plain GUIDs and also accepts the
+            -- "Encounter:<npcId>" key Forever uses when a boss kill has no readable GUID.
+            local result = addon.ParseCreatureNpcId and addon.ParseCreatureNpcId(guid) or nil
             _lastGuid = guid
             _lastNpcId = result
             return result
         end
 
         local function getPetOwnerGUID(sourceGUID)
-            if not sourceGUID then return nil end
+            if not sourceGUID or (addon.IsSecretValue and addon.IsSecretValue(sourceGUID)) then
+                return nil
+            end
             return _cachedPetOwnerByGUID[sourceGUID]
         end
 
         local function isPlayerOrPartyMember(guid)
-            if not guid then return false end
+            if not guid or (addon.IsSecretValue and addon.IsSecretValue(guid)) then
+                return false
+            end
             return _cachedPartyGUIDs[guid] == true
         end
         
@@ -4401,6 +5142,9 @@ do
             local def = row._def
             local targetNpcId = def and def.targetNpcId
             local rk = row.requiredKills or (def and def.requiredKills)
+            local extra = row.extraCreditKills or (def and def.extraCreditKills)
+            -- Completed dungeon rows only stay indexed for optional bonus bosses.
+            local includeRequired = not row.completed
             local trackedNpcIds
             local seenNpcIds
 
@@ -4418,18 +5162,12 @@ do
                 table_insert(trackedNpcIds, npcId)
             end
 
-            if type(targetNpcId) == "table" then
-                for _, id in pairs(targetNpcId) do
-                    addNpcId(id)
+            local function addFromKillTable(killTable)
+                if type(killTable) ~= "table" then
+                    return
                 end
-            else
-                addNpcId(targetNpcId)
-            end
-
-            if type(rk) == "table" then
-                for key, need in pairs(rk) do
-                    -- Any-of groups (e.g. "Ring Of Law", "Edge of Madness") store NPC IDs
-                    -- as the value table; index those IDs, not the string alias key.
+                for key, need in pairs(killTable) do
+                    -- Any-of groups (e.g. "Ring Of Law") store NPC IDs as the value table.
                     if type(need) == "table" then
                         for _, id in pairs(need) do
                             addNpcId(id)
@@ -4439,6 +5177,19 @@ do
                     end
                 end
             end
+
+            if includeRequired then
+                if type(targetNpcId) == "table" then
+                    for _, id in pairs(targetNpcId) do
+                        addNpcId(id)
+                    end
+                else
+                    addNpcId(targetNpcId)
+                end
+                addFromKillTable(rk)
+            end
+
+            addFromKillTable(extra)
 
             return trackedNpcIds
         end
@@ -4476,10 +5227,20 @@ do
             return oa < ob
         end
 
+        local function rowHasExtraCreditKills(row)
+            if not row then return false end
+            local extra = row.extraCreditKills or (row._def and row._def.extraCreditKills)
+            return type(extra) == "table" and next(extra) ~= nil
+        end
+
         -- Keep dungeon kill rows registered for CLEU even if IsRowOutleveled mis-fires briefly
         -- (e.g. instance id not ready). KillTracker still enforces entry-level eligibility.
+        -- Completed rows stay active only when they still have optional bonus bosses to award.
         local function isRuntimeKillRowActive(row)
-            if not row or row.completed or type(row.killTracker) ~= "function" then
+            if not row or type(row.killTracker) ~= "function" then
+                return false
+            end
+            if row.completed and not rowHasExtraCreditKills(row) then
                 return false
             end
             if not IsRowOutleveled(row) then
@@ -4504,8 +5265,10 @@ do
             }
             local rows = (addon and addon.AchievementRowModel) or {}
             for _, row in ipairs(rows) do
-                if not row.completed and type(row.killTracker) == "function" then
-                    table_insert(index.killTrackerRowsSorted, row)
+                if type(row.killTracker) == "function" then
+                    if not row.completed or rowHasExtraCreditKills(row) then
+                        table_insert(index.killTrackerRowsSorted, row)
+                    end
                 end
             end
             table_sort(index.killTrackerRowsSorted, compareKillRows)
@@ -4631,6 +5394,7 @@ do
             local tracked = npcKillTrackContext(npcId)
             return tracked
         end
+        addon.IsNpcTrackedForAchievement = isNpcTrackedForAchievement
 
         -- Module-level table reused across calls to avoid per-call allocation and GC pressure.
         -- Safe because callers iterate the result synchronously before the next CLEU event fires.
@@ -4745,7 +5509,9 @@ do
         end
 
         local function isPlayerPartyOrPetSource(sourceGUID)
-            if not sourceGUID then return false end
+            if not sourceGUID or (addon.IsSecretValue and addon.IsSecretValue(sourceGUID)) then
+                return false
+            end
             return _cachedPartyGUIDs[sourceGUID] == true
                 or _cachedPetOwnerByGUID[sourceGUID] ~= nil
         end
@@ -4821,7 +5587,7 @@ do
 
             local anyAwarded = false
             for _, row in ipairs(rowsWithTracker) do
-                if row.killTracker(destGUID) then
+                if row.killTracker(destGUID, npcId) then
                     MarkRowCompleted(row)
                     local iconTex = (row.frame and row.frame.Icon and row.frame.Icon.GetTexture and row.frame.Icon:GetTexture()) or row.icon or 136116
                     local titleText = (row.frame and row.frame.Title and row.frame.Title.GetText and row.frame.Title:GetText()) or row.title or "Achievement"
@@ -4845,8 +5611,18 @@ do
         end
 
         local function processKill(destGUID, npcId)
-            if not destGUID or recentKills[destGUID] then
+            if not destGUID or (addon.IsSecretValue and addon.IsSecretValue(destGUID)) or recentKills[destGUID] then
                 return
+            end
+
+            local isEncounter = type(destGUID) == "string" and destGUID:sub(1, 10) == "Encounter:"
+            local now = GetTime()
+            if not isEncounter and npcId and achEvt.encounterClaimedAt[npcId]
+                and (now - achEvt.encounterClaimedAt[npcId]) < 10 then
+                return
+            end
+            if not isEncounter and npcId then
+                achEvt.guidClaimedAt[npcId] = now
             end
 
             -- Capture solo status synchronously while game state is current
@@ -4876,9 +5652,52 @@ do
             return externalPlayersByNPC[destGUID] or {}
         end
         
+        -- Entry point for clients that cannot register COMBAT_LOG_EVENT_UNFILTERED (Forever). The caller
+        -- decides credit itself. The rare/quest-loot hook is the caller's job: PARTY_KILL runs it for
+        -- every creature, while the UNIT_DIED fallback must not. See Forever\KillTracking.lua.
+        if addon then
+            addon.AwardKillFromExternalSource = function(destGUID, npcIdHint)
+                if type(destGUID) ~= "string" or (addon.IsSecretValue and addon.IsSecretValue(destGUID)) then
+                    return false
+                end
+                if destGUID:sub(1, 9) ~= "Creature-" then
+                    return false
+                end
+
+                local npcId = tonumber(npcIdHint) or getNpcIdFromGUID(destGUID)
+                if not npcId then
+                    return false
+                end
+
+                processKill(destGUID, npcId)
+                clearCombatTrackingForGUID(destGUID)
+                return true
+            end
+
+            -- Boss credit from ENCOUNTER_END, which identifies the creature without a GUID. The dungeon
+            -- kill tracker still applies the player's level, party size, and average-party-level snapshot.
+            addon.AwardKillFromEncounter = function(_, creatureID)
+                creatureID = tonumber(creatureID)
+                if not creatureID then
+                    return false
+                end
+                local now = GetTime()
+                if achEvt.guidClaimedAt[creatureID] and (now - achEvt.guidClaimedAt[creatureID]) < 10 then
+                    return false
+                end
+                achEvt.encounterClaimedAt[creatureID] = now
+                processKill("Encounter:" .. creatureID, creatureID)
+                return true
+            end
+        end
+
         achEvt:RegisterEvent("GROUP_ROSTER_UPDATE")
         achEvt:RegisterEvent("UNIT_PET")
-        achEvt:RegisterEvent("COMBAT_LOG_EVENT_UNFILTERED")
+        -- Forever forbids this for insecure addons, and asking anyway reports ADDON_ACTION_FORBIDDEN.
+        -- Restrictions.combatLog is the capability flag; IsForeverClient is the product identity.
+        if not (addon.Restrictions and addon.Restrictions.combatLog) then
+            achEvt:RegisterEvent("COMBAT_LOG_EVENT_UNFILTERED")
+        end
         achEvt:RegisterEvent("BOSS_KILL")
         achEvt:RegisterEvent("QUEST_ACCEPTED")
         achEvt:RegisterEvent("QUEST_TURNED_IN")
@@ -4962,6 +5781,12 @@ do
                 local _, subevent, _, sourceGUID, sourceName, _, _, destGUID, destName, _, _, param12, param13, param14, param15, param16 = CombatLogGetCurrentEventInfo()
                 
                 if subevent == "PARTY_KILL" then
+                    -- Routed here instead of its own CLEU frame; must run before the tap-denial
+                    -- and instance gates below, which can return early.
+                    local onRareQuestLootKill = addon and addon.FirstKillRareQuestLoot_OnPartyKill
+                    if onRareQuestLootKill and destGUID then
+                        onRareQuestLootKill(destGUID)
+                    end
                     -- PARTY_KILL fires when the player/party gets credit for a kill.
                     -- In dungeon/raid: only the group is present, so we always process (interchangeable with UNIT_DIED).
                     -- In open world: require npcsInCombat and check tap denial so we don't credit kills we didn't tag.
@@ -5102,10 +5927,9 @@ do
                 if InvalidateAchievementRuntimeIndex then
                     InvalidateAchievementRuntimeIndex()
                 end
-                -- arg2 is the QuestId
+                -- Classic: (questLogIndex, questID). Retail/Forever: (questID) only.
                 local arg1, arg2 = ...
-                local questID = arg2 and tonumber(arg2) or nil
-                questID = questID and tonumber(questID) or nil
+                local questID = tonumber(arg2) or tonumber(arg1)
                 if questID and addon and addon.SetProgress then
                     -- Store player's level when quest is accepted as a backup reference
                     -- This helps prevent achievements from failing if player levels up between accepting and turning in
@@ -5220,37 +6044,46 @@ do
                 local unit = ...
                 if unit ~= "player" then return end
 
-                -- Single pass: evaluate DefiasMask (Rogue only) and dungeon set achievements together.
-                local _, classFile = UnitClass("player")
-                local isRogue = (classFile == "ROGUE")
-                local headSlotItemId = isRogue and GetInventoryItemID("player", 1) or nil
+                -- Debounce: equipping a set fires this once per slot, and each pass scans every
+                -- row and pcalls a tracker per dungeon-set row. Collapse a burst into one pass.
+                if not _pendingInventoryCheck then
+                    _pendingInventoryCheck = true
+                    C_Timer.After(0, function()
+                        _pendingInventoryCheck = false
 
-                for _, row in ipairs(addon.AchievementRowModel or {}) do
-                    if not IsAchievementAlreadyCompleted(row) then
-                        -- DefiasMask: Rogue wearing the head item
-                        if isRogue and headSlotItemId == 7997 and (row.id == "DefiasMask" or row.achId == "DefiasMask") then
-                            MarkRowCompleted(row)
-                            local iconTex = (row.frame and row.frame.Icon and row.frame.Icon.GetTexture and row.frame.Icon:GetTexture()) or row.icon or 136116
-                            local titleText = (row.frame and row.frame.Title and row.frame.Title.GetText and row.frame.Title:GetText()) or row.title or "Achievement"
-                            CreateAchToast(iconTex, titleText, row.points, row.frame or row)
-                        end
-                        -- Dungeon set achievements (tracker checks all required items internally)
-                        if row._def and row._def.isDungeonSet then
-                            local achId = row.achId or row.id
-                            if achId then
-                                local trackerFn = (addon and addon.GetAchievementFunction and addon.GetAchievementFunction(achId, "IsCompleted")) or (addon and addon[achId])
-                                if type(trackerFn) == "function" then
-                                    local ok, shouldComplete = pcall(trackerFn)
-                                    if ok and shouldComplete == true then
-                                        MarkRowCompleted(row)
-                                        local iconTex = (row.frame and row.frame.Icon and row.frame.Icon.GetTexture and row.frame.Icon:GetTexture()) or row.icon or 136116
-                                        local titleText = (row.frame and row.frame.Title and row.frame.Title.GetText and row.frame.Title:GetText()) or row.title or "Achievement"
-                                        CreateAchToast(iconTex, titleText, row.points, row.frame or row)
+                        -- Single pass: evaluate DefiasMask (Rogue only) and dungeon set achievements together.
+                        local _, classFile = UnitClass("player")
+                        local isRogue = (classFile == "ROGUE")
+                        local headSlotItemId = isRogue and GetInventoryItemID("player", 1) or nil
+
+                        for _, row in ipairs(addon.AchievementRowModel or {}) do
+                            if not IsAchievementAlreadyCompleted(row) then
+                                -- DefiasMask: Rogue wearing the head item
+                                if isRogue and headSlotItemId == 7997 and (row.id == "DefiasMask" or row.achId == "DefiasMask") then
+                                    MarkRowCompleted(row)
+                                    local iconTex = (row.frame and row.frame.Icon and row.frame.Icon.GetTexture and row.frame.Icon:GetTexture()) or row.icon or 136116
+                                    local titleText = (row.frame and row.frame.Title and row.frame.Title.GetText and row.frame.Title:GetText()) or row.title or "Achievement"
+                                    CreateAchToast(iconTex, titleText, row.points, row.frame or row)
+                                end
+                                -- Dungeon set achievements (tracker checks all required items internally)
+                                if row._def and row._def.isDungeonSet then
+                                    local achId = row.achId or row.id
+                                    if achId then
+                                        local trackerFn = (addon and addon.GetAchievementFunction and addon.GetAchievementFunction(achId, "IsCompleted")) or (addon and addon[achId])
+                                        if type(trackerFn) == "function" then
+                                            local ok, shouldComplete = pcall(trackerFn)
+                                            if ok and shouldComplete == true then
+                                                MarkRowCompleted(row)
+                                                local iconTex = (row.frame and row.frame.Icon and row.frame.Icon.GetTexture and row.frame.Icon:GetTexture()) or row.icon or 136116
+                                                local titleText = (row.frame and row.frame.Title and row.frame.Title.GetText and row.frame.Title:GetText()) or row.title or "Achievement"
+                                                CreateAchToast(iconTex, titleText, row.points, row.frame or row)
+                                            end
+                                        end
                                     end
                                 end
                             end
                         end
-                    end
+                    end)
                 end
             elseif event == "ITEM_LOCKED" then
                 -- Track item delete flow for "Precious"
@@ -5354,7 +6187,9 @@ do
                 -- Check for "MessageToKarazhan" achievement when speaking to Archmage Leryda
                 local npcName = UnitName("npc")
                 local playerLevel = UnitLevel("player")
-                if npcName == "Archmage Leryda" and playerLevel <= 60 then
+                -- Forever: NPC names can be secret on restricted maps; comparing them errors.
+                if npcName and not (addon.IsSecretValue and addon.IsSecretValue(npcName))
+                    and npcName == "Archmage Leryda" and playerLevel <= 60 then
                     for _, row in ipairs(addon.AchievementRowModel or {}) do
                         local id = row and (row.id or row.achId)
                         if row and (not row.completed) and id == "MessageToKarazhan" then
@@ -5410,25 +6245,33 @@ do
                     end
                 end
             elseif event == "UPDATE_FACTION" then
-                -- Handle reputation achievement completion
-                for _, row in ipairs(addon.AchievementRowModel or {}) do
-                    if not row.completed and row._def and row._def.isReputation then
-                        local achId = row.achId or row.id
-                        if achId then
-                            -- Check if this achievement has a reputation tracker function
-                            local trackerFn = (addon and addon.GetAchievementFunction and addon.GetAchievementFunction(achId, "IsCompleted")) or (addon and addon[achId])
-                            if type(trackerFn) == "function" then
-                                -- The tracker function checks if the player is exalted with the faction
-                                local ok, shouldComplete = pcall(trackerFn)
-                                if ok and shouldComplete == true then
-                                    MarkRowCompleted(row)
-                                local iconTex = (row.frame and row.frame.Icon and row.frame.Icon.GetTexture and row.frame.Icon:GetTexture()) or row.icon or 136116
-                                local titleText = (row.frame and row.frame.Title and row.frame.Title.GetText and row.frame.Title:GetText()) or row.title or "Achievement"
-                                CreateAchToast(iconTex, titleText, row.points, row.frame or row)
+                -- Debounce: UPDATE_FACTION arrives in bursts on quest turn-ins and rep grinds,
+                -- and each pass scans every row and pcalls a tracker per reputation row.
+                if not _pendingFactionCheck then
+                    _pendingFactionCheck = true
+                    C_Timer.After(0.5, function()
+                        _pendingFactionCheck = false
+                        -- Handle reputation achievement completion
+                        for _, row in ipairs(addon.AchievementRowModel or {}) do
+                            if not row.completed and row._def and row._def.isReputation then
+                                local achId = row.achId or row.id
+                                if achId then
+                                    -- Check if this achievement has a reputation tracker function
+                                    local trackerFn = (addon and addon.GetAchievementFunction and addon.GetAchievementFunction(achId, "IsCompleted")) or (addon and addon[achId])
+                                    if type(trackerFn) == "function" then
+                                        -- The tracker function checks if the player is exalted with the faction
+                                        local ok, shouldComplete = pcall(trackerFn)
+                                        if ok and shouldComplete == true then
+                                            MarkRowCompleted(row)
+                                            local iconTex = (row.frame and row.frame.Icon and row.frame.Icon.GetTexture and row.frame.Icon:GetTexture()) or row.icon or 136116
+                                            local titleText = (row.frame and row.frame.Title and row.frame.Title.GetText and row.frame.Title:GetText()) or row.title or "Achievement"
+                                            CreateAchToast(iconTex, titleText, row.points, row.frame or row)
+                                        end
+                                    end
                                 end
                             end
                         end
-                    end
+                    end)
                 end
             elseif event == "QUEST_REMOVED" then
                 for k in pairs(_questLogCache) do _questLogCache[k] = nil end
@@ -5557,6 +6400,17 @@ end
  
 -- Reusable function for achievement tab click logic
 local function ShowAchievementTab()
+    if addon.ShowLegacyAchievementsPage and addon.ShowLegacyAchievementsPage() then
+        return
+    end
+    -- Forever + classic UI restorer: do not open the character-frame panel.
+    if addon.IsForeverCharacterUI then
+        if addon.Dashboard and addon.Dashboard.Toggle then
+            addon.Dashboard:Toggle()
+        end
+        return
+    end
+
     if EnsureAchievementPanelCreated then
         EnsureAchievementPanelCreated()
     end
@@ -5573,7 +6427,7 @@ local function ShowAchievementTab()
         PlaySound("igCharacterInfoTab")
     end
 
-    for i = 1, CharacterFrame.numTabs do
+    for i = 1, addon.GetCharacterFrameTabCount() do
         local t = _G["CharacterFrameTab"..i]
         if t then
             PanelTemplates_DeselectTab(t)
@@ -5602,8 +6456,7 @@ local function ShowAchievementTab()
     
     -- Sync solo mode checkbox state
     if AchievementPanel.SoloModeCheckbox then
-        local _, cdb = GetCharDB()
-        local isChecked = (cdb and cdb.settings and cdb.settings.soloAchievements) or false
+        local isChecked = (addon.IsSoloModeEnabled and addon.IsSoloModeEnabled()) or false
         AchievementPanel.SoloModeCheckbox:SetChecked(isChecked)
         
         local isHardcoreActive = C_GameRules and C_GameRules.IsHardcoreActive and C_GameRules.IsHardcoreActive() or false
@@ -5642,7 +6495,7 @@ local function ShowAchievementTab()
 
     -- AchievementPanel.PortraitCover:Show()
 end
--- Export so ToggleAchievementCharacterFrameTab and square frame can call at click time
+-- CharacterFrame tab / square-frame clicks use this directly (not the Dashboard toggle).
 if addon then addon.ShowAchievementTab = ShowAchievementTab end
 
 Tab:SetScript("OnClick", ShowAchievementTab)
@@ -5679,19 +6532,21 @@ Tab:HookScript("OnLeave", function(self)
 end)
 
 -- Hook tab selection to show/hide highlight based on selection state
-hooksecurefunc("PanelTemplates_SelectTab", function(tab)
+addon.SafeHookGlobal("PanelTemplates_SelectTab", function(tab)
     if tab == Tab and Tab.squareFrame and Tab.squareFrame:IsShown() and Tab.squareFrame.highlight then
         Tab.squareFrame.highlight:Show()
     end
 end)
 
-hooksecurefunc("PanelTemplates_DeselectTab", function(tab)
+addon.SafeHookGlobal("PanelTemplates_DeselectTab", function(tab)
     if tab == Tab and Tab.squareFrame and Tab.squareFrame:IsShown() and Tab.squareFrame.highlight then
         Tab.squareFrame.highlight:Hide()
     end
 end)
 
-hooksecurefunc("CharacterFrame_ShowSubFrame", function(frameName)
+-- CharacterFrame_ShowSubFrame was retired in the retail Character UI rework, so this is absent on
+-- Forever. Hooking it unconditionally threw here and took the rest of this file with it.
+addon.SafeHookGlobal("CharacterFrame_ShowSubFrame", function(frameName)
     if AchievementPanel and AchievementPanel:IsShown() and frameName ~= "HardcoreAchievementsFrame" then
         AchievementPanel._suppressOnHide = true
         AchievementPanel:Hide()
@@ -5736,10 +6591,14 @@ CharacterFrame:HookScript("OnShow", function()
     
     -- Load tab position (this handles both saved and default positions, including expansion-dependent defaults)
     LoadTabPosition()
+    -- Forever: keep the unused CharacterFrame tab hidden if a restorer re-shows chrome.
+    if addon.IsForeverCharacterUI and C_Timer and C_Timer.After then
+        C_Timer.After(0, LoadTabPosition)
+    end
 end)
 
 -- Hook ToggleCharacter to handle CharacterStatsClassic visibility and square frame
-hooksecurefunc("ToggleCharacter", function(tab, onlyShow)
+addon.SafeHookGlobal("ToggleCharacter", function(tab, onlyShow)
     -- When switching to PaperDoll tab, show CharacterStatsClassic if not hidden
     if tab == "PaperDollFrame" then
         if type(_G.CSC_ShowStatsPanel) == "function" then
@@ -5800,7 +6659,16 @@ do
         if Profession then Profession.RefreshAll() end
         if InvalidateAchievementRuntimeIndex then InvalidateAchievementRuntimeIndex() end
 
-        addon.Initializing = false
+        -- Keep Initializing true through the next frame so deferred login timers
+        -- (quest top-up, exploration metas, profession refresh) do not arm the
+        -- unsaved-progress banner for no-op settle work.
+        if C_Timer and C_Timer.After then
+            C_Timer.After(0, function()
+                addon.Initializing = false
+            end)
+        else
+            addon.Initializing = false
+        end
         print("|cff008066[Hardcore Achievements]|r |cffffd100All achievements loaded!|r")
 
         if addon.Leaderboard and addon.Leaderboard.ScheduleCompletionStatsRebuild then

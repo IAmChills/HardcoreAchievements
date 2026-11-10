@@ -22,7 +22,7 @@ local DungeonSets = {
     staticPoints = true,
   },
 
-  -- WAINING CAVERNS
+  -- WAILING CAVERNS
   {
     achId = "ViperSet",
     title = "Embrace of the Viper Set",

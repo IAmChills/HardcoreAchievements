@@ -427,9 +427,10 @@ local function OnPresenceValidate(key, data, context)
 end
 
 --- Old "Name-Realm" row key used before switching to UnitGUID; migrate once to the GUID key.
+--- Forever must not treat UnitName's surname as a realm.
 local function LegacyNameRealmKey()
-    local name, realm = UnitName("player")
-    realm = realm or GetRealmName()
+    local name = (addon.GetPlayerFullName and addon.GetPlayerFullName()) or UnitName("player")
+    local realm = (addon.GetPlayerRealmLabel and addon.GetPlayerRealmLabel()) or GetRealmName()
     if not name or name == "" then
         return nil
     end
@@ -526,10 +527,17 @@ function Sync:Initialize()
 
     local db = LibP2PDB:GetDatabase(DB_PREFIX)
     if not db then
+        -- Forever: also broadcast on custom chat channel "HCA" (name, not index).
+        -- Stock GUILD/PARTY/RAID/YELL stay enabled. Classic omits channels (CHANNEL blocked).
+        local channels
+        if addon.IsForeverClient and addon.IsForeverClient() then
+            channels = { addon.HCA_COMM_CHANNEL_NAME or "HCA" }
+        end
         db = LibP2PDB:NewDatabase({
             prefix = DB_PREFIX,
             version = DB_VERSION,
-            compressor = addon.LibP2PDBFastCompressor,
+            channels = channels,
+            onError = addon.LibP2PDBOnError,
             onMigrateDB = OnMigrateDB,
             onMigrateRow = OnMigrateRow,
         })
@@ -636,8 +644,8 @@ function Sync:BuildLocalRow(options)
     end
 
     return {
-        name = name,
-        realm = GetRealmName() or "",
+        name = (addon.GetPlayerFullName and addon.GetPlayerFullName()) or name,
+        realm = (addon.GetPlayerRealmLabel and addon.GetPlayerRealmLabel()) or GetRealmName() or "",
         guild = GuildForPublish(options.publishReason),
         faction = UnitFactionGroup("player") or "",
         class = classEnglish,
@@ -659,6 +667,9 @@ function Sync:BuildLocalRow(options)
 end
 
 function Sync:PublishLocal(reason)
+    if addon.IsForeverChatRestricted and addon.IsForeverChatRestricted() then
+        return false
+    end
     if not LibP2PDB or not self.db then
         return false
     end

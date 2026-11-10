@@ -7,3 +7,8 @@ Admin
 *.md
 *.addonpackignore
 *.svg
+*.code-workspace
+HardcoreAchievementsTab2.png
+ForeverDashboard.png
+ForeverLeaderboard.png
+ForeverMeta.png

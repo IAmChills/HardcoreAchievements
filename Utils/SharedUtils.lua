@@ -1,5 +1,5 @@
 local addonName, addon = ...
-local UnitBuff = UnitBuff
+local GetPlayerBuff = addon.GetPlayerBuff
 local UnitClass = UnitClass
 local UnitFactionGroup = UnitFactionGroup
 local GetClassColor = GetClassColor
@@ -72,6 +72,21 @@ local function GetClassColor()
     return cachedClassColor
 end
 
+-- Forever given names include a surname. Titles like "%s the Keeper" should use the first name only.
+local function GetPlayerShowcaseName(name)
+    if name == nil or name == "" then
+        name = (GetUnitName and GetUnitName("player")) or (UnitName and UnitName("player")) or ""
+    end
+    name = tostring(name)
+    if addon and addon.IsForeverCharacterUI then
+        local first = name:match("^([^%s]+)")
+        if first and first ~= "" then
+            return first
+        end
+    end
+    return name
+end
+
 -- Initialize on PLAYER_LOGIN event
 local classColorFrame = CreateFrame("Frame")
 classColorFrame:RegisterEvent("PLAYER_LOGIN")
@@ -86,9 +101,16 @@ end)
 -- Character Panel Tab Management
 -- =========================================================
 
--- Get the Character Frame achievement tab
+-- Get the Character Frame achievement tab.
+-- Only a fallback for when addon.GetTab is unavailable, and only meaningful on clients whose character
+-- panel actually has tabs to count past. Retail has none, so this returns nil rather than erroring.
 local function GetAchievementTab()
-    return _G["CharacterFrameTab" .. (CharacterFrame.numTabs + 1)]
+    if not addon.GetCharacterFrameTabCount then return nil end
+
+    local count = addon.GetCharacterFrameTabCount()
+    if count < 1 then return nil end
+
+    return _G["CharacterFrameTab" .. (count + 1)]
 end
 
 -- Check if tab is the achievement tab
@@ -170,14 +192,27 @@ end
 -- Other files: local IsSelfFound = addon.IsSelfFound; call IsSelfFound() for true/false.
 -- =========================================================
 
+-- Whether the player is self-found cannot change for the life of the character, so the last answer the
+-- client was willing to give remains true afterwards. That matters because retail 12.0 refuses aura reads
+-- from tainted code while auras are secret, and combat is exactly when this gets asked: it sits behind
+-- the solo-bonus decision on every kill.
+local selfFoundLastKnown = nil
+
 local function IsSelfFound()
     for i = 1, 40 do
-        local name, _, _, _, _, _, _, _, _, spellId = UnitBuff("player", i)
+        -- Via the compat bridge: UnitBuff was removed in retail 11.0 (see Utils\Compat.lua).
+        local name, spellId, refused = GetPlayerBuff(i)
+        if refused then
+            -- Treating a refusal as "no buff" would silently demote a self-found character mid-combat.
+            return selfFoundLastKnown == true
+        end
         if not name then break end
         if spellId == 431567 or name == "Self-Found Adventurer" then
+            selfFoundLastKnown = true
             return true
         end
     end
+    selfFoundLastKnown = false
     return false
 end
 
@@ -277,6 +312,7 @@ local function RegisterAchievementDef(def, overrides)
         isQuest = def.isQuest or false,
         isRaid = def.isRaid or false,
         isHeroicDungeon = def.isHeroicDungeon or false,
+        maxPartySize = def.maxPartySize,
         isMetaAchievement = def.isMetaAchievement or false,
         isContinentExploration = def.isContinentExploration or false,
         isVariation = def.isVariation or false,
@@ -594,6 +630,7 @@ end
 if addon then
     addon.GetSetting = GetSetting
     addon.GetClassColor = GetClassColor
+    addon.GetPlayerShowcaseName = GetPlayerShowcaseName
     addon.GetAchievementDisplayValues = GetAchievementDisplayValues
     addon.UpdateCharacterPanelTabVisibility = UpdateCharacterPanelTabVisibility
     addon.SetUseCharacterPanel = SetUseCharacterPanel

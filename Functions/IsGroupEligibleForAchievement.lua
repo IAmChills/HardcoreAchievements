@@ -29,14 +29,21 @@ local UnitInRange = UnitInRange
 local table_insert = table.insert
 
 local function IsGroupEligibleForAchievement(MAX_LEVEL, ACH_ID, destGUID)
-    -- If in a raid, not eligible
-    if IsInRaid() then
+    local maxPartySize = 5
+    if ACH_ID and addon and addon.AchievementDefs then
+        local achDef = addon.AchievementDefs[tostring(ACH_ID)] or addon.AchievementDefs[ACH_ID]
+        if achDef and achDef.maxPartySize then
+            maxPartySize = achDef.maxPartySize
+        end
+    end
+
+    -- 10-man dungeons convert to raid to fit 6–10 players; 5-man dungeons still reject raids.
+    if IsInRaid() and maxPartySize <= 5 then
         return false
     end
 
-    -- Check party size (should not exceed 5 members)
     local members = GetNumGroupMembers()
-    if members > 5 then
+    if members > maxPartySize then
         return false
     end
 

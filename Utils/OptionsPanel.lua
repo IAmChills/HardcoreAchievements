@@ -29,17 +29,19 @@ local function SetSetting(settingName, value)
     end
 end
 
+-- Options UI is built at file parse time. Do not create the SavedVariables
+-- global here; wait for ADDON_LOADED to bind it.
 local function GetAccountDB()
+    if type(HardcoreAchievementsDB) == "table" then
+        if addon then
+            addon.HardcoreAchievementsDB = HardcoreAchievementsDB
+        end
+        return HardcoreAchievementsDB
+    end
     if addon and type(addon.HardcoreAchievementsDB) == "table" then
         return addon.HardcoreAchievementsDB
     end
-    if type(HardcoreAchievementsDB) ~= "table" then
-        HardcoreAchievementsDB = {}
-    end
-    if addon then
-        addon.HardcoreAchievementsDB = HardcoreAchievementsDB
-    end
-    return HardcoreAchievementsDB
+    return nil
 end
 
 local function IsMinimapButtonShown()
@@ -47,7 +49,10 @@ local function IsMinimapButtonShown()
         return addon.IsMinimapButtonShown()
     end
     local db = GetAccountDB()
-    db.minimap = db.minimap or { hide = false, position = 45 }
+    if not db then
+        return true
+    end
+    db.minimap = db.minimap or { hide = false, minimapPos = 45 }
     return db.minimap.hide ~= true
 end
 
@@ -57,9 +62,11 @@ local function SetMinimapButtonShown(shown)
         return
     end
     local db = GetAccountDB()
-    db.minimap = db.minimap or { hide = false, position = 45 }
+    if not db then
+        return
+    end
+    db.minimap = db.minimap or { hide = false, minimapPos = 45 }
     db.minimap.hide = not shown
-    db.hide = not shown
 end
 
 -- Helper function to check if screenshots are disabled (called before Screenshot in HardcoreAchievements.lua)
@@ -75,13 +82,26 @@ end
 
 -- Helper function to check if solo achievements mode is enabled
 local function IsSoloModeEnabled()
+    local cdb
     if type(GetCharDB) == "function" then
-        local _, cdb = GetCharDB()
-        if cdb and cdb.settings and cdb.settings.soloAchievements then
-            return true
+        _, cdb = GetCharDB()
+    end
+    if not (cdb and cdb.settings and cdb.settings.soloAchievements) then
+        return false
+    end
+
+    -- Hardcore Self-Found can be turned off at an NPC and never reapplied. The SSF
+    -- checkbox is then disabled, so a leftover checked setting would stay stuck on
+    -- and keep previewing solo/SSF points.
+    local isHardcoreActive = C_GameRules and C_GameRules.IsHardcoreActive and C_GameRules.IsHardcoreActive()
+    if isHardcoreActive then
+        local isSelfFound = addon and addon.IsSelfFound
+        if type(isSelfFound) ~= "function" or not isSelfFound() then
+            cdb.settings.soloAchievements = false
+            return false
         end
     end
-    return false
+    return true
 end
 
 -- Helper function to check if award on kill is enabled
@@ -111,7 +131,7 @@ end
 
 -- Create Discord frame (will be created on first use)
 local discordFrame = nil
-local DISCORD_LINK = "https://discord.gg/3KChDhux2D" --https://discord.gg/3KChDhux2D alternative link
+local DISCORD_LINK = "https://discord.gg/BemPAE2y8h" --https://discord.gg/3KChDhux2D alternative link
 
 local function CreateDiscordFrame()
     if discordFrame then return discordFrame end
@@ -149,20 +169,32 @@ local function CreateDiscordFrame()
     discordLinkBox:SetAutoFocus(false)
     discordLinkBox:SetText(DISCORD_LINK)
     discordLinkBox:SetTextColor(0.345, 0.396, 0.949, 1) -- Discord blurple color
+
+    -- The link is wider than the box and the view follows the cursor, which SetText leaves at the
+    -- end. Select the whole link for copying, then park the cursor at the start so the visible
+    -- portion begins at "https://" instead of the invite code.
+    local function SelectLinkFromStart()
+        discordLinkBox:HighlightText()
+        discordLinkBox:SetCursorPosition(0)
+    end
+
+    SelectLinkFromStart()
+
     discordLinkBox:SetScript("OnEscapePressed", function(self)
         self:ClearFocus()
     end)
     
     -- Make read-only (disable editing)
-    discordLinkBox:SetScript("OnEditFocusGained", function(self)
+    discordLinkBox:SetScript("OnEditFocusGained", function()
         -- Allow selection but prevent editing
-        self:HighlightText()
+        SelectLinkFromStart()
     end)
     
     -- Make it appear read-only by preventing text changes
     discordLinkBox:SetScript("OnChar", function(self)
         -- Prevent any text input - restore original text
         self:SetText(DISCORD_LINK)
+        SelectLinkFromStart()
     end)
     
     -- Close button
@@ -172,6 +204,13 @@ local function CreateDiscordFrame()
         discordFrame:Hide()
     end)
     
+    -- The frame is reused across opens, so re-select on every show rather than only at creation.
+    -- SetFocus fires OnEditFocusGained; the explicit call covers the case where focus was retained.
+    discordFrame:SetScript("OnShow", function()
+        discordLinkBox:SetFocus()
+        SelectLinkFromStart()
+    end)
+
     -- Make frame movable
     discordFrame:SetMovable(true)
     discordFrame:EnableMouse(true)
@@ -328,7 +367,11 @@ local function CreateBackupRestoreFrame()
     -- =========================================================
     -- Create Tabs
     -- =========================================================
-    local backupTab = CreateFrame("Button", "HardcoreAchievementsBackupTab", frame, "CharacterFrameTabButtonTemplate")
+    -- ResolveTemplate rather than a literal: CharacterFrameTabButtonTemplate is absent on retail-based
+    -- clients (Forever), where CreateFrame would error on the unknown template name.
+    local tabTemplate = addon.ResolveTemplate("CharacterFrameTabButtonTemplate", "PanelTabButtonTemplate")
+
+    local backupTab = CreateFrame("Button", "HardcoreAchievementsBackupTab", frame, tabTemplate)
     backupTab:SetFrameStrata("FULLSCREEN")
     backupTab:SetPoint("TOPLEFT", frame, "BOTTOMLEFT", 0, 8)
     backupTab:SetText("Backup")
@@ -337,7 +380,7 @@ local function CreateBackupRestoreFrame()
     backupTab:SetScript("OnShow", nil)
     backupTab:SetScript("OnClick", function() SwitchTab("Backup") end)
     
-    local restoreTab = CreateFrame("Button", "HardcoreAchievementsRestoreTab", frame, "CharacterFrameTabButtonTemplate")
+    local restoreTab = CreateFrame("Button", "HardcoreAchievementsRestoreTab", frame, tabTemplate)
     restoreTab:SetFrameStrata("FULLSCREEN")
     restoreTab:SetPoint("LEFT", backupTab, "RIGHT")
     restoreTab:SetText("Restore")
@@ -363,7 +406,7 @@ local function CreateBackupRestoreFrame()
     -- Instructions text
     local instructionsText = backupPanel:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     instructionsText:SetPoint("TOP", titleText, "BOTTOM", 0, -10)
-    instructionsText:SetText("Copy the text below and save it as a backup. This includes all characters, achievements, progress, and settings.")
+    instructionsText:SetText("Copy the text below and save it as a backup. This includes this character's progress plus account settings and leaderboard data.")
     instructionsText:SetTextColor(0.8, 0.8, 0.8, 1)
     instructionsText:SetWidth(550)
     instructionsText:SetJustifyH("CENTER")
@@ -433,7 +476,7 @@ local function CreateBackupRestoreFrame()
     -- Warning text
     local warningText = restorePanel:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     warningText:SetPoint("TOP", titleText, "BOTTOM", 0, -10)
-    warningText:SetText("|cffff0000WARNING:|r This will replace your entire database including all characters, achievements, progress, and settings. Paste your backup string below and click Import.")
+    warningText:SetText("|cffff0000WARNING:|r This replaces this character's progress and your account settings/leaderboard. Paste your backup string below and click Import.")
     warningText:SetTextColor(1, 0.8, 0.8, 1)
     warningText:SetWidth(550)
     warningText:SetJustifyH("CENTER")
@@ -496,29 +539,27 @@ local function CreateBackupRestoreFrame()
         -- Decode and deserialize (DecodeData handles both new and legacy formats)
         local success, data = addon.DecodeData(text)
         if not success then
-            print("|cffff0000Hardcore Achievements:|r Failed to import database. Invalid backup string.")
+            print("|cffff0000Hardcore Achievements:|r Failed to import database. Invalid backup string" .. (data and (": " .. tostring(data)) or "."))
             return
         end
         
-        -- Validate full database structure
-        if type(data) ~= "table" or not data.chars or type(data.chars) ~= "table" then
-            print("|cffff0000Hardcore Achievements:|r Invalid backup data format. Expected full database structure with 'chars' table.")
-            return
-        end
-        
-        -- Replace the entire database (write to SavedVariables global so it persists)
-        if addon and addon.HardcoreAchievementsDB then
-            HardcoreAchievementsDB = data
-            if addon then addon.HardcoreAchievementsDB = HardcoreAchievementsDB end
-            
-            print("|cff00ff00Hardcore Achievements:|r Full database imported successfully! All characters and settings have been restored.")
-            print("|cffffd100Hardcore Achievements:|r Reloading UI...")
-            
-            frame:Hide()
-            ReloadUI()
-        else
+        local applyBackup = addon and addon.ApplySavedVariablesBackup
+        if type(applyBackup) ~= "function" then
             print("|cffff0000Hardcore Achievements:|r Database not available.")
+            return
         end
+
+        local applied, err = applyBackup(data)
+        if not applied then
+            print("|cffff0000Hardcore Achievements:|r " .. tostring(err or "Invalid backup data format."))
+            return
+        end
+
+        print("|cff00ff00Hardcore Achievements:|r Database imported successfully! Character progress and account settings have been restored.")
+        print("|cffffd100Hardcore Achievements:|r Reloading UI...")
+
+        frame:Hide()
+        ReloadUI()
     end)
     
     -- Store references
@@ -529,9 +570,11 @@ local function CreateBackupRestoreFrame()
     return frame
 end
 
--- Function to export full account database
+-- Function to export account + current character SavedVariables
 local function ExportDatabase()
-    if not addon or not addon.HardcoreAchievementsDB then
+    local buildBackup = addon and addon.BuildSavedVariablesBackup
+    local payload = type(buildBackup) == "function" and buildBackup() or nil
+    if not payload then
         print("|cffff0000Hardcore Achievements:|r No database found.")
         return
     end
@@ -546,7 +589,7 @@ local function ExportDatabase()
 
     -- Do the expensive serialization off the main UI thread using a coroutine + C_Timer
     local co = coroutine.create(function()
-        local encoded = addon.EncodeData(addon.HardcoreAchievementsDB)
+        local encoded = addon.EncodeData(payload)
 
         -- Yield back to UI thread so we can update the edit box safely
         coroutine.yield(encoded)
@@ -747,7 +790,7 @@ local function CreateOptionsPanel()
     -- Credits text
     local creditsText = panel:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
     creditsText:SetPoint("TOPLEFT", creditsCategoryTitle, "BOTTOMLEFT", 0, -8)
-    creditsText:SetText("Special thanks to:\n\n|cffff8000Viviway|r for the help with the addon and the overall UI design.\n|cffff8000Tulhur|r for the help with tracking down bugs and all his suggestions.\n|cffff8000BonniesDad|r for supplying the Ultra Hardcore addon and allowing Hardcore Achivements to thrive.\n|cffff8000CDank|r for creating the Hardcore TBC community and spreading the word about Hardcore Achivements.\n|cffff8000mocktail|r for creating the Hardcore addon and allowing Hardcore Achivements to thrive.")
+    creditsText:SetText("Special thanks to:\n\n|cffff8000Viviway|r for the help with the addon and the overall UI design.\n|cffff8000Tulhur|r for the help with tracking down bugs and all his suggestions.\n|cffff8000BonniesDad|r for supplying the Ultra Hardcore addon and allowing Hardcore Achivements to thrive.\n|cffff8000CDank|r for creating the Hardcore TBC community and spreading the word about Hardcore Achivements.\n|cffff8000Hardcore Team|r for creating the Hardcore addon and allowing Hardcore Achivements to thrive.\n|cffff8000Erunehtar|r for the help with the addon and the Libraries.")
     creditsText:SetTextColor(0.8, 0.8, 0.8, 1)
     creditsText:SetWidth(600)
     creditsText:SetJustifyH("LEFT")
@@ -808,11 +851,17 @@ local function ShowBackupRestore()
     ExportDatabase()
 end
 
+local function ShowDiscordFrame()
+    local frame = CreateDiscordFrame()
+    frame:Show()
+end
+
 if addon then
     addon.ShouldTakeScreenshot = ShouldTakeScreenshot
     addon.IsSoloModeEnabled = IsSoloModeEnabled
     addon.IsAwardOnKillEnabled = IsAwardOnKillEnabled
     addon.ShouldAnnounceInGuildChat = ShouldAnnounceInGuildChat
     addon.ShowBackupRestore = ShowBackupRestore
+    addon.ShowDiscordFrame = ShowDiscordFrame
     addon.OptionsPanel = optionsPanel
 end

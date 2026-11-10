@@ -222,27 +222,29 @@ local function CreateInitialOptionsFrame()
         setSetting("announceInGuildChat", self:GetChecked())
     end)
 
-    -- Show Achievements on the Character Info Panel
-    local useCharacterPanelCB = CreateFrame("CheckButton", nil, frame, "UICheckButtonTemplate")
-    useCharacterPanelCB:SetPoint("TOPLEFT", announceInGuildChatCB, "BOTTOMLEFT", 0, -10)
-    useCharacterPanelCB:SetSize(10, 10)
-    setCheckboxLabel(useCharacterPanelCB, "Show Achievements on the Character Info Panel")
-    useCharacterPanelCB:SetChecked(getSetting("useCharacterPanel", true))
-    ApplyCustomCheckboxTextures(useCharacterPanelCB)
-    AddTooltipToCheckbox(useCharacterPanelCB, "If enabled, the Achievements tab will appear on the Character (C) frame.")
-    useCharacterPanelCB:SetScript("OnClick", function(self)
-        local isChecked = self:GetChecked()
-        setSetting("useCharacterPanel", isChecked)
-        setSetting("showCustomTab", isChecked)
-        if addon and addon.UpdateCharacterPanelTabVisibility then
-            addon.UpdateCharacterPanelTabVisibility()
-        end
-        -- Sync Dashboard checkbox if it exists (so Dashboard stays in sync when open)
-        local dashboardFrame = addon and addon.DashboardFrame
-        if dashboardFrame and dashboardFrame.UseCharacterPanelCheckbox then
-            dashboardFrame.UseCharacterPanelCheckbox:SetChecked(isChecked)
-        end
-    end)
+    -- Forever hosts achievements on Legacy Challenges, never the Character frame.
+    if not (addon and addon.IsForeverCharacterUI) then
+        local useCharacterPanelCB = CreateFrame("CheckButton", nil, frame, "UICheckButtonTemplate")
+        useCharacterPanelCB:SetPoint("TOPLEFT", announceInGuildChatCB, "BOTTOMLEFT", 0, -10)
+        useCharacterPanelCB:SetSize(10, 10)
+        setCheckboxLabel(useCharacterPanelCB, "Show Achievements on the Character Info Panel")
+        useCharacterPanelCB:SetChecked(getSetting("useCharacterPanel", true))
+        ApplyCustomCheckboxTextures(useCharacterPanelCB)
+        AddTooltipToCheckbox(useCharacterPanelCB, "If enabled, the Achievements tab will appear on the Character (C) frame.")
+        useCharacterPanelCB:SetScript("OnClick", function(self)
+            local isChecked = self:GetChecked()
+            setSetting("useCharacterPanel", isChecked)
+            setSetting("showCustomTab", isChecked)
+            if addon and addon.UpdateCharacterPanelTabVisibility then
+                addon.UpdateCharacterPanelTabVisibility()
+            end
+            -- Sync Dashboard checkbox if it exists (so Dashboard stays in sync when open)
+            local dashboardFrame = addon and addon.DashboardFrame
+            if dashboardFrame and dashboardFrame.UseCharacterPanelCheckbox then
+                dashboardFrame.UseCharacterPanelCheckbox:SetChecked(isChecked)
+            end
+        end)
+    end
 
     -- Done button
     local doneBtn = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")

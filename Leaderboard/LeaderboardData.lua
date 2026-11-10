@@ -62,6 +62,8 @@ local LEADERBOARD_RACE_PORTRAIT_TOKEN = {
   [8] = "Troll",
   [10] = "Bloodelf",
   [11] = "Draenei",
+  [95] = "Skyborne", -- High Order Skyborne (Alliance)
+  [96] = "Skyborne", -- Windshaper Skyborne (Horde)
 }
 
 local function FormatClassPortrait(classText, raceId, sex)
@@ -178,8 +180,8 @@ local function GetLocalCharacterKey()
     if Leaderboard.GetLeaderboardRowKey then
         return Leaderboard.GetLeaderboardRowKey()
     end
-    local name, realm = UnitName("player")
-    realm = realm or GetRealmName()
+    local name = (addon.GetPlayerFullName and addon.GetPlayerFullName()) or UnitName("player")
+    local realm = (addon.GetPlayerRealmLabel and addon.GetPlayerRealmLabel()) or GetRealmName()
     if not name or name == "" then
         return nil
     end
@@ -257,7 +259,7 @@ end
 local function BuildScopeContext()
     return {
         guild = GetPlayerGuildNameForScope(),
-        realm = GetRealmName() or "",
+        realm = (addon.GetPlayerRealmLabel and addon.GetPlayerRealmLabel()) or GetRealmName() or "",
         faction = UnitFactionGroup("player") or "",
     }
 end
@@ -290,8 +292,14 @@ local function InScope(row, scope, context)
             end
         end
     end
-    if scope.realm and (row.realm or "") ~= ((context and context.realm) or (GetRealmName() or "")) then
-        return false
+    if scope.realm then
+        local myRealm = (context and context.realm)
+            or (addon.GetPlayerRealmLabel and addon.GetPlayerRealmLabel())
+            or GetRealmName()
+            or ""
+        if (row.realm or "") ~= myRealm then
+            return false
+        end
     end
     if scope.faction and (row.faction or "") ~= ((context and context.faction) or (UnitFactionGroup("player") or "")) then
         return false
@@ -533,7 +541,9 @@ function Data:GetScopeLabel()
         if scope.guild and GetPlayerGuildNameForScope() then
             labels[#labels + 1] = "Guild"
         end
-        if scope.realm then labels[#labels + 1] = "Realm" end
+        if scope.realm then
+            labels[#labels + 1] = (addon.IsForeverClient and addon.IsForeverClient()) and "Ruleset" or "Realm"
+        end
         if scope.faction then labels[#labels + 1] = "Faction" end
         if scope.dead then labels[#labels + 1] = "Dead" end
         base = (#labels == 0) and "World" or table.concat(labels, " + ")

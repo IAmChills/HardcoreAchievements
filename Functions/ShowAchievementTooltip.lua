@@ -155,7 +155,9 @@ local function ShowBossRequirements(achId, requiredKills, bossOrder, achievement
             end
         end
         if bonusEntries and #bonusEntries > 0 then
-            GameTooltip:AddLine("\nBonus:", 0, 1, 0)
+            -- Separate blank line; do not prefix "\n" onto a short header (Classic truncates to "Bon...").
+            GameTooltip:AddLine(" ")
+            GameTooltip:AddLine("Bonus:", 0, 1, 0)
             for i = 1, #bonusEntries do
                 local entry = bonusEntries[i]
                 if entry.done then
@@ -171,6 +173,7 @@ local function ShowBossRequirements(achId, requiredKills, bossOrder, achievement
     local progress = addon and addon.GetProgress and addon.GetProgress(achId)
     if progress and progress.avgPartyLevel then
         local sizeText = progress.entryPartySize and (" (" .. tostring(progress.entryPartySize) .. " players)") or ""
+        GameTooltip:AddLine(" ")
         GameTooltip:AddLine("Avg party level on entry: " .. tostring(progress.avgPartyLevel) .. sizeText, 0.75, 0.75, 0.75)
     end
 end
@@ -494,6 +497,15 @@ local function ShowAchievementTooltip(frame, data)
     end
     
     GameTooltip:AddLine(tooltip, nil, nil, nil, true)
+
+    -- Guild firsts won by someone else remain listed, so say so and when it happened.
+    if isGuildFirst and not achievementCompleted and addon and addon.GetGuildFirstClaimedLabel then
+        local claimedLabel, claimedAt = addon.GetGuildFirstClaimedLabel(achId, data)
+        if claimedLabel then
+            local claimedDate = (claimedAt and addon.FormatTimestamp) and addon.FormatTimestamp(claimedAt) or ""
+            GameTooltip:AddDoubleLine(claimedLabel, claimedDate, 1, 0.27, 0.27, 0.6, 0.6, 0.6)
+        end
+    end
     
     -- For achievements without level requirements (secret, profession, or no level), show points below the description
     if showPointsInBody then

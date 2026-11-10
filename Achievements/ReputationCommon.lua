@@ -12,6 +12,80 @@ local CreateFrame = CreateFrame
 local C_Timer = C_Timer
 
 ---------------------------------------
+-- Shared UPDATE_FACTION dispatch
+---------------------------------------
+-- UPDATE_FACTION arrives in bursts while questing. Previously every reputation achievement owned
+-- its own event frame and re-ran its own GetNumFactions() scan on each event, so a single burst
+-- cost dozens of full reputation-list walks. All achievements now share one frame, one cached
+-- faction scan, and one debounced pass.
+
+local registrars = {}
+local factionIdSet = nil
+local passPending = false
+local passWantsChecks = false
+local sharedEventFrame = nil
+
+local function GetFactionIdSet()
+  if factionIdSet then
+    return factionIdSet
+  end
+  local set = {}
+  local numFactions = (GetNumFactions and GetNumFactions()) or 0
+  for i = 1, numFactions do
+    local _, _, _, _, _, _, _, _, isHeader, _, _, _, _, factionID = GetFactionInfo(i)
+    if not isHeader and factionID then
+      set[factionID] = true
+    end
+  end
+  factionIdSet = set
+  return set
+end
+
+local function RunRegistrarPass()
+  passPending = false
+  local runChecks = passWantsChecks
+  passWantsChecks = false
+  -- Drop the cached scan once per pass; the first registrar rebuilds it and the rest reuse it.
+  factionIdSet = nil
+  for i = 1, #registrars do
+    local entry = registrars[i]
+    if runChecks then
+      entry.check()
+    end
+    entry.register()
+  end
+end
+
+local function QueueRegistrarPass(wantsChecks)
+  if wantsChecks then
+    passWantsChecks = true
+  end
+  if passPending then
+    return
+  end
+  passPending = true
+  if C_Timer and C_Timer.After then
+    C_Timer.After(0.5, RunRegistrarPass)
+  else
+    RunRegistrarPass()
+  end
+end
+
+local function EnsureSharedEventFrame()
+  if sharedEventFrame then
+    return
+  end
+  sharedEventFrame = CreateFrame("Frame")
+  sharedEventFrame:RegisterEvent("PLAYER_LOGIN")
+  sharedEventFrame:RegisterEvent("ADDON_LOADED")
+  sharedEventFrame:RegisterEvent("UPDATE_FACTION")
+  sharedEventFrame:SetScript("OnEvent", function(_, event)
+    factionIdSet = nil
+    QueueRegistrarPass(event == "UPDATE_FACTION")
+  end)
+end
+
+---------------------------------------
 -- Registration Function
 ---------------------------------------
 
@@ -77,17 +151,10 @@ local function registerReputationAchievement(def)
     return standing == 8
   end
   
-  -- Check if player has the faction in their list (even if not exalted)
-  -- Uses GetNumFactions loop to check if faction exists in player's reputation list
-  local function HasFaction()  
-    local numFactions = GetNumFactions()
-    for i = 1, numFactions do
-      local name, _, _, _, _, _, _, _, isHeader, _, _, _, _, factionID = GetFactionInfo(i)
-      if not isHeader and factionID == factionId then
-        return true
-      end
-    end
-    return false
+  -- Check if player has the faction in their list (even if not exalted).
+  -- Reads the shared faction scan so dozens of achievements cost one walk, not one each.
+  local function HasFaction()
+    return GetFactionIdSet()[factionId] == true
   end
   
   ---------------------------------------
@@ -243,23 +310,21 @@ local function registerReputationAchievement(def)
     addon[registerFuncName]()
   end
   
-  -- Create the event frame dynamically
-  local eventFrame = CreateFrame("Frame")
-  eventFrame:RegisterEvent("PLAYER_LOGIN")
-  eventFrame:RegisterEvent("ADDON_LOADED")
-  eventFrame:RegisterEvent("UPDATE_FACTION")
-  eventFrame:SetScript("OnEvent", function(self, event)
-    if event == "UPDATE_FACTION" then
-      -- Check completion when reputation updates
+  -- Join the shared event pass instead of creating a frame per achievement.
+  registrars[#registrars + 1] = {
+    register = function()
+      addon[registerFuncName]()
+    end,
+    check = function()
       if CheckCompletion() then
         local row = addon[rowVarName]
         -- Only show toast if this is a new completion (not loading from database)
         local showToast = not WasAlreadyCompleted()
         MarkCompletionAndShowToast(row, showToast)
       end
-    end
-    addon[registerFuncName]()
-  end)
+    end,
+  }
+  EnsureSharedEventFrame()
   
   if _G.CharacterFrame and _G.CharacterFrame.HookScript then
     CharacterFrame:HookScript("OnShow", function()

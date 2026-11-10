@@ -1,0 +1,588 @@
+---------------------------------------
+-- Dungeon Set Achievement Common Module
+---------------------------------------
+local DungeonSetCommon = {}
+
+local addonName, addon = ...
+local GetItemInfo = GetItemInfo
+local GetItemCount = GetItemCount
+local UnitClass = UnitClass
+local UnitFactionGroup = UnitFactionGroup
+local CreateFrame = CreateFrame
+local C_Timer = C_Timer
+
+---------------------------------------
+-- Item Name Lookup
+---------------------------------------
+
+-- Get item names from item IDs (you can expand this with a lookup table)
+-- Exported on addon for tooltip/link functions
+local function GetItemName(itemId)
+  local id = tonumber(itemId) or itemId
+  -- This is a basic mapping - you can expand this with more item names
+  local itemNames = {
+    -- Defias Set (Rogue)
+    [10399] = "Blackened Defias Armor",
+    [10403] = "Blackened Defias Gloves",
+    [10402] = "Blackened Defias Boots",
+    [10401] = "Blackened Defias Leggings",
+    [10400] = "Blackened Defias Belt",
+
+    -- Embrace of the Viper Set (Druid)
+    [10412] = "Belt of the Fang",
+    [10411] = "Footpads of the Fang",
+    [10413] = "Gloves of the Fang",
+    [10410] = "Leggings of the Fang",
+    [6473] = "Armor of the Fang",
+
+    -- Chain of the Scarlet Crusade Set (Paladin)
+    [10329] = "Scarlet Belt",
+    [10332] = "Scarlet Boots",
+    [10328] = "Scarlet Chestpiece",
+    [10331] = "Scarlet Gauntlets",
+    [10330] = "Scarlet Leggings",
+    [10333] = "Scarlet Wristguards",
+
+    -- Bloodmail Regalia Set (Scholomance)
+    [14614] = "Bloodmail Belt",
+    [14616] = "Bloodmail Boots",
+    [14615] = "Bloodmail Gauntlets",
+    [14611] = "Bloodmail Hauberk",
+    [14612] = "Bloodmail Legguards",
+
+    -- Cadaverous Set (Scholomance)
+    [14637] = "Cadaverous Armor",
+    [14636] = "Cadaverous Belt",
+    [14640] = "Cadaverous Gloves",
+    [14638] = "Cadaverous Leggings",
+    [14641] = "Cadaverous Walkers",
+
+    -- Deathbone Set (Scholomance)
+    [14624] = "Deathbone Chestplate",
+    [14622] = "Deathbone Gauntlets",
+    [14620] = "Deathbone Girdle",
+    [14623] = "Deathbone Legguards",
+    [14621] = "Deathbone Sabatons",
+
+    -- Necropile Set (Scholomance)
+    [14631] = "Necropile Boots",
+    [14629] = "Necropile Cuffs",
+    [14632] = "Necropile Leggings",
+    [14633] = "Necropile Mantle",
+    [14626] = "Necropile Robe",
+
+    -- Postmaster's Set (Scholomance)
+    [13390] = "Postmaster's Band",
+    [13388] = "Postmaster's Tunic",
+    [13391] = "Postmaster's Treads",
+    [13392] = "Postmaster's Seal",
+    [13389] = "Postmaster's Trousers",
+
+    -- Ironweave Set (Blackrock Spire)
+    [22306] = "Ironweave Belt",
+    [22311] = "Ironweave Boots",
+    [22313] = "Ironweave Bracers",
+    [22302] = "Ironweave Cowl",
+    [22304] = "Ironweave Gloves",
+    [22305] = "Ironweave Mantle",
+    [22303] = "Ironweave Pants",
+    [22301] = "Ironweave Robe",
+
+    -- Savage Gladiator Set (Blackrock Depths)
+    [11729] = "Savage Gladiator Helm",
+    [11726] = "Savage Gladiator Chain",
+    [11728] = "Savage Gladiator Leggings",
+    [11731] = "Savage Gladiator Greaves",
+    [11730] = "Savage Gladiator Grips",
+
+    -- Beaststalker's Set (Hunter D1)
+    [16680] = "Beaststalker's Belt",
+    [16681] = "Beaststalker's Bindings",
+    [16676] = "Beaststalker's Gloves",
+    [16675] = "Beaststalker's Boots",
+    [16679] = "Beaststalker's Mantle",
+    [16677] = "Beaststalker's Cap",
+    [16674] = "Beaststalker's Tunic",
+    [16678] = "Beaststalker's Pants",
+
+    -- Magister's Set (Mage D1)
+    [16685] = "Magister's Belt",
+    [16683] = "Magister's Bindings",
+    [16684] = "Magister's Gloves",
+    [16682] = "Magister's Boots",
+    [16689] = "Magister's Mantle",
+    [16686] = "Magister's Crown",
+    [16688] = "Magister's Robes",
+    [16687] = "Magister's Leggings",
+
+    -- Wildheart Set (Druid D1)
+    [16716] = "Wildheart's Belt",
+    [16714] = "Wildheart's Bracers",
+    [16717] = "Wildheart's Gloves",
+    [16715] = "Wildheart's Boots",
+    [16718] = "Wildheart's Spaulders",
+    [16720] = "Wildheart's Cowl",
+    [16706] = "Wildheart's Vest",
+    [16719] = "Wildheart's Kilt",
+
+    -- Battlegear of Valor Set (Warrior D1)
+    [16736] = "Belt of Valor",
+    [16735] = "Bracers of Valor",
+    [16737] = "Gauntlets of Valor",
+    [16734] = "Boots of Valor",
+    [16733] = "Spaulders of Valor",
+    [16731] = "Helm of Valor",
+    [16730] = "Breastplate of Valor",
+    [16732] = "Legplates of Valor",
+
+    -- Vestments of the Devout Set (Priest D1)
+    [16696] = "Devout Belt",
+    [16697] = "Devout Bracers",
+    [16692] = "Devout Gloves",
+    [16691] = "Devout Sandals",
+    [16695] = "Devout Mantle",
+    [16693] = "Devout Crown",
+    [16690] = "Devout Robe",
+    [16694] = "Devout Skirt",
+
+    -- Dreadmist Raiment Set (Warlock D1)
+    [16702] = "Dreadmist Belt",
+    [16703] = "Dreadmist Bracers",
+    [16705] = "Dreadmist Wraps",
+    [16704] = "Dreadmist Sandals",
+    [16701] = "Dreadmist Mantle",
+    [16698] = "Dreadmist Mask",
+    [16700] = "Dreadmist Robe",
+    [16699] = "Dreadmist Leggings",
+
+    -- Lightforge Armor Set (Paladin D1)
+    [16723] = "Lightforge Belt",
+    [16722] = "Lightforge Bracers",
+    [16724] = "Lightforge Gauntlets",
+    [16725] = "Lightforge Boots",
+    [16729] = "Lightforge Spaulders",
+    [16727] = "Lightforge Helm",
+    [16726] = "Lightforge Breastplate",
+    [16728] = "Lightforge Legplates",
+
+    -- Shadowcraft Armor Set (Rogue D1)
+    [16713] = "Shadowcraft Belt",
+    [16710] = "Shadowcraft Bracers",
+    [16712] = "Shadowcraft Gloves",
+    [16711] = "Shadowcraft Boots",
+    [16708] = "Shadowcraft Spaulders",
+    [16707] = "Shadowcraft Cap",
+    [16721] = "Shadowcraft Tunic",
+    [16709] = "Shadowcraft Pants",
+
+    -- The Elements Set (Shaman D1)
+    [16673] = "Cord of the Elements",
+    [16671] = "Bindings of the Elements",
+    [16672] = "Gauntlets of the Elements",
+    [16670] = "Boots of the Elements",
+    [16669] = "Pauldrons of the Elements",
+    [16667] = "Coif of the Elements",
+    [16666] = "Vest of the Elements",
+    [16668] = "Kilt of the Elements",
+
+    -- Beastmaster's Set (Hunter D2)
+    [22010] = "Beastmaster's Belt",
+    [22011] = "Beastmaster's Bindings",
+    [22015] = "Beastmaster's Gloves",
+    [22061] = "Beastmaster's Boots",
+    [22016] = "Beastmaster's Mantle",
+    [22013] = "Beastmaster's Cap",
+    [22060] = "Beastmaster's Tunic",
+    [22017] = "Beastmaster's Pants",
+
+    -- Sorcerer's Regalia Set (Mage D2)
+    [22062] = "Sorcerer's Belt",
+    [22063] = "Sorcerer's Bindings",
+    [22066] = "Sorcerer's Gloves",
+    [22064] = "Sorcerer's Boots",
+    [22068] = "Sorcerer's Mantle",
+    [22065] = "Sorcerer's Crown",
+    [22069] = "Sorcerer's Robes",
+    [22067] = "Sorcerer's Leggings",
+
+    -- Feralheart Raiment Set (Druid D2)
+    [22106] = "Feralheart Belt",
+    [22108] = "Feralheart Bracers",
+    [22110] = "Feralheart Gloves",
+    [22107] = "Feralheart Boots",
+    [22112] = "Feralheart Spaulders",
+    [22109] = "Feralheart Cowl",
+    [22113] = "Feralheart Vest",
+    [22111] = "Feralheart Kilt",
+
+    -- Battlegear of Heroism Set (Warrior D2)
+    [21994] = "Belt of Heroism",
+    [21996] = "Bracers of Heroism",
+    [21998] = "Gauntlets of Heroism",
+    [21995] = "Boots of Heroism",
+    [22001] = "Spaulders of Heroism",
+    [21999] = "Helm of Heroism",
+    [21997] = "Breastplate of Heroism",
+    [22000] = "Legplates of Heroism",
+
+    -- Vestments of the Virtuous Set (Priest D2)
+    [22078] = "Virtuous Belt",
+    [22079] = "Virtuous Bracers",
+    [22081] = "Virtuous Gloves",
+    [22084] = "Virtuous Sandals",
+    [22082] = "Virtuous Mantle",
+    [22080] = "Virtuous Crown",
+    [22083] = "Virtuous Robe",
+    [22085] = "Virtuous Skirt",
+
+    -- Deathmist Raiment Set (Warlock D2)
+    [22070] = "Deathmist Belt",
+    [22071] = "Deathmist Bracers",
+    [22077] = "Deathmist Wraps",
+    [22076] = "Deathmist Sandals",
+    [22073] = "Deathmist Mantle",
+    [22074] = "Deathmist Mask",
+    [22075] = "Deathmist Robe",
+    [22072] = "Deathmist Leggings",
+
+    -- Soulforge Armor Set (Paladin D2)
+    [22086] = "Soulforge Belt",
+    [22088] = "Soulforge Bracers",
+    [22090] = "Soulforge Gauntlets",
+    [22087] = "Soulforge Boots",
+    [22093] = "Soulforge Spaulders",
+    [22091] = "Soulforge Helm",
+    [22089] = "Soulforge Breastplate",
+    [22092] = "Soulforge Legplates",
+
+    -- Darkmantle Armor Set (Rogue D2)
+    [22002] = "Darkmantle Belt",
+    [22004] = "Darkmantle Bracers",
+    [22006] = "Darkmantle Gloves",
+    [22003] = "Darkmantle Boots",
+    [22008] = "Darkmantle Spaulders",
+    [22005] = "Darkmantle Cap",
+    [22009] = "Darkmantle Tunic",
+    [22007] = "Darkmantle Pants",
+
+    -- Five Thunders Set (Shaman D2)
+    [22098] = "Cord of the Five Thunders",
+    [22095] = "Bindings of the Five Thunders",
+    [22099] = "Gauntlets of the Five Thunders",
+    [22096] = "Boots of the Five Thunders",
+    [22101] = "Pauldrons of the Five Thunders",
+    [22097] = "Coif of the Five Thunders",
+    [22102] = "Vest of the Five Thunders",
+    [22100] = "Kilt of the Five Thunders",
+
+  }
+  
+  -- First try the lookup table
+  if itemNames[id] then
+    return itemNames[id]
+  end
+  
+  -- Fallback to GetItemInfo if item not in table (for items not yet added)
+  local itemName = GetItemInfo(id)
+  if itemName then
+    return itemName
+  end
+  
+  -- Last resort: return formatted item ID
+  return "Item " .. tostring(id)
+end
+
+---------------------------------------
+-- Registration Function
+---------------------------------------
+
+-- Register a dungeon set achievement with the given definition
+local function registerDungeonSetAchievement(def)
+  local achId = def.achId
+  local title = def.title or ""
+  local tooltip = def.tooltip or ""
+  local icon = def.icon
+  local points = def.points or 0
+  local requiredItems = def.requiredItems or {}
+  local itemOrder = def.itemOrder -- Optional ordering for tooltip display
+  local faction = def.faction
+  local class = def.class
+  local zone = def.zone
+  local staticPoints = def.staticPoints or false
+
+  -- Always register the def (eligibility still gates the character-frame row).
+  def.isDungeonSet = true
+  if addon and addon.RegisterAchievementDef then
+    addon.RegisterAchievementDef(def, { level = nil })
+  end
+  
+  -- Create unique variable names
+  local rowVarName = achId .. "_Row"
+  local registerFuncName = "Register" .. achId
+  
+  ---------------------------------------
+  -- State Management
+  ---------------------------------------
+
+  local state = {
+    completed = false,
+    itemOwned = {} -- Track which items are owned
+  }
+  
+  ---------------------------------------
+  -- Helper Functions
+  ---------------------------------------
+
+  -- Load progress from database
+  local function LoadProgress()
+    local progress = addon and addon.GetProgress and addon.GetProgress(achId)
+    if progress then
+      state.completed = progress.completed or false
+      -- Load item ownership state if stored
+      if progress.itemOwned then
+        state.itemOwned = progress.itemOwned
+      end
+    end
+  end
+  
+  -- Save progress to database
+  local function SaveProgress()
+    if addon and addon.SetProgress then
+      addon.SetProgress(achId, "completed", state.completed)
+      addon.SetProgress(achId, "itemOwned", state.itemOwned)
+    end
+  end
+  
+  -- Check if a specific item is owned (checks saved state first, then current inventory)
+  local function IsItemOwned(itemId)
+    -- Check saved state first (once owned, always owned)
+    if state.itemOwned and state.itemOwned[itemId] then
+      return true
+    end
+    -- Fall back to checking current inventory
+    return GetItemCount(itemId, true) > 0
+  end
+  
+  -- Check if all required items are owned
+  local function HasAllItems()
+    if state.completed then return true end
+    
+    for _, itemId in ipairs(requiredItems) do
+      if not IsItemOwned(itemId) then
+        return false
+      end
+    end
+    return true
+  end
+  
+  -- Update item ownership state
+  -- Once an item is marked as owned, it stays owned (even if sold/deleted)
+  local function UpdateItemOwnership()
+    local anyChanged = false
+    for _, itemId in ipairs(requiredItems) do
+      local currentlyOwned = GetItemCount(itemId, true) > 0
+      -- Only update if we don't already have it marked as owned
+      -- This ensures "once owned, always owned" behavior
+      if currentlyOwned and not state.itemOwned[itemId] then
+        state.itemOwned[itemId] = true
+        anyChanged = true
+      end
+    end
+    -- Only save if something changed
+    if anyChanged then
+      SaveProgress()
+    end
+  end
+  
+  ---------------------------------------
+  -- Tooltip Management
+  ---------------------------------------
+
+  local function UpdateTooltip()
+    local row = addon[rowVarName]
+    if not row then return end
+    local baseTooltip = tooltip or ""
+    row.tooltip = baseTooltip
+
+    local frame = row.frame
+    if not frame then
+      if addon and addon.AddRowUIInit then
+        addon.AddRowUIInit(row, function()
+          C_Timer.After(0, UpdateTooltip)
+        end)
+      end
+      return
+    end
+    frame.tooltip = baseTooltip
+    if addon and addon.BindAchievementRowTooltip then
+      addon.BindAchievementRowTooltip(frame, {
+        beforeShow = function()
+          UpdateItemOwnership()
+          LoadProgress()
+        end,
+      })
+    end
+  end
+  
+  -- Check if achievement should be completed
+  local function CheckCompletion()
+    if state.completed then return true end
+    
+    if HasAllItems() then
+      state.completed = true
+      SaveProgress()
+      return true
+    end
+    
+    return false
+  end
+  
+  ---------------------------------------
+  -- Tracker Function
+  ---------------------------------------
+
+  local function ItemTracker()
+    if state.completed then return true end
+    
+    -- Update ownership state
+    UpdateItemOwnership()
+    
+    -- Check if achievement should be completed
+    if CheckCompletion() then
+      -- Mark achievement as completed in the row if it exists
+      local row = addon[rowVarName]
+      if row and addon and addon.MarkRowCompleted then
+        addon.MarkRowCompleted(row)
+      end
+      UpdateTooltip()
+      return true
+    end
+    
+    UpdateTooltip()
+    return false
+  end
+  
+  -- Store the tracker function globally for the main system
+  -- Note: The bridge will call this on EQUIP_UNEQUIP events
+  -- Tracker function is passed directly to CreateAchievementRow and stored on row
+  
+  -- Register functions in local registry to reduce global pollution
+  if addon and addon.RegisterAchievementFunction then
+    addon.RegisterAchievementFunction(achId, "IsCompleted", function() 
+      UpdateItemOwnership()
+      return CheckCompletion()
+    end)
+  end
+  
+  -- Check if player's class matches the required class(es)
+  local function MatchesClassRequirement()
+    if not class then return true end
+    
+    local _, classFile = UnitClass("player")
+    if type(class) == "table" then
+      -- Array of classes - check if player's class is in the array
+      for _, allowedClass in ipairs(class) do
+        if classFile == allowedClass then
+          return true
+        end
+      end
+      return false
+    else
+      -- Single class string
+      return classFile == class
+    end
+  end
+  
+  -- Check eligibility
+  local function IsEligible()
+    if faction and addon.PlayerFactionMatches and not addon.PlayerFactionMatches(faction) then
+      return false
+    elseif faction and not addon.PlayerFactionMatches then
+      local factionTag, factionLocalized = UnitFactionGroup("player")
+      if faction ~= factionTag and faction ~= factionLocalized then
+        return false
+      end
+    end
+    
+    -- Class: use class file tokens ("MAGE","WARRIOR",...)
+    if not MatchesClassRequirement() then
+      return false
+    end
+    
+    return true
+  end
+  
+  ---------------------------------------
+  -- Registration Logic
+  ---------------------------------------
+
+  addon[registerFuncName] = function()
+    if not (addon and addon.CreateAchievementRow) then return end
+    if addon[rowVarName] then return end
+    
+    -- Check if player is eligible for this achievement
+    if not IsEligible() then return end
+    
+    -- Load progress from database
+    LoadProgress()
+    UpdateItemOwnership()
+    
+    addon[rowVarName] = addon.CreateAchievementRow(
+      nil,
+      achId,
+      title,
+      tooltip,
+      icon,
+      nil, -- no max level; dungeon sets can be completed at any level
+      points,
+      nil, -- No kill tracker for item sets
+      nil, -- No quest tracker for item sets
+      staticPoints,
+      zone, -- Pass zone to row
+      def
+    )
+    
+    -- Store requiredItems on the row for easy access
+    if requiredItems and next(requiredItems) then
+      addon[rowVarName].requiredItems = requiredItems
+    end
+    
+    -- Update tooltip after creation to ensure it shows current progress
+    C_Timer.After(0.1, UpdateTooltip)
+  end
+  
+  -- Auto-register the achievement immediately if the panel is ready
+  if addon and addon.CreateAchievementRow then
+    addon[registerFuncName]()
+  end
+  
+  -- Create the event frame dynamically
+  local eventFrame = CreateFrame("Frame")
+  eventFrame:RegisterEvent("PLAYER_LOGIN")
+  eventFrame:RegisterEvent("ADDON_LOADED")
+  eventFrame:SetScript("OnEvent", function()
+    LoadProgress()
+    UpdateItemOwnership()
+    addon[registerFuncName]()
+  end)
+  
+  if _G.CharacterFrame and _G.CharacterFrame.HookScript then
+    CharacterFrame:HookScript("OnShow", function()
+      LoadProgress()
+      UpdateItemOwnership()
+      addon[registerFuncName]()
+    end)
+  end
+end
+
+---------------------------------------
+-- Module Exportwe
+---------------------------------------
+
+DungeonSetCommon.registerDungeonSetAchievement = registerDungeonSetAchievement
+
+if addon then
+  addon.DungeonSetCommon = DungeonSetCommon
+  addon.GetItemName = GetItemName
+end
+

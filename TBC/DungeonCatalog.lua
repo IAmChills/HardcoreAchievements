@@ -84,7 +84,7 @@ local Dungeons = {
     extraCreditKills = {
       [5912] = 1,  -- Deviate Faerie Dragon (rare)
     },
-    bossOrder = {3671, 3653, 3669, 3670, 3674, 5912, 3673, 5775, 3654}
+    bossOrder = {3671, 3653, 3669, 3670, 3674, 3673, 5775, 3654, 5912}
   },
 
   -- Shadowfang Keep (Both, Level 18-25)
@@ -110,7 +110,7 @@ local Dungeons = {
     extraCreditKills = {
       [3872] = 1,  -- Deathsworn Captain (rare)
     },
-    bossOrder = {3914, 3886, 3887, 4278, 4279, 3872, 4274, 3927, 4275}
+    bossOrder = {3914, 3886, 3887, 4278, 4279, 4274, 3927, 4275, 3872}
   },
 
   -- Blackfathom Deeps (Both, Level 20-30)
@@ -201,7 +201,7 @@ local Dungeons = {
     extraCreditKills = {
       [6228] = 1,  -- Dark Iron Ambassador (rare)
     },
-    bossOrder = {7361, 7079, 6235, 6229, 6228, 7800}
+    bossOrder = {7361, 7079, 6235, 6229, 7800, 6228}
   },
 
   --  -- Potential Duskwood Achievement (Alliance)
@@ -249,7 +249,7 @@ local Dungeons = {
       [6488] = 1,  -- Fallen Champion (rare)
       [6489] = 1,  -- Ironspine (rare)
     },
-    bossOrder = {3983, 4543, 6490, 6488, 6489, 3974, 6487, 3975, 4542, 3976, 3977}
+    bossOrder = {3983, 4543, 3974, 6487, 3975, 4542, 3976, 3977, 6490, 6488, 6489}
   },
 
   -- Razorfen Downs (Both, Level 35-45)
@@ -264,15 +264,15 @@ local Dungeons = {
     requiredMapId = 129,
     requiredKills = {
       [7355] = 1,  -- Tuten'kash
-      [7356] = 1,  -- Plaguemaw the Rotting
       [7357] = 1,  -- Mordresh Fire Eye
       [8567] = 1,  -- Glutton
       [7358] = 1,  -- Amnennar the Coldbringer
     },
     extraCreditKills = {
       [7354] = 1,  -- Ragglesnout (rare)
+      [7356] = 1,  -- Plaguemaw the Rotting (Summoned)
     },
-    bossOrder = {7355, 7356, 7357, 7354, 8567, 7358}
+    bossOrder = {7355, 7357, 8567, 7358, 7354, 7356}
   },
 
   -- Uldaman (Both, Level 35-45)
@@ -287,7 +287,6 @@ local Dungeons = {
     requiredMapId = 70,
     requiredKills = {
       [6910] = 1,  -- Revelosh
-      --[6906] = 1,  -- Baelog (horde only)
       [7228] = 1,  -- Ironaya
       [7023] = 1,  -- Obsidian Sentinel
       [7206] = 1,  -- Ancient Stone Keeper
@@ -295,11 +294,14 @@ local Dungeons = {
       [4854] = 1,  -- Grimlok
       [2748] = 1,  -- Archaedas
     },
+    extraCreditKills = {
+      ["The Lost Dwarves"] = {6906, 6907, 6908},  -- The Lost Dwarves (any one of the three) HORDE ONLY
+    },
     -- Archaedas pedestals need 3 players; omit from Duo/Solo variations
     minPartySizeForBoss = {
       [2748] = 3,
     },
-    bossOrder = {6910, 7228, 7023, 7206, 7291, 4854, 2748}
+    bossOrder = {6910, 7228, 7023, 7206, 7291, 4854, 2748, "The Lost Dwarves"}
   },
 
   -- Zul'Farrak (Both, Level 44-54)
@@ -316,19 +318,20 @@ local Dungeons = {
       [8127] = 1,  -- Antu'sul
       [7272] = 1,  -- Theka the Martyr
       [7271] = 1,  -- Witch Doctor Zum'rah
-      [7796] = 1,  -- Nekrum Gutchewer
-      --[7275] = 1,  -- Shadowpriest Sezz'ziz
+      [7796] = 1,  -- Nekrum Gutchewer (not sure how to implement this it has been buggy)
+      [7275] = 1,  -- Shadowpriest Sezz'ziz (not sure how to implement this it has been buggy)
       [7604] = 1,  -- Sergeant Bly
       [7795] = 1,  -- Hydromancer Velratha
       [7267] = 1,  -- Chief Ukorz Sandscalp
       [7797] = 1,  -- Ruuzlu
     },
     extraCreditKills = {
+      [7273] = 1,   -- Gahz'rilla
       [10081] = 1,  -- Dustwraith (rare)
       [10082] = 1,  -- Zerillis (rare)
       [10080] = 1,  -- Sandarr Dunereaver (rare)
     },
-    bossOrder = {8127, 7272, 7271, 7796, 7604, 7795, 7267, 7797, 10081, 10082, 10080}
+    bossOrder = {8127, 7272, 7271, 7796, 7275, 7604, 7795, 7267, 7797, 7273, 10081, 10082, 10080}
   },
 
   -- Maraudon (Both, Level 40-50)
@@ -400,20 +403,24 @@ local Dungeons = {
       [9017] = 1,  -- Lord Incendius
       [9056] = 1,  -- Fineous Darkvire
       [9041] = 1,  -- Warder Stilgiss
-      [9042] = 1,  -- Verek
       [9156] = 1,  -- Ambassador Flamelash
+      ["The Seven"] = {9034, 9035, 9036, 9037, 9038, 9039, 9040},  -- The Seven (any one of the seven) Hate'rel, Anger'rel, Vile'rel, Gloom'rel, Seeth'rel, Doom'rel, Dope'rel
       [9938] = 1,  -- Magmus
       [9019] = 1,  -- Emperor Dagran Thaurissan
     },
     extraCreditKills = {
+      [9537] = 1,  -- Hurley Blackbreath
+      [9502] = 1,  -- Phalanx
+      [9543] = 1,  -- Ribbly Screwspigot
+      [9499] = 1,  -- Plugger Spazzring
       [8929] = 1,  -- Princess Moira Bronzebeard
     },
-    bossOrder = {9025, 9016, 9319, 9018, "Ring Of Law", 9024, 9033, 8983, 9017, 9056, 9041, 9042, 9156, 9938, 8929, 9019}
+    bossOrder = {9025, 9016, 9319, 9018, "Ring Of Law", 9024, 9033, 8983, 9017, 9056, 9041, 9156, "The Seven", 9938, 9019, 9537, 9502, 9543, 9499, 8929}
   },
 
   -- Blackrock Spire (Both, Level 55-60)
   {
-    achId = "BRS",
+    achId = "LBRS",
     title = "Lower Blackrock Spire",
     tooltip = "Defeat the bosses of " .. ClassColor .. "Lower Blackrock Spire|r at level 59 or lower upon entering the dungeon",
     icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_boss_overlord_wyrmthalak.png", -- 236429
@@ -442,6 +449,29 @@ local Dungeons = {
     bossOrder = {9196, 9236, 9237, 10596, 10584, 9736, 10268, 10220, 9568}
   },
 
+  -- Upper Blackrock Spire (10-man dungeon, Level 60)
+  {
+    achId = "UBRS",
+    title = "Upper Blackrock Spire",
+    tooltip = "Defeat the bosses of " .. ClassColor .. "Upper Blackrock Spire|r at level 60 or lower upon entering the dungeon (up to 10 players)",
+    icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_boss_generaldrakkisath.png", -- 254648
+    level = 60,
+    points = 25,
+    staticPoints = false,
+    requiredMapId = 229,
+    maxPartySize = 10,
+    requiredKills = {
+      [9816] = 1,  -- Pyroguard Emberseer
+      [10429] = 1, -- Warchief Rend Blackhand
+      [10430] = 1, -- The Beast
+      [10363] = 1, -- General Drakkisath
+    },
+    extraCreditKills = {
+      [10509] = 1, -- Jed Runewatcher
+    },
+    bossOrder = {9816, 10429, 10430, 10363, 10509}
+  },
+
   -- Stratholme (Both, Level 58-60)
   {
     achId = "STRAT",
@@ -453,17 +483,17 @@ local Dungeons = {
     staticPoints = false,
     requiredMapId = 329,
     requiredKills = {
-      [11058] = 1, -- Ezra Grimm
+      --[11058] = 1, -- Ezra Grimm
       [10516] = 1, -- The Unforgiven
       [10808] = 1, -- Timmy the Cruel
       [11032] = 1, -- Malor the Zealous
       [10997] = 1, -- Cannon Master Willey
-      [11120] = 1, -- Crimson Hammersmith
+      --[11120] = 1, -- Crimson Hammersmith
       [10811] = 1, -- Archivist Galford
-      [10813] = 1, -- Balnazzar
+      ["Grand Crusader Dathrohan/Balnazzar"] = {10812, 10813}, -- Grand Crusader Dathrohan/Balnazzar
       [10435] = 1, -- Magistrate Barthilas
       [10437] = 1, -- Nerub'enkan
-      [11121] = 1, -- Black Guard Swordsmith
+      --[11121] = 1, -- Black Guard Swordsmith
       [10438] = 1, -- Maleki the Pallid
       [10436] = 1, -- Baroness Anastari
       [10439] = 1, -- Ramstein the Gorger
@@ -475,7 +505,7 @@ local Dungeons = {
       [11143] = 1, -- Postmaster Malown (summoned)
       [10809] = 1, -- Stonespine (rare)
     },
-    bossOrder = {11058, 10393, 10558, 10516, 11143, 10808, 11032, 10997, 11120, 10811, 10813, 10435, 10809, 10437, 11121, 10438, 10436, 10439, 10440}
+    bossOrder = {10516, 10808, 11032, 10997, 10811, "Grand Crusader Dathrohan/Balnazzar", 10435, 10437, 10438, 10436, 10439, 10440, 10393, 10558, 11143, 10809}
   },
 
   -- Dire Maul (Both, Level 58-60)
@@ -489,7 +519,6 @@ local Dungeons = {
     staticPoints = false,
     requiredMapId = 429,
     requiredKills = {
-      [14354] = 1, -- Pusillin
       [14327] = 1, -- Lethtendris
       [13280] = 1, -- Hydrospawn
       [11490] = 1, -- Zevrim Thornhoof
@@ -508,9 +537,10 @@ local Dungeons = {
       [11486] = 1, -- Prince Tortheldrin
     },
     extraCreditKills = {
+      [14354] = 1, -- Pusillin
       [11467] = 1, -- Tsu'zee (rare)
     },
-    bossOrder = {14354, 14327, 13280, 11490, 11492, 14326, 14322, 14321, 14323, 14325, 14324, 11501, 11489, 11487, 11467, 11488, 11496, 11486}
+    bossOrder = {14327, 13280, 11490, 11492, 14326, 14322, 14321, 14323, 14325, 14324, 11501, 11489, 11487, 11488, 11496, 11486, 14354, 11467}
   },
 
   -- Scholomance (Both, Level 58-60)
@@ -540,7 +570,7 @@ local Dungeons = {
     extraCreditKills = {
       [10506] = 1, -- Kirtonos the Herald (summoned)
     },
-    bossOrder = {10506, 10503, 11622, 10433, 10432, 10508, 10505, 11261, 10901, 10507, 10504, 10502, 1853}
+    bossOrder = {10503, 11622, 10433, 10432, 10508, 10505, 11261, 10901, 10507, 10504, 10502, 1853, 10506}
   },
 
   -- Hellfire Ramparts (Both, Level 60-62)

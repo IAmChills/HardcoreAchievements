@@ -34,11 +34,22 @@ local instanceEntryLevels = {}
 local wasDeadOnExit = false
 local lastInstanceMapId = nil
 
+local function GetEntryStore()
+    if addon and type(addon.GetCharDB) == "function" then
+        local _, cdb = addon.GetCharDB()
+        if type(cdb) == "table" then
+            return cdb
+        end
+    end
+    return nil
+end
+
 -- Persist dungeon entry state to SavedVariables so it survives /reload (e.g. enter at 14, level to 15, reload -> still eligible)
 local function SaveDungeonEntryState()
-    if not (addon and addon.HardcoreAchievementsDB) then return end
-    addon.HardcoreAchievementsDB.dungeonEntryLevels = addon.HardcoreAchievementsDB.dungeonEntryLevels or {}
-    local sv = addon.HardcoreAchievementsDB.dungeonEntryLevels
+    local store = GetEntryStore()
+    if not store then return end
+    store.dungeonEntryLevels = store.dungeonEntryLevels or {}
+    local sv = store.dungeonEntryLevels
     for mapId, entry in pairs(instanceEntryLevels) do
         if entry and (entry.playerLevel or entry.partyLevels) then
             sv[tostring(mapId)] = {
@@ -59,14 +70,15 @@ local function SaveDungeonEntryState()
             sv[mapIdStr] = nil
         end
     end
-    addon.HardcoreAchievementsDB.dungeonLastInstanceMapId = lastInstanceMapId and tostring(lastInstanceMapId) or nil
+    store.dungeonLastInstanceMapId = lastInstanceMapId and tostring(lastInstanceMapId) or nil
 end
 
 -- Restore from SavedVariables when re-entering world (e.g. after /reload) so we keep entry-level eligibility
 local function RestoreDungeonEntryState(mapId)
-    if not mapId or not (addon and addon.HardcoreAchievementsDB and addon.HardcoreAchievementsDB.dungeonEntryLevels) then return false end
+    local store = GetEntryStore()
+    if not mapId or not store or type(store.dungeonEntryLevels) ~= "table" then return false end
     local key = tostring(mapId)
-    local saved = addon.HardcoreAchievementsDB.dungeonEntryLevels[key]
+    local saved = store.dungeonEntryLevels[key]
     if not saved or not saved.playerLevel then return false end
     instanceEntryLevels[mapId] = {
         playerLevel = saved.playerLevel,
@@ -100,6 +112,11 @@ end
 
 local function DungeonMapIdsMatch(a, b)
     return a ~= nil and b ~= nil and tonumber(a) == tonumber(b)
+end
+
+-- 10-man dungeons (UBRS) convert to raid to fit 6–10 players. A 5-man dungeon still rejects raids.
+local function RaidGroupExceedsDungeonSize(maxPartySize)
+    return IsInRaid() and (maxPartySize or 5) <= 5
 end
 
 -- instanceEntryLevels may use number or string keys depending on API / savedvars restores.
@@ -149,7 +166,7 @@ local function CheckAchievementEligibility(mapId, achDef, entryData)
     local maxPartySize = achDef.maxPartySize or 5
     local members = GetNumGroupMembers()
     if members > maxPartySize then return false end
-    if IsInRaid() then return false end
+    if RaidGroupExceedsDungeonSize(maxPartySize) then return false end
     
     -- Check faction
     if achDef.faction then
@@ -896,6 +913,7 @@ local function registerDungeonAchievement(def)
     faction = faction,
     isVariation = def.isVariation,
     baseAchId = def.baseAchId,
+    maxPartySize = def.maxPartySize,
     allowSoloDouble = false,
   })
   end
@@ -1226,7 +1244,9 @@ local function registerDungeonAchievement(def)
       [8567] = "Glutton",
       [7358] = "Amnennar the Coldbringer",
       [6910] = "Revelosh",
-      --[6906] = "Baelog",
+      [6906] = "Baelog",
+      [6907] = "Eric \"The Swift\"",
+      [6908] = "Olaf",
       [7228] = "Ironaya",
       [7023] = "Obsidian Sentinel",
       [7206] = "Ancient Stone Keeper",
@@ -1245,11 +1265,12 @@ local function registerDungeonAchievement(def)
       [7272] = "Theka the Martyr",
       [7271] = "Witch Doctor Zum'rah",
       [7796] = "Nekrum Gutchewer",
-      --[7275] = "Shadowpriest Sezz'ziz",
+      [7275] = "Shadowpriest Sezz'ziz",
       [7604] = "Sergeant Bly",
       [7795] = "Hydromancer Velratha",
       [7267] = "Chief Ukorz Sandscalp",
       [7797] = "Ruuzlu",
+      [7273] = "Gahz'rilla",
       [10081] = "Dustwraith",
       [10082] = "Zerillis",
       [10080] = "Sandarr Dunereaver",
@@ -1283,7 +1304,19 @@ local function registerDungeonAchievement(def)
       [9041] = "Warder Stilgiss",
       [9042] = "Verek",
       [9156] = "Ambassador Flamelash",
+      -- The Seven
+      [9034] = "Hate'rel",
+      [9035] = "Anger'rel",
+      [9036] = "Vile'rel",
+      [9037] = "Gloom'rel",
+      [9038] = "Seeth'rel",
+      [9039] = "Doom'rel",
+      [9040] = "Dope'rel",
       [9938] = "Magmus",
+      [9537] = "Hurley Blackbreath",
+      [9502] = "Phalanx",
+      [9543] = "Ribbly Screwspigot",
+      [9499] = "Plugger Spazzring",
       [8929] = "Princess Moira Bronzebeard",
       [9019] = "Emperor Dagran Thaurissan",
       [9196] = "Highlord Omokk",
@@ -1298,6 +1331,7 @@ local function registerDungeonAchievement(def)
       [9816] = "Pyroguard Emberseer",
       [10429] = "Warchief Rend Blackhand",
       [10339] = "Gyth",
+      [10509] = "Jed Runewatcher",
       [10430] = "The Beast",
       [10363] = "General Drakkisath",
       [11058] = "Ezra Grimm",
@@ -1310,6 +1344,7 @@ local function registerDungeonAchievement(def)
       [10997] = "Cannon Master Willey",
       [11120] = "Crimson Hammersmith",
       [10811] = "Archivist Galford",
+      [10812] = "Grand Crusader Dathrohan/Balnazzar",
       [10813] = "Balnazzar",
       [10435] = "Magistrate Barthilas",
       [10809] = "Stonespine",
@@ -1380,11 +1415,11 @@ local function registerDungeonAchievement(def)
   end
 
   local function IsGroupEligible()
-    if IsInRaid() then return false end
     local members = GetNumGroupMembers()
     
     -- Check max party size (from variation or default to 5)
     local maxPartySize = def.maxPartySize or 5
+    if RaidGroupExceedsDungeonSize(maxPartySize) then return false end
     if members > maxPartySize then return false end
 
     local requirePartyLevels = def.isVariation == true
@@ -1555,7 +1590,7 @@ local function registerDungeonAchievement(def)
     -- Only print for the first eligible variation (processKill iterates base then Trio, Duo, Solo)
     if addon and addon.DungeonKillPrintedForGUID ~= destGUID then
         addon.DungeonKillPrintedForGUID = destGUID
-        if extraAwarded and extraAwarded > 0 and state.completed and not isRequired then
+        if extraAwarded and extraAwarded > 0 and not isRequired then
           print("|cff008066[Hardcore Achievements]|r |cffffd100" .. GetBossName(npcId) .. " extra credit (+" .. tostring(extraAwarded) .. ") for: " .. title .. "|r")
           if addon.EventLogAdd then
             addon.EventLogAdd("Dungeon extra credit +" .. tostring(extraAwarded) .. ": " .. GetBossName(npcId) .. " (npc " .. tostring(npcId) .. ") — " .. title)

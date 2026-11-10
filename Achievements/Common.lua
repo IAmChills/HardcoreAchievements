@@ -30,6 +30,10 @@ local select = select
 local GetPlayerPresetFromSettings = addon and addon.GetPlayerPresetFromSettings
 
 local function getNpcIdFromGUID(guid)
+    -- Same result as strsplit for a plain GUID. Returns nil for a secret GUID instead of erroring.
+    if addon.ParseCreatureNpcId then
+        return addon.ParseCreatureNpcId(guid)
+    end
     if not guid then
         return nil
     end
@@ -116,6 +120,16 @@ function M.registerQuestAchievement(cfg)
 
     local MAX_LEVEL = tonumber(cfg.maxLevel)
     local FACTION, RACE, CLASS = cfg.faction, cfg.race, cfg.class
+
+    -- Log and chat output should name the achievement, not its internal id. Callers register
+    -- with ids only, so the title is resolved from the definition registry at output time.
+    local function AchTitle()
+        local resolve = addon and addon.GetAchievementTitle
+        if resolve then
+            return resolve(ACH_ID)
+        end
+        return tostring(ACH_ID)
+    end
 
     ---------------------------------------
     -- Helper Functions
@@ -282,6 +296,22 @@ function M.registerQuestAchievement(cfg)
         return true -- no level cap
     end
 
+    -- New kills use the live player level. levelAtAccept must not let an over-cap kill
+    -- count after the row already failed. Re-kills are allowed only if an under-cap
+    -- levelAtKill was already banked (solo/points refresh after a valid kill).
+    local function canRecordKillAtCurrentLevel()
+        if not MAX_LEVEL or MAX_LEVEL <= 0 then
+            return true
+        end
+        local currentLevel = UnitLevel("player") or 1
+        if currentLevel <= MAX_LEVEL then
+            return true
+        end
+        local progressTable = GetProgress()
+        local levelAtKill = progressTable and tonumber(progressTable.levelAtKill)
+        return levelAtKill ~= nil and levelAtKill <= MAX_LEVEL
+    end
+
     local function setProg(key, val)
         if addon and addon.SetProgress then
             addon.SetProgress(ACH_ID, key, val)
@@ -305,24 +335,14 @@ function M.registerQuestAchievement(cfg)
         if not REQUIRED_QUEST_ID then
             return true -- No quest requirement means always "on quest"
         end
-        -- Check if quest is in quest log (player is actively on the quest)
-        if GetQuestLogIndexByID then
-            local logIndex = GetQuestLogIndexByID(REQUIRED_QUEST_ID)
-            if logIndex and logIndex > 0 then
-                return true
-            end
+        -- Via the compat bridge: the Classic quest log globals are gone on retail-based clients, where
+        -- reading their absence as "not on this quest" silently dropped kills here (see Utils\Compat.lua).
+        local getQuestLogState = addon and addon.GetQuestLogState
+        if not getQuestLogState then
+            return false
         end
-        -- Fallback: check using classic API (for older versions)
-        if GetNumQuestLogEntries then
-            local numEntries = GetNumQuestLogEntries()
-            for i = 1, numEntries do
-                local title, level, suggestGroup, isHeader, isCollapsed, isComplete, frequency, questID = GetQuestLogTitle(i)
-                if not isHeader and questID == REQUIRED_QUEST_ID then
-                    return true
-                end
-            end
-        end
-        return false
+        local onQuest = getQuestLogState(REQUIRED_QUEST_ID)
+        return onQuest and true or false
     end
 
     local function topUpFromServer()
@@ -696,12 +716,12 @@ function M.registerQuestAchievement(cfg)
             lastKillLogGUID, lastKillLogTime = guid, now
             addon.EventLogAdd(msg)
         end
-        local killFunc = function(destGUID)
-            if state.completed or not belowMax() then
+        local killFunc = function(destGUID, npcIdHint)
+            if state.completed or not canRecordKillAtCurrentLevel() then
                 return false
             end
             
-            local destId = getNpcIdFromGUID(destGUID)
+            local destId = tonumber(npcIdHint) or getNpcIdFromGUID(destGUID)
             local progressTable = GetProgress()
             local killValidated = false
             local idNum = nil -- For REQUIRED_KILLS
@@ -748,7 +768,7 @@ function M.registerQuestAchievement(cfg)
                 
                 if not canTrackKill then
                     if addon.EventLogAdd then
-                        addon.EventLogAdd("NPC kill not counted (quest): achievement " .. tostring(ACH_ID) .. ", npcId " .. tostring(destId) .. " — not on required quest (or award-on-kill / allowKillsBeforeQuest off, no quest progress)")
+                        addon.EventLogAdd("NPC kill not counted (quest): achievement " .. AchTitle() .. ", npcId " .. tostring(destId) .. " — not on required quest (or award-on-kill / allowKillsBeforeQuest off, no quest progress)")
                     end
                     return false -- Player is not on quest, award on kill is disabled, allowKillsBeforeQuest is disabled, and no quest progress - don't track kill
                 end
@@ -776,10 +796,10 @@ function M.registerQuestAchievement(cfg)
                 
                 -- Always warn in chat when an ineligible player blocks completion.
                 -- This is a critical one-time notification; do not gate behind row visibility.
-                print("|cff008066[Hardcore Achievements]|r |cffffd100Achievement " .. (ACH_ID or "Unknown") .. " cannot be fulfilled: An ineligible player contributed.|r")
+                print("|cff008066[Hardcore Achievements]|r |cffffd100Achievement " .. AchTitle() .. " cannot be fulfilled: An ineligible player contributed.|r")
                 print("|cff008066[Hardcore Achievements]|r |cffffd100You can kill the NPC again to update your status. Or abandon the quest to reset all progress|r")
                 if addon.EventLogAdd then
-                    addon.EventLogAdd("NPC kill not counted (ineligible group / external help): achievement " .. tostring(ACH_ID) .. ", npcId " .. tostring(destId))
+                    addon.EventLogAdd("NPC kill not counted (ineligible group / external help): achievement " .. AchTitle() .. ", npcId " .. tostring(destId))
                 end
                 
                 -- Track the kill progress, but mark as ineligible (don't increment eligible counts)
@@ -863,7 +883,7 @@ function M.registerQuestAchievement(cfg)
                 setProg("counts", state.counts)
                 setProg("eligibleCounts", state.eligibleCounts)
                 if killContributesToRequirement then
-                    maybeLogKillProgress(destGUID, "NPC kill counted toward achievement " .. tostring(ACH_ID) .. ": npcId " .. tostring(idNum) .. " (kill requirements satisfied=" .. tostring(countsSatisfied()) .. ")")
+                    maybeLogKillProgress(destGUID, "NPC kill counted toward achievement " .. AchTitle() .. ": npcId " .. tostring(idNum) .. " (kill requirements satisfied=" .. tostring(countsSatisfied()) .. ")")
                 end
                 
                 -- Store player's level at time of THIS kill
@@ -929,7 +949,7 @@ function M.registerQuestAchievement(cfg)
                 local killLevel = UnitLevel("player") or 1
                 setProg("levelAtKill", killLevel)
                 if not killAlreadySatisfied then
-                    maybeLogKillProgress(destGUID, "NPC kill counted toward achievement " .. tostring(ACH_ID) .. ": npcId " .. tostring(destId) .. " (target kill registered)")
+                    maybeLogKillProgress(destGUID, "NPC kill counted toward achievement " .. AchTitle() .. ": npcId " .. tostring(destId))
                 end
                 
                 -- Store points and solo status (use model row when panel not built)
@@ -1093,13 +1113,22 @@ function M.registerQuestAchievement(cfg)
         end
 
         local f = CreateFrame("Frame")
+        local questLogCheckPending = false
         f:RegisterEvent("QUEST_LOG_UPDATE")
         f:SetScript("OnEvent", function(self)
             if state.completed then
                 self:UnregisterAllEvents()
                 return
             end
+            -- QUEST_LOG_UPDATE fires in bursts and on every objective change. Without this guard
+            -- each quest achievement queued a fresh timer per event, so a burst multiplied into
+            -- hundreds of pending server top-up checks.
+            if questLogCheckPending then
+                return
+            end
+            questLogCheckPending = true
             C_Timer.After(0.25, function()
+                questLogCheckPending = false
                 if topUpFromServer() and checkComplete() then
                     self:UnregisterAllEvents()
                 end
