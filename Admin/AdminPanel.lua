@@ -31,13 +31,33 @@ end
 
 -- SECURITY: Get admin secret key from database (set by admin via slash command)
 -- This key is NOT in source code and must be set by the admin
-local function GetAdminSecretKey()
-    local db = (addon and addon.HardcoreAchievementsDB)
-    if not db then
-        db = {}
-        if addon then addon.HardcoreAchievementsDB = db end
+-- Account-scoped (HardcoreAchievementsDB), not CharDB — matches CommandHandler.
+local function GetAccountDB()
+    if type(HardcoreAchievementsDB) == "table" then
+        if addon then
+            addon.HardcoreAchievementsDB = HardcoreAchievementsDB
+        end
+        return HardcoreAchievementsDB
     end
-    return db.adminSecretKey
+    if addon and type(addon.HardcoreAchievementsDB) == "table" then
+        return addon.HardcoreAchievementsDB
+    end
+    return nil
+end
+
+local function GetAdminSecretKey()
+    local db = GetAccountDB()
+    return db and db.adminSecretKey
+end
+
+local function AppendAdminLog(entry)
+    local db = GetAccountDB()
+    if not db then return end
+    db.adminLog = db.adminLog or {}
+    table.insert(db.adminLog, entry)
+    if #db.adminLog > 50 then
+        table.remove(db.adminLog, 1)
+    end
 end
 
 -- SECURITY: HMAC-style hash function using secret key
@@ -322,29 +342,19 @@ local function SendAdminCommand(achievementId, targetCharacter, forceUpdate, ove
 	if completedAtDate then suffix = suffix .. " [Completed Date: " .. tostring(completedAtDate) .. "]" end
 	print("|cff00ff00[HardcoreAchievements Admin]|r Sent achievement command for '" .. achievementId .. "' to " .. targetCharacter .. suffix)
     
-    -- Log the admin action
-    local db = (addon and addon.HardcoreAchievementsDB)
-    if not db.adminLog then db.adminLog = {} end
-    if addon then addon.HardcoreAchievementsDB = db end
-    
-    table.insert(db.adminLog, {
+    AppendAdminLog({
         timestamp = time(),
         achievementId = achievementId,
         targetCharacter = targetCharacter,
-		adminCharacter = UnitName("player"),
-		forceUpdate = forceUpdate and true or false,
-		solo = solo and true or false,
-		overridePoints = overridePoints and tonumber(overridePoints) or nil,
-		overrideLevel = overrideLevel and tonumber(overrideLevel) or nil,
-		completedAtDate = completedAtDate or nil,
+        adminCharacter = UnitName("player"),
+        forceUpdate = forceUpdate and true or false,
+        solo = solo and true or false,
+        overridePoints = overridePoints and tonumber(overridePoints) or nil,
+        overrideLevel = overrideLevel and tonumber(overrideLevel) or nil,
+        completedAtDate = completedAtDate or nil,
         nonce = payload.nonce,
         payloadHash = payload.validationHash
     })
-    
-    -- Keep only last 50 log entries to prevent database bloat
-    if #db.adminLog > 50 then
-        table.remove(db.adminLog, 1)
-    end
 end
 
 -- SECURITY: Send delete achievement command to target player
@@ -384,12 +394,7 @@ local function SendDeleteAchievementCommand(achievementId, targetCharacter, perm
     local permStr = permanent and " [Permanent - player cannot earn again]" or " [Temporary - player can earn again]"
     print("|cff00ff00[HardcoreAchievements Admin]|r Sent delete achievement command for '" .. achievementId .. "' to " .. targetCharacter .. permStr)
     
-    -- Log the admin action
-    local db = (addon and addon.HardcoreAchievementsDB)
-    if not db.adminLog then db.adminLog = {} end
-    if addon then addon.HardcoreAchievementsDB = db end
-    
-    table.insert(db.adminLog, {
+    AppendAdminLog({
         timestamp = time(),
         commandType = "delete_achievement",
         achievementId = achievementId,
@@ -399,11 +404,6 @@ local function SendDeleteAchievementCommand(achievementId, targetCharacter, perm
         payloadHash = payload.validationHash,
         permanent = permanent and true or false,
     })
-    
-    -- Keep only last 50 log entries to prevent database bloat
-    if #db.adminLog > 50 then
-        table.remove(db.adminLog, 1)
-    end
 end
 
 -- SECURITY: Send clear secret key command to target player
@@ -442,12 +442,7 @@ local function SendClearSecretKeyCommand(targetCharacter)
     
     print("|cff00ff00[HardcoreAchievements Admin]|r Sent clear secret key command to " .. targetCharacter)
     
-    -- Log the admin action
-    local db = (addon and addon.HardcoreAchievementsDB)
-    if not db.adminLog then db.adminLog = {} end
-    if addon then addon.HardcoreAchievementsDB = db end
-    
-    table.insert(db.adminLog, {
+    AppendAdminLog({
         timestamp = time(),
         commandType = "clear_secret_key",
         targetCharacter = targetCharacter,
@@ -455,11 +450,6 @@ local function SendClearSecretKeyCommand(targetCharacter)
         nonce = payload.nonce,
         payloadHash = payload.validationHash
     })
-    
-    -- Keep only last 50 log entries to prevent database bloat
-    if #db.adminLog > 50 then
-        table.remove(db.adminLog, 1)
-    end
 end
 
 local function CreateAdminPanel()
