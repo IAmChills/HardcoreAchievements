@@ -97,6 +97,16 @@ local function UpdateEventRegistration(cdb)
     end
 end
 
+-- Admin delete of a false failure: resume as a clean run in progress.
+if addon then
+    addon.ChallengeResets = addon.ChallengeResets or {}
+    addon.ChallengeResets[ACH_ID] = function(cdb)
+        cdb.stats = cdb.stats or {}
+        cdb.stats.playerQuestTurnIns = 0
+        f:RegisterEvent("QUEST_TURNED_IN")
+    end
+end
+
 f:SetScript("OnEvent", function(_, event)
     if not (addon and addon.GetCharDB) then
         return

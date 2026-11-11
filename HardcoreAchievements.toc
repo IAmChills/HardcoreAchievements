@@ -65,7 +65,7 @@ Achievements\ProfessionCatalog.lua [AllowLoadGameType vanilla]
 Achievements\Catalog.lua [AllowLoadGameType vanilla]
 Achievements\SecretCatalog.lua [AllowLoadGameType vanilla]
 Achievements\GuildFirstCatalog.lua [AllowLoadGameType vanilla]
-Achievements\RidiculousCatalog.lua [AllowLoadGameType vanilla]
+Achievements\RidiculousCatalog.lua [AllowLoadGameType vanilla, camelot]
 Achievements\DungeonCatalog.lua [AllowLoadGameType vanilla]
 Achievements\DungeonSetCatalog.lua [AllowLoadGameType vanilla]
 Achievements\ReputationCatalog.lua [AllowLoadGameType vanilla]
@@ -111,6 +111,8 @@ Forever\NPCTooltip.lua [AllowLoadGameType camelot, mainline]
 
 Utils\Dashboard.lua
 Utils\CommandHandler.lua
+Utils\AppealCrypto.lua
+Utils\AppealCodes.lua
 Utils\AchievementLinks.lua
 Utils\OptionsPanel.lua
 Utils\InitialOptionsFrame.lua

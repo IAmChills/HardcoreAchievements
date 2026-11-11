@@ -142,15 +142,17 @@ function RaidCommon.registerRaidAchievement(def)
   ---------------------------------------
 
   -- Load progress from database on initialization
+  -- Saved data is authoritative: when an admin delete clears it, the cached state must reset too.
   local function LoadProgress()
     local progress = addon and addon.GetProgress and addon.GetProgress(achId)
-    if progress and progress.counts then
-      state.counts = progress.counts
+    state.counts = (progress and progress.counts) or {}
+    local completed = (progress and progress.completed) and true or false
+    if not completed and addon and addon.GetCharDB then
+      local _, cdb = addon.GetCharDB()
+      local rec = cdb and cdb.achievements and cdb.achievements[tostring(achId)]
+      completed = (rec and rec.completed) and true or false
     end
-    -- Check if already completed in previous session
-    if progress and progress.completed then
-      state.completed = true
-    end
+    state.completed = completed
   end
 
   -- Save progress to database
@@ -527,6 +529,7 @@ function RaidCommon.registerRaidAchievement(def)
   -- Register functions in local registry to reduce global pollution
   if addon and addon.RegisterAchievementFunction then
     addon.RegisterAchievementFunction(achId, "IsCompleted", function() return state.completed end)
+    addon.RegisterAchievementFunction(achId, "ResetState", LoadProgress)
   end
 
   ---------------------------------------

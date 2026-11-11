@@ -820,7 +820,7 @@ for _, def in ipairs(Achievements) do
   end
 end
 
--- Export to addon for internal use (e.g. RefreshAllAchievementPoints, AdminPanel)
+-- Export to addon for internal use (e.g. RefreshAllAchievementPoints)
 if addon then
   addon.CatalogAchievements = Achievements
 end

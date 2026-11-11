@@ -1156,7 +1156,7 @@ local function OnAchievementCompleted(achievementData)
     end
 end
 
--- Admin helpers: used by AdminPanel directly and by relay clients via CommandHandler.
+-- Admin helpers: used by appeal-code corrections (CommandHandler AdminOps).
 --- @return string? scopeKey
 function M.GetScopeKeyForAchievement(self, achievementId)
     local row = FindRowByAchId(achievementId)

@@ -1,0 +1,10 @@
+# Appeal-code signing keys must never be committed (the addon only contains the public key).
+*.pem
+*.key
+*signing_key*
+Tools/AppealSigner/keys/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
