@@ -71,11 +71,24 @@ end
 -- Main Initialization
 ---------------------------------------
 
+local JumpCounter = nil
+-- Admin delete of a false failure: restart the run with a clean (zero) jump count.
+if addon then
+    addon.ChallengeResets = addon.ChallengeResets or {}
+    addon.ChallengeResets[NO_JUMP_ACHIEVEMENT_ID] = function(cdb)
+        cdb.stats = cdb.stats or {}
+        cdb.stats.playerJumps = 0
+        if JumpCounter then
+            JumpCounter.count = 0
+        end
+    end
+end
+
+
 local jumpTrackingFrame = CreateFrame("Frame")
 jumpTrackingFrame:RegisterEvent("ADDON_LOADED")
 
 local initialized = false
-local JumpCounter = nil
 
 jumpTrackingFrame:SetScript("OnEvent", function(self, event, addonName)
     if addonName == "HardcoreAchievements" then
