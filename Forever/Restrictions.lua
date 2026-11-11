@@ -61,6 +61,6 @@ addon.Restrictions.encounterEndEvent = false
 -- Enum.AddOnRestrictionType.Chat, when active, blocks SendAddonMessage. Leaderboard sync
 -- cannot run then; PublishLocal returns false quietly.
 --
--- Forever\CommChannel.lua joins custom chat channel "HCA". LeaderboardSync passes
--- channels = { "HCA" } into LibP2PDB:NewDatabase so broadcasts also go CHANNEL by name
--- (plus stock GUILD/PARTY/RAID/YELL). Classic omits channels; CHANNEL is Classic-disabled.
+-- Forever also does not allow SendAddonMessage on custom chat channels. Open-world sync
+-- would need LibP2PDB RegisterChatChannel / BroadcastKeyChatChannel (real SendChatMessage
+-- payloads), not desc.channels. Until that lands, Forever uses stock GUILD/PARTY/RAID/YELL only.

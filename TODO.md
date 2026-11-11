@@ -9,21 +9,14 @@ https://linkbreakers.com/qr-code-generator/discord
 
 ## Active Tasks
 
-### Forever leaderboard sync: LibP2PDB `channels` + stock broadcasts (waiting on upstream fix)
-**Goal:** Keep default GUILD/PARTY/RAID/YELL, and also sync over custom chat channel `HCA` on Forever for open-world peers (no party/guild required). No LibP2PDB fork; no ChatThrottleLib redirect.
+### Forever leaderboard sync: open-world via chat channels (not started)
+**Current:** LibP2PDB stock GUILD/PARTY/RAID/YELL only (all clients). Forever blocks `SendAddonMessage` on custom channels, so `desc.channels` / addon-CHANNEL is a dead end — that wiring was removed.
 
-**Wired now:**
-- `Leaderboard/LeaderboardSync.lua` → `NewDatabase({ ..., channels = { "HCA" } })` on Forever only.
-- `Forever/CommChannel.lua` joins/refreshes channel `HCA` by name (indexes move; do not hardcode ids).
-- Classic/TBC: no `channels`; stock YELL path unchanged.
+**Future (Hardcore Mode style):** real chat channel + LibP2PDB `RegisterChatChannel` / `BroadcastKeyChatChannel` (`SendChatMessage`, not addon CHANNEL). Needs join/leave, optional channel rotation against admin locks, hardware-event sends, and 255-byte payload limits. Do not use `NewDatabase({ channels = ... })` for this.
 
-**Upstream status (author):** `desc.channels` is the intended API, but current `Private:Broadcast` wrongly does `SendCommMessage(..., channelName, nil)` instead of resolving the name to `"CHANNEL", GetChannelName(name)`. Author acknowledged and will fix. Until that lands, the `HCA` entry may no-op/fail while GUILD/PARTY/RAID/YELL still work. Separate API `RegisterChatChannel` / `BroadcastKeyChatChannel` is for visible chat-channel payloads (Hardcore Mode style), not what we want for continuous leaderboard gossip.
-
-**After upstream fix ships:**
-- [ ] Bump embedded LibP2PDB.
-- [ ] Confirm ungrouped Forever peers sync via `HCA` (`/hca probe` shows live channel index).
-- [ ] Confirm Classic still ignores CHANNEL and uses stock paths.
-- [ ] Optional later: if author adds a way to disable default GUILD/PARTY/RAID/YELL when CHANNEL is enough, reconsider Forever CHANNEL-only to cut duplicate sends (not required).
+- [ ] Design Forever chat-channel join + register with LibP2PDB
+- [ ] Broadcast on hardware-safe events; keep GUILD/PARTY/RAID/YELL as fallback
+- [ ] Classic/TBC unchanged (no chat-channel sync required)
 
 ### Forever dungeon catalog: missing `requiredMapId` / icons
 Fill from `/run local n,t,d,dn,p,_,_,id=GetInstanceInfo(); print("name: "..n,"mapId: "..id)` while inside each dungeon. Icons are file IDs (or `Interface\\...` paths); `000` / `000000` placeholders break UI. `requiredMapId = 000` → Lua `0` and blocks kill credit via `IsOnRequiredMap`.
