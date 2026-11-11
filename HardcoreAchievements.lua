@@ -1865,6 +1865,85 @@ local function IsAchievementAlreadyCompleted(row)
     return false
 end
 
+-- Points earned by a completed row (solo doubling, preset multiplier, self-found bonus, extra credit).
+-- Also used by admin corrections that change solo status on an already-completed achievement.
+-- Defined on addon rather than as a local: the main chunk is near Lua's 200-local limit.
+function addon.ComputeCompletionPoints(row, progress, wasSolo, rec)
+    -- Check if we have pointsAtKill value in progress to use those points
+    local finalPoints = tonumber(row.points) or 0
+    if progress and progress.pointsAtKill then
+        -- Use the points that were stored at the time of kill/quest (without self-found bonus)
+        finalPoints = tonumber(progress.pointsAtKill) or 0
+        if IsSelfFound() then
+            local baseForBonus = row.originalPoints or row.revealPointsBase or 0
+            local bonus = GetSelfFoundBonus(baseForBonus)
+            if bonus > 0 and finalPoints > 0 then
+                finalPoints = finalPoints + bonus
+                -- Mark that we've already applied self-found bonus so ApplySelfFoundBonus doesn't add it again
+                rec.SFMod = true
+            end
+        end
+    elseif row.allowSoloDouble and not row.isSecretAchievement then
+        -- No kill/quest pointsAtKill (e.g. customItem). Recompute from originalPoints so
+        -- we don't lock in Solo-mode *preview* doubling, and so actual solo gets *2 + label.
+        local basePoints = tonumber(row.originalPoints) or tonumber(row.revealPointsBase) or 0
+        if not row.staticPoints and basePoints > 0 then
+            local preset = addon and addon.GetPlayerPresetFromSettings and addon.GetPlayerPresetFromSettings() or nil
+            local multiplier = GetPresetMultiplier(preset) or 1.0
+            basePoints = basePoints + math.floor((basePoints) * (multiplier - 1) + 0.5)
+        end
+        finalPoints = wasSolo and (basePoints * 2) or basePoints
+        if IsSelfFound() then
+            local bonus = GetSelfFoundBonus(tonumber(row.originalPoints) or tonumber(row.revealPointsBase) or 0)
+            if bonus > 0 and finalPoints > 0 then
+                finalPoints = finalPoints + bonus
+                rec.SFMod = true
+            end
+        end
+    end
+
+    -- Secret achievements: compute real points from reveal base + multiplier (placeholder points are static).
+    if row.isSecretAchievement then
+        local base = tonumber(row.revealPointsBase or row.originalPoints) or 0
+        local computed = base
+        if not (row.revealStaticPoints) then
+            local preset = addon and addon.GetPlayerPresetFromSettings and addon.GetPlayerPresetFromSettings() or nil
+            local multiplier = GetPresetMultiplier(preset) or 1.0
+            computed = base + math.floor((base) * (multiplier - 1) + 0.5)
+        end
+        if row.allowSoloDouble and wasSolo then
+            computed = computed * 2
+        end
+        finalPoints = computed
+
+        -- Apply self-found bonus for any point-bearing achievement (including secrets).
+        if IsSelfFound() then
+            local bonus = GetSelfFoundBonus(base)
+            if bonus > 0 and finalPoints > 0 then
+                finalPoints = finalPoints + bonus
+                rec.SFMod = true
+            end
+        end
+    end
+
+    -- Points from pointsAtKill already include multiplier and solo doubling if applicable
+
+    -- Dungeon extra-credit bosses: flat +5 each (after multipliers / solo, same layer as self-found).
+    local extraPts = tonumber(rec.extraCreditPoints)
+    if not extraPts and progress and progress.extraCreditPoints then
+        extraPts = tonumber(progress.extraCreditPoints)
+    end
+    extraPts = extraPts or 0
+    if extraPts > 0 then
+        finalPoints = finalPoints + extraPts
+        rec.extraCreditPoints = extraPts
+    end
+    -- Mark empty table so legacy grant does not re-award on next login.
+    rec.extraCreditKills = rec.extraCreditKills or {}
+
+    return finalPoints
+end
+
 -- Mark a row as completed (DB write, UI, hooks, broadcast, etc.) and arm the unsaved reminder banner.
 -- Restoration paths are protected by the three guards below; only live gameplay arms the banner.
 local function MarkRowCompleted(row, cdbParam)
@@ -1931,77 +2010,7 @@ local function MarkRowCompleted(row, cdbParam)
         rec.level       = UnitLevel("player") or nil
         -- Store solo status in achievement record so it persists after progress is cleared
         rec.wasSolo = wasSolo
-        -- Check if we have pointsAtKill value in progress to use those points
-        local finalPoints = tonumber(row.points) or 0
-        if progress and progress.pointsAtKill then
-            -- Use the points that were stored at the time of kill/quest (without self-found bonus)
-            finalPoints = tonumber(progress.pointsAtKill) or 0
-            if IsSelfFound() then
-                local baseForBonus = row.originalPoints or row.revealPointsBase or 0
-                local bonus = GetSelfFoundBonus(baseForBonus)
-                if bonus > 0 and finalPoints > 0 then
-                    finalPoints = finalPoints + bonus
-                    -- Mark that we've already applied self-found bonus so ApplySelfFoundBonus doesn't add it again
-                    rec.SFMod = true
-                end
-            end
-        elseif row.allowSoloDouble and not row.isSecretAchievement then
-            -- No kill/quest pointsAtKill (e.g. customItem). Recompute from originalPoints so
-            -- we don't lock in Solo-mode *preview* doubling, and so actual solo gets *2 + label.
-            local basePoints = tonumber(row.originalPoints) or tonumber(row.revealPointsBase) or 0
-            if not row.staticPoints and basePoints > 0 then
-                local preset = addon and addon.GetPlayerPresetFromSettings and addon.GetPlayerPresetFromSettings() or nil
-                local multiplier = GetPresetMultiplier(preset) or 1.0
-                basePoints = basePoints + math.floor((basePoints) * (multiplier - 1) + 0.5)
-            end
-            finalPoints = wasSolo and (basePoints * 2) or basePoints
-            if IsSelfFound() then
-                local bonus = GetSelfFoundBonus(tonumber(row.originalPoints) or tonumber(row.revealPointsBase) or 0)
-                if bonus > 0 and finalPoints > 0 then
-                    finalPoints = finalPoints + bonus
-                    rec.SFMod = true
-                end
-            end
-        end
-
-        -- Secret achievements: compute real points from reveal base + multiplier (placeholder points are static).
-        if row.isSecretAchievement then
-            local base = tonumber(row.revealPointsBase or row.originalPoints) or 0
-            local computed = base
-            if not (row.revealStaticPoints) then
-                local preset = addon and addon.GetPlayerPresetFromSettings and addon.GetPlayerPresetFromSettings() or nil
-                local multiplier = GetPresetMultiplier(preset) or 1.0
-                computed = base + math.floor((base) * (multiplier - 1) + 0.5)
-            end
-            if row.allowSoloDouble and wasSolo then
-                computed = computed * 2
-            end
-            finalPoints = computed
-
-            -- Apply self-found bonus for any point-bearing achievement (including secrets).
-            if IsSelfFound() then
-                local bonus = GetSelfFoundBonus(base)
-                if bonus > 0 and finalPoints > 0 then
-                    finalPoints = finalPoints + bonus
-                    rec.SFMod = true
-                end
-            end
-        end
-
-        -- Points from pointsAtKill already include multiplier and solo doubling if applicable
-
-        -- Dungeon extra-credit bosses: flat +5 each (after multipliers / solo, same layer as self-found).
-        local extraPts = tonumber(rec.extraCreditPoints)
-        if not extraPts and progress and progress.extraCreditPoints then
-            extraPts = tonumber(progress.extraCreditPoints)
-        end
-        extraPts = extraPts or 0
-        if extraPts > 0 then
-            finalPoints = finalPoints + extraPts
-            rec.extraCreditPoints = extraPts
-        end
-        -- Mark empty table so legacy grant does not re-award on next login.
-        rec.extraCreditKills = rec.extraCreditKills or {}
+        local finalPoints = addon.ComputeCompletionPoints(row, progress, wasSolo, rec)
 
         rec.points = finalPoints
         -- Reflect final points in UI row and text immediately
@@ -2190,6 +2199,9 @@ local function CompleteAchievementWithToast(row)
     end
 
     MarkRowCompleted(row)
+    if not row.completed then
+        return false
+    end
 
     local iconTex, titleText, frame = GetAchievementToastDisplay(row)
     CreateAchToast(iconTex, titleText, row.points or 0, frame or row)
@@ -2626,6 +2638,16 @@ CreateAchToast = function(iconTex, title, pts, achIdOrRow)
         return
     end
 
+    -- Gameplay callers toast right after MarkRowCompleted, which refuses permanently admin-deleted
+    -- achievements; don't celebrate a completion that was blocked.
+    local toastId = type(achIdOrRow) == "table" and (achIdOrRow.id or achIdOrRow.achId) or achIdOrRow
+    if toastId ~= nil then
+        local _, cdb = GetCharDB()
+        if cdb and cdb.deletedByAdmin and cdb.deletedByAdmin[tostring(toastId)] then
+            return
+        end
+    end
+
     -- Nothing on screen and nothing waiting means this toast opens a burst, so it is the one that gets
     -- the sound and the screenshot. Anything that lands while the queue is draining stays quiet.
     local opensBurst = (not achToast.showing) and #achToast.queue == 0
@@ -3033,7 +3055,7 @@ local function InitializeMinimapButton()
                     print("|cff008066[Hardcore Achievements]|r Cannot open during combat.")
                     return
                 end
-                if button == "LeftButton" and not IsShiftKeyDown() then
+                if button == "LeftButton" then
                     ToggleHardcoreAchievementsUI()
                 elseif button == "RightButton" and IsShiftKeyDown() then
                     -- Shift-right-click to open options panel
@@ -3042,11 +3064,6 @@ local function InitializeMinimapButton()
                     -- Right-click to open achievement leaderboard
                     if addon and addon.Leaderboard and addon.Leaderboard.Toggle then
                         addon.Leaderboard:Toggle()
-                    end
-                elseif button == "LeftButton" and IsShiftKeyDown() then
-                    -- Left-click with Shift to open admin panel
-                    if HardcoreAchievementsAdminPanel and HardcoreAchievementsAdminPanel.Toggle then
-                        HardcoreAchievementsAdminPanel:Toggle()
                     end
                 end
             end,

@@ -111,9 +111,9 @@ Forever\NPCTooltip.lua [AllowLoadGameType camelot, mainline]
 
 Utils\Dashboard.lua
 Utils\CommandHandler.lua
+Utils\AppealCrypto.lua
+Utils\AppealCodes.lua
 Utils\AchievementLinks.lua
 Utils\OptionsPanel.lua
 Utils\InitialOptionsFrame.lua
 Utils\CharacterInspection.lua
-
-Admin\AdminPanel.lua
