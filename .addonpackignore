@@ -8,6 +8,7 @@ Tools
 *.addonpackignore
 *.svg
 *.code-workspace
+.gitignore
 HardcoreAchievementsTab2.png
 ForeverDashboard.png
 ForeverLeaderboard.png

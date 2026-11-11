@@ -63,7 +63,7 @@ local OPTION_PARSERS = {
     l = { "level", function(v) return ParseUInt(v, 1, 255) end },
     s = { "solo", function(v) return v == "1" or nil end },
     d = { "date", ParseDate },
-    n = { "winnerName", function(v) return #v <= 48 and not v:find("[%c%s,;=]") and v or nil end },
+    n = { "winnerName", function(v) return #v <= 48 and (v:match("^%S+$") or v:match("^%S+ %S+$")) and not v:find("[%c,;=]") and v or nil end },
     g = { "winnerGUID", function(v) return IsPlayerGUID(v) and v or nil end },
 }
 
