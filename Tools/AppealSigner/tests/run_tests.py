@@ -116,6 +116,7 @@ methods.Show = function(self) self.shown = true end
 methods.Hide = function(self) self.shown = false end
 methods.IsShown = function(self) return self.shown end
 methods.GetName = function(self) return self.name end
+methods.GetFrameLevel = function() return 1 end
 methods.CreateFontString = function() return NewMock() end
 methods.CreateTexture = function() return NewMock() end
 methods.RegisterEvent = function(self, e) self.events = self.events or {}; self.events[e] = true end
@@ -244,6 +245,14 @@ class Env:
             if fn is None:
                 raise RuntimeError(f"{rel}: {res[1].decode()}")
             fn(b"HardcoreAchievements", g.ADDON)
+
+    def load(self, rel):
+        g = self.lua.globals()
+        res = g.loadstring((ROOT / rel).read_bytes(), b"@" + rel.encode())
+        fn = res[0] if isinstance(res, tuple) else res
+        if fn is None:
+            raise RuntimeError(f"{rel}: {res[1].decode()}")
+        fn(b"HardcoreAchievements", g.ADDON)
 
     def run(self, lua_code):
         return self.lua.execute(lua_code.encode())
@@ -588,7 +597,7 @@ def test_solo_and_partial_updates():
     e = Env()
     e.redeem(make_code(P("C", "Ragefire")))
     ok, msg = e.redeem(make_code(P("DP", "Ragefire")))
-    check(ok and "permanently removed" in msg and "Ragefire Chasm" in msg, f"delete permanent message: {msg}")
+    check(ok and msg == "Ragefire Chasm was removed with restrictions", f"delete permanent message: {msg}")
     saved = e.eval("DUMP(CDB)")
     e2 = Env()
     e2.run("CDB = " + saved)
@@ -611,6 +620,170 @@ def test_solo_and_partial_updates():
     ok, msg = e.redeem(make_code(P("UB", "Ragefire")))
     e.run("ADDON.MarkRowCompleted(ADDON.AchievementPanel.achievements[2], CDB)")
     check(ok and rec(e, "Ragefire", "completed") is True, f"unban restores normal earning: {msg}")
+
+
+DUNGEON_STUBS = r"""
+MAP_ID = 389
+strsplit = function(_, s) local t = {} for p in s:gmatch("[^%-]+") do t[#t + 1] = p end return unpack(t) end
+GetInstanceInfo = function() return "Test", "party", 1, "", 5, 0, false, MAP_ID end
+IsInInstance = function() return false end
+GetNumGroupMembers = function() return 0 end
+UnitExists = function() return false end
+UnitFactionGroup = function() return "Horde", "Horde" end
+GetTime = os.clock
+C_Timer = { After = function() end }
+REG = {}
+ADDON.RegisterAchievementFunction = function(id, k, f) REG[id] = REG[id] or {}; REG[id][k] = f end
+ADDON.GetAchievementFunction = function(id, k) return REG[id] and REG[id][k] end
+ADDON.GetClassColor = function() return "" end
+ADDON.RegisterAchievementDef = function() end
+ADDON.GetProgress = function(id) CDB.progress = CDB.progress or {}; return CDB.progress[id] end
+ADDON.SetProgress = function(id, k, v) CDB.progress[id] = CDB.progress[id] or {}; CDB.progress[id][k] = v end
+ADDON.ClearProgress = function(id) if CDB.progress then CDB.progress[id] = nil end end
+ADDON.CreateAchievementRow = function(_, id, title, _, _, _, pts, tracker, _, _, _, def)
+  local r = { id = id, achId = id, title = title, points = pts, originalPoints = pts, killTracker = tracker, _def = def }
+  table.insert(ADDON.AchievementPanel.achievements, r)
+  return r
+end
+-- Same contract as CheckPendingCompletions: ask IsCompleted for every row not completed in the DB.
+function SWEEP()
+  for _, r in ipairs(ADDON.AchievementPanel.achievements) do
+    local rec = CDB.achievements[r.id]
+    if not r.completed and not (rec and rec.completed) then
+      local fn = ADDON.GetAchievementFunction(r.id, "IsCompleted")
+      if fn and fn() == true then ADDON.MarkRowCompleted(r, CDB) end
+    end
+  end
+end
+-- Same contract as the PARTY_KILL bridge: a tracker returning true completes the row.
+function KILL(npcId, spawn)
+  local guid = "Creature-0-1-2-3-" .. npcId .. "-" .. spawn
+  if ADDON.GetAchievementFunction("TestDungeon", "Kill")(guid) then
+    ADDON.MarkRowCompleted(ADDON.TestDungeon_Row, CDB)
+  end
+  SWEEP()
+end
+function DONE() return (CDB.achievements.TestDungeon and CDB.achievements.TestDungeon.completed) == true end
+"""
+
+
+def test_dungeon_delete_reaward():
+    section("Dungeon: temporary delete does not re-award from cached tracker state")
+
+    def dungeon_env():
+        env = Env(setup=DUNGEON_STUBS)
+        env.load("Achievements/DungeonCommon.lua")
+        env.run('ADDON.DungeonCommon.registerDungeonAchievement({ achId = "TestDungeon", title = "Test Dungeon", '
+                'level = 60, points = 10, requiredMapId = MAP_ID, requiredKills = { [11520] = 1, [11517] = 1 } })')
+        return env
+
+    e = dungeon_env()
+    e.run('KILL(11520, "A1")')
+    check(not e.eval("DONE()"), "one of two bosses does not complete")
+    e.run('KILL(11517, "A2")')
+    check(e.eval("DONE()") and e.eval("CDB.progress.TestDungeon") is None, "both bosses complete; progress cleared")
+
+    ok, msg = e.redeem(make_code(P("D", "TestDungeon")))
+    check(ok and not e.eval("DONE()") and e.eval("ADDON.TestDungeon_Row.completed") is False, f"temporary delete removes it: {msg}")
+    e.run("SWEEP(); SWEEP()")
+    check(not e.eval("DONE()"), "pending-completion sweep does not re-award after delete")
+    e.run('local c = ADDON.GetAchievementFunction("TestDungeon", "GetKillCounts")(); KC = 0; for _ in pairs(c) do KC = KC + 1 end; SWEEP()')
+    check(e.eval("KC") == 0 and not e.eval("DONE()"), "tracker refresh shows no kills and still no re-award")
+
+    e.run('KILL(11520, "A1"); KILL(11517, "A2")')
+    check(not e.eval("DONE()"), "the original (already counted) kills do not count again")
+    e.run('KILL(11520, "B1")')
+    check(not e.eval("DONE()"), "one new kill is not enough (stale counts are gone)")
+    e.run('KILL(11517, "B2")')
+    check(e.eval("DONE()"), "new eligible kills of every boss earn it again")
+
+    section("Dungeon: permanent delete still blocks re-earning")
+    e = dungeon_env()
+    e.run('KILL(11520, "A1"); KILL(11517, "A2")')
+    ok, msg = e.redeem(make_code(P("DP", "TestDungeon")))
+    e.run('SWEEP(); KILL(11520, "C1"); KILL(11517, "C2")')
+    check(ok and not e.eval("DONE()"), f"new kills do not re-award a permanently deleted dungeon: {msg}")
+    ok, msg = e.redeem(make_code(P("UB", "TestDungeon")))
+    e.run('KILL(11520, "D1"); KILL(11517, "D2")')
+    check(ok and e.eval("DONE()"), f"after unban, new kills earn it: {msg}")
+
+
+CHALLENGE_STUBS = r"""
+LEVEL, XP, EQUIPPED = 42, 100, {}
+UnitLevel = function() return LEVEL end
+UnitXP = function() return XP end
+PVP_ON = true
+UnitIsPVP = function() return PVP_ON end
+GetPVPTimer = function() return 0 end
+IsPVPTimerRunning = function() return false end
+GetInventoryItemID = function(_, slot) return EQUIPPED[slot] end
+hooksecurefunc = function() end
+IsFalling = function() return false end
+GetTime = os.clock
+UIParent = NewMock()
+C_Timer = { After = function() end, NewTicker = function() return { Cancel = function() end } end }
+CUSTOM = {}
+ADDON.RegisterCustomAchievement = function(id, _, fn) CUSTOM[id] = fn end
+ADDON.EnsureFailureTimestamp = function(id)
+  CDB.achievements[id] = CDB.achievements[id] or {}
+  local rec = CDB.achievements[id]
+  if not rec.completed then rec.failedAt = rec.failedAt or time(); rec.failed = true end
+end
+for _, id in ipairs({ "NoJumpChallenge", "NoWeaponChallenge", "NoArmorChallenge", "NoQuestTurnInChallenge", "PVPChallenge" }) do
+  table.insert(ADDON.AchievementPanel.achievements, { id = id, achId = id, title = id, points = 0, originalPoints = 0, _def = { supportsStoredFailure = true } })
+end
+function FIRE(event, ...)
+  for _, f in ipairs(FRAMES) do
+    if f.events and f.events[event] and f.scripts.OnEvent then f.scripts.OnEvent(f, event, ...) end
+  end
+end
+function FAILED(id) local r = CDB.achievements[id]; return (r and r.failed) == true end
+"""
+
+CHALLENGES = {
+    "NoJumpChallenge": "playerJumps = 3",
+    "NoWeaponChallenge": "playerWeapons = true, playerWeaponsArmed = true",
+    "NoArmorChallenge": "playerNude = true, playerNudeArmed = true",
+    "NoQuestTurnInChallenge": "playerQuestTurnIns = 2",
+    "PVPChallenge": "playerWarforgedPvpDropped = true, playerWarforgedPvpArmed = true",
+}
+
+
+def test_challenge_unfail():
+    section("Ridiculous challenges: delete undoes a false failure")
+
+    def challenge_env():
+        env = Env(setup=CHALLENGE_STUBS)
+        for rel in ["Functions/TrackJumps.lua", "Functions/TrackNoWeapon.lua", "Functions/TrackNude.lua",
+                    "Functions/TrackNoQuestTurnIns.lua", "Functions/TrackWarforged.lua", "Achievements/RidiculousCatalog.lua"]:
+            env.load(rel)
+        env.run("CDB.stats = { " + ", ".join(CHALLENGES.values()) + " }")
+        for ach in CHALLENGES:
+            env.run(f'CDB.achievements["{ach}"] = {{ failed = true, failedAt = 1 }}')
+        return env
+
+    e = challenge_env()
+    for ach in CHALLENGES:
+        ok, msg = e.redeem(make_code(P("D", ach)))
+        check(ok and not e.eval(f'FAILED("{ach}")'), f"{ach}: delete clears the failure: {msg}")
+    e.run("LEVEL = 60")
+    for ach in CHALLENGES:
+        check(e.eval(f'CUSTOM["{ach}"]()') is True, f"{ach}: clean run completes at max level after the reset")
+
+    section("Ridiculous challenges: a real violation after the reset fails again")
+    e = challenge_env()
+    for ach in CHALLENGES:
+        e.redeem(make_code(P("D", ach)))
+    e.run('EQUIPPED[16] = nil; FIRE("PLAYER_EQUIPMENT_CHANGED", 16, false)')
+    check(e.eval('FAILED("NoWeaponChallenge")'), "unequipping into a weapon swap fails Knuckle Up again")
+    e.run('EQUIPPED[5] = 1234; FIRE("PLAYER_EQUIPMENT_CHANGED", 5, true)')
+    check(e.eval('FAILED("NoArmorChallenge")'), "equipping armor fails Birthday Suit again")
+    e.run('FIRE("QUEST_TURNED_IN")')
+    check(e.eval('FAILED("NoQuestTurnInChallenge")') and e.eval("CDB.stats.playerQuestTurnIns") == 1,
+          "a quest turn-in fails Bloodbath again")
+    e.run('PVP_ON = false; FIRE("PLAYER_FLAGS_CHANGED", "player")')
+    check(e.eval('FAILED("PVPChallenge")'), "dropping the PvP flag fails Warforged again")
+    check(not e.eval('FAILED("NoJumpChallenge")') and e.eval("CDB.stats.playerJumps") == 0, "jump count restarts at zero")
 
 
 def test_redemption_rules():
@@ -915,6 +1088,8 @@ def main():
     test_rsa_vectors(env)
     test_operations()
     test_solo_and_partial_updates()
+    test_dungeon_delete_reaward()
+    test_challenge_unfail()
     test_redemption_rules()
     test_malformed_codes()
     test_window_and_legacy()

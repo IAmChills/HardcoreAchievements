@@ -79,6 +79,8 @@ Solo and updates:
   solo-eligible on that character (same rule as gameplay), and points are recalculated unless `--points` is given.
 - `update` changes only the fields in the code. If nothing differs, the window says the achievement is already
   up to date (the code is still recorded as used). Solo can be turned on but not off.
+- `delete` also clears a failed state. For the Ridiculous challenges (no jump, no weapon, nude, no quests,
+  Warforged) it restarts the run as clean from the current point, so use it to undo a false failure.
 - `delete --permanent` blocks normal earning until `unban`; a signed `complete` overrides it and clears the block.
 
 ## Tests

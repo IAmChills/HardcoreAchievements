@@ -14,8 +14,9 @@ local function SlotHasEquippedItem(slot)
     return type(itemId) == "number" and itemId > 0
 end
 
+-- INVSLOT_AMMO (0) is allowed: hunters need ammo and it is not armor.
 local function HasAnyEquippedItem()
-    for slot = 0, 19 do
+    for slot = 1, 19 do
         if SlotHasEquippedItem(slot) then
             return true
         end
@@ -97,7 +98,8 @@ local function SyncNoArmorState(cdb, refreshOnFail, event, slot, hasCurrent)
         if not armed or state ~= false then
             return
         end
-        if type(slot) == "number" and slot >= 0 and slot <= 19 and hasCurrent == true and SlotHasEquippedItem(slot) then
+        -- Ignore ammo slot changes; any other newly occupied gear slot fails the run.
+        if type(slot) == "number" and slot >= 1 and slot <= 19 and hasCurrent == true and SlotHasEquippedItem(slot) then
             MarkNoArmorFailure(cdb, refreshOnFail)
         end
     end
@@ -142,6 +144,18 @@ end
 f:RegisterEvent("PLAYER_LOGIN")
 f:RegisterEvent("PLAYER_ENTERING_WORLD")
 f:RegisterEvent("PLAYER_EQUIPMENT_CHANGED")
+
+-- Admin delete of a false failure: resume as a clean run in progress.
+if addon then
+    addon.ChallengeResets = addon.ChallengeResets or {}
+    addon.ChallengeResets[ACH_ID] = function(cdb)
+        cdb.stats = cdb.stats or {}
+        cdb.stats.playerNude = false
+        cdb.stats.playerNudeArmed = (UnitLevel("player") or 1) > 1 or (UnitXP("player") or 0) > 0
+        f:RegisterEvent("PLAYER_EQUIPMENT_CHANGED")
+        UpdateXPEventRegistration(cdb)
+    end
+end
 
 f:SetScript("OnEvent", function(_, event, arg1, arg2)
     if not (addon and addon.GetCharDB) then

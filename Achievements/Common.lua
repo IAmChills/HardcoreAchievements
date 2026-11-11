@@ -1032,6 +1032,7 @@ function M.registerQuestAchievement(cfg)
     -- Quest Tracker Function
     ---------------------------------------
 
+    local questLogFrame
     if REQUIRED_QUEST_ID then
         local questFunc = function(questID)
             if state.completed then
@@ -1113,6 +1114,7 @@ function M.registerQuestAchievement(cfg)
         end
 
         local f = CreateFrame("Frame")
+        questLogFrame = f
         local questLogCheckPending = false
         f:RegisterEvent("QUEST_LOG_UPDATE")
         f:SetScript("OnEvent", function(self)
@@ -1150,6 +1152,15 @@ function M.registerQuestAchievement(cfg)
                 return checkComplete()
             end
             return checkComplete()
+        end)
+        -- An admin delete clears the saved progress; drop the cached copy so only new
+        -- kills or quest turn-ins (or the server's quest-completed flag) can re-award.
+        addon.RegisterAchievementFunction(ACH_ID, "ResetState", function()
+            state.completed, state.killed, state.quest = false, false, false
+            state.counts, state.eligibleCounts = {}, {}
+            if questLogFrame then
+                questLogFrame:RegisterEvent("QUEST_LOG_UPDATE")
+            end
         end)
     end
 end

@@ -138,6 +138,18 @@ f:RegisterEvent("PLAYER_LOGIN")
 f:RegisterEvent("PLAYER_ENTERING_WORLD")
 f:RegisterEvent("PLAYER_EQUIPMENT_CHANGED")
 
+-- Admin delete of a false failure: resume as a clean run in progress.
+if addon then
+    addon.ChallengeResets = addon.ChallengeResets or {}
+    addon.ChallengeResets[ACH_ID] = function(cdb)
+        cdb.stats = cdb.stats or {}
+        cdb.stats.playerWeapons = false
+        cdb.stats.playerWeaponsArmed = (UnitLevel("player") or 1) > 1 or (UnitXP("player") or 0) > 0
+        f:RegisterEvent("PLAYER_EQUIPMENT_CHANGED")
+        UpdateXPEventRegistration(cdb)
+    end
+end
+
 f:SetScript("OnEvent", function(_, event, arg1, arg2)
     if not (addon and addon.GetCharDB) then
         return

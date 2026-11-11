@@ -364,6 +364,7 @@ if addon and addon.RegisterAchievementFunction then
   addon.RegisterAchievementFunction(achId, "GetKillCounts", function()
     return GetDisplayKillCounts()
   end)
+  addon.RegisterAchievementFunction(achId, "ResetState", ResetState)
 end
 
 -- Register SyncBossKill so party members share kill credit within the same combat session

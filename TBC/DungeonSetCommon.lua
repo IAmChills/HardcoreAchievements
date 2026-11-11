@@ -332,15 +332,17 @@ function DungeonSetCommon.registerDungeonSetAchievement(def)
   ---------------------------------------
 
   -- Load progress from database
+  -- Saved data is authoritative: when an admin delete clears it, the cached state must reset too.
   local function LoadProgress()
     local progress = addon and addon.GetProgress and addon.GetProgress(achId)
-    if progress then
-      state.completed = progress.completed or false
-      -- Load item ownership state if stored
-      if progress.itemOwned then
-        state.itemOwned = progress.itemOwned
-      end
+    state.itemOwned = (progress and progress.itemOwned) or {}
+    local completed = (progress and progress.completed) and true or false
+    if not completed and addon and addon.GetCharDB then
+      local _, cdb = addon.GetCharDB()
+      local rec = cdb and cdb.achievements and cdb.achievements[tostring(achId)]
+      completed = (rec and rec.completed) and true or false
     end
+    state.completed = completed
   end
   
   -- Save progress to database
@@ -466,6 +468,7 @@ function DungeonSetCommon.registerDungeonSetAchievement(def)
   
   -- Register functions in local registry to reduce global pollution
   if addon and addon.RegisterAchievementFunction then
+    addon.RegisterAchievementFunction(achId, "ResetState", LoadProgress)
     addon.RegisterAchievementFunction(achId, "IsCompleted", function() 
       UpdateItemOwnership()
       return CheckCompletion()

@@ -220,6 +220,15 @@ local function DeleteAchievement(achievementId, permanent)
         achievementRow.Sub:SetText(defaultSub)
     end
 
+    -- Ridiculous challenges re-derive failure from run stats; restore a clean run so a false failure is undone.
+    local resetChallenge = addon.ChallengeResets and addon.ChallengeResets[id]
+    if type(resetChallenge) == "function" then
+        resetChallenge(cdb)
+    end
+    if addon and type(addon.InvalidateOutleveledCacheForAchId) == "function" then
+        addon.InvalidateOutleveledCacheForAchId(id)
+    end
+
     -- Reset icon/frame styling
     if addon and type(addon.ApplyOutleveledStyle) == "function" then
         addon.ApplyOutleveledStyle(achievementRow)
@@ -240,6 +249,12 @@ local function DeleteAchievement(achievementId, permanent)
     -- Clear progress (if function exists)
     if addon and type(addon.ClearProgress) == "function" then
         addon.ClearProgress(id)
+    end
+    -- Trackers cache counts/completion in closures; without this the pending-completion
+    -- sweep re-awards the achievement from the stale cache seconds later.
+    local resetState = addon.GetAchievementFunction and addon.GetAchievementFunction(id, "ResetState")
+    if type(resetState) == "function" then
+        resetState()
     end
 
     -- Dashboard / tracker: main row is updated above; embed dashboard reads from DB — rebuild if open

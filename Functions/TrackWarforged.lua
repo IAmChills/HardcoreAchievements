@@ -409,6 +409,19 @@ local function UpdateEventRegistration(cdb)
     end
 end
 
+-- Admin delete of a false failure: resume as a clean run in progress.
+if addon then
+    addon.ChallengeResets = addon.ChallengeResets or {}
+    addon.ChallengeResets[ACH_ID] = function(cdb)
+        cdb.stats = cdb.stats or {}
+        cdb.stats.playerWarforgedPvpDropped = false
+        cdb.stats.playerWarforgedPvpArmed = (UnitLevel("player") or 1) > 1 or (UnitXP("player") or 0) > 0
+        f:RegisterEvent("PLAYER_FLAGS_CHANGED")
+        UpdateXPEventRegistration(cdb)
+        UpdatePvpWarningTicker(cdb, false)
+    end
+end
+
 f:SetScript("OnEvent", function(_, event, arg1)
     if event == "PLAYER_LOGOUT" then
         StopPvpWarningTicker()
