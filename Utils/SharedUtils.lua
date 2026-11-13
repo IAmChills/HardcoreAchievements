@@ -624,6 +624,65 @@ local function PartitionKillEntries(entries)
     return required, bonus
 end
 
+-- =========================================================
+-- Secret015 "Roach": hearth out of dungeon/raid mid-combat while grouped.
+-- START stores combat + castGUID; SUCCEEDED awards only if same cast + combat;
+-- INTERRUPTED / FAILED clear the pending cast.
+-- =========================================================
+
+local HEARTHSTONE_SPELL_ID = 8690
+local hearthPending -- { castGUID=, combat= }
+
+local function PlayerInCombat()
+    if PlayerIsInCombat then
+        return PlayerIsInCombat() and true or false
+    end
+    return UnitAffectingCombat("player") and true or false
+end
+
+local function RoachHearthSpellTracker(spellId, targetName, phase, castGUID)
+    if tonumber(spellId) ~= HEARTHSTONE_SPELL_ID then
+        return false
+    end
+
+    if phase == "start" then
+        hearthPending = {
+            castGUID = castGUID,
+            combat = PlayerInCombat(),
+        }
+        return false
+    end
+
+    if phase == "interrupted" or phase == "failed" then
+        if hearthPending and (not castGUID or not hearthPending.castGUID or hearthPending.castGUID == castGUID) then
+            hearthPending = nil
+        end
+        return false
+    end
+
+    if phase ~= "succeeded" then
+        return false
+    end
+
+    local snap = hearthPending
+    hearthPending = nil
+    if not snap or not snap.combat then
+        return false
+    end
+    if snap.castGUID and castGUID and snap.castGUID ~= castGUID then
+        return false
+    end
+
+    local inInstance, instanceType = IsInInstance()
+    if not inInstance or (instanceType ~= "party" and instanceType ~= "raid") then
+        return false
+    end
+    if not (IsInGroup and IsInGroup()) then
+        return false
+    end
+    return true
+end
+
 ---------------------------------------
 -- Export: internal (addon)
 ---------------------------------------
@@ -647,4 +706,5 @@ if addon then
     addon.AwardDungeonExtraCreditKill = AwardDungeonExtraCreditKill
     addon.GrantLegacyDungeonExtraCredit = GrantLegacyDungeonExtraCredit
     addon.EXTRA_CREDIT_POINTS_PER_BOSS = EXTRA_CREDIT_POINTS_PER_BOSS
+    addon.RoachHearthSpellTracker = RoachHearthSpellTracker
 end

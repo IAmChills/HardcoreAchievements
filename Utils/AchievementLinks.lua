@@ -180,10 +180,10 @@ if Old_ItemRef_SetHyperlink then
             local usingSecretPoints = (rec and (rec.secret or rec.secretTitle) and not skipSecrecy and not viewerCompleted)
 			-- Sender-stable tooltip override (only when the viewer is allowed to see the real tooltip).
 			-- Define `def.linkTooltip = function(senderName, senderGuid) return "..." end` on an achievement.
-			-- Prefer sender name from link payload; fallback: extract from displayTitleFromLink for "X the Keeper" style.
+			-- Prefer sender name from link payload; fallback: extract from "Name the …" display titles.
 			local tooltipSenderName = (senderName and senderName ~= "") and senderName or nil
 			if not tooltipSenderName and displayTitleFromLink and displayTitleFromLink ~= "" and rec and rec.linkUsesSenderTitle then
-				local extracted = displayTitleFromLink:match("^(.+) the Keeper$")
+				local extracted = displayTitleFromLink:match("^(.+) the .+$")
 				if extracted and extracted ~= "" then
 					tooltipSenderName = extracted
 				end

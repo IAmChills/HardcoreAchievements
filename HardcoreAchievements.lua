@@ -2103,28 +2103,40 @@ local function MarkRowCompleted(row, cdbParam)
         Profession.NotifyRowCompleted(row)
     end
     
-    -- Broadcast achievement completion (skip for retroactive completions on first load to avoid guild spam).
-    -- Forever blocks automated EMOTE (needs a hardware event); Classic still sends here.
-    -- Forever queues the emote onto the toast and sends it from the toast click handler instead.
-    -- Guild chat is allowed on both clients. Name slot stays empty: emote is client-prefixed.
-    if not skipBroadcastForRetroactive then
+    -- Broadcast achievement completion (skip for retroactive completions on first load to avoid spam).
+    -- Gated by "Announce achievements in chat". Classic/TBC: auto-EMOTE. Forever (1.60.1): in
+    -- dungeon/raid → auto-EMOTE; outdoors → PARTY if grouped (EMOTE needs HW; toast click still
+    -- sends outdoor EMOTE). Guild when in a guild. Name slot empty: emote is client-prefixed.
+    local shouldAnnounce = true
+    if addon and addon.ShouldAnnounceInChat then
+        shouldAnnounce = addon.ShouldAnnounceInChat() and true or false
+    end
+    if not skipBroadcastForRetroactive and shouldAnnounce then
         local achievementTitle = (row.Title and row.Title.GetText and row.Title:GetText()) or row.title or "Unknown Achievement"
-        if not (addon and addon.IsForeverClient and addon.IsForeverClient()) then
-            local broadcastMessage = string_format(ACHIEVEMENT_BROADCAST, "", achievementTitle)
-            broadcastMessage = broadcastMessage:gsub("^%s+", "")
+        local isForever = addon and addon.IsForeverClient and addon.IsForeverClient()
+        local inInstance = IsInInstance and select(1, IsInInstance()) or false
+
+        local broadcastMessage = string_format(ACHIEVEMENT_BROADCAST, "", achievementTitle)
+        broadcastMessage = broadcastMessage:gsub("^%s+", "")
+
+        local link
+        local achIdForLink = row.achId or row.id
+        local getBracket = addon and addon.GetAchievementBracket
+        if achIdForLink and type(getBracket) == "function" then
+            link = getBracket(achIdForLink)
+        end
+        local linkedMessage = string_format(ACHIEVEMENT_BROADCAST, "", link or achievementTitle):gsub("^%s+", "")
+
+        if not isForever or inInstance then
+            -- Classic/TBC always; Forever only inside dungeon/raid (outdoor EMOTE needs a HW event).
             SendChatMessage(broadcastMessage, "EMOTE")
+        elseif IsInGroup and IsInGroup() then
+            -- Forever outdoors: PARTY only. Solo → guild below when in a guild.
+            SendChatMessage(linkedMessage, "PARTY")
         end
 
-        if (addon and addon.ShouldAnnounceInGuildChat) and addon.ShouldAnnounceInGuildChat() and IsInGuild() then
-            local link = nil
-            local achIdForLink = row.achId or row.id
-            local getBracket = addon and addon.GetAchievementBracket
-            if achIdForLink and type(getBracket) == "function" then
-                link = getBracket(achIdForLink)
-            end
-            local guildMessage = string_format(ACHIEVEMENT_BROADCAST, "", link or achievementTitle)
-            guildMessage = guildMessage:gsub("^%s+", "")
-            SendChatMessage(guildMessage, "GUILD")
+        if IsInGuild and IsInGuild() then
+            SendChatMessage(linkedMessage, "GUILD")
         end
     end
     
@@ -2556,11 +2568,20 @@ function achToast.ShowNow(iconTex, title, pts, achIdOrRow, announce)
     f.icon:SetTexture(tex)
     f.name:SetText(title or "")
 
-    -- Forever cannot auto-emote from the award path; stash text for the toast click handler.
+    -- Forever outdoors: auto-EMOTE needs a hardware event, so stash text for the toast click.
+    -- Forever inside instances already auto-emotes from the award path — do not queue a duplicate.
     f.pendingEmote = nil
-    if not skipBroadcastForRetroactive and addon and addon.IsForeverClient and addon.IsForeverClient() then
-        local broadcastMessage = string_format(ACHIEVEMENT_BROADCAST, "", title or "Unknown Achievement")
-        f.pendingEmote = broadcastMessage:gsub("^%s+", "")
+    local shouldAnnounce = true
+    if addon and addon.ShouldAnnounceInChat then
+        shouldAnnounce = addon.ShouldAnnounceInChat() and true or false
+    end
+    if not skipBroadcastForRetroactive and shouldAnnounce
+        and addon and addon.IsForeverClient and addon.IsForeverClient() then
+        local inInstance = IsInInstance and select(1, IsInInstance()) or false
+        if not inInstance then
+            local broadcastMessage = string_format(ACHIEVEMENT_BROADCAST, "", title or "Unknown Achievement")
+            f.pendingEmote = broadcastMessage:gsub("^%s+", "")
+        end
     end
 
     if finalPoints == 0 then
@@ -5732,6 +5753,10 @@ do
         achEvt:RegisterEvent("QUEST_TURNED_IN")
         achEvt:RegisterEvent("QUEST_REMOVED")
         achEvt:RegisterEvent("UNIT_SPELLCAST_SENT")
+        achEvt:RegisterEvent("UNIT_SPELLCAST_START")
+        achEvt:RegisterEvent("UNIT_SPELLCAST_SUCCEEDED")
+        achEvt:RegisterEvent("UNIT_SPELLCAST_INTERRUPTED")
+        achEvt:RegisterEvent("UNIT_SPELLCAST_FAILED")
         achEvt:RegisterEvent("UNIT_INVENTORY_CHANGED")
         achEvt:RegisterEvent("ITEM_LOCKED")
         achEvt:RegisterEvent("DELETE_ITEM_CONFIRM")
@@ -6028,16 +6053,40 @@ do
                 
                 -- Clear the level-up cache after processing quest turn-in
                 recentLevelUpCache = nil
-            elseif event == "UNIT_SPELLCAST_SENT" then
-                -- Classic signature: unit, targetName, castGUID, spellId
-                local unit, targetName, castGUID, spellId = ...
+            elseif event == "UNIT_SPELLCAST_SENT"
+                or event == "UNIT_SPELLCAST_START"
+                or event == "UNIT_SPELLCAST_SUCCEEDED"
+                or event == "UNIT_SPELLCAST_INTERRUPTED"
+                or event == "UNIT_SPELLCAST_FAILED" then
+                -- SENT: unit, targetName, castGUID, spellId
+                -- START / SUCCEEDED / INTERRUPTED / FAILED: unit, castGUID, spellId
+                local unit, a2, a3, a4 = ...
                 if unit ~= "player" then return end
-                if spellId ~= 21343 and spellId ~= 16589 then return end
+
+                local spellId, targetName, castGUID, phase
+                if event == "UNIT_SPELLCAST_SENT" then
+                    targetName, castGUID, spellId, phase = a2, a3, a4, "sent"
+                else
+                    castGUID, spellId = a2, a3
+                    targetName = ""
+                    if event == "UNIT_SPELLCAST_START" then
+                        phase = "start"
+                    elseif event == "UNIT_SPELLCAST_SUCCEEDED" then
+                        phase = "succeeded"
+                    elseif event == "UNIT_SPELLCAST_INTERRUPTED" then
+                        phase = "interrupted"
+                    else
+                        phase = "failed"
+                    end
+                end
+
+                spellId = tonumber(spellId)
+                -- snowball, noggenfogger, hearthstone
+                if spellId ~= 21343 and spellId ~= 16589 and spellId ~= 8690 then return end
+
                 for _, row in ipairs(addon.AchievementRowModel or {}) do
-                    -- Check both row.completed and database to prevent re-completion
                     if not IsAchievementAlreadyCompleted(row) and type(row.spellTracker) == "function" then
-                        -- Evaluate tracker and require true return value
-                        local ok, shouldComplete = pcall(row.spellTracker, tonumber(spellId), tostring(targetName or ""))
+                        local ok, shouldComplete = pcall(row.spellTracker, spellId, tostring(targetName or ""), phase, castGUID)
                         if ok and shouldComplete == true then
                             MarkRowCompleted(row)
                             local iconTex = (row.frame and row.frame.Icon and row.frame.Icon.GetTexture and row.frame.Icon:GetTexture()) or row.icon or 136116

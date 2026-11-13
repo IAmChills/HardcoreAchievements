@@ -5,7 +5,7 @@ local addonName, addon = ...
 --
 -- Forever identity is addon.IsForeverClient() (Interface 16xxx) in Utils\Compat.lua.
 -- This file only records capability flags for that client. TOC still gates the load with
--- AllowLoadGameType camelot/mainline; the IsForeverClient guard below also keeps real
+-- AllowLoadGameType forever/mainline; the IsForeverClient guard below also keeps real
 -- retail from picking up these flags if the mainline TOC tag loads this file there.
 --
 -- Confirmed by probe on this client:

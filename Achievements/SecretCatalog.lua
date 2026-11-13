@@ -26,7 +26,8 @@ local Secrets = {
     faction = FACTION_HORDE,
     zone = "Orgrimmar",
     customIsCompleted = function() return false end,
-    customSpell = function(spellId, targetName)
+    customSpell = function(spellId, targetName, phase)
+        if phase and phase ~= "sent" then return false end
         if targetName == "Thrall" and spellId == 21343 then
             return true
         end
@@ -49,7 +50,8 @@ local Secrets = {
     faction = FACTION_ALLIANCE,
     zone = "Stormwind City",
     customIsCompleted = function() return false end,
-    customSpell = function(spellId, targetName)
+    customSpell = function(spellId, targetName, phase)
+        if phase and phase ~= "sent" then return false end
         if targetName == "Highlord Bolvar Fordragon" and spellId == 21343 then
             return true
         end
@@ -85,7 +87,8 @@ local Secrets = {
     icon = 134863,
     points = 0,
     customIsCompleted = function() return false end,
-    customSpell = function(spellId, targetName)
+    customSpell = function(spellId, targetName, phase)
+        if phase and phase ~= "sent" then return false end
         if spellId == 16589 then
             return true
         end
@@ -221,11 +224,16 @@ local Secrets = {
     hiddenUntilComplete = true,
 }, {
     achId = "Secret0010",
-    title = "Scarlet Crusade",
+    title = string_format("%s the Scarlet Crusader", addon.GetPlayerShowcaseName()),
     level = nil,
     tooltip = "You have completed the secret achievement: |cffff8000Obtain the Tabard of the Scarlet Crusade|r",
     icon = 133770,
     points = 0,
+    -- Title includes the completing player's name; chat links show the sender for all viewers.
+    linkUsesSenderTitle = true,
+    linkTitle = function(senderName)
+        return string_format("%s the Scarlet Crusader", addon.GetPlayerShowcaseName(senderName))
+    end,
     customIsCompleted = function() return false end,
     customItem = function() return GetItemCount(23192, true) > 0 end,
     -- Secret presentation before completion
@@ -306,6 +314,19 @@ local Secrets = {
       { itemId = 12367, questId = 977, npcIds = { 7460, 7459 }, requiredKills = 2, requiredItems = 2 }, -- Pristine Yeti Horn / Are We There, Yeti? [Neutral]
     },
     supportsStoredFailure = true,
+    secret = true,
+    staticPoints = true,
+    hiddenUntilComplete = true,
+}, {
+    achId = "Secret015",
+    title = "Roach",
+    level = nil,
+    tooltip = "You have completed the secret achievement: |cffff8000Hearth out of a dungeon mid-combat, abandoning your party.|r You were out of mana, obviously...",
+    icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Inv_helm_armor_pirateeyepatch_b_01_blackpirate.png",
+    points = 0,
+    customIsCompleted = function() return false end,
+    -- START stores combat+castGUID; SUCCEEDED awards same cast; INTERRUPTED/FAILED clear.
+    customSpell = addon.RoachHearthSpellTracker,
     secret = true,
     staticPoints = true,
     hiddenUntilComplete = true,

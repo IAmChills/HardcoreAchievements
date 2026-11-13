@@ -1749,6 +1749,7 @@ local function registerDungeonAchievement(def)
       if tostring(payload.achievementId or "") ~= tostring(achId) then return false end
       if tonumber(payload.mapId) ~= tonumber(requiredMapId) then return false end
       if not IsOnRequiredMap() then return false end
+      if not IsGroupEligible() then return false end
 
       LoadProgress()
       local npcId = tonumber(payload.npcId)

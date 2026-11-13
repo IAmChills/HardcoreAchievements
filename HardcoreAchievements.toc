@@ -16,16 +16,16 @@ embeds.xml
 # Cross-version API bridge. Must stay above everything else: files capture its helpers into file-level
 # locals at load time, so it has to exist before they run.
 Utils\Compat.lua
-Forever\Restrictions.lua [AllowLoadGameType camelot, mainline]
-Forever\LegacyFrameTab.lua [AllowLoadGameType camelot, mainline]
-Forever\LegacyFramePanel.lua [AllowLoadGameType camelot, mainline]
+Forever\Restrictions.lua [AllowLoadGameType forever, mainline]
+Forever\LegacyFrameTab.lua [AllowLoadGameType forever, mainline]
+Forever\LegacyFramePanel.lua [AllowLoadGameType forever, mainline]
 
 Functions\GetUHCPreset.lua
 Functions\PlayerIsSolo.lua
 Functions\IsGroupEligibleForAchievement.lua
-Forever\KillTracking.lua [AllowLoadGameType camelot, mainline]
-Forever\EncounterKills.lua [AllowLoadGameType camelot, mainline]
-Forever\Diagnostics.lua [AllowLoadGameType camelot, mainline]
+Forever\KillTracking.lua [AllowLoadGameType forever, mainline]
+Forever\EncounterKills.lua [AllowLoadGameType forever, mainline]
+Forever\Diagnostics.lua [AllowLoadGameType forever, mainline]
 Functions\GetStatusText.lua
 Functions\RefreshAllAchievementPoints.lua
 Functions\ShowAchievementTooltip.lua
@@ -41,7 +41,7 @@ Functions\AchievementEventLog.lua
 Data\Localizations.lua
 Functions\ProfessionTracker.lua [AllowLoadGameType vanilla]
 TBC\ProfessionTracker.lua [AllowLoadGameType tbc]
-Forever\ProfessionTracker.lua [AllowLoadGameType camelot, mainline]
+Forever\ProfessionTracker.lua [AllowLoadGameType forever, mainline]
 
 Utils\SharedUtils.lua
 Utils\FilterDropdown.lua
@@ -64,7 +64,7 @@ Achievements\ProfessionCatalog.lua [AllowLoadGameType vanilla]
 Achievements\Catalog.lua [AllowLoadGameType vanilla]
 Achievements\SecretCatalog.lua [AllowLoadGameType vanilla]
 Achievements\GuildFirstCatalog.lua [AllowLoadGameType vanilla]
-Achievements\RidiculousCatalog.lua [AllowLoadGameType vanilla, camelot]
+Achievements\RidiculousCatalog.lua [AllowLoadGameType vanilla, forever]
 Achievements\DungeonCatalog.lua [AllowLoadGameType vanilla]
 Achievements\DungeonSetCatalog.lua [AllowLoadGameType vanilla]
 Achievements\ReputationCatalog.lua [AllowLoadGameType vanilla]
@@ -91,22 +91,22 @@ TBC\MetaCatalog.lua [AllowLoadGameType tbc]
 TBC\GuildFirstCatalog.lua [AllowLoadGameType tbc]
 TBC\ExplorationCatalog.lua [AllowLoadGameType tbc]
 
-Forever\DungeonCommon.lua [AllowLoadGameType camelot, mainline]
-Forever\DungeonSetCommon.lua [AllowLoadGameType camelot, mainline]
-Forever\RaidCommon.lua [AllowLoadGameType camelot, mainline]
-Forever\ReputationCommon.lua [AllowLoadGameType camelot, mainline]
-Forever\Catalog.lua [AllowLoadGameType camelot, mainline]
-Forever\DungeonCatalog.lua [AllowLoadGameType camelot, mainline]
-Forever\DungeonSetCatalog.lua [AllowLoadGameType camelot, mainline]
-Forever\ExplorationCatalog.lua [AllowLoadGameType camelot, mainline]
-Forever\GuildFirstCatalog.lua [AllowLoadGameType camelot, mainline]
-Forever\MetaCatalog.lua [AllowLoadGameType camelot, mainline]
-Forever\ProfessionCatalog.lua [AllowLoadGameType camelot, mainline]
-Forever\RaidCatalog.lua [AllowLoadGameType camelot, mainline]
-Forever\ReputationCatalog.lua [AllowLoadGameType camelot, mainline]
-Forever\SecretCatalog.lua [AllowLoadGameType camelot, mainline]
+Forever\DungeonCommon.lua [AllowLoadGameType forever, mainline]
+Forever\DungeonSetCommon.lua [AllowLoadGameType forever, mainline]
+Forever\RaidCommon.lua [AllowLoadGameType forever, mainline]
+Forever\ReputationCommon.lua [AllowLoadGameType forever, mainline]
+Forever\Catalog.lua [AllowLoadGameType forever, mainline]
+Forever\DungeonCatalog.lua [AllowLoadGameType forever, mainline]
+Forever\DungeonSetCatalog.lua [AllowLoadGameType forever, mainline]
+Forever\ExplorationCatalog.lua [AllowLoadGameType forever, mainline]
+Forever\GuildFirstCatalog.lua [AllowLoadGameType forever, mainline]
+Forever\MetaCatalog.lua [AllowLoadGameType forever, mainline]
+Forever\ProfessionCatalog.lua [AllowLoadGameType forever, mainline]
+Forever\RaidCatalog.lua [AllowLoadGameType forever, mainline]
+Forever\ReputationCatalog.lua [AllowLoadGameType forever, mainline]
+Forever\SecretCatalog.lua [AllowLoadGameType forever, mainline]
 
-Forever\NPCTooltip.lua [AllowLoadGameType camelot, mainline]
+Forever\NPCTooltip.lua [AllowLoadGameType forever, mainline]
 
 Utils\Dashboard.lua
 Utils\CommandHandler.lua

@@ -115,15 +115,12 @@ local function IsAwardOnKillEnabled()
     return false
 end
 
--- Helper function to check if achievements should be announced in guild chat (default: true)
-local function ShouldAnnounceInGuildChat()
+-- Helper: announce achievements in chat (emote / party / guild). Default true.
+local function ShouldAnnounceInChat()
     if type(GetCharDB) == "function" then
         local _, cdb = GetCharDB()
-        if cdb and cdb.settings then
-            if cdb.settings.announceInGuildChat == false then
-                return false
-            end
-            return true
+        if cdb and cdb.settings and cdb.settings.announceInChat == false then
+            return false
         end
     end
     return true
@@ -677,22 +674,22 @@ local function CreateOptionsPanel()
     end)
     AddTooltipToCheckbox(awardOnKillCB, "If enabled, achievements that require an NPC kill will be awarded immediately on kill rather than waiting for quest completion.")
 
-    -- Announce achievements in guild chat checkbox
-    local announceInGuildChatCB = CreateFrame("CheckButton", nil, panel, "InterfaceOptionsCheckButtonTemplate")
-    announceInGuildChatCB:SetPoint("TOPLEFT", awardOnKillCB, "BOTTOMLEFT", 0, -8)
-    announceInGuildChatCB.Text:SetText("Announce achievements in guild chat")
-    announceInGuildChatCB:SetChecked(GetSetting("announceInGuildChat", true))
-    announceInGuildChatCB:SetScript("OnClick", function(self)
+    -- Announce achievements in chat (emote / party / guild)
+    local announceInChatCB = CreateFrame("CheckButton", nil, panel, "InterfaceOptionsCheckButtonTemplate")
+    announceInChatCB:SetPoint("TOPLEFT", awardOnKillCB, "BOTTOMLEFT", 0, -8)
+    announceInChatCB.Text:SetText("Announce achievements in chat")
+    announceInChatCB:SetChecked(GetSetting("announceInChat", true))
+    announceInChatCB:SetScript("OnClick", function(self)
         local isChecked = self:GetChecked()
-        SetSetting("announceInGuildChat", isChecked)
+        SetSetting("announceInChat", isChecked)
     end)
-    AddTooltipToCheckbox(announceInGuildChatCB, "If enabled, achievements will be announced in guild chat when completed.")
+    AddTooltipToCheckbox(announceInChatCB, "If enabled, achievements are announced in chat when completed (emote, party, and guild as available).")
 
     -- =========================================================
     -- User Interface Category
     -- =========================================================
     local uiCategoryTitle = panel:CreateFontString(nil, "ARTWORK", "GameFontNormalLarge")
-    uiCategoryTitle:SetPoint("TOPLEFT", announceInGuildChatCB, "BOTTOMLEFT", 0, -15)
+    uiCategoryTitle:SetPoint("TOPLEFT", announceInChatCB, "BOTTOMLEFT", 0, -15)
     uiCategoryTitle:SetText("|cff008066User Interface|r")
 
     -- Show Minimap Button checkbox (account-wide)
@@ -800,7 +797,7 @@ local function CreateOptionsPanel()
     panel.checkboxes = {
         disableScreenshots = disableScreenshotsCB,
         awardOnKill = awardOnKillCB,
-        announceInGuildChat = announceInGuildChatCB,
+        announceInChat = announceInChatCB,
         showMinimapButton = showMinimapButtonCB,
         modernRows = modernRowsCB,
     }
@@ -820,8 +817,8 @@ local function CreateOptionsPanel()
         if awardOnKillCB then
             awardOnKillCB:SetChecked(GetSetting("awardOnKill", false))
         end
-        if announceInGuildChatCB then
-            announceInGuildChatCB:SetChecked(GetSetting("announceInGuildChat", true))
+        if announceInChatCB then
+            announceInChatCB:SetChecked(GetSetting("announceInChat", true))
         end
         if showMinimapButtonCB then
             showMinimapButtonCB:SetChecked(IsMinimapButtonShown())
@@ -860,7 +857,7 @@ if addon then
     addon.ShouldTakeScreenshot = ShouldTakeScreenshot
     addon.IsSoloModeEnabled = IsSoloModeEnabled
     addon.IsAwardOnKillEnabled = IsAwardOnKillEnabled
-    addon.ShouldAnnounceInGuildChat = ShouldAnnounceInGuildChat
+    addon.ShouldAnnounceInChat = ShouldAnnounceInChat
     addon.ShowBackupRestore = ShowBackupRestore
     addon.ShowDiscordFrame = ShowDiscordFrame
     addon.OptionsPanel = optionsPanel
