@@ -702,7 +702,7 @@ local function EnsureDBForScope(scopeKey)
     if root and root.guildFirst and root.guildFirst[scopeKey] and root.guildFirst[scopeKey].state then
         importReplayActive = true
         importClaimCount, importRemovedCount = 0, 0
-        -- Replaying a claim we won runs MarkRowCompleted, which emotes and posts to guild chat. Reuse
+        -- Replaying a claim we won runs MarkRowCompleted, which can announce in chat. Reuse
         -- the same suppression the post-login retroactive pass uses so we do not re-announce old wins.
         local restoreBroadcast
         if addon and addon.SetSkipAchievementBroadcast then
