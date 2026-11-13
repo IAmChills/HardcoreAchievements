@@ -1,6 +1,4 @@
 local addonName, addon = ...
-local GetNumSkillLines = GetNumSkillLines
-local GetSkillLineInfo = GetSkillLineInfo
 local CreateFrame = CreateFrame
 local C_Timer = C_Timer
 local pairs = pairs
@@ -8,6 +6,33 @@ local tonumber = tonumber
 local type = type
 local table_insert = table.insert
 local table_sort = table.sort
+
+-- Forever uses C_SkillInfo.*; Classic GetNumSkillLines/GetSkillLineInfo are nil here.
+local function GetSkillLineCount()
+    if C_SkillInfo and C_SkillInfo.GetNumSkillLines then
+        return C_SkillInfo.GetNumSkillLines() or 0
+    end
+    if GetNumSkillLines then
+        return GetNumSkillLines() or 0
+    end
+    return 0
+end
+
+-- Returns skillName, isHeader, skillRank, skillMaxRank, skillLineID (or nils).
+local function GetSkillLineAt(index)
+    if C_SkillInfo and C_SkillInfo.GetSkillLineInfo then
+        local info = C_SkillInfo.GetSkillLineInfo(index)
+        if type(info) ~= "table" then
+            return nil
+        end
+        return info.name, info.isHeader == true, info.rank or 0, info.maxRank or 0, tonumber(info.skillID)
+    end
+    if GetSkillLineInfo then
+        local skillName, isHeader, _, skillRank, _, _, skillMaxRank, _, _, _, _, _, _, _, _, _, _, skillLineID = GetSkillLineInfo(index)
+        return skillName, isHeader and true or false, skillRank or 0, skillMaxRank or 0, tonumber(skillLineID)
+    end
+    return nil
+end
 
 local ProfessionTracker = {}
 
@@ -192,20 +217,6 @@ local function UpdateProfessionRowVisibility(skillID)
     local cdb = GetCharacterDB()
     local hasKnown = state and state.known
 
-    -- Find the highest completed achievement rank
-    local highestCompletedRank = 0
-    for _, row in ipairs(rows) do
-        if row and row._def then
-            local completed = IsRowCompleted(row, cdb)
-            if completed then
-                local rank = GetRequiredRank(row._def)
-                if rank > highestCompletedRank then
-                    highestCompletedRank = rank
-                end
-            end
-        end
-    end
-
     local nextRowAssigned = false
     local filterNeedsRefresh = false
 
@@ -214,14 +225,13 @@ local function UpdateProfessionRowVisibility(skillID)
             InitializeProfessionHiddenUntilComplete(row)
 
             local completed = IsRowCompleted(row, cdb)
-            local currentRank = GetRequiredRank(row._def)
             local shouldShow = false
 
             if completed then
-                -- Only show the highest completed achievement
-                shouldShow = (currentRank == highestCompletedRank)
+                -- Keep every completed tier visible (including after the profession is dropped).
+                shouldShow = true
             elseif hasKnown then
-                -- Show only the next incomplete achievement
+                -- Show only the next incomplete tier for a learned profession.
                 if not nextRowAssigned then
                     shouldShow = true
                     nextRowAssigned = true
@@ -229,7 +239,7 @@ local function UpdateProfessionRowVisibility(skillID)
                     shouldShow = false
                 end
             else
-                -- Player doesn't have profession and achievement not completed
+                -- Unlearned and not completed: hide.
                 shouldShow = false
             end
 
@@ -356,15 +366,16 @@ local function NotifySkillChanged(skillID, newRank, oldRank, localizedName, comp
 end
 
 local function ScanSkills(completeAchievement)
-    if not GetNumSkillLines or not GetSkillLineInfo then
+    local numLines = GetSkillLineCount()
+    if numLines <= 0 then
         return
     end
 
     local seen = {}
-    for index = 1, GetNumSkillLines() do
-        local skillName, isHeader, _, skillRank, _, _, skillMaxRank, _, _, _, _, _, _, _, _, _, _, skillLineID = GetSkillLineInfo(index)
-        if not isHeader then
-            local skillID = skillLineID or (skillName and ProfessionNameToID[skillName])
+    for index = 1, numLines do
+        local skillName, isHeader, skillRank, skillMaxRank, skillLineID = GetSkillLineAt(index)
+        if skillName and not isHeader then
+            local skillID = skillLineID or ProfessionNameToID[skillName]
 
             if skillID and ProfessionByID[skillID] then
                 seen[skillID] = true
@@ -376,7 +387,7 @@ local function ScanSkills(completeAchievement)
                 state.maxRank = skillMaxRank or 0
                 state.known = CalculateKnownState(state.rank, state.maxRank)
 
-                if skillName and skillName ~= "" then
+                if skillName ~= "" then
                     state.localizedName = skillName
                 end
 

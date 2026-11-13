@@ -35,7 +35,6 @@ local UnitIsGroupLeader = UnitIsGroupLeader
 local UnitName = UnitName
 local hooksecurefunc = hooksecurefunc
 local UpdateMultiplierText = (addon and addon.UpdateMultiplierText)
-local PlayerHasSkill = (addon and addon.Profession and addon.Profession.PlayerHasSkill)
 local RefreshAllAchievementPoints = (addon and addon.RefreshAllAchievementPoints)
 local ShowAchievementTooltip = (addon and addon.ShowAchievementTooltip)
 local GetAchievementBracket = (addon and addon.GetAchievementBracket)
@@ -2340,8 +2339,17 @@ function DASHBOARD:BuildClassicGrid(srcRows)
       end
   end
 
-  -- Sort by level (ascending) to match list view and character frame ordering
+  -- Sort by level (ascending) to match list view and character frame ordering.
+  -- Profession tab only: keep incomplete rows first, completed at the bottom.
+  local isProfessionTab = DashboardFrame and DashboardFrame.SelectedTabKey == "profession"
   table_sort(visibleForGrid, function(a, b)
+    if isProfessionTab then
+      local aCompleted = not not a.completed
+      local bCompleted = not not b.completed
+      if aCompleted ~= bCompleted then
+        return not aCompleted
+      end
+    end
     local aFailed = IsRowOutleveled and type(IsRowOutleveled) == "function" and IsRowOutleveled(a)
     local bFailed = IsRowOutleveled and type(IsRowOutleveled) == "function" and IsRowOutleveled(b)
     if aFailed ~= bFailed then
@@ -3110,8 +3118,9 @@ local function UpdateDashboardProgressOverview(srcRows)
     elseif key == "profession" then
       -- Only count profession achievements for professions the player actually has.
       -- (Profession rows exist for all professions; addon.Profession hides irrelevant ones.)
+      -- Resolve at update time: ProfessionTracker may load after Dashboard.
       local completed, total = 0, 0
-      local hasSkillFn = PlayerHasSkill
+      local hasSkillFn = addon and addon.Profession and addon.Profession.PlayerHasSkill
       for _, row in ipairs(srcRows) do
         local def = row and row._def
         if def and def.isProfession == true then
@@ -3195,11 +3204,11 @@ local function UpdateDashboardProgressOverview(srcRows)
   -- Columns under the All bar
   local leftKeys, rightKeys
   if isTBC then
-    leftKeys = { "quest", "dungeon", "heroic_dungeon", "raid", "guild" }
+    leftKeys = { "quest", "dungeon", "heroic_dungeon", "raid" }
     rightKeys = { "profession", "reputation", "exploration", "secret" }
   else
     leftKeys = { "quest", "dungeon", "profession", "raid" }
-    rightKeys = { "reputation", "exploration", "secret", "guild" }
+    rightKeys = { "reputation", "exploration", "secret" }
   end
 
   local function LayoutColumn(keys, side)
@@ -3362,13 +3371,23 @@ function DASHBOARD:BuildModernRows(srcRows)
     end
   end
   
-  -- Sort rows (failed to bottom, maintaining level order)
+  -- Sort rows (failed to bottom, maintaining level order).
+  -- Profession tab only: incomplete first, completed at the bottom.
+  local isProfessionTab = DashboardFrame and DashboardFrame.SelectedTabKey == "profession"
   local _, cdb = nil, nil
   if type(GetCharDB) == "function" then
     _, cdb = GetCharDB()
   end
 
   table_sort(visibleRows, function(a, b)
+    if isProfessionTab then
+      local aCompleted = not not a.completed
+      local bCompleted = not not b.completed
+      if aCompleted ~= bCompleted then
+        return not aCompleted
+      end
+    end
+
     local aFailed = IsRowOutleveled(a)
     local bFailed = IsRowOutleveled(b)
     if aFailed ~= bFailed then
