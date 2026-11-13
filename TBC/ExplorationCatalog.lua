@@ -152,7 +152,7 @@ local KalimdorExplorationZones = {
   { zone = "Dustwallow Marsh", title = "Dustwallow Marsh", icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_Zone_DustwallowMarsh.png", points = 10 },
   { zone = "Felwood", title = "Felwood", icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_Zone_Felwood.png", points = 10 },
   { zone = "Feralas", title = "Feralas", icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_Zone_Feralas.png", points = 10 },
-  { zone = "Moonglade", title = "Moonglade", icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Spell_Arcane_TeleportMoonglade.png", points = 10 },
+  { zone = "Moonglade", title = "Moonglade", icon = 135758, points = 10 },
   { zone = "Mulgore", title = "Mulgore", icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_Zone_Mulgore_01.png", points = 10 },
   --{ zone = "Orgrimmar", title = "Orgrimmar", icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_Zone_XXX.png", points = 0 },
   { zone = "Silithus", title = "Silithus", icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_Zone_Silithus_01.png", points = 10 },
@@ -212,7 +212,7 @@ local OutlandExplorationZones = {
 
 local KalimdorContinentAchievement = {
   title = "Explore Kalimdor",
-  icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_Zone_EasternKingdoms_01.png",
+  icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_Zone_Kalimdor_01.png",
   points = 50,
 }
 
