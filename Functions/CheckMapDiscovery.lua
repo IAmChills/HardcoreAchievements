@@ -125,7 +125,7 @@ local LocationMap = {
     ["Ashenvale"] = {
         ["Astranaar"] = {x = 0.37, y = 0.51},
         ["Thistlefur Village"] = {x = 0.32, y = 0.38},
-        ["The Ruins of Ordil'Aran"] = {x = 0.30, y = 0.28}, -- Not in Forever
+        ["The Ruins of Ordil'Aran"] = {x = 0.30, y = 0.28},
         ["Lake Falathim"] = {x = 0.20, y = 0.37},
         ["The Shrine of Aessina"] = {x = 0.22, y = 0.53},
         ["Fire Scare Shrine"] = {x = 0.27, y = 0.64},
@@ -542,7 +542,7 @@ local LocationMap = {
         ["Amberstill Ranch"] = {x = 0.63, y = 0.50},
         ["Gol'Bolar Quarry"] = {x = 0.70, y = 0.57},
         ["The Tundrid Hills"] = {x = 0.61, y = 0.57},
-        ["Misty Pine Refuge"] = {x = 0.58, y = 0.44}, -- Not in Forever
+        ["Misty Pine Refuge"] = {x = 0.58, y = 0.44},
         ["Ironforge"] = {x = 0.50, y = 0.39},
         ["Coldridge Pass"] = {x = 0.35, y = 0.63},
         ["The Grizzled Den"] = {x = 0.41, y = 0.57},
@@ -659,7 +659,7 @@ local LocationMap = {
         ["Southpoint Tower"] = {x = 0.20, y = 0.49},
         ["Western Strand"] = {x = 0.33, y = 0.66},
         ["Purgation Isle"] = {x = 0.16, y = 0.81},
-        ["Azurelode Mine"] = {x = 0.27, y = 0.58}, -- Not in Forever
+        ["Azurelode Mine"] = {x = 0.27, y = 0.58},
         ["Hillsbrad Fields"] = {x = 0.34, y = 0.42},
         ["Darrow Hill"] = {x = 0.47, y = 0.34},
         ["Southshore"] = {x = 0.51, y = 0.57},
@@ -805,9 +805,9 @@ local LocationMap = {
         ["Scarlet Monastery"] = {x = 0.84, y = 0.35},
         ["Venomweb Vale"] = {x = 0.86, y = 0.45},
         ["Crusader Outpost"] = {x = 0.79, y = 0.55},
-        ["Balnir Farmstead"] = {x = 0.75, y = 0.63}, -- Not in Forever
+        ["Balnir Farmstead"] = {x = 0.75, y = 0.63},
         ["The Bulwark"] = {x = 0.83, y = 0.70},
-        ["Cold Hearth Manor"] = {x = 0.54, y = 0.57}, -- Not in Forever
+        ["Cold Hearth Manor"] = {x = 0.54, y = 0.57},
         ["Stillwater Pond"] = {x = 0.50, y = 0.52},
         ["Agamand Mills"] = {x = 0.48, y = 0.36},
         ["Solliden Farmstead"] = {x = 0.36, y = 0.50},
@@ -1024,29 +1024,6 @@ local LocationMap = {
         ["Darkcrest Shore"] = {x = 0.70, y = 0.81},
         ["Umbrafen Village"] = {x = 0.83, y = 0.83},
         ["Zabra'jin"] = {x = 0.32, y = 0.50},
-    },
-
-    -- ==================== FOREVER ====================
-    ["Zephra's Isle"] = {
-        ["Valanaar"] = {x = 0.62, y = 0.77},
-        ["Overlook Standing Stones"] = {x = 0.48, y = 0.69},
-        ["Windfield Orchard"] = {x = 0.47, y = 0.82},
-        ["Gustberry Lowlands"] = {x = 0.63, y = 0.67},
-        ["Falaath Village"] = {x = 0.50, y = 0.56},
-        ["Shen'dar Village"] = {x = 0.46, y = 0.44},
-        ["Shen'dar Highlands"] = {x = 0.37, y = 0.51},
-        ["Windsong Standing Stones"] = {x = 0.46, y = 0.39},
-        ["West Pylong Watchtower"] = {x = 0.40, y = 0.63},
-        ["East Pylong Watchtower"] = {x = 0.69, y = 0.67},
-        ["Thendal Village"] = {x = 0.42, y = 0.22},
-        --["Thendal Standing Stones"] = {x = 0.49, y = 0.19},
-        --["Thendal Grove"] = {x = 0.39, y = 0.30},
-        ["Shrine of Akir"] = {x = 0.61, y = 0.51},
-        ["Rohashi Spires"] = {x = 0.71, y = 0.50}, -- may not be available as it's floating spires through a portal
-        ["Shadowgale Forest"] = {x = 0.59, y = 0.38},
-        ["Ruins of Bana'Aethal"] = {x = 0.59, y = 0.30},
-        ["Windsong Lake"] = {x = 0.52, y = 0.47},
-        ["Fairweather Stables"] = {x = 0.54, y = 0.81},
     },
 }
 
