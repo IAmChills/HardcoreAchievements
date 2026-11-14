@@ -1670,18 +1670,28 @@ local function Update(self)
         -- Set content frame width to match base frame (for text wrapping)
         trackerContentFrame:SetWidth(baseFrameWidth)
 
-        -- Sort tracked achievements by the order they were tracked in so new items appear at the bottom.
+        -- Sort tracked achievements by level ascending; no-level entries sink to the bottom.
         local sortedAchievements = {}
         for achievementId, data in pairs(trackedAchievements) do
+            local level = GetAchievementLevel(achievementId)
+            level = tonumber(level)
             table_insert(sortedAchievements, {
                 id = achievementId,
                 data = data,
+                level = (level and level > 0) and level or nil,
                 trackedOrder = GetTrackedAchievementOrder(data) or math.huge,
             })
         end
-        
-        -- Sort by tracked order so older tracked items stay at the top.
+
         table_sort(sortedAchievements, function(a, b)
+            local aLevel, bLevel = a.level, b.level
+            if aLevel and bLevel then
+                if aLevel ~= bLevel then
+                    return aLevel < bLevel
+                end
+            elseif aLevel or bLevel then
+                return aLevel ~= nil
+            end
             if a.trackedOrder ~= b.trackedOrder then
                 return a.trackedOrder < b.trackedOrder
             end
