@@ -1058,6 +1058,26 @@ local function registerDungeonAchievement(def)
     return IsRequiredBoss(npcId) or IsExtraCreditBoss(npcId)
   end
 
+  -- How many kills this specific NPC id needs before further credit is ignored.
+  -- Any-of groups (value table) still only need one kill of this member.
+  local function RequiredNeedForNpc(npcId)
+    npcId = tonumber(npcId) or npcId
+    local direct = requiredKills[npcId]
+    if direct ~= nil and type(direct) ~= "table" then
+      return tonumber(direct) or 1
+    end
+    for _, value in pairs(requiredKills) do
+      if type(value) == "table" then
+        for _, id in pairs(value) do
+          if (tonumber(id) or id) == npcId then
+            return 1
+          end
+        end
+      end
+    end
+    return 1
+  end
+
   local UpdateTooltip
 
   -- Increment kill count for a boss
@@ -1134,8 +1154,16 @@ local function registerDungeonAchievement(def)
     if isExtra and addon and addon.IsExtraCreditKillAwarded and addon.IsExtraCreditKillAwarded(achId, npcId) then
       -- Already awarded this optional boss; ignore repeats.
       if not isRequired then
+        -- Absorb alternate tokens (Encounter: vs loot GUID) so sync/loot cannot re-broadcast.
+        MarkKillTokenProcessed(killToken)
         return false
       end
+    end
+    -- ENCOUNTER_END uses map:ach:npc tokens; loot uses Creature GUIDs. Same boss, different tokens.
+    -- Reject once this NPC's required count is already met so loot cannot double-count or re-sync.
+    if isRequired and GetKillCount(npcId) >= RequiredNeedForNpc(npcId) then
+      MarkKillTokenProcessed(killToken)
+      return false
     end
     if killToken and HasProcessedKillToken(killToken) then
       return false
@@ -1607,6 +1635,19 @@ local function registerDungeonAchievement(def)
   -- Tracker Function
   ---------------------------------------
 
+  local function KillDebug(message)
+    if not (addon and addon.ForeverKillDebug) then
+      return
+    end
+    if addon.IsSecretValue and addon.IsSecretValue(message) then
+      return
+    end
+    print("|cff008066[HCA Kills]|r " .. message)
+    if addon.EventLogAdd then
+      addon.EventLogAdd("[Kills] " .. message)
+    end
+  end
+
   -- Create the tracker function dynamically
   local function KillTracker(destGUID, npcIdHint)
     if not IsOnRequiredMap() then 
@@ -1659,8 +1700,16 @@ local function registerDungeonAchievement(def)
     local killToken = BuildKillToken(destGUID, npcId)
     local applied, extraAwarded = ApplyBossKillCredit(npcId, killToken)
     if not applied then
+      KillDebug("ApplyBossKillCredit REJECTED ach=" .. tostring(achId)
+        .. " npc=" .. tostring(npcId)
+        .. " token=" .. tostring(killToken)
+        .. " syncBroadcast=false")
       return false
     end
+    KillDebug("ApplyBossKillCredit ACCEPTED ach=" .. tostring(achId)
+      .. " npc=" .. tostring(npcId)
+      .. " token=" .. tostring(killToken)
+      .. " extraAwarded=" .. tostring(extraAwarded or 0))
     -- Only print for the first eligible variation (processKill iterates base then Trio, Duo, Solo)
     if addon and addon.DungeonKillPrintedForGUID ~= destGUID then
         addon.DungeonKillPrintedForGUID = destGUID
@@ -1682,8 +1731,19 @@ local function registerDungeonAchievement(def)
       local ok, active = pcall(C_RestrictedActions.IsAddOnRestrictionActive, Enum.AddOnRestrictionType.Chat)
       chatRestricted = ok and not (addon.IsSecretValue and addon.IsSecretValue(active)) and active == true
     end
-    if addon and type(addon.SendDungeonBossCreditMessage) == "function" and killToken and not chatRestricted then
+    local canSync = addon and type(addon.SendDungeonBossCreditMessage) == "function" and killToken and not chatRestricted
+    if canSync then
       addon.SendDungeonBossCreditMessage(achId, requiredMapId, npcId, killToken)
+      KillDebug("syncBroadcast ATTEMPTED ach=" .. tostring(achId)
+        .. " npc=" .. tostring(npcId)
+        .. " token=" .. tostring(killToken))
+    else
+      local reason = chatRestricted and "chatRestricted"
+        or (not killToken and "noToken")
+        or "noSendFn"
+      KillDebug("syncBroadcast SKIPPED ach=" .. tostring(achId)
+        .. " npc=" .. tostring(npcId)
+        .. " reason=" .. reason)
     end
 
     -- Extra-credit-only kills on an already completed dungeon never re-complete.

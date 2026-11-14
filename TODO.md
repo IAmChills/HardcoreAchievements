@@ -1,28 +1,29 @@
 # TODO List
 
 # Useful Links
+
 ### Dungeon IDs / Encounters
+
 https://warcraft.wiki.gg/wiki/DungeonEncounterID
 
 ### Discord link generator
+
 https://linkbreakers.com/qr-code-generator/discord
 
 ## Active Tasks
 
 ### Forever leaderboard sync: open-world via chat channels (not started)
+
 **Current:** LibP2PDB stock GUILD/PARTY/RAID/YELL only (all clients). Forever blocks `SendAddonMessage` on custom channels, so `desc.channels` / addon-CHANNEL is a dead end — that wiring was removed.
 
 **Future (Hardcore Mode style):** real chat channel + LibP2PDB `RegisterChatChannel` / `BroadcastKeyChatChannel` (`SendChatMessage`, not addon CHANNEL). Needs join/leave, optional channel rotation against admin locks, hardware-event sends, and 255-byte payload limits. Do not use `NewDatabase({ channels = ... })` for this.
 
 - [ ] Design Forever chat-channel join + register with LibP2PDB
-- [ ] Broadcast on hardware-safe events; keep GUILD/PARTY/RAID/YELL as fallback
-- [ ] Classic/TBC unchanged (no chat-channel sync required)
 
 ### Forever dungeon catalog: missing `requiredMapId` / icons
+
 Fill from `/run local n,t,d,dn,p,_,_,id=GetInstanceInfo(); print("name: "..n,"mapId: "..id)` while inside each dungeon. Icons are file IDs (or `Interface\\...` paths); `000` / `000000` placeholders break UI. `requiredMapId = 000` → Lua `0` and blocks kill credit via `IsOnRequiredMap`.
 
-- [ ] Hall of Thanes (`HOT`)
-  - [ ] `requiredMapId`
 - [ ] Excavation Site: Wetlands (`ESW`)
   - [ ] `requiredMapId`
 - [ ] City of Dalaran (`COD`)
@@ -39,14 +40,11 @@ Fill from `/run local n,t,d,dn,p,_,_,id=GetInstanceInfo(); print("name: "..n,"ma
   - [ ] `requiredMapId`
 
 ### Forever dungeon/raid: remaining `ENCOUNTER_END` id → NPC maps
+
 `GetBossName` now has all Forever catalog NPC names. Name fallback works when `encounterName` matches; id maps preferred. Use `/hca killdebug on` + pull. Raids still on `BOSS_KILL` via `RaidCommon` (Onyxia active).
 
 **Forever-original (need live killdebug; no classic wiki ids)**
-- [ ] Hall of Thanes
-  - [ ] Faldrim Anvilmar (261306)
-  - [ ] Magmatus (261316)
-  - [ ] Plunder (261311)
-  - [ ] Durgen Dirgehammer (261319)
+
 - [ ] Excavation Site: Wetlands
   - [ ] Saltspine (260322)
   - [ ] Shadetooth (260325)
@@ -109,6 +107,7 @@ Fill from `/run local n,t,d,dn,p,_,_,id=GetInstanceInfo(); print("name: "..n,"ma
   - [ ] King Op (261993)
 
 **Classic tracked but still name-fallback only (no wiki encounter id, or side boss)**
+
 - [ ] The Stockade — no classic wiki DungeonEncounterIDs
   - [ ] Targorr the Dread (1696)
   - [ ] Kam Deepfury (1666)
@@ -145,68 +144,82 @@ Fill from `/run local n,t,d,dn,p,_,_,id=GetInstanceInfo(); print("name: "..n,"ma
   - [ ] Jed Runewatcher (10509) — UBRS
 
 **Version notes**
+
 - Avatar of Hakkar (`8443` / encounter `492`): Forever only. Classic/TBC leave commented (buggy kill credit).
 - Gahz'rilla (`7273` / encounter `594`): extra credit in all three catalogs; Forever encounter map fixed.
 - UBRS: Gyth dropped; Jed Runewatcher is extra credit (name-fallback).
 - Kill sets / bossOrder for shared classic dungeons synced Forever → Classic/TBC (TBC keeps its own levels/icons).
 
 ## Bugs
- - Molten Core bosses?
+
+- Molten Core bosses?
 
 ## Quests
+
  - 
 
 ## Explorer Achievements
- - Several Forever zones
+
+- Several Forever zones
 
 ## Titles? (I can fake titles in tooltips / chat but that's it. Requires addon)
- - The Eager Explorer title
- - Hardcore Legend
- - Tier I – The Brave
- - Tier II – The Reckless
+
+- The Eager Explorer title
+- Hardcore Legend
+- Tier I – The Brave
+- Tier II – The Reckless
 
 ## Challenges (heavy code, not opposed)
- - No pet hunter
- - Protection warrior
- - Monk build
- - Cloth paladin
+
+- No pet hunter
+- Protection warrior
+- Monk build
+- Cloth paladin
 
 ## Miscellaneous
- - Pirate Software Achieve 
-   - hearth out of an instance while in combat
- - Destroy your light of elune (giga hardcore achievement)
+
+- Pirate Software Achieve 
+  - hearth out of an instance while in combat
+- Destroy your light of elune (giga hardcore achievement)
 
 ## Class challenges
- - paladin, hunter, mage (likely not do-able with the nerfs)
 
- ## Helpful Code Snippets
+- paladin, hunter, mage (likely not do-able with the nerfs)
+
+## Helpful Code Snippets
 
 ### Class-colored text
+
 ```lua
 |c" .. select(4, GetClassColor(select(2, UnitClass("player")))) .. "PlayerName|r
 ```
 
 ### Print player's assigned group role
+
 ```lua
 /script print(UnitGroupRolesAssigned('player'))
 ```
 
 ### Reset Progress or Achievement in database
+
 ```lua
 /run HardcoreAchievementsCharDB[UnitGUID("player")].achievements["Test"]=nil HardcoreAchievementsCharDB[UnitGUID("player")].progress["Test"]=nil ReloadUI()
 ```
 
 ### Display Toast
+
 ```lua
 /run HardcoreAchievementsToast(nil, "Test Toast", 10, "TestAchievement");HardcoreAchievementsShowGuildFirstToast("Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\guild_first.png", "Guild First Test Toast", 100, "TestAchievement");
 ```
 
 ### Clear Logs
+
 ```lua
 /run HardcoreAchievementsCharDB[UnitGUID("player")].eventLogLines={} ReloadUI()
 ```
 
 ### Get Dungeon Info
+
 ```lua
 /dump GetInstanceInfo()
 /run local n,t,d,dn,p,_,_,id=GetInstanceInfo(); print("name: "..n,"type: "..t,"difficulty: "..dn,"maxPlayers: "..p,"mapId: ".. id)

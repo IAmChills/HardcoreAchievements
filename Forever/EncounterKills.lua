@@ -29,14 +29,92 @@ local nameToNpcId = nil
 -- Forever-original dungeons (ROL/HOT/etc.) come from live /hca killdebug.
 -- Values may be a number or { npcId, ... } when one encounter credits multiple tracked bosses.
 local ENCOUNTER_ID_TO_NPC = {
-    -- Forever: Ruins of Lordaeron (live)
+    -- =========================================================
+    -- Forever-original (placeholders: replace 0000 via /hca killdebug)
+    -- =========================================================
+
+    -- Hall of Thanes
+    [3493] = 261306, -- Faldrim Anvilmar
+    [3495] = 261316, -- Magmatus
+    [3494] = 261311, -- Plunder
+    [3496] = 261319, -- Durgen Dirgehammer
+
+    -- Ruins of Lordaeron (Lordaeron Captain rare has no encounter)
     [3353] = 250483, -- Witherfang
     [3411] = 256035, -- Viktor the Vile
     [3357] = 250631, -- The Abandoned
     [3412] = 256097, -- Bjork
     [3354] = 250657, -- Rath'mael
     [3355] = 250660, -- The Baron (encounter name "The Butcher")
-    -- Lordaeron Captain (255699) — need live killdebug
+
+        -- Excavation Site: Wetlands
+    --[0000] = 260322, -- Saltspine
+    --[0000] = 260325, -- Shadetooth
+    --[0000] = 260326, -- Relic Guardian
+
+    -- City of Dalaran
+    --[0000] = 247126, -- Atrexis the Grave Knight
+    --[0000] = 245999, -- Arcane Anomaly
+    --[0000] = 246003, -- Fel Ancient
+    --[0000] = 246017, -- Unstable Sentinel
+    --[0000] = 246008, -- Mana Devourer
+    --[0000] = 246016, -- Arcanic Enigma
+    --[0000] = 246020, -- Shade of the Archmage
+    --[0000] = 247032, -- Lyn the Ignored
+
+    -- The Drowned City
+    --[0000] = 258905, -- Zul'alai
+    --[0000] = 258924, -- Var'taka
+    --[0000] = 260042, -- Captain Dreadrise
+    --[0000] = 269586, -- Deathless Marrow
+    --[0000] = 263886, -- Primeval Elemental
+    --[0000] = 260274, -- Min'loth the Serpent
+    --[0000] = 264177, -- Gill
+    --[0000] = 264172, -- Umbra
+    --[0000] = 260468, -- "Pyromancer" Braxton
+
+    -- Krol'dok Stronghold
+    --[0000] = 258966, -- Slavecrusher Grox
+    --[0000] = 258972, -- Twilight Commander Zarmok
+    --[0000] = 259281, -- War Handler Ashka
+    --[0000] = 258964, -- Nar'gurk
+    --[0000] = 264773, -- Bossman Toof
+    --[0000] = 258968, -- Overlord Mugg
+
+    -- Alcaz Prison
+    --[0000] = 255391, -- Overseer Wrex
+    --[0000] = 256236, -- The Questioner
+    --[0000] = 255997, -- Tidemistress Ca'zass
+    --[0000] = 257016, -- Katerina the Cleaner
+    --[0000] = 255702, -- Blazeroar
+
+    -- Blackmaw Hold
+    --[0000] = 247206, -- Impaan the Imprisoner
+    --[0000] = 247198, -- Bonesnout the Unbroken
+    --[0000] = 247195, -- Withermaw
+    --[0000] = 247209, -- Elder Shaman Bloodmane
+    --[0000] = 247207, -- Blackmaw Behemoth
+    --[0000] = 247231, -- Unbound Spirit
+    --[0000] = 247234, -- Varrox Bleakhoof
+    --[0000] = 269104, -- Moontouched Wanderer
+    --[0000] = 269111, -- Gortek the Apprentice
+
+    -- Shaper's Terrace
+    --[0000] = 253201, -- Titanosaur
+    --[0000] = {0000, 0000, 0000}, -- Ravasaur Hunters (need NPC ids + encounter id)
+    --[0000] = 261812, -- Thunderhoof
+    --[0000] = 261813, -- Venomridge
+    --[0000] = 262127, -- Direhorn Matriarch
+    --[0000] = 261974, -- Cinder
+    --[0000] = 262297, -- Snowtalon
+    --[0000] = 262081, -- Bolt
+    --[0000] = 272561, -- Vitrix
+    --[0000] = 261809, -- Nanaya
+    --[0000] = 261993, -- King Op
+
+    -- =========================================================
+    -- Classic dungeons (wiki ids mapped; placeholders = name-fallback only)
+    -- =========================================================
 
     -- Ragefire Chasm
     [430] = 11517, -- Oggleflint
@@ -80,6 +158,14 @@ local ENCOUNTER_ID_TO_NPC = {
     [224] = 4830,  -- Old Serra'kis
     [225] = 4832,  -- Twilight Lord Kelris
     [226] = 4829,  -- Aku'mai
+
+    -- The Stockade (no classic wiki DungeonEncounterIDs)
+    --[0000] = 1696, -- Targorr the Dread
+    --[0000] = 1666, -- Kam Deepfury
+    --[0000] = 1717, -- Hamhock
+    --[0000] = 1663, -- Dextren Ward
+    --[0000] = 1716, -- Bazil Thredd
+    --[0000] = 1720, -- Bruegal Ironknuckle
 
     -- Razorfen Kraul
     [438] = 6168, -- Roogug
@@ -438,8 +524,8 @@ tracker:SetScript("OnEvent", function(_, event, ...)
                 or type(encounterUnitStatus))))
 
     local killSuccess = IsKillSuccess(success)
-    if killSuccess == false then
-        KillLog("ENCOUNTER_END ignored: wipe/failure")
+    if killSuccess ~= true then
+        KillLog("ENCOUNTER_END ignored: success not confirmed")
         return
     end
 
@@ -468,7 +554,7 @@ tracker:SetScript("OnEvent", function(_, event, ...)
         end
     end
 
-    if killSuccess == true or killSuccess == nil then
+    if killSuccess == true then
         if AwardFromEncounterID(encounterID, "ENCOUNTER_END") then
             return
         end

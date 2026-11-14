@@ -25,6 +25,7 @@ Functions\PlayerIsSolo.lua
 Functions\IsGroupEligibleForAchievement.lua
 Forever\KillTracking.lua [AllowLoadGameType forever, mainline]
 Forever\EncounterKills.lua [AllowLoadGameType forever, mainline]
+Forever\LootKills.lua [AllowLoadGameType forever, mainline]
 Forever\Diagnostics.lua [AllowLoadGameType forever, mainline]
 Functions\GetStatusText.lua
 Functions\RefreshAllAchievementPoints.lua
@@ -36,7 +37,7 @@ Functions\TrackNude.lua
 Functions\TrackNoQuestTurnIns.lua
 Functions\TrackWarforged.lua
 Functions\DataEncoding.lua
-Functions\CheckMapDiscovery.lua
+Functions\CheckMapDiscovery.lua [AllowLoadGameType vanilla, tbc]
 Functions\AchievementEventLog.lua
 Data\Localizations.lua
 Functions\ProfessionTracker.lua [AllowLoadGameType vanilla]
@@ -91,6 +92,7 @@ TBC\MetaCatalog.lua [AllowLoadGameType tbc]
 TBC\GuildFirstCatalog.lua [AllowLoadGameType tbc]
 TBC\ExplorationCatalog.lua [AllowLoadGameType tbc]
 
+Forever\CheckMapDiscovery.lua [AllowLoadGameType forever, mainline]
 Forever\DungeonCommon.lua [AllowLoadGameType forever, mainline]
 Forever\DungeonSetCommon.lua [AllowLoadGameType forever, mainline]
 Forever\RaidCommon.lua [AllowLoadGameType forever, mainline]

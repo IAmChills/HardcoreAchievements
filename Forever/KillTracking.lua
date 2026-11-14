@@ -49,6 +49,27 @@ local function KillLog(message)
     end
 end
 
+-- killdebug only: describe a GUID without parsing or comparing secret values.
+local function DescribeGUID(label, guid)
+    if not addon.ForeverKillDebug then
+        return
+    end
+    if guid == nil then
+        KillLog(label .. " guid=nil")
+        return
+    end
+    if IsSecret(guid) then
+        KillLog(label .. " secret=true type=" .. type(guid) .. " (not parsed)")
+        return
+    end
+    if type(guid) ~= "string" then
+        KillLog(label .. " secret=false type=" .. type(guid) .. " (not parsed)")
+        return
+    end
+    local npcId = addon.ParseCreatureNpcId and addon.ParseCreatureNpcId(guid)
+    KillLog(label .. " secret=false guid=" .. guid .. " npcId=" .. tostring(npcId))
+end
+
 local function PlainGUID(unit)
     if not UnitExists(unit) then
         return nil
@@ -166,21 +187,33 @@ local function ReadableLevel(unit)
     return nil
 end
 
+local function IsInsideGroupInstance()
+    local _, instanceType = IsInInstance()
+    return instanceType == "party" or instanceType == "raid"
+end
+
 --- Records participation for one living mob. Targeting alone never counts as assistance.
 local function Sample(unit)
+    -- Dungeon/raid kills do not require threat participation.
+    if IsInsideGroupInstance() then
+        return
+    end
+
     if type(unit) ~= "string" or not UnitExists(unit) or UnitIsDead(unit) then
         return
     end
+
     local guid = UnitGUID(unit)
     if type(guid) ~= "string" or IsSecret(guid) or guid:sub(1, 9) ~= "Creature-" then
         return
     end
+
     local npcId = TrackedNpcId(guid)
     if not npcId then
         return
     end
-    local record = GetRecord(guid, npcId)
 
+    local record = GetRecord(guid, npcId)
     if UnitIsTapDenied then
         local tapDenied = UnitIsTapDenied(unit)
         if type(tapDenied) == "boolean" then
@@ -257,6 +290,12 @@ local function Refresh()
             records[guid] = nil
         end
     end
+    -- Preserve record cleanup above, but skip threat sampling
+    -- inside dungeons and raids.
+    if IsInsideGroupInstance() then
+        return
+    end
+
     if not UnitAffectingCombat("player") then
         return
     end
@@ -317,6 +356,9 @@ local function Award(guid, npcId, source)
 end
 
 local function OnPartyKill(attackerGUID, targetGUID)
+    DescribeGUID("PARTY_KILL attacker", attackerGUID)
+    DescribeGUID("PARTY_KILL target", targetGUID)
+
     if type(targetGUID) ~= "string" or IsSecret(targetGUID) then
         LogSecretGUID("PARTY_KILL target")
         return
@@ -368,6 +410,8 @@ local function OnPartyKill(attackerGUID, targetGUID)
 end
 
 local function OnUnitDied(guid)
+    DescribeGUID("UNIT_DIED dest", guid)
+
     if type(guid) ~= "string" or IsSecret(guid) then
         LogSecretGUID("UNIT_DIED")
         return

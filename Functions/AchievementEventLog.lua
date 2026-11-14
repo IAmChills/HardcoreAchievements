@@ -110,6 +110,10 @@ local function formatLine(msg)
 end
 
 function addon.EventLogAdd(msg)
+    -- Secret strings cannot be compared or persisted; skip before any == / tostring.
+    if addon.IsSecretValue and addon.IsSecretValue(msg) then
+        return
+    end
     if not msg or msg == "" then return end
     local t = getEventLogLines()
     addon.eventLogLines = t
@@ -134,6 +138,9 @@ end
 -- Add or replace a log line identified by key (same key amends in place).
 -- Use attempt-scoped keys so a later run does not overwrite prior history.
 function addon.EventLogUpsert(key, msg)
+    if addon.IsSecretValue and (addon.IsSecretValue(key) or addon.IsSecretValue(msg)) then
+        return
+    end
     if not key or key == "" or not msg or msg == "" then return end
     local t = getEventLogLines()
     local keys = getEventLogKeys()
