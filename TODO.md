@@ -49,8 +49,6 @@ Fill from `/run local n,t,d,dn,p,_,_,id=GetInstanceInfo(); print("name: "..n,"ma
   - [ ] Saltspine (260322)
   - [ ] Shadetooth (260325)
   - [ ] Relic Guardian (260326)
-- [ ] Ruins of Lordaeron
-  - [ ] Lordaeron Captain (255699) — extra credit
 - [ ] City of Dalaran
   - [ ] Atrexis the Grave Knight (247126)
   - [ ] Arcane Anomaly (245999)
@@ -127,21 +125,6 @@ Fill from `/run local n,t,d,dn,p,_,_,id=GetInstanceInfo(); print("name: "..n,"ma
 - [ ] Dire Maul
   - [ ] Pusillin (14354)
   - [ ] Tsu'zee (11467)
-- [ ] Blackrock Depths
-  - [ ] Princess Moira Bronzebeard (8929) — shares Emperor encounter 245; do not id-map; needs separate kill signal / name
-- [ ] Rares with no wiki encounter (name fallback)
-  - [ ] Deviate Faerie Dragon (5912) — WC
-  - [ ] Deathsworn Captain (3872) — SFK
-  - [ ] Dark Iron Ambassador (6228) — GNOM
-  - [ ] Azshir (6490) — SM
-  - [ ] Fallen Champion (6488) — SM
-  - [ ] Ironspine (6489) — SM
-  - [ ] Ragglesnout (7354) — RFD
-  - [ ] Plaguemaw (7356) — RFD
-  - [ ] Skul (10393) — STRAT
-  - [ ] Postmaster Malown (11143) — STRAT
-  - [ ] Stonespine (10809) — STRAT
-  - [ ] Jed Runewatcher (10509) — UBRS
 
 **Version notes**
 

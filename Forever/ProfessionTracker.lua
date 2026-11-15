@@ -54,6 +54,7 @@ local ProfessionList = {
     { key = "Fishing",       skillID = 356, name = "Fishing",       icon = 136245, secondary = true },
     { key = "FirstAid",      skillID = 129, name = "First Aid",     icon = 135966, secondary = true },
     { key = "Lockpicking",   skillID = 633, name = "Lockpicking",   icon = 134237, secondary = true },
+    { key = "Comprehension", skillID = 3012, name = "Comprehension", icon = 8188276, secondary = true },
  -- { key = "Poisons",       skillID = 40,  name = "Poisons",       icon = 132273, secondary = true },
  -- { key = "Riding",        skillID = 762, name = "Riding",        icon = 132261, secondary = true },
 }
