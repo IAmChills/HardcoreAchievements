@@ -594,7 +594,9 @@ local Dungeons = {
       [9502] = 1,  -- Phalanx
       [9543] = 1,  -- Ribbly Screwspigot
       [9499] = 1,  -- Plugger Spazzring
-      [8929] = 1,  -- Princess Moira Bronzebeard
+      -- 8929 normal; 10076 = High Priestess of Thaurissan when the save-quest was completed.
+      -- CanonicalNpcId(10076) → 8929 so either form credits once.
+      [8929] = 1,  -- Princess Moira Bronzebeard / High Priestess of Thaurissan (10076)
     },
     bossOrder = {9025, 9016, 9319, 9018, "Ring Of Law", 9024, 9033, 8983, 9017, 9056, 9041, 9156, "The Seven", 9938, 9019, 9537, 9502, 9543, 9499, 8929}
   },
@@ -676,9 +678,10 @@ local Dungeons = {
       [10363] = 1, -- General Drakkisath
     },
     extraCreditKills = {
+      [10264] = 1, -- Solakar Flamewreath
       [10509] = 1, -- Jed Runewatcher
     },
-    bossOrder = {9816, 10429, 10430, 10363, 10509}
+    bossOrder = {9816, 10429, 10430, 10363, 10264, 10509}
   },
 
   -- Stratholme (Both, Level 58-60)

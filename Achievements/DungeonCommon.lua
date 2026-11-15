@@ -1314,6 +1314,7 @@ local function registerDungeonAchievement(def)
       [9543] = "Ribbly Screwspigot",
       [9499] = "Plugger Spazzring",
       [8929] = "Princess Moira Bronzebeard",
+      [10076] = "High Priestess of Thaurissan", -- Moira after save-quest; CanonicalNpcId → 8929
       [9019] = "Emperor Dagran Thaurissan",
       [9196] = "Highlord Omokk",
       [9236] = "Shadow Hunter Vosh'gajin",

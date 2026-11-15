@@ -20,118 +20,27 @@ https://linkbreakers.com/qr-code-generator/discord
 
 - [ ] Design Forever chat-channel join + register with LibP2PDB
 
-### Forever dungeon catalog: missing `requiredMapId` / icons
+### Forever dungeon catalog: missing `requiredMapId`
 
-Fill from `/run local n,t,d,dn,p,_,_,id=GetInstanceInfo(); print("name: "..n,"mapId: "..id)` while inside each dungeon. Icons are file IDs (or `Interface\\...` paths); `000` / `000000` placeholders break UI. `requiredMapId = 000` → Lua `0` and blocks kill credit via `IsOnRequiredMap`.
+Fill from `/run local n,t,d,dn,p,_,_,id=GetInstanceInfo(); print("name: "..n,"mapId: "..id)` while inside each dungeon. `requiredMapId = 000` → Lua `0` and blocks kill credit via `IsOnRequiredMap`. Same ids must be copied into `RareLootKills.lua` `mapId` for Forever rares (currently `nil`).
 
-- [ ] Excavation Site: Wetlands (`ESW`)
-  - [ ] `requiredMapId`
-- [ ] City of Dalaran (`COD`)
-  - [ ] `requiredMapId`
-- [ ] The Drowned City (`TDC`)
-  - [ ] `requiredMapId`
-- [ ] Krol'dok Stronghold (`KS`)
-  - [ ] `requiredMapId`
-- [ ] Alcaz Prison (`AP`)
-  - [ ] `requiredMapId`
-- [ ] Blackmaw Hold (`BMH`)
-  - [ ] `requiredMapId`
-- [ ] Shaper's Terrace (`SHT`)
-  - [ ] `requiredMapId`
+- [ ] Excavation Site: Wetlands (`ESW`) — `requiredMapId`
+- [ ] City of Dalaran (`COD`) — `requiredMapId`
+- [ ] The Drowned City (`TDC`) — `requiredMapId` (+ RareLoot mapId for Gill / Umbra / Braxton)
+- [ ] Krol'dok Stronghold (`KS`) — `requiredMapId` (+ RareLoot mapId for Bossman Toof)
+- [ ] Alcaz Prison (`AP`) — `requiredMapId`
+- [ ] Blackmaw Hold (`BMH`) — `requiredMapId` (+ RareLoot mapId for Moontouched Wanderer / Gortek)
+- [ ] Shaper's Terrace (`SHT`) — `requiredMapId` (+ RareLoot mapId for King Op)
 
-### Forever dungeon/raid: remaining `ENCOUNTER_END` id → NPC maps
+### Forever: missing encounter / NPC ids (no rare-loot coverage yet)
 
-`GetBossName` now has all Forever catalog NPC names. Name fallback works when `encounterName` matches; id maps preferred. Use `/hca killdebug on` + pull. Raids still on `BOSS_KILL` via `RaidCommon` (Onyxia active).
+- [ ] Shaper's Terrace — Ravasaur Hunters any-of still `{0000,0000,0000}` — real NPC ids + encounter id
+- [ ] Shaper's Terrace — King Op (`261993`) — empty `RareLootKills` items; need distinctive drops and/or encounter id
 
-**Forever-original (need live killdebug; no classic wiki ids)**
-
-- [ ] Excavation Site: Wetlands
-  - [ ] Saltspine (260322)
-  - [ ] Shadetooth (260325)
-  - [ ] Relic Guardian (260326)
-- [ ] City of Dalaran
-  - [ ] Atrexis the Grave Knight (247126)
-  - [ ] Arcane Anomaly (245999)
-  - [ ] Fel Ancient (246003)
-  - [ ] Unstable Sentinel (246017)
-  - [ ] Mana Devourer (246008)
-  - [ ] Arcanic Enigma (246016)
-  - [ ] Shade of the Archmage (246020)
-  - [ ] Lyn the Ignored (247032)
-- [ ] The Drowned City
-  - [ ] Zul'alai (258905)
-  - [ ] Var'taka (258924)
-  - [ ] Captain Dreadrise (260042)
-  - [ ] Deathless Marrow (269586)
-  - [ ] Primeval Elemental (263886)
-  - [ ] Min'loth the Serpent (260274)
-  - [ ] Gill (264177)
-  - [ ] Umbra (264172)
-  - [ ] "Pyromancer" Braxton (260468)
-- [ ] Krol'dok Stronghold
-  - [ ] Slavecrusher Grox (258966)
-  - [ ] Twilight Commander Zarmok (258972)
-  - [ ] War Handler Ashka (259281)
-  - [ ] Nar'gurk (258964)
-  - [ ] Bossman Toof (264773)
-  - [ ] Overlord Mugg (258968)
-- [ ] Alcaz Prison
-  - [ ] Overseer Wrex (255391)
-  - [ ] The Questioner (256236)
-  - [ ] Tidemistress Ca'zass (255997)
-  - [ ] Katerina the Cleaner (257016)
-  - [ ] Blazeroar (255702)
-- [ ] Blackmaw Hold
-  - [ ] Impaan the Imprisoner (247206)
-  - [ ] Bonesnout the Unbroken (247198)
-  - [ ] Withermaw (247195)
-  - [ ] Elder Shaman Bloodmane (247209)
-  - [ ] Blackmaw Behemoth (247207)
-  - [ ] Unbound Spirit (247231)
-  - [ ] Varrox Bleakhoof (247234)
-  - [ ] Moontouched Wanderer (269104)
-  - [ ] Gortek the Apprentice (269111)
-- [ ] Shaper's Terrace
-  - [ ] Titanosaur (253201)
-  - [ ] Ravasaur Hunters any-of set still `{0000,0000,0000}` — need real NPC ids
-  - [ ] Thunderhoof (261812)
-  - [ ] Venomridge (261813)
-  - [ ] Direhorn Matriarch (262127)
-  - [ ] Cinder (261974)
-  - [ ] Snowtalon (262297)
-  - [ ] Bolt (262081)
-  - [ ] Vitrix (272561)
-  - [ ] Nanaya (261809)
-  - [ ] King Op (261993)
-
-**Classic tracked but still name-fallback only (no wiki encounter id, or side boss)**
-
-- [ ] The Stockade — no classic wiki DungeonEncounterIDs
-  - [ ] Targorr the Dread (1696)
-  - [ ] Kam Deepfury (1666)
-  - [ ] Hamhock (1717)
-  - [ ] Dextren Ward (1663)
-  - [ ] Bazil Thredd (1716)
-  - [ ] Bruegal Ironknuckle (1720)
-- [ ] Zul'Farrak
-  - [ ] Sergeant Bly (7604)
-  - [ ] Ruuzlu (7797)
-  - [ ] Dustwraith (10081)
-  - [ ] Zerillis (10082)
-  - [ ] Sandarr Dunereaver (10080)
-- [ ] Temple of Atal'Hakkar
-  - [ ] Atal'alarion (8580)
-  - [ ] Ogom the Wretched (5711)
-- [ ] Dire Maul
-  - [ ] Pusillin (14354)
-  - [ ] Tsu'zee (11467)
-
-**Version notes**
+**Notes**
 
 - Avatar of Hakkar (`8443` / encounter `492`): Forever only. Classic/TBC leave commented (buggy kill credit).
-- Gahz'rilla (`7273` / encounter `594`): extra credit in all three catalogs; Forever encounter map fixed.
-- UBRS: Gyth dropped; Jed Runewatcher is extra credit (name-fallback).
-- Kill sets / bossOrder for shared classic dungeons synced Forever → Classic/TBC (TBC keeps its own levels/icons).
+- Moira shares Emperor encounter `245`; keep loot/name-only, never `{9019, 8929}` on the encounter id. Post-quest form `10076` (High Priestess) canonicalizes to `8929`.
 
 ## Bugs
 

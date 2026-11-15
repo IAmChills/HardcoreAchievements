@@ -309,6 +309,20 @@ function addon.IsSecretValue(value)
     return issecretvalue and issecretvalue(value) or false
 end
 
+--- Collapse alternate NPC ids that represent the same tracked boss kill.
+--- High Priestess of Thaurissan (10076) is Princess Moira (8929) when BRD was cleared with
+--- the save-the-princess quest completed by the whole group; loot and credit are shared.
+function addon.CanonicalNpcId(npcId)
+    npcId = tonumber(npcId)
+    if not npcId then
+        return nil
+    end
+    if npcId == 10076 then
+        return 8929
+    end
+    return npcId
+end
+
 --- NPC id from a unit GUID.
 --- Plain creature, vehicle, and other hyphenated GUIDs keep the historical strsplit result, so Classic
 --- and TBC behaviour is unchanged. Secret GUIDs return nil instead of erroring. "Encounter:<id>" is the

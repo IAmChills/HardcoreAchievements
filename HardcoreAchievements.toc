@@ -26,6 +26,7 @@ Functions\IsGroupEligibleForAchievement.lua
 Forever\KillTracking.lua [AllowLoadGameType forever, mainline]
 Forever\EncounterKills.lua [AllowLoadGameType forever, mainline]
 Forever\LootKills.lua [AllowLoadGameType forever, mainline]
+Forever\RareLootKills.lua [AllowLoadGameType forever, mainline]
 Forever\Diagnostics.lua [AllowLoadGameType forever, mainline]
 Functions\GetStatusText.lua
 Functions\RefreshAllAchievementPoints.lua

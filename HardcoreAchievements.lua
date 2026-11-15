@@ -5432,6 +5432,7 @@ do
             if not npcId then
                 return false, false
             end
+            npcId = (addon.CanonicalNpcId and addon.CanonicalNpcId(npcId)) or tonumber(npcId) or npcId
             local runtimeIndex = EnsureAchievementRuntimeIndex and EnsureAchievementRuntimeIndex()
             local trackedRows = runtimeIndex and runtimeIndex.npcIdToKillRows[npcId]
             local warnRows = runtimeIndex and runtimeIndex.npcIdToWarnRows[npcId]
@@ -5665,6 +5666,10 @@ do
                 return
             end
 
+            if npcId and addon.CanonicalNpcId then
+                npcId = addon.CanonicalNpcId(npcId) or npcId
+            end
+
             local isEncounter = type(destGUID) == "string" and destGUID:sub(1, 10) == "Encounter:"
             local now = GetTime()
             if not isEncounter and npcId and achEvt.encounterClaimedAt[npcId]
@@ -5718,6 +5723,9 @@ do
                 if not npcId then
                     return false
                 end
+                if addon.CanonicalNpcId then
+                    npcId = addon.CanonicalNpcId(npcId) or npcId
+                end
 
                 processKill(destGUID, npcId)
                 clearCombatTrackingForGUID(destGUID)
@@ -5730,6 +5738,9 @@ do
                 creatureID = tonumber(creatureID)
                 if not creatureID then
                     return false
+                end
+                if addon.CanonicalNpcId then
+                    creatureID = addon.CanonicalNpcId(creatureID) or creatureID
                 end
                 local now = GetTime()
                 if achEvt.guidClaimedAt[creatureID] and (now - achEvt.guidClaimedAt[creatureID]) < 10 then

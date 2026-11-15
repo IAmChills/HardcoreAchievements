@@ -41,6 +41,7 @@ local ENCOUNTER_ID_TO_NPC = {
 
     -- Ruins of Lordaeron (Lordaeron Captain rare has no encounter)
     [3353] = 250483, -- Witherfang
+    [3408] = 255699, -- Lordaeron Captain
     [3411] = 256035, -- Viktor the Vile
     [3357] = 250631, -- The Abandoned
     [3412] = 256097, -- Bjork
@@ -48,69 +49,63 @@ local ENCOUNTER_ID_TO_NPC = {
     [3355] = 250660, -- The Baron (encounter name "The Butcher")
 
         -- Excavation Site: Wetlands
-    --[0000] = 260322, -- Saltspine
-    --[0000] = 260325, -- Shadetooth
-    --[0000] = 260326, -- Relic Guardian
+    [3480] = 260322, -- Saltspine
+    [3481] = 260325, -- Shadetooth
+    [3482] = 260326, -- Relic Guardian
 
     -- City of Dalaran
-    --[0000] = 247126, -- Atrexis the Grave Knight
-    --[0000] = 245999, -- Arcane Anomaly
-    --[0000] = 246003, -- Fel Ancient
-    --[0000] = 246017, -- Unstable Sentinel
-    --[0000] = 246008, -- Mana Devourer
-    --[0000] = 246016, -- Arcanic Enigma
-    --[0000] = 246020, -- Shade of the Archmage
-    --[0000] = 247032, -- Lyn the Ignored
+    [3311] = 247126, -- Atrexis the Grave Knight
+    [3298] = 245999, -- Arcane Anomaly
+    [3299] = 246003, -- Fel Ancient
+    [3302] = 246017, -- Unstable Sentinel
+    [3300] = 246008, -- Mana Devourer
+    [3301] = 246016, -- Arcanic Enigma
+    [3303] = 246020, -- Shade of the Archmage
+    [3310] = 247032, -- Lyn the Ignored
 
     -- The Drowned City
-    --[0000] = 258905, -- Zul'alai
-    --[0000] = 258924, -- Var'taka
-    --[0000] = 260042, -- Captain Dreadrise
-    --[0000] = 269586, -- Deathless Marrow
-    --[0000] = 263886, -- Primeval Elemental
-    --[0000] = 260274, -- Min'loth the Serpent
-    --[0000] = 264177, -- Gill
-    --[0000] = 264172, -- Umbra
-    --[0000] = 260468, -- "Pyromancer" Braxton
+    [3474] = 258905, -- Zul'alai
+    [3475] = 258924, -- Var'taka
+    [3476] = 260042, -- Captain Dreadrise
+    [3478] = 269586, -- Deathless Marrow
+    [3511] = 263886, -- Primeval Elemental
+    [3479] = 260274, -- Min'loth the Serpent
 
     -- Krol'dok Stronghold
-    --[0000] = 258966, -- Slavecrusher Grox
-    --[0000] = 258972, -- Twilight Commander Zarmok
-    --[0000] = 259281, -- War Handler Ashka
-    --[0000] = 258964, -- Nar'gurk
+    [3450] = 258966, -- Slavecrusher Grox
+    [3452] = 258972, -- Twilight Commander Zarmok
+    [3453] = 259281, -- War Handler Ashka
+    [3449] = 258964, -- Nar'gurk
     --[0000] = 264773, -- Bossman Toof
-    --[0000] = 258968, -- Overlord Mugg
+    [3451] = 258968, -- Overlord Mugg
 
     -- Alcaz Prison
-    --[0000] = 255391, -- Overseer Wrex
-    --[0000] = 256236, -- The Questioner
-    --[0000] = 255997, -- Tidemistress Ca'zass
-    --[0000] = 257016, -- Katerina the Cleaner
-    --[0000] = 255702, -- Blazeroar
+    [3403] = 255391, -- Overseer Wrex
+    [3415] = 256236, -- The Questioner
+    [3410] = 255997, -- Tidemistress Ca'zass
+    [3418] = 257016, -- Katerina the Cleaner
+    [3409] = 255702, -- Blazeroar
 
     -- Blackmaw Hold
-    --[0000] = 247206, -- Impaan the Imprisoner
-    --[0000] = 247198, -- Bonesnout the Unbroken
-    --[0000] = 247195, -- Withermaw
-    --[0000] = 247209, -- Elder Shaman Bloodmane
-    --[0000] = 247207, -- Blackmaw Behemoth
-    --[0000] = 247231, -- Unbound Spirit
-    --[0000] = 247234, -- Varrox Bleakhoof
-    --[0000] = 269104, -- Moontouched Wanderer
-    --[0000] = 269111, -- Gortek the Apprentice
+    [3316] = 247206, -- Impaan the Imprisoner
+    [3322] = 247198, -- Bonesnout the Unbroken
+    [3315] = 247195, -- Withermaw
+    [3327] = 247209, -- Elder Shaman Bloodmane
+    [3323] = 247207, -- Blackmaw Behemoth
+    [3336] = 247231, -- Unbound Spirit
+    [3334] = 247234, -- Varrox Bleakhoof
 
     -- Shaper's Terrace
-    --[0000] = 253201, -- Titanosaur
+    [3498] = 253201, -- Titanosaur
     --[0000] = {0000, 0000, 0000}, -- Ravasaur Hunters (need NPC ids + encounter id)
-    --[0000] = 261812, -- Thunderhoof
-    --[0000] = 261813, -- Venomridge
-    --[0000] = 262127, -- Direhorn Matriarch
-    --[0000] = 261974, -- Cinder
-    --[0000] = 262297, -- Snowtalon
-    --[0000] = 262081, -- Bolt
-    --[0000] = 272561, -- Vitrix
-    --[0000] = 261809, -- Nanaya
-    --[0000] = 261993, -- King Op
+    [3509] = 261812, -- Thunderhoof
+    [3501] = 261813, -- Venomridge
+    [3507] = 262127, -- Direhorn Matriarch
+    [3503] = 261974, -- Cinder
+    [3597] = 262297, -- Snowtalon
+    [3505] = 262081, -- Bolt
+    [3600] = 272561, -- Vitrix
+    [3502] = 261809, -- Nanaya
 
     -- =========================================================
     -- Classic dungeons (wiki ids mapped; placeholders = name-fallback only)
@@ -160,12 +155,11 @@ local ENCOUNTER_ID_TO_NPC = {
     [226] = 4829,  -- Aku'mai
 
     -- The Stockade (no classic wiki DungeonEncounterIDs)
-    --[0000] = 1696, -- Targorr the Dread
-    --[0000] = 1666, -- Kam Deepfury
-    --[0000] = 1717, -- Hamhock
-    --[0000] = 1663, -- Dextren Ward
-    --[0000] = 1716, -- Bazil Thredd
-    --[0000] = 1720, -- Bruegal Ironknuckle
+    [2756] = 1696, -- Targorr the Dread
+    [2757] = 1666, -- Kam Deepfury
+    [2758] = 1717, -- Hamhock
+    [2759] = 1663, -- Dextren Ward
+    [2760] = 1716, -- Bazil Thredd
 
     -- Razorfen Kraul
     [438] = 6168, -- Roogug
@@ -207,7 +201,7 @@ local ENCOUNTER_ID_TO_NPC = {
     [553] = 4854, -- Grimlok
     [554] = 2748, -- Archaedas
 
-    -- Zul'Farrak (Sergeant Bly / Ruuzlu / rares: no classic wiki encounter — name fallback)
+    -- Zul'Farrak
     [593] = 7795, -- Hydromancer Velratha
     [594] = 7273, -- Gahz'rilla (extra credit)
     [595] = 8127, -- Antu'sul
@@ -256,9 +250,9 @@ local ENCOUNTER_ID_TO_NPC = {
     [243] = {9034, 9035, 9036, 9037, 9038, 9039, 9040}, -- The Seven (any one of the seven) Hate'rel, Anger'rel, Vile'rel, Gloom'rel, Seeth'rel, Doom'rel, Dope'rel
     [244] = 9938, -- Magmus
     -- Emperor + Moira share encounter 245. Map Emperor only: a table {9019, 8929} would
-    -- also award Moira extra credit when she is spared (quest). Moira still gets name fallback
-    -- if a separate BOSS_KILL/ENCOUNTER_END name fires for her; verify with killdebug.
-    [245] = 9019, -- Emperor Dagran Thaurissan (Moira 8929 intentionally not tied to this id)
+    -- also award Moira extra credit when she is spared (quest). Moira (8929) / High Priestess
+    -- (10076) credit via loot GUID or rare-loot; CanonicalNpcId maps 10076 → 8929.
+    [245] = 9019, -- Emperor Dagran Thaurissan (Moira intentionally not tied to this id)
 
     -- Lower Blackrock Spire
     [267] = 9196,  -- Highlord Omokk
@@ -273,6 +267,7 @@ local ENCOUNTER_ID_TO_NPC = {
 
     -- Upper Blackrock Spire (Gyth 10339 no longer tracked; Jed 10509 has no wiki encounter)
     [276] = 9816, -- Pyroguard Emberseer
+    [277] = 10264, -- Solakar Flamewreath
     [278] = 10429, -- Warchief Rend Blackhand
     [279] = 10430, -- The Beast
     [280] = 10363, -- General Drakkisath
@@ -291,6 +286,7 @@ local ENCOUNTER_ID_TO_NPC = {
     [482] = 10435, -- Magistrate Barthilas
     [483] = 10439, -- Ramstein the Gorger
     [484] = 10440, -- Baron Rivendare / Lord Aurius Rivendare
+    [2798] = 11143, -- Postmaster Malown (summoned)
 
     -- Dire Maul (Pusillin / Tsu'zee: no classic wiki encounter — name fallback)
     [343] = 11490, -- Zevrim Thornhoof
@@ -330,6 +326,8 @@ local ENCOUNTER_ID_TO_NPC = {
 -- Used only when encounter id is unknown; id map still preferred.
 local ENCOUNTER_NAME_ALIASES = {
     ["the butcher"] = 250660, -- The Baron
+    -- Moira's post-quest form; CanonicalNpcId also maps 10076 → 8929 at award time.
+    ["high priestess of thaurissan"] = 8929,
 }
 
 local function KillLog(message)
