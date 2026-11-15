@@ -7,6 +7,9 @@
 ## SavedVariables: HardcoreAchievementsDB
 ## SavedVariablesPerCharacter: HardcoreAchievementsCharDB
 ## IconTexture: Interface\AddOns\HardcoreAchievements\Images\HardcoreAchievementsButton.png
+## AddonCompartmentFunc: HardcoreAchievements_OnAddonCompartmentClick
+## AddonCompartmentFuncOnEnter: HardcoreAchievements_OnAddonCompartmentEnter
+## AddonCompartmentFuncOnLeave: HardcoreAchievements_OnAddonCompartmentLeave
 ## X-Category: Achievements
 ## Category: Achievements
 

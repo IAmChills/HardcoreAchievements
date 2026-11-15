@@ -3046,6 +3046,27 @@ local function EnsureMinimapDB()
     return db, db.minimap
 end
 
+-- Shared by minimap LDB and AddonCompartment (Left = dashboard, Right = leaderboard, Shift-Right = options).
+local function HandleLauncherClick(button)
+    -- Forever hosts dashboard/leaderboard on LegacySystemFrame; opening it
+    -- during combat lockdown raises ADDON_ACTION_BLOCKED.
+    if addon and addon.IsForeverCharacterUI and InCombatLockdown and InCombatLockdown()
+        and ((button == "LeftButton" and not IsShiftKeyDown())
+            or (button == "RightButton" and not IsShiftKeyDown())) then
+        print("|cff008066[Hardcore Achievements]|r Cannot open during combat.")
+        return
+    end
+    if button == "LeftButton" then
+        ToggleHardcoreAchievementsUI()
+    elseif button == "RightButton" and IsShiftKeyDown() then
+        OpenOptionsPanel()
+    elseif button == "RightButton" then
+        if addon and addon.Leaderboard and addon.Leaderboard.Toggle then
+            addon.Leaderboard:Toggle()
+        end
+    end
+end
+
 -- Register the minimap icon
 local function InitializeMinimapButton()
     local db, minimapDB = EnsureMinimapDB()
@@ -3068,25 +3089,7 @@ local function InitializeMinimapButton()
             text = "HardcoreAchievements",
             icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\HardcoreAchievementsButton.png",
             OnClick = function(self, button)
-                -- Forever hosts dashboard/leaderboard on LegacySystemFrame; opening it
-                -- during combat lockdown raises ADDON_ACTION_BLOCKED.
-                if addon and addon.IsForeverCharacterUI and InCombatLockdown and InCombatLockdown()
-                    and ((button == "LeftButton" and not IsShiftKeyDown())
-                        or (button == "RightButton" and not IsShiftKeyDown())) then
-                    print("|cff008066[Hardcore Achievements]|r Cannot open during combat.")
-                    return
-                end
-                if button == "LeftButton" then
-                    ToggleHardcoreAchievementsUI()
-                elseif button == "RightButton" and IsShiftKeyDown() then
-                    -- Shift-right-click to open options panel
-                    OpenOptionsPanel()
-                elseif button == "RightButton" then
-                    -- Right-click to open achievement leaderboard
-                    if addon and addon.Leaderboard and addon.Leaderboard.Toggle then
-                        addon.Leaderboard:Toggle()
-                    end
-                end
+                HandleLauncherClick(button)
             end,
             OnTooltipShow = function(tooltip)
                 tooltip:AddLine("Hardcore Achievements", 1, 0.82, 0)
@@ -3141,6 +3144,32 @@ end
 if addon then
     addon.SetMinimapButtonShown = SetMinimapButtonShown
     addon.IsMinimapButtonShown = IsMinimapButtonShown
+end
+
+-- Addon compartment (TOC ## AddonCompartmentFunc*). Globals required; same clicks as minimap.
+function HardcoreAchievements_OnAddonCompartmentClick(addonName, buttonName)
+    HandleLauncherClick(buttonName or "LeftButton")
+end
+
+function HardcoreAchievements_OnAddonCompartmentEnter(addonName, menuButtonFrame)
+    local owner = menuButtonFrame or AddonCompartmentFrame
+    if not (GameTooltip and owner) then
+        return
+    end
+    GameTooltip:SetOwner(owner, "ANCHOR_LEFT")
+    if minimapDataObject and minimapDataObject.OnTooltipShow then
+        minimapDataObject.OnTooltipShow(GameTooltip)
+    else
+        GameTooltip:SetText("Hardcore Achievements", 1, 0.82, 0)
+        GameTooltip:AddLine("Click to toggle Dashboard", 0.5, 0.5, 0.5)
+    end
+    GameTooltip:Show()
+end
+
+function HardcoreAchievements_OnAddonCompartmentLeave(addonName, menuButtonFrame)
+    if GameTooltip then
+        GameTooltip:Hide()
+    end
 end
 
 -- =========================================================
