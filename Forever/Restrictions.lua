@@ -62,5 +62,15 @@ addon.Restrictions.encounterEndEvent = false
 -- cannot run then; PublishLocal returns false quietly.
 --
 -- Forever also does not allow SendAddonMessage on custom chat channels. Open-world sync
--- would need LibP2PDB RegisterChatChannel / BroadcastKeyChatChannel (real SendChatMessage
--- payloads), not desc.channels. Until that lands, Forever uses stock GUILD/PARTY/RAID/YELL only.
+-- uses Utils\CommChannel.lua (rotating hca###### from GetServerTime()/1337 + seed
+-- fallbacks) plus Utils\ChatBroadcast.lua (LibP2PDB RegisterChatChannel /
+-- BroadcastKeyChatChannel via SendChatMessage, flushed from hardware events) on
+-- Classic, TBC, and Forever. Stock GUILD/PARTY/RAID/YELL BroadcastKey remains.
+-- Do not use NewDatabase({ channels = ... }) for this.
+--
+-- BLOCKER (upstream LibP2PDB): Forever chat senders have no realm suffix, so
+-- VerifySenderPeerID appends the receiver's GetRealmName() shard label and compares it to
+-- the sender's GUID realm (e.g. "CAMWOW US1 ..." vs "CAMWOWUS2..."). Surname/name matching
+-- is fine; realm mismatch drops the message before onPeerAdded. HCA keeps chat presence +
+-- whisper handshake ready; do not patch LibP2PDB here — wait for the author's Forever
+-- name/realm verification support, then retest peer discovery unchanged.

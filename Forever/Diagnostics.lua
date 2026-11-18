@@ -51,6 +51,14 @@ function addon.RunForeverProbe()
     --     .. " interface=" .. tostring(interfaceVersion))
     local inInstance, instanceType = IsInInstance()
     Line("instance=" .. tostring(inInstance) .. " type=" .. tostring(instanceType))
+
+    if addon.TryRegisterHCAChatChannel then
+        addon.TryRegisterHCAChatChannel()
+    end
+    Line("HCA channel index=" .. tostring(addon.GetHCACommChannelIndex and addon.GetHCACommChannelIndex()))
+    Line("HCA chat broadcast=" .. tostring(addon.FlushBroadcastQueue ~= nil)
+        .. " queueFn=" .. tostring(addon.QueueChatBroadcast ~= nil))
+
     -- Line("PARTY_KILL registered=" .. tostring(addon.Restrictions.partyKillEvent)
     --     .. " ENCOUNTER_END registered=" .. tostring(addon.Restrictions.encounterEndEvent))
 

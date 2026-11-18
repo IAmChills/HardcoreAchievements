@@ -12,13 +12,11 @@ https://linkbreakers.com/qr-code-generator/discord
 
 ## Active Tasks
 
-### Forever leaderboard sync: open-world via chat channels (not started)
+### Leaderboard sync: open-world via chat channels
 
-**Current:** LibP2PDB stock GUILD/PARTY/RAID/YELL only (all clients). Forever blocks `SendAddonMessage` on custom channels, so `desc.channels` / addon-CHANNEL is a dead end — that wiring was removed.
+**Current:** Stock GUILD/PARTY/RAID/YELL `BroadcastKey` for full `players` (incl. `completedIds`). HCA chat carries **presence pings only** (hardware flush); receivers handshake via whisper `SendKey`/`RequestKey` and pull full rows. Prefix `HCALB` (no underscore — LibP2PDB chat parse uses `%w+`). Do not use `NewDatabase({ channels = ... })`.
 
-**Future (Hardcore Mode style):** real chat channel + LibP2PDB `RegisterChatChannel` / `BroadcastKeyChatChannel` (`SendChatMessage`, not addon CHANNEL). Needs join/leave, optional channel rotation against admin locks, hardware-event sends, and 255-byte payload limits. Do not use `NewDatabase({ channels = ... })` for this.
-
-- [ ] Design Forever chat-channel join + register with LibP2PDB
+- [ ] **Forever blocker (upstream LibP2PDB):** chat `VerifySenderPeerID` rejects peers when Forever omits a realm suffix on the sender and substitutes the receiver’s shard label (`GetRealmName`), which differs from the sender’s GUID realm. Surname/name checks are fine. Author plans Forever name/realm verification; keep HCA chat + whisper path intact and do not fork LibP2PDB. Classic/TBC peer discovery works.
 
 ### Forever dungeon catalog: missing `requiredMapId`
 

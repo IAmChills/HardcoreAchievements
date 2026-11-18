@@ -517,6 +517,9 @@ function Leaderboard:Refresh()
 end
 
 function Leaderboard:Toggle()
+    if addon and addon.FlushBroadcastQueue then
+        addon.FlushBroadcastQueue()
+    end
     if addon and addon.IsForeverCharacterUI and InCombatLockdown and InCombatLockdown() then
         return
     end

@@ -53,6 +53,8 @@ Utils\FilterDropdown.lua
 Utils\AchievementTracker.lua
 HardcoreAchievements.lua
 Utils\GuildFirst.lua
+Utils\CommChannel.lua
+Utils\ChatBroadcast.lua
 
 Leaderboard\Leaderboard.lua
 Leaderboard\LeaderboardCompletionStats.lua

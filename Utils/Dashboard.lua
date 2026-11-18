@@ -4436,6 +4436,9 @@ local function BuildDashboardFrame()
     
     -- Click handler to open Options panel
     DashboardFrame.SettingsButton:SetScript("OnClick", function(self)
+      if addon and addon.FlushBroadcastQueue then
+        addon.FlushBroadcastQueue()
+      end
       if addon and addon.OpenOptionsPanel then
         addon.OpenOptionsPanel()
       end
@@ -5093,6 +5096,9 @@ function DASHBOARD:Hide()
 end
 
 function DASHBOARD:Toggle()
+  if addon.FlushBroadcastQueue then
+    addon.FlushBroadcastQueue()
+  end
   if addon.ToggleLegacyAchievementsPage then
     if addon.ToggleLegacyAchievementsPage() then
       return

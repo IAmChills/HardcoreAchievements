@@ -3048,6 +3048,10 @@ end
 
 -- Shared by minimap LDB and AddonCompartment (Left = dashboard, Right = leaderboard, Shift-Right = options).
 local function HandleLauncherClick(button)
+    -- Hardware-event flush for LibP2PDB chat-channel queue (before UI work).
+    if addon and addon.FlushBroadcastQueue then
+        addon.FlushBroadcastQueue()
+    end
     -- Forever hosts dashboard/leaderboard on LegacySystemFrame; opening it
     -- during combat lockdown raises ADDON_ACTION_BLOCKED.
     if addon and addon.IsForeverCharacterUI and InCombatLockdown and InCombatLockdown()
@@ -4377,6 +4381,9 @@ AchievementPanel.DashboardButton.Icon = AchievementPanel.DashboardButton:CreateT
 AchievementPanel.DashboardButton.Icon:SetAllPoints(AchievementPanel.DashboardButton)
 AchievementPanel.DashboardButton.Icon:SetTexture("Interface\\AchievementFrame\\UI-Achievement-Progressive-Shield-NoPoints")
 AchievementPanel.DashboardButton:SetScript("OnClick", function()
+    if addon and addon.FlushBroadcastQueue then
+        addon.FlushBroadcastQueue()
+    end
     if addon and addon.ShowDashboard then
         addon.ShowDashboard()
     end
