@@ -102,43 +102,6 @@ local PRESENCE_SCHEMA = {
 
 local LibP2PDB = LibStub and LibStub("LibP2PDB", true)
 local persistDebounceToken = 0
-
--- TEMP [LBTrace]: discovery/sync/receive/UI diagnostics. Remove after investigation.
-local function Trace(msg)
-    if addon.DebugPrint then
-        addon.DebugPrint("[LBTrace] " .. tostring(msg))
-    end
-end
-Sync.Trace = Trace
-
-local function TraceTransport()
-    local chan = addon.GetHCACommChannelName and addon.GetHCACommChannelName()
-    return ("guild=%s group=%s instance=%s yell=%s chat=%s"):format(
-        tostring(IsInGuild and IsInGuild() or false),
-        tostring(IsInGroup and IsInGroup() or false),
-        tostring(IsInInstance and IsInInstance() or false),
-        tostring(not (IsInInstance and IsInInstance())),
-        tostring(chan or "none"))
-end
-
-local function TracePeers(db)
-    if not LibP2PDB or not db then
-        return "peers=?"
-    end
-    local ok, peers = pcall(function()
-        return LibP2PDB:ListPeers(db)
-    end)
-    if not ok or type(peers) ~= "table" then
-        return "peers=?"
-    end
-    local names = {}
-    for _, info in pairs(peers) do
-        names[#names + 1] = tostring(info and info.name)
-    end
-    -- ListPeers includes self.
-    return ("peers=%d [%s]"):format(#names, table.concat(names, ","))
-end
-
 -- HCA chat carries presence pings only (full players rows exceed the 255-byte chat limit).
 
 --- Stock LibP2PDB BroadcastKey (GUILD/PARTY/RAID/YELL). HCA chat queue: presence only.
@@ -451,33 +414,19 @@ end
 local _pendingRowChanges = {}
 local _pendingPresenceChanges = {}
 
--- TEMP [LBTrace]: non-nil while Sync:Initialize imports saved state; per-row logging is aggregated.
-local traceInitCounts = nil
--- TEMP [LBTrace]: live tombstones arrive in gossip bursts; reported per drain instead of per row.
-local traceLiveDeletes = { rows = 0, presence = 0 }
-
 local function DrainPendingChanges()
     local any = false
-    local rowsApplied, presenceApplied = 0, 0
     for key, newData in pairs(_pendingRowChanges) do
         if StoreRow(key, newData ~= false and newData or nil) then
             any = true
-            rowsApplied = rowsApplied + 1
         end
         _pendingRowChanges[key] = nil
     end
     for key, newData in pairs(_pendingPresenceChanges) do
         if StorePresence(key, newData ~= false and newData or nil) then
             any = true
-            presenceApplied = presenceApplied + 1
         end
         _pendingPresenceChanges[key] = nil
-    end
-    if rowsApplied > 0 or presenceApplied > 0 or traceLiveDeletes.rows > 0 or traceLiveDeletes.presence > 0 then
-        Trace(("drain applied rows=%d presence=%d; remote deletions received rows=%d presence=%d"):format(
-            rowsApplied, presenceApplied, traceLiveDeletes.rows, traceLiveDeletes.presence))
-        traceLiveDeletes.rows = 0
-        traceLiveDeletes.presence = 0
     end
     if any then
         SchedulePersistState(false)
@@ -487,27 +436,11 @@ end
 local function OnTableChanged(key, newData)
     -- Remote/network applies only — never queue HCA presence pings here (anti ping-pong).
     _pendingRowChanges[key] = newData or false
-    if traceInitCounts then
-        local field = newData and "rows" or "rowDeletes"
-        traceInitCounts[field] = traceInitCounts[field] + 1
-    elseif not newData then
-        traceLiveDeletes.rows = traceLiveDeletes.rows + 1
-    elseif key ~= GetCharacterKey() then
-        Trace(("remote players row received %s name=%s"):format(tostring(key), tostring(newData.name)))
-    end
 end
 
 local function OnPresenceChanged(key, newData)
     -- Remote/network applies only — never queue HCA presence pings here (anti ping-pong).
     _pendingPresenceChanges[key] = newData or false
-    if traceInitCounts then
-        local field = newData and "presence" or "presenceDeletes"
-        traceInitCounts[field] = traceInitCounts[field] + 1
-    elseif not newData then
-        traceLiveDeletes.presence = traceLiveDeletes.presence + 1
-    elseif key ~= GetCharacterKey() then
-        Trace(("remote presence received %s"):format(tostring(key)))
-    end
 end
 
 local function ValidatePeerOwnedKey(key, context)
@@ -641,20 +574,12 @@ function Sync:Initialize()
             prefix = DB_PREFIX,
             version = DB_VERSION,
             peerTimeout = 400,
-            -- TEMP [LBTrace]: logging only.
-            onPeerAdded = function(peerID, peerName)
-                Trace(("peer discovered %s (%s)"):format(tostring(peerName), tostring(peerID)))
-            end,
-            onPeerExpired = function(peerID, peerName)
-                Trace(("peer expired %s (%s)"):format(tostring(peerName), tostring(peerID)))
-            end,
             onError = addon.LibP2PDBOnError,
             onMigrateDB = OnMigrateDB,
             onMigrateRow = OnMigrateRow,
         })
     end
     self.db = db
-    traceInitCounts = { rows = 0, rowDeletes = 0, presence = 0, presenceDeletes = 0 }
 
     pcall(function()
         LibP2PDB:NewTable(db, {
@@ -691,11 +616,6 @@ function Sync:Initialize()
     end
 
     MigrateLegacyLeaderboardKey()
-
-    Trace(("init import: players rows=%d deleted=%d, presence=%d deleted=%d"):format(
-        traceInitCounts.rows, traceInitCounts.rowDeletes,
-        traceInitCounts.presence, traceInitCounts.presenceDeletes))
-    traceInitCounts = nil
 
     -- Custom chat channel "HCA" (SendChatMessage), not addon CHANNEL — Classic / TBC / Forever.
     if addon.InitializeHCAChatBroadcast then
@@ -822,10 +742,8 @@ function Sync:PublishLocal(reason)
     end
     -- updatedAt is always Now(); a timestamp-only difference must not bump the row version and trigger gossip.
     if current and ShallowEqual(current, row, "updatedAt") then
-        Trace(("PublishLocal(%s) skipped: unchanged"):format(tostring(reason)))
         return true
     end
-    Trace(("PublishLocal(%s) sending players row; %s"):format(tostring(reason), TraceTransport()))
     local ok, success = pcall(function()
         return LibP2PDB:SetKey(self.db, TABLE_NAME, key, row)
     end)
@@ -879,7 +797,6 @@ function Sync:BroadcastPresence()
     if not LibP2PDB or not self.db then
         return
     end
-    Trace("BroadcastPresence (Empty packet); " .. TraceTransport())
     pcall(function()
         LibP2PDB:BroadcastPresence(self.db)
     end)
@@ -889,7 +806,6 @@ function Sync:SyncDatabase()
     if not LibP2PDB or not self.db then
         return
     end
-    Trace("SyncDatabase; " .. TracePeers(self.db))
     pcall(function()
         LibP2PDB:SyncDatabase(self.db)
     end)

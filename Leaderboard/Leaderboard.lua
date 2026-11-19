@@ -516,10 +516,6 @@ function Leaderboard:Show()
         return
     end
     addon._hcaOpenDashboardTabKey = "leaderboard"
-    if self.Sync and self.Sync.Trace then
-        self.Sync.Trace(("UI open: full render; rows in model=%d"):format(
-            (function() local n = 0 for _ in pairs(self:GetDB().rows or {}) do n = n + 1 end return n end)()))
-    end
     if addon.Dashboard and addon.Dashboard.Show then
         addon.Dashboard:Show()
     elseif self.UI and self.UI.Show then
@@ -612,9 +608,6 @@ function Leaderboard:Initialize()
     self.leaderboardUIViewTicker = C_Timer.NewTicker(LEADERBOARD_VIEW_UI_REFRESH_SEC, function()
         local df = addon.DashboardFrame
         if df and df:IsShown() and df.SelectedTabKey == "leaderboard" then
-            if Leaderboard.Sync and Leaderboard.Sync.Trace then
-                Leaderboard.Sync.Trace(("UI 60s refresh: dirty=%d"):format(Leaderboard:GetDirtyCount()))
-            end
             if Leaderboard.ApplyPendingUpdates then
                 -- Option A: cheap incremental pass over dirty rows.
                 Leaderboard:ApplyPendingUpdates()
