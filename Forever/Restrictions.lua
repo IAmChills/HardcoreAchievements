@@ -71,6 +71,7 @@ addon.Restrictions.encounterEndEvent = false
 -- BLOCKER (upstream LibP2PDB): Forever chat senders have no realm suffix, so
 -- VerifySenderPeerID appends the receiver's GetRealmName() shard label and compares it to
 -- the sender's GUID realm (e.g. "CAMWOW US1 ..." vs "CAMWOWUS2..."). Surname/name matching
--- is fine; realm mismatch drops the message before onPeerAdded. HCA keeps chat presence +
--- whisper handshake ready; do not patch LibP2PDB here — wait for the author's Forever
--- name/realm verification support, then retest peer discovery unchanged.
+-- is fine; realm mismatch drops chat messages before peers are observed. HCA does not
+-- duplicate peer handshakes — LibP2PDB BroadcastPresence + SyncDatabase (180s) own
+-- convergence on stock channels. Do not patch LibP2PDB here; wait for upstream Forever
+-- name/realm verification, then retest chat discovery unchanged.

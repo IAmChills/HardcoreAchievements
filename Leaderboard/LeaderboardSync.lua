@@ -103,15 +103,43 @@ local PRESENCE_SCHEMA = {
 local LibP2PDB = LibStub and LibStub("LibP2PDB", true)
 local persistDebounceToken = 0
 
+-- TEMP [LBTrace]: discovery/sync/receive/UI diagnostics. Remove after investigation.
+local function Trace(msg)
+    if addon.DebugPrint then
+        addon.DebugPrint("[LBTrace] " .. tostring(msg))
+    end
+end
+Sync.Trace = Trace
+
+local function TraceTransport()
+    local chan = addon.GetHCACommChannelName and addon.GetHCACommChannelName()
+    return ("guild=%s group=%s instance=%s yell=%s chat=%s"):format(
+        tostring(IsInGuild and IsInGuild() or false),
+        tostring(IsInGroup and IsInGroup() or false),
+        tostring(IsInInstance and IsInInstance() or false),
+        tostring(not (IsInInstance and IsInInstance())),
+        tostring(chan or "none"))
+end
+
+local function TracePeers(db)
+    if not LibP2PDB or not db then
+        return "peers=?"
+    end
+    local ok, peers = pcall(function()
+        return LibP2PDB:ListPeers(db)
+    end)
+    if not ok or type(peers) ~= "table" then
+        return "peers=?"
+    end
+    local names = {}
+    for _, info in pairs(peers) do
+        names[#names + 1] = tostring(info and info.name)
+    end
+    -- ListPeers includes self.
+    return ("peers=%d [%s]"):format(#names, table.concat(names, ","))
+end
+
 -- HCA chat carries presence pings only (full players rows exceed the 255-byte chat limit).
--- Whisper SendKey/RequestKey/SyncDatabase exchange full players rows including completedIds.
-local peerNameByKey = {}
-local peerNameByPeerID = {}
--- peerID -> true once handshake has been scheduled (onPeerAdded fires once per peer).
-local handshakedPeers = {}
-local requestPlayerDebounceToken = {}
-local HANDSHAKE_DELAY_SEC = 0.5
-local REQUEST_PLAYER_DEBOUNCE_SEC = 2
 
 --- Stock LibP2PDB BroadcastKey (GUILD/PARTY/RAID/YELL). HCA chat queue: presence only.
 local function BroadcastKeyAndQueue(db, tableName, key)
@@ -124,142 +152,6 @@ local function BroadcastKeyAndQueue(db, tableName, key)
     -- Never queue full players rows for HCA chat; presence is the realm-wide ping.
     if tableName == PRESENCE_TABLE_NAME and addon.QueueChatBroadcast then
         addon.QueueChatBroadcast(tableName, key)
-    end
-end
-
-local function RememberPeer(peerID, peerName)
-    if type(peerName) ~= "string" or peerName == "" then
-        return
-    end
-    if peerID ~= nil then
-        peerNameByPeerID[peerID] = peerName
-    end
-    if LibP2PDB and type(LibP2PDB.PeerIDToPlayerGUID) == "function" and peerID ~= nil then
-        local ok, guid = pcall(function()
-            return LibP2PDB:PeerIDToPlayerGUID(peerID)
-        end)
-        if ok and type(guid) == "string" and guid ~= "" then
-            peerNameByKey[guid] = peerName
-        end
-    end
-end
-
-local function ResolvePeerNameForKey(key)
-    if type(key) ~= "string" or key == "" then
-        return nil
-    end
-    if peerNameByKey[key] then
-        return peerNameByKey[key]
-    end
-    if not LibP2PDB or not Sync.db or type(LibP2PDB.ListPeers) ~= "function" then
-        return nil
-    end
-    local ok, peers = pcall(function()
-        return LibP2PDB:ListPeers(Sync.db)
-    end)
-    if not ok or type(peers) ~= "table" then
-        return nil
-    end
-    for peerID, info in pairs(peers) do
-        local name = info and info.name
-        if type(name) == "string" and name ~= "" and type(LibP2PDB.PeerIDToPlayerGUID) == "function" then
-            local gOk, guid = pcall(function()
-                return LibP2PDB:PeerIDToPlayerGUID(peerID)
-            end)
-            if gOk and guid == key then
-                peerNameByKey[key] = name
-                peerNameByPeerID[peerID] = name
-                return name
-            end
-        end
-    end
-    return nil
-end
-
---- First sight of a peer (e.g. HCA presence ping): two-way whisper exchange of full players rows.
-local function HandshakePeer(peerID, peerName)
-    if not LibP2PDB or not Sync.db or type(peerName) ~= "string" or peerName == "" then
-        return
-    end
-    RememberPeer(peerID, peerName)
-
-    local myKey = Leaderboard.GetLeaderboardRowKey and Leaderboard.GetLeaderboardRowKey()
-    if myKey then
-        pcall(function()
-            LibP2PDB:SendKey(Sync.db, TABLE_NAME, myKey, peerName)
-        end)
-        pcall(function()
-            if LibP2PDB:HasKey(Sync.db, PRESENCE_TABLE_NAME, myKey) then
-                LibP2PDB:SendKey(Sync.db, PRESENCE_TABLE_NAME, myKey, peerName)
-            end
-        end)
-    end
-
-    if type(LibP2PDB.PeerIDToPlayerGUID) == "function" and peerID ~= nil then
-        local ok, guid = pcall(function()
-            return LibP2PDB:PeerIDToPlayerGUID(peerID)
-        end)
-        if ok and type(guid) == "string" and guid ~= "" then
-            peerNameByKey[guid] = peerName
-            pcall(function()
-                LibP2PDB:RequestKey(Sync.db, TABLE_NAME, guid, peerName)
-            end)
-        end
-    end
-
-    -- One gossip pass for recovery; not used on every later presence ping.
-    pcall(function()
-        LibP2PDB:SyncDatabase(Sync.db)
-    end)
-end
-
-local function OnPeerAdded(peerID, peerName)
-    if peerID == nil or type(peerName) ~= "string" or peerName == "" then
-        return
-    end
-    RememberPeer(peerID, peerName)
-    if handshakedPeers[peerID] then
-        return
-    end
-    handshakedPeers[peerID] = true
-    local function run()
-        HandshakePeer(peerID, peerName)
-    end
-    if C_Timer and C_Timer.After then
-        C_Timer.After(HANDSHAKE_DELAY_SEC, run)
-    else
-        run()
-    end
-end
-
---- Known peer sent a presence ping (achievement/profile change): pull their players row only.
-local function ScheduleRequestPlayerRow(key)
-    local localKey = Leaderboard.GetLeaderboardRowKey and Leaderboard.GetLeaderboardRowKey()
-    if not key or key == localKey then
-        return
-    end
-    if not LibP2PDB or not Sync.db then
-        return
-    end
-    local peerName = ResolvePeerNameForKey(key)
-    if not peerName then
-        return
-    end
-
-    local token = (requestPlayerDebounceToken[key] or 0) + 1
-    requestPlayerDebounceToken[key] = token
-    local function run()
-        if requestPlayerDebounceToken[key] ~= token then
-            return
-        end
-        pcall(function()
-            LibP2PDB:RequestKey(Sync.db, TABLE_NAME, key, peerName)
-        end)
-    end
-    if C_Timer and C_Timer.After then
-        C_Timer.After(REQUEST_PLAYER_DEBOUNCE_SEC, run)
-    else
-        run()
     end
 end
 
@@ -321,6 +213,35 @@ Leaderboard.GetAddOnVersionString = GetAddOnVersionString
 
 local function GetCharacterKey()
     return Leaderboard.GetLeaderboardRowKey and Leaderboard.GetLeaderboardRowKey()
+end
+
+-- Inactive players expire locally (onIsExpired + local cache prune) instead of being deleted:
+-- LibP2PDB never purges tombstones, so DeleteKey would grow storage and gossip forever.
+local ACTIVITY_RETENTION_SECONDS = 30 * 86400
+
+--- Unknown activity (0) never expires; neither does the local character.
+--- @param key string
+--- @param lastActivityAt number newest updatedAt across players + presence
+--- @return boolean
+function Sync.IsActivityExpired(key, lastActivityAt)
+    if key == GetCharacterKey() or not lastActivityAt or lastActivityAt <= 0 then
+        return false
+    end
+    return (Now() - lastActivityAt) > ACTIVITY_RETENTION_SECONDS
+end
+
+--- onIsExpired for both tables: activity is the newer of the players row and presence updatedAt,
+--- because unchanged players rows are not republished while presence keeps heartbeating.
+local function MakeOnIsExpired(otherTableName)
+    return function(key, data)
+        local otherAt = 0
+        if LibP2PDB and Sync.db then
+            local other = LibP2PDB:GetKey(Sync.db, otherTableName, key)
+            otherAt = type(other) == "table" and (tonumber(other.updatedAt) or 0) or 0
+        end
+        local ownAt = type(data) == "table" and (tonumber(data.updatedAt) or 0) or 0
+        return Sync.IsActivityExpired(key, math.max(ownAt, otherAt))
+    end
 end
 
 --- Guild name for sync: GetGuildInfo is often nil during logout / zoning; keep last known + stored row.
@@ -388,17 +309,17 @@ local function FieldEqual(key, a, b)
     return false
 end
 
-local function ShallowEqual(a, b)
+local function ShallowEqual(a, b, ignoreKey)
     if type(a) ~= "table" or type(b) ~= "table" then
         return false
     end
     for key, value in pairs(a) do
-        if not FieldEqual(key, value, b[key]) then
+        if key ~= ignoreKey and not FieldEqual(key, value, b[key]) then
             return false
         end
     end
     for key in pairs(b) do
-        if a[key] == nil then
+        if key ~= ignoreKey and a[key] == nil then
             return false
         end
     end
@@ -530,19 +451,33 @@ end
 local _pendingRowChanges = {}
 local _pendingPresenceChanges = {}
 
+-- TEMP [LBTrace]: non-nil while Sync:Initialize imports saved state; per-row logging is aggregated.
+local traceInitCounts = nil
+-- TEMP [LBTrace]: live tombstones arrive in gossip bursts; reported per drain instead of per row.
+local traceLiveDeletes = { rows = 0, presence = 0 }
+
 local function DrainPendingChanges()
     local any = false
+    local rowsApplied, presenceApplied = 0, 0
     for key, newData in pairs(_pendingRowChanges) do
         if StoreRow(key, newData ~= false and newData or nil) then
             any = true
+            rowsApplied = rowsApplied + 1
         end
         _pendingRowChanges[key] = nil
     end
     for key, newData in pairs(_pendingPresenceChanges) do
         if StorePresence(key, newData ~= false and newData or nil) then
             any = true
+            presenceApplied = presenceApplied + 1
         end
         _pendingPresenceChanges[key] = nil
+    end
+    if rowsApplied > 0 or presenceApplied > 0 or traceLiveDeletes.rows > 0 or traceLiveDeletes.presence > 0 then
+        Trace(("drain applied rows=%d presence=%d; remote deletions received rows=%d presence=%d"):format(
+            rowsApplied, presenceApplied, traceLiveDeletes.rows, traceLiveDeletes.presence))
+        traceLiveDeletes.rows = 0
+        traceLiveDeletes.presence = 0
     end
     if any then
         SchedulePersistState(false)
@@ -552,13 +487,26 @@ end
 local function OnTableChanged(key, newData)
     -- Remote/network applies only — never queue HCA presence pings here (anti ping-pong).
     _pendingRowChanges[key] = newData or false
+    if traceInitCounts then
+        local field = newData and "rows" or "rowDeletes"
+        traceInitCounts[field] = traceInitCounts[field] + 1
+    elseif not newData then
+        traceLiveDeletes.rows = traceLiveDeletes.rows + 1
+    elseif key ~= GetCharacterKey() then
+        Trace(("remote players row received %s name=%s"):format(tostring(key), tostring(newData.name)))
+    end
 end
 
 local function OnPresenceChanged(key, newData)
     -- Remote/network applies only — never queue HCA presence pings here (anti ping-pong).
     _pendingPresenceChanges[key] = newData or false
-    if newData then
-        ScheduleRequestPlayerRow(key)
+    if traceInitCounts then
+        local field = newData and "presence" or "presenceDeletes"
+        traceInitCounts[field] = traceInitCounts[field] + 1
+    elseif not newData then
+        traceLiveDeletes.presence = traceLiveDeletes.presence + 1
+    elseif key ~= GetCharacterKey() then
+        Trace(("remote presence received %s"):format(tostring(key)))
     end
 end
 
@@ -662,21 +610,19 @@ function Sync:TombstoneKey(key)
         return false
     end
 
-    local ok, success = pcall(function()
-        return LibP2PDB:DeleteKey(self.db, TABLE_NAME, key)
-    end)
-    if ok and success then
-        BroadcastKeyAndQueue(self.db, TABLE_NAME, key)
+    -- DeleteKey returns true as a no-op for missing/already-tombstoned keys, which leaves nothing
+    -- for BroadcastKey to send. Pruned keys are other players' GUIDs, so never use the HCA chat queue.
+    local changed = false
+    for _, tableName in ipairs({ TABLE_NAME, PRESENCE_TABLE_NAME }) do
+        pcall(function()
+            if LibP2PDB:HasKey(self.db, tableName, key) and LibP2PDB:DeleteKey(self.db, tableName, key) then
+                changed = true
+                LibP2PDB:BroadcastKey(self.db, tableName, key)
+            end
+        end)
     end
 
-    pcall(function()
-        if LibP2PDB:HasKey(self.db, PRESENCE_TABLE_NAME, key) then
-            LibP2PDB:DeleteKey(self.db, PRESENCE_TABLE_NAME, key)
-            BroadcastKeyAndQueue(self.db, PRESENCE_TABLE_NAME, key)
-        end
-    end)
-
-    return ok and success
+    return changed
 end
 
 function Sync:Initialize()
@@ -694,22 +640,31 @@ function Sync:Initialize()
         db = LibP2PDB:NewDatabase({
             prefix = DB_PREFIX,
             version = DB_VERSION,
+            peerTimeout = 400,
+            -- TEMP [LBTrace]: logging only.
+            onPeerAdded = function(peerID, peerName)
+                Trace(("peer discovered %s (%s)"):format(tostring(peerName), tostring(peerID)))
+            end,
+            onPeerExpired = function(peerID, peerName)
+                Trace(("peer expired %s (%s)"):format(tostring(peerName), tostring(peerID)))
+            end,
             onError = addon.LibP2PDBOnError,
             onMigrateDB = OnMigrateDB,
             onMigrateRow = OnMigrateRow,
-            onPeerAdded = OnPeerAdded,
         })
     end
     self.db = db
+    traceInitCounts = { rows = 0, rowDeletes = 0, presence = 0, presenceDeletes = 0 }
 
     pcall(function()
         LibP2PDB:NewTable(db, {
             name = TABLE_NAME,
             keyType = "string",
             exclusive = false,
-            rowsPerChunk = 16, -- packed completedIds keeps each chunk small; 1 would 16x whisper count (1.5s apart)
+            rowsPerChunk = 16, -- packed completedIds keeps each gossip chunk small
             schema = PLAYER_SCHEMA_V2,
             onValidate = OnPlayerRowValidate,
+            onIsExpired = MakeOnIsExpired(PRESENCE_TABLE_NAME),
             onChange = OnTableChanged,
         })
     end)
@@ -722,6 +677,7 @@ function Sync:Initialize()
             rowsPerChunk = 128,
             schema = PRESENCE_SCHEMA,
             onValidate = OnPresenceValidate,
+            onIsExpired = MakeOnIsExpired(TABLE_NAME),
             onChange = OnPresenceChanged,
         })
     end)
@@ -735,6 +691,11 @@ function Sync:Initialize()
     end
 
     MigrateLegacyLeaderboardKey()
+
+    Trace(("init import: players rows=%d deleted=%d, presence=%d deleted=%d"):format(
+        traceInitCounts.rows, traceInitCounts.rowDeletes,
+        traceInitCounts.presence, traceInitCounts.presenceDeletes))
+    traceInitCounts = nil
 
     -- Custom chat channel "HCA" (SendChatMessage), not addon CHANNEL — Classic / TBC / Forever.
     if addon.InitializeHCAChatBroadcast then
@@ -859,9 +820,12 @@ function Sync:PublishLocal(reason)
     if not key or not row then
         return false
     end
-    if current and ShallowEqual(current, row) then
+    -- updatedAt is always Now(); a timestamp-only difference must not bump the row version and trigger gossip.
+    if current and ShallowEqual(current, row, "updatedAt") then
+        Trace(("PublishLocal(%s) skipped: unchanged"):format(tostring(reason)))
         return true
     end
+    Trace(("PublishLocal(%s) sending players row; %s"):format(tostring(reason), TraceTransport()))
     local ok, success = pcall(function()
         return LibP2PDB:SetKey(self.db, TABLE_NAME, key, row)
     end)
@@ -915,6 +879,7 @@ function Sync:BroadcastPresence()
     if not LibP2PDB or not self.db then
         return
     end
+    Trace("BroadcastPresence (Empty packet); " .. TraceTransport())
     pcall(function()
         LibP2PDB:BroadcastPresence(self.db)
     end)
@@ -924,6 +889,7 @@ function Sync:SyncDatabase()
     if not LibP2PDB or not self.db then
         return
     end
+    Trace("SyncDatabase; " .. TracePeers(self.db))
     pcall(function()
         LibP2PDB:SyncDatabase(self.db)
     end)

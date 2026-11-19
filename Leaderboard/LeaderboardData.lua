@@ -20,16 +20,9 @@ local LibStub = LibStub
 local LibP2PDB = LibStub and LibStub("LibP2PDB", true)
 
 local RECENT_SECONDS = 10 * 60
--- Drop other players' rows with no heartbeat for this long (UI + saved DB cleanup).
-local STALE_ROW_SECONDS = 7 * 86400
 -- Avoid pruning work on every GetRows refresh.
 local PRUNE_COOLDOWN_SECONDS = 120
-local TOMBSTONE_BATCH_SIZE = 25
-local TOMBSTONE_BATCH_INTERVAL_SECONDS = 2
 local lastPruneAt = 0
-local tombstoneQueue = {}
-local tombstoneQueuedKeys = {}
-local nextTombstoneBatchAt = 0
 
 local function MatchesSearch(row, term)
   if not term or term == "" then return true end
@@ -113,51 +106,6 @@ local function Now()
     return (GetServerTime and GetServerTime()) or time()
 end
 
-local function QueueTombstone(key)
-    if not key or tombstoneQueuedKeys[key] then
-        return
-    end
-    tombstoneQueuedKeys[key] = true
-    tombstoneQueue[#tombstoneQueue + 1] = key
-    if Leaderboard.EnsureScheduler then
-        Leaderboard:EnsureScheduler()
-    end
-end
-
-function Data:ProcessTombstoneQueue()
-    if #tombstoneQueue == 0 then
-        return
-    end
-
-    local now = Now()
-    if nextTombstoneBatchAt > 0 and now < nextTombstoneBatchAt then
-        return
-    end
-    nextTombstoneBatchAt = now + TOMBSTONE_BATCH_INTERVAL_SECONDS
-
-    local sync = Leaderboard.Sync
-    local sent = 0
-    local changed = false
-    while sent < TOMBSTONE_BATCH_SIZE and #tombstoneQueue > 0 do
-        local key = table.remove(tombstoneQueue, 1)
-        tombstoneQueuedKeys[key] = nil
-        if sync and sync.TombstoneKey then
-            if sync:TombstoneKey(key) then
-                changed = true
-            end
-        end
-        sent = sent + 1
-    end
-
-    if changed and sync and sync.Persist then
-        sync:Persist()
-    end
-
-    if #tombstoneQueue > 0 and Leaderboard.EnsureScheduler then
-        Leaderboard:EnsureScheduler()
-    end
-end
-
 function Data:Invalidate()
     dataVersion = dataVersion + 1
     cachedBaseRows = nil
@@ -200,22 +148,33 @@ local function PruneStaleLeaderboardRows()
         return
     end
 
-    local root = Leaderboard:GetDB()
-    local rows = root.rows
-    if not rows then
+    local sync = Leaderboard.Sync
+    if not (sync and sync.IsActivityExpired) then
         return
     end
 
+    local root = Leaderboard:GetDB()
+    local rows = root.rows or {}
+    local presence = root.presence or {}
+
+    local function LastActivityAt(key)
+        local row, pres = rows[key], presence[key]
+        local rowAt = type(row) == "table" and (tonumber(row.updatedAt) or 0) or 0
+        local presAt = type(pres) == "table" and (tonumber(pres.updatedAt) or 0) or 0
+        return math.max(rowAt, presAt)
+    end
+
+    -- Local cache only: no tombstones. LibP2PDB drops the same rows from saved state via
+    -- onIsExpired, and a newer update from a peer re-adds the row through onChange.
     local toDrop = {}
-    for key, row in pairs(rows) do
-        if type(row) == "table" and key ~= localKey then
-            local presence = root.presence and root.presence[key]
-            local rowUpdatedAt = tonumber(row.updatedAt) or 0
-            local presenceUpdatedAt = type(presence) == "table" and (tonumber(presence.updatedAt) or 0) or 0
-            local updatedAt = math.max(rowUpdatedAt, presenceUpdatedAt)
-            if updatedAt > 0 and (now - updatedAt) > STALE_ROW_SECONDS then
-                toDrop[#toDrop + 1] = key
-            end
+    for key in pairs(rows) do
+        if key ~= localKey and sync.IsActivityExpired(key, LastActivityAt(key)) then
+            toDrop[#toDrop + 1] = key
+        end
+    end
+    for key in pairs(presence) do
+        if rows[key] == nil and key ~= localKey and sync.IsActivityExpired(key, LastActivityAt(key)) then
+            toDrop[#toDrop + 1] = key
         end
     end
 
@@ -223,25 +182,22 @@ local function PruneStaleLeaderboardRows()
         return
     end
 
-    if Leaderboard.IsPruneGraceActive and Leaderboard:IsPruneGraceActive() then
-        -- After login, local saved data can be days old while gossip catch-up is still in flight.
-        -- Do not hide or tombstone rows until peers had a chance to refresh them.
-        return
-    end
-
     for _, key in ipairs(toDrop) do
         rows[key] = nil
-        if root.presence then
-            root.presence[key] = nil
-        end
-        QueueTombstone(key)
+        presence[key] = nil
     end
 
-    local sync = Leaderboard.Sync
-    if sync and sync.Persist then
+    if sync.Persist then
         sync:Persist()
     end
     Data:Invalidate()
+    if Leaderboard.ScheduleCompletionStatsRebuild then
+        Leaderboard.ScheduleCompletionStatsRebuild()
+    end
+end
+
+function Data:PruneExpiredRows()
+    PruneStaleLeaderboardRows()
 end
 
 local function ScopeHasFilters(scope)

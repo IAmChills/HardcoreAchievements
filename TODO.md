@@ -14,9 +14,11 @@ https://linkbreakers.com/qr-code-generator/discord
 
 ### Leaderboard sync: open-world via chat channels
 
-**Current:** Stock GUILD/PARTY/RAID/YELL `BroadcastKey` for full `players` (incl. `completedIds`). HCA chat carries **presence pings only** (hardware flush); receivers handshake via whisper `SendKey`/`RequestKey` and pull full rows. Prefix `HCALB` (no underscore — LibP2PDB chat parse uses `%w+`). Do not use `NewDatabase({ channels = ... })`.
+**Current:** HCA owns local `players`/`presence` writes + stock `BroadcastKey` (GUILD/PARTY/RAID/YELL) and rotating `hca######` presence-only chat. LibP2PDB owns peer discovery/convergence via `BroadcastPresence` + `SyncDatabase` every **180s** (`peerTimeout = 400`). Prefix `HCALB`. Do not use `NewDatabase({ channels = ... })`.
 
-- [ ] **Forever blocker (upstream LibP2PDB):** chat `VerifySenderPeerID` rejects peers when Forever omits a realm suffix on the sender and substitutes the receiver’s shard label (`GetRealmName`), which differs from the sender’s GUID realm. Surname/name checks are fine. Author plans Forever name/realm verification; keep HCA chat + whisper path intact and do not fork LibP2PDB. Classic/TBC peer discovery works.
+- [x] Rotating HCA chat + hardware flush; presence-only chat payloads
+- [x] Remove HCA-side handshake/`SendKey`/`RequestKey`; rely on LibP2PDB sync
+- [ ] **Forever blocker (upstream LibP2PDB):** chat `VerifySenderPeerID` rejects peers when Forever omits a realm suffix on the sender and substitutes the receiver’s shard label (`GetRealmName`). Leave for upstream; do not fork LibP2PDB. Classic/TBC peer discovery works.
 
 ### Forever dungeon catalog: missing `requiredMapId`
 
@@ -113,4 +115,10 @@ Fill from `/run local n,t,d,dn,p,_,_,id=GetInstanceInfo(); print("name: "..n,"ma
 ```lua
 /dump GetInstanceInfo()
 /run local n,t,d,dn,p,_,_,id=GetInstanceInfo(); print("name: "..n,"type: "..t,"difficulty: "..dn,"maxPlayers: "..p,"mapId: ".. id)
+```
+
+### Check chat channel rotation time
+
+```lua
+/run local t=GetServerTime();print("Next rotation in:",1337-t%1337,"seconds")
 ```

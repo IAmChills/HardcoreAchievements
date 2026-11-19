@@ -4,9 +4,10 @@ local addonName, addon = ...
 -- LibP2PDB chat-channel broadcast queue (Classic / TBC / Forever)
 --
 -- SendChatMessage on custom channels requires a genuine hardware-event
--- stack. Queue key updates from Sync:PublishLocal / BroadcastKey, then
+-- stack. Queue presence key updates from PublishPresence / BroadcastKey, then
 -- flush from verified binding/UI toggles. Channel name comes from
 -- CommChannel's rotating hca###### period (never hard-coded).
+-- Opportunistic discovery only — LibP2PDB SyncDatabase owns convergence.
 -- =========================================================
 
 local LibStub = LibStub
@@ -31,11 +32,28 @@ local CHAT_MAX_BYTES = 255
 local CHAT_SIZE_MARGIN = 16
 local LibP2PDB = LibStub and LibStub("LibP2PDB", true)
 
--- Hide HCALB wire payloads from chat UI. CHAT_MSG_CHANNEL still fires for LibP2PDB.
+-- Hide everything shown for rotating hca###### channels (player messages, own/other join/leave,
+-- moderator/owner notices) plus HCALB payloads anywhere. Display filter only: the events still
+-- fire, so LibP2PDB's CHAT_MSG_CHANNEL listener, membership, and rotation are unaffected.
+-- All these events share arg4 = "6. hcaXXXXXX" and arg9 = base channel name.
 if ChatFrame_AddMessageEventFilter then
-    ChatFrame_AddMessageEventFilter("CHAT_MSG_CHANNEL", function(_, _, msg)
-        return type(msg) == "string" and strmatch(msg, "^" .. DB_PREFIX .. ";%d+;") ~= nil
+    local function IsRotatingChannel(_, _, _, _, _, channelString, _, _, _, _, channelName)
+        local name = channelName
+        if type(name) ~= "string" or name == "" then
+            name = type(channelString) == "string" and strmatch(channelString, "^%d+%.%s*(.+)$") or channelString
+        end
+        return type(name) == "string" and strmatch(name, "^hca%x%x%x%x%x%x$") ~= nil
+    end
+    ChatFrame_AddMessageEventFilter("CHAT_MSG_CHANNEL", function(self, event, msg, ...)
+        if type(msg) == "string" and strmatch(msg, "^" .. DB_PREFIX .. ";%d+;") then
+            return true
+        end
+        return IsRotatingChannel(self, event, msg, ...)
     end)
+    ChatFrame_AddMessageEventFilter("CHAT_MSG_CHANNEL_NOTICE", IsRotatingChannel)
+    ChatFrame_AddMessageEventFilter("CHAT_MSG_CHANNEL_NOTICE_USER", IsRotatingChannel)
+    ChatFrame_AddMessageEventFilter("CHAT_MSG_CHANNEL_JOIN", IsRotatingChannel)
+    ChatFrame_AddMessageEventFilter("CHAT_MSG_CHANNEL_LEAVE", IsRotatingChannel)
 end
 
 --- @type table<string, table<string|number, boolean>>

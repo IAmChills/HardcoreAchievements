@@ -21,22 +21,18 @@ local LEADERBOARD_DASHBOARD_REFRESH_DEBOUNCE_SEC = 0.35
 local dashboardRefreshToken = 0
 local PUBLISH_DEBOUNCE_SEC = 3
 local PRESENCE_INTERVAL_SEC = 5 * 60
-local LIGHTWEIGHT_SYNC_INTERVAL_SEC = 120
-local OPEN_SYNC_COOLDOWN_SEC = 60
-local LOGIN_SYNC_RETRY_COOLDOWN_SEC = 20
+local SYNC_INTERVAL_SEC = 180
 local SCHEDULER_TICK_SEC = 1
-local LOGIN_PRUNE_GRACE_SEC = 10 * 60
 local pendingPublishReason
 local pendingPublishAt
 local pendingPresenceAt
 local pendingPresenceOffline
-local pendingFullSyncQueue = {}
-local lastFullSyncAt = 0
+local pendingLibSyncAt
+local lastLibSyncAt = 0
 local nextPresenceAt = 0
-local nextLightweightSyncAt = 0
+local nextLibSyncAt = 0
 local initialLoginSyncDone = false
 local schedulerTicker
-local loginPruneGraceUntil = 0
 
 -- =============================================================================
 -- OPTION A: INCREMENTAL / DIRTY-ROW UPDATE PLAN (FUTURE WORK)
@@ -343,23 +339,19 @@ local function NowSeconds()
     return (GetTime and GetTime()) or 0
 end
 
-local function BroadcastPresenceNow()
+local function LibBroadcastPresenceNow()
     if Leaderboard.Sync and Leaderboard.Sync.BroadcastPresence then
         Leaderboard.Sync:BroadcastPresence()
     end
-    if Leaderboard.Sync and Leaderboard.Sync.PublishPresence then
-        Leaderboard.Sync:PublishPresence(false)
-    end
 end
 
-local function RunFullSyncNow(cooldownSeconds)
+local function RunLibSyncNow()
     local now = NowSeconds()
-    cooldownSeconds = tonumber(cooldownSeconds) or 0
-    if cooldownSeconds > 0 and lastFullSyncAt > 0 and (now - lastFullSyncAt) < cooldownSeconds then
+    if lastLibSyncAt > 0 and (now - lastLibSyncAt) < 1 then
         return
     end
-    lastFullSyncAt = now
-    BroadcastPresenceNow()
+    lastLibSyncAt = now
+    LibBroadcastPresenceNow()
     if Leaderboard.Sync and Leaderboard.Sync.SyncDatabase then
         Leaderboard.Sync:SyncDatabase()
     end
@@ -367,10 +359,6 @@ end
 
 local function SchedulerPulse()
     local now = NowSeconds()
-
-    if Leaderboard.Data and Leaderboard.Data.ProcessTombstoneQueue then
-        Leaderboard.Data:ProcessTombstoneQueue()
-    end
 
     if pendingPublishAt and now >= pendingPublishAt then
         local reason = pendingPublishReason or "queued"
@@ -388,12 +376,9 @@ local function SchedulerPulse()
         end
     end
 
-    for i = #pendingFullSyncQueue, 1, -1 do
-        local item = pendingFullSyncQueue[i]
-        if item and now >= item.dueAt then
-            table.remove(pendingFullSyncQueue, i)
-            RunFullSyncNow(item.cooldown)
-        end
+    if pendingLibSyncAt and now >= pendingLibSyncAt then
+        pendingLibSyncAt = nil
+        RunLibSyncNow()
     end
 
     if nextPresenceAt <= 0 then
@@ -404,11 +389,11 @@ local function SchedulerPulse()
         nextPresenceAt = now + PRESENCE_INTERVAL_SEC
     end
 
-    if nextLightweightSyncAt <= 0 then
-        nextLightweightSyncAt = now + LIGHTWEIGHT_SYNC_INTERVAL_SEC
-    elseif now >= nextLightweightSyncAt then
-        RunFullSyncNow(0)
-        nextLightweightSyncAt = now + LIGHTWEIGHT_SYNC_INTERVAL_SEC
+    if nextLibSyncAt <= 0 then
+        nextLibSyncAt = now + SYNC_INTERVAL_SEC
+    elseif now >= nextLibSyncAt then
+        RunLibSyncNow()
+        nextLibSyncAt = now + SYNC_INTERVAL_SEC
     end
 end
 
@@ -440,30 +425,21 @@ local function QueuePresence(delaySeconds, offline)
     EnsureScheduler()
 end
 
-local function QueueFullSync(delaySeconds, cooldownSeconds)
+local function QueueLibSync(delaySeconds)
     local dueAt = NowSeconds() + (tonumber(delaySeconds) or 0)
-    pendingFullSyncQueue[#pendingFullSyncQueue + 1] = {
-        dueAt = dueAt,
-        cooldown = tonumber(cooldownSeconds) or 0,
-    }
+    pendingLibSyncAt = pendingLibSyncAt and math.min(pendingLibSyncAt, dueAt) or dueAt
     EnsureScheduler()
-end
-
-local function StopVisibleSyncLoop()
-    -- Visible sync is intentionally one-shot on open; keep this hook for tab cleanup.
 end
 
 local function QueueLeaderboardOpenSync()
     if not C_Timer then
         QueueLocalPublish("leaderboard_open", true)
-        BroadcastPresenceNow()
-        RunFullSyncNow(OPEN_SYNC_COOLDOWN_SEC)
+        QueuePresence(0)
         return
     end
 
     QueueLocalPublish("leaderboard_open", false, 0.5)
     QueuePresence(1)
-    QueueFullSync(2, OPEN_SYNC_COOLDOWN_SEC)
     EnsureScheduler()
 end
 
@@ -525,7 +501,6 @@ function Leaderboard:Toggle()
     end
     local dashboardFrame = addon and addon.DashboardFrame
     if dashboardFrame and dashboardFrame:IsShown() and dashboardFrame.SelectedTabKey == "leaderboard" then
-        StopVisibleSyncLoop()
         if addon.Dashboard and addon.Dashboard.Hide then
             addon.Dashboard:Hide()
         else
@@ -541,6 +516,10 @@ function Leaderboard:Show()
         return
     end
     addon._hcaOpenDashboardTabKey = "leaderboard"
+    if self.Sync and self.Sync.Trace then
+        self.Sync.Trace(("UI open: full render; rows in model=%d"):format(
+            (function() local n = 0 for _ in pairs(self:GetDB().rows or {}) do n = n + 1 end return n end)()))
+    end
     if addon.Dashboard and addon.Dashboard.Show then
         addon.Dashboard:Show()
     elseif self.UI and self.UI.Show then
@@ -549,16 +528,8 @@ function Leaderboard:Show()
     QueueLeaderboardOpenSync()
 end
 
-function Leaderboard:OnLeaderboardHidden()
-    StopVisibleSyncLoop()
-end
-
 function Leaderboard:EnsureScheduler()
     EnsureScheduler()
-end
-
-function Leaderboard:IsPruneGraceActive()
-    return loginPruneGraceUntil > 0 and NowSeconds() < loginPruneGraceUntil
 end
 
 function Leaderboard:Initialize()
@@ -597,16 +568,17 @@ function Leaderboard:Initialize()
                 return
             end
             initialLoginSyncDone = true
-            loginPruneGraceUntil = NowSeconds() + LOGIN_PRUNE_GRACE_SEC
             local loginDelay = JitteredDelay(3, 3)
             QueueLocalPublish("login", false, loginDelay)
             QueuePresence(loginDelay)
-            QueueFullSync(loginDelay + 2, LOGIN_SYNC_RETRY_COOLDOWN_SEC)
-            QueueFullSync(loginDelay + 25, LOGIN_SYNC_RETRY_COOLDOWN_SEC)
-            QueueFullSync(loginDelay + 55, 5 * 60)
+            QueueLibSync(loginDelay + 2)
             -- Rebuild after catalogs + delayed login publish so eligibility filters and completedIds are warm.
             if Leaderboard.ScheduleCompletionStatsRebuild and C_Timer and C_Timer.After then
                 C_Timer.After(loginDelay + 1, function()
+                    -- Saved rows cache can hold players that expired while offline; stats read it directly.
+                    if Leaderboard.Data and Leaderboard.Data.PruneExpiredRows then
+                        Leaderboard.Data:PruneExpiredRows()
+                    end
                     Leaderboard.ScheduleCompletionStatsRebuild()
                 end)
             end
@@ -640,14 +612,15 @@ function Leaderboard:Initialize()
     self.leaderboardUIViewTicker = C_Timer.NewTicker(LEADERBOARD_VIEW_UI_REFRESH_SEC, function()
         local df = addon.DashboardFrame
         if df and df:IsShown() and df.SelectedTabKey == "leaderboard" then
+            if Leaderboard.Sync and Leaderboard.Sync.Trace then
+                Leaderboard.Sync.Trace(("UI 60s refresh: dirty=%d"):format(Leaderboard:GetDirtyCount()))
+            end
             if Leaderboard.ApplyPendingUpdates then
                 -- Option A: cheap incremental pass over dirty rows.
                 Leaderboard:ApplyPendingUpdates()
             elseif addon.RefreshDashboard then
                 addon.RefreshDashboard(true)
             end
-        else
-            StopVisibleSyncLoop()
         end
     end)
 end
