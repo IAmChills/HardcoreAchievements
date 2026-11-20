@@ -1024,7 +1024,7 @@ local function GetMostRecentCompletedSet(srcRows, maxCount)
 end
 
 local LEADERBOARD_COLS = {
-  { key = "name", title = "Player Name", width = 100, align = "CENTER" },
+  { key = "name", title = "Player Name", width = (addon.IsForeverClient and addon.IsForeverClient()) and 150 or 100, align = "CENTER" },
   { key = "level", title = "Lvl", width = 25, align = "CENTER" },
   { key = "class", title = "Class", width = 84, align = "CENTER" },
   { key = "faction", title = "Faction", width = 50, align = "CENTER" },
