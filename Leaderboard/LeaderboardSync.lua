@@ -558,6 +558,21 @@ function Sync:TombstoneKey(key)
     return changed
 end
 
+--- Forever whispers cannot cross rulesets: keep known other-ruleset players out of the peer list
+--- (their presence is still applied). Players without a row yet are left to LibP2PDB.
+local function IsPeerAllowed(peerID, peerName, playerGUID)
+    if not (addon.IsForeverClient and addon.IsForeverClient()) then
+        return true
+    end
+    local rows = Leaderboard:GetDB().rows
+    local row = rows and rows[playerGUID]
+    local peerRuleset = type(row) == "table" and row.realm
+    if not peerRuleset or peerRuleset == "" then
+        return true
+    end
+    return peerRuleset == addon.GetPlayerRealmLabel()
+end
+
 function Sync:Initialize()
     if self.initialized then
         return
@@ -575,6 +590,7 @@ function Sync:Initialize()
             version = DB_VERSION,
             peerTimeout = 400,
             onError = addon.LibP2PDBOnError,
+            onIsPeerAllowed = IsPeerAllowed,
             onMigrateDB = OnMigrateDB,
             onMigrateRow = OnMigrateRow,
         })

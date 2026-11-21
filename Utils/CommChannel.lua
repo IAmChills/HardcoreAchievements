@@ -91,6 +91,15 @@ local function CurrentPeriodNumber()
     return floor(now / PERIOD_SECONDS)
 end
 
+--- Leaving/joining is blocked (ADDON_ACTION_BLOCKED, not a Lua error) during combat and Forever
+--- encounter chat restrictions; the heartbeat retries once they lift.
+local function ChannelChangesBlocked()
+    if InCombatLockdown and InCombatLockdown() then
+        return true
+    end
+    return addon.IsForeverChatRestricted and addon.IsForeverChatRestricted() or false
+end
+
 local function DefaultChannelsReady()
     local id = GetChannelName and GetChannelName("General")
     return type(id) == "number" and id > 0
@@ -243,7 +252,7 @@ TryJoinCycle = function(fromHardwareFlush, periodNumber, seed)
     if seed > MAX_SEED then
         return false
     end
-    if not DefaultChannelsReady() then
+    if not DefaultChannelsReady() or ChannelChangesBlocked() then
         return false
     end
     if joinPending then
@@ -320,6 +329,9 @@ function addon.EnsureHCACommChannel()
     if not periodNumber then
         return false
     end
+    if ChannelChangesBlocked() then
+        return activeName ~= nil and activePeriod == periodNumber and ChannelIndex(activeName) ~= nil
+    end
     if activePeriod and activePeriod ~= periodNumber then
         return RotateToPeriod(periodNumber, true)
     end
@@ -365,7 +377,7 @@ end
 
 local function Heartbeat()
     local periodNumber = CurrentPeriodNumber()
-    if not periodNumber then
+    if not periodNumber or ChannelChangesBlocked() then
         return
     end
 
@@ -414,6 +426,9 @@ local function ReconcileEnteringWorld()
     ClearPending()
     autoJoinCycles = 0
     StartHeartbeat()
+    if ChannelChangesBlocked() then
+        return false
+    end
 
     local periodNumber = CurrentPeriodNumber()
     if not periodNumber then
@@ -493,7 +508,7 @@ boot:SetScript("OnEvent", function(_, event)
     end
 
     local periodNumber = CurrentPeriodNumber()
-    if not periodNumber then
+    if not periodNumber or ChannelChangesBlocked() then
         return
     end
     if activePeriod and activePeriod ~= periodNumber then

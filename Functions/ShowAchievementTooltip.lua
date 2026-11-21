@@ -169,12 +169,24 @@ local function ShowBossRequirements(achId, requiredKills, bossOrder, achievement
         end
     end
 
-    -- Self-policing: show average party level recorded at dungeon entry
-    local progress = addon and addon.GetProgress and addon.GetProgress(achId)
-    if progress and progress.avgPartyLevel then
-        local sizeText = progress.entryPartySize and (" (" .. tostring(progress.entryPartySize) .. " players)") or ""
+    -- Self-policing: show average party level recorded at dungeon entry.
+    -- Completed: the record keeps the completing run's value (progress is cleared on completion;
+    -- progress only still has one for completions saved before the record copied it).
+    local snapshot
+    if achievementCompleted and addon and addon.GetCharDB then
+        local _, cdb = addon.GetCharDB()
+        local rec = cdb and cdb.achievements and cdb.achievements[tostring(achId)]
+        if rec and rec.avgPartyLevel then
+            snapshot = rec
+        end
+    end
+    if not snapshot then
+        snapshot = addon and addon.GetProgress and addon.GetProgress(achId)
+    end
+    if snapshot and snapshot.avgPartyLevel then
+        local sizeText = snapshot.entryPartySize and (" (" .. tostring(snapshot.entryPartySize) .. " players)") or ""
         GameTooltip:AddLine(" ")
-        GameTooltip:AddLine("Avg party level on entry: " .. tostring(progress.avgPartyLevel) .. sizeText, 0.75, 0.75, 0.75)
+        GameTooltip:AddLine("Avg party level on entry: " .. tostring(snapshot.avgPartyLevel) .. sizeText, 0.75, 0.75, 0.75)
     end
 end
 

@@ -141,7 +141,7 @@ local CommPriority = {
 ------------------------------------------------------------------------------------------------------------------------
 
 if DEBUG then
-    -- Forever renamed UIParentLoadAddOn to LoadAddOnWithErrorHandling.
+    -- HCA patch: Forever renamed UIParentLoadAddOn to LoadAddOnWithErrorHandling.
     local loadAddOn = UIParentLoadAddOn or LoadAddOnWithErrorHandling
     if loadAddOn then
         loadAddOn("Blizzard_DebugTools")
@@ -755,7 +755,7 @@ function Private.New(playerName, playerRealm, playerGUID)
     return instance
 end
 
---- Realmless clients (WoW Forever) return "" from GetRealmName(); use the character's ruleset instead.
+--- HCA patch: realmless clients (WoW Forever) return "" from GetRealmName(); use the character's ruleset instead.
 --- @return string realm Non-empty realm or ruleset label.
 local function GetPlayerRealm()
     local realm = GetRealmName()
@@ -778,7 +778,7 @@ end
 --- The private library state instance.
 local priv = Private.New(assert(UnitName("player"), "unable to get player name"), GetPlayerRealm(), assert(UnitGUID("player"), "unable to get player GUID"))
 
---- Forever senders arrive as "First Surname" while UnitName("player") is the first name only.
+--- HCA patch: Forever senders arrive as "First Surname" while UnitName("player") is the first name only.
 priv.playerFullName = GetUnitName and GetUnitName("player", false) or priv.playerName
 
 ------------------------------------------------------------------------------------------------------------------------
@@ -806,6 +806,7 @@ priv.playerFullName = GetUnitName and GetUnitName("player", false) or priv.playe
 --- @field onIsAdmin LibP2PDB.DBOnIsAdminCallback? Optional callback invoked with the acting peer's ID and name before enforcing `exclusive` or `immutable` restrictions. Return true to grant admin bypass for that peer.
 --- @field onPeerAdded LibP2PDB.DBOnPeerAddedCallback? Optional callback function(peerID, peerName) invoked when a new peer is first observed.
 --- @field onPeerExpired LibP2PDB.DBOnPeerExpiredCallback? Optional callback function(peerID, peerName) invoked when a peer times out and is removed.
+--- @field onIsPeerAllowed LibP2PDB.DBOnIsPeerAllowedCallback? Optional callback function(peerID, peerName, playerGUID) checked whenever a peer is seen. Return false to keep (or drop) the sender out of the peer list; its messages are still processed.
 --- @field onNewerVersion LibP2PDB.DBOnNewerVersionCallback? Optional callback function(newVersion) invoked when a newer database version is detected from another peer.
 --- @field peerTimeout number? Optional seconds of inactivity after which a peer is considered inactive (default: 100.0).
 
@@ -839,6 +840,7 @@ priv.playerFullName = GetUnitName and GetUnitName("player", false) or priv.playe
 --- @alias LibP2PDB.DBOnIsAdminCallback fun(peerID: LibP2PDB.PeerID, peerName: LibP2PDB.PeerName?): boolean Callback to determine if a peer has admin privileges. Return true to grant the peer permission to bypass `exclusive` and `immutable` restrictions. The peerName may be nil if the peer is not yet known.
 --- @alias LibP2PDB.DBOnPeerAddedCallback fun(peerID: LibP2PDB.PeerID, peerName: LibP2PDB.PeerName) Callback function invoked when a new peer is first observed.
 --- @alias LibP2PDB.DBOnPeerExpiredCallback fun(peerID: LibP2PDB.PeerID, peerName: LibP2PDB.PeerName) Callback function invoked when a peer times out and is removed.
+--- @alias LibP2PDB.DBOnIsPeerAllowedCallback fun(peerID: LibP2PDB.PeerID, peerName: LibP2PDB.PeerName, playerGUID: string): boolean Return false to exclude the sender from the peer list.
 --- @alias LibP2PDB.DBOnNewerVersionCallback fun(newVersion: LibP2PDB.DBVersion) Callback function invoked when a newer database version is detected from another peer.
 
 --- @class LibP2PDB.MigrationContext Context information for database/table/row migrations.
@@ -871,6 +873,7 @@ function LibP2PDB:NewDatabase(desc)
     assert(IsFunctionOrNil(desc.onIsAdmin), "desc.onIsAdmin must be a function if provided")
     assert(IsFunctionOrNil(desc.onPeerAdded), "desc.onPeerAdded must be a function if provided")
     assert(IsFunctionOrNil(desc.onPeerExpired), "desc.onPeerExpired must be a function if provided")
+    assert(IsFunctionOrNil(desc.onIsPeerAllowed), "desc.onIsPeerAllowed must be a function if provided")
     assert(IsFunctionOrNil(desc.onNewerVersion), "desc.onNewerVersion must be a function if provided")
     assert(IsNumberOrNil(desc.peerTimeout, 0.0), "desc.peerTimeout must be a positive number if provided")
 
@@ -910,6 +913,7 @@ function LibP2PDB:NewDatabase(desc)
         onChange = desc.onChange,
         onPeerAdded = desc.onPeerAdded,
         onPeerExpired = desc.onPeerExpired,
+        onIsPeerAllowed = desc.onIsPeerAllowed,
         onNewerVersion = desc.onNewerVersion,
         -- Access control
         onIsAdmin = desc.onIsAdmin,
@@ -3607,6 +3611,7 @@ end
 --- @param sender LibP2PDB.PeerName The sender of the message.
 function Private:OnCommReceived(prefix, encoded, channel, sender)
     -- Ignore messages from self (sender may have realm suffix on cross-realm channels)
+    -- HCA patch: playerFullName check
     if sender == self.playerName or sender == self.playerFullName or sender == self.playerName .. "-" .. self.playerRealm then
         return
     end
@@ -3644,6 +3649,7 @@ end
 --- @param sender string The name of the sender (may include realm suffix).
 function Private:OnChatMsgChannel(msg, channel, sender)
     -- Ignore messages from self
+    -- HCA patch: playerFullName check
     if sender == self.playerName or sender == self.playerFullName or sender == self.playerName .. "-" .. self.playerRealm then
         return
     end
@@ -4253,6 +4259,17 @@ function Private:UpdatePeer(message)
     -- Lookup existing peer info
     local now = GetTime()
     local peerInfo = dbi.peers[peerID]
+
+    -- HCA patch: let the owner exclude peers it cannot sync with (e.g. unreachable by whisper)
+    if dbi.onIsPeerAllowed and peerID ~= self.peerID then
+        local success, allowed = SafeCall(dbi, dbi.onIsPeerAllowed, peerID, peerName, PeerIDToPlayerGUID(peerID))
+        if success and allowed == false then
+            if peerInfo then
+                self:RemovePeer(dbi, peerID)
+            end
+            return
+        end
+    end
 
     -- Update existing peer
     if peerInfo then

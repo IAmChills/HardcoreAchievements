@@ -1119,7 +1119,10 @@ function DungeonCommon.registerDungeonAchievement(def)
     if isRequired then
       StorePointsAtKill()
     end
-    StoreEntryLevelSnapshot()
+    -- The average is kept as of completion; later (extra credit) kills must not replace it.
+    if not state.completed then
+      StoreEntryLevelSnapshot()
+    end
     SaveProgress()
     UpdateTooltip()
 

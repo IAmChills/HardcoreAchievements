@@ -2010,6 +2010,11 @@ local function MarkRowCompleted(row, cdbParam)
         rec.level       = UnitLevel("player") or nil
         -- Store solo status in achievement record so it persists after progress is cleared
         rec.wasSolo = wasSolo
+        -- Same for the dungeon party-level snapshot taken by the completing kill
+        if progress and progress.avgPartyLevel then
+            rec.avgPartyLevel = progress.avgPartyLevel
+            rec.entryPartySize = progress.entryPartySize
+        end
         local finalPoints = addon.ComputeCompletionPoints(row, progress, wasSolo, rec)
 
         rec.points = finalPoints

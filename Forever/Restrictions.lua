@@ -76,8 +76,9 @@ addon.Restrictions.encounterEndEvent = false
 -- Whispers: Forever reorders addon whispers sent in the same instant, so AceComm reassembles
 -- multi-part gossip chunks out of order (corrupt). Forever\WhisperPacing.lua spaces HCA
 -- whisper parts 0.1s apart; rowsPerChunk stays at the Classic values.
--- Whispers cannot cross rulesets, so sync with a different-ruleset peer fails
--- ("No player named ... is currently playing") until that peer times out.
+-- Whispers cannot cross rulesets. LeaderboardSync's onIsPeerAllowed keeps players whose row
+-- carries another ruleset out of the LibP2PDB peer list (their presence still applies); players
+-- with no row yet are tried and left to LibP2PDB's normal failure/timeout handling.
 --
 -- Combat: ShowUIPanel/HideUIPanel on LegacySystemFrame are blocked for addon code, but the
 -- frame is not protected (and Blizzard_LegacySystem loads in combat). Forever\LegacyFramePanel.lua

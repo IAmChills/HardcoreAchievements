@@ -16,17 +16,13 @@ https://linkbreakers.com/qr-code-generator/discord
 
 **Current:** HCA owns local `players`/`presence` writes + stock `BroadcastKey` (GUILD/PARTY/RAID/YELL) and rotating `hca######` presence-only chat. LibP2PDB owns peer discovery/convergence via `BroadcastPresence` + `SyncDatabase` every **180s** (`peerTimeout = 400`). Prefix `HCALB`. Do not use `NewDatabase({ channels = ... })`.
 
-- [ ] **Forever: per-ruleset peer list (preferred over a per-ruleset channel)** — keep the shared rotating channel so cross-ruleset presence still shows players online, but keep only same-ruleset senders in LibP2PDB's peer list so `SyncDatabase` never whispers across rulesets ("No player named ..." failures). Needs a small lib patch: a peer filter checked in `Private:AddPeer` (message/row still applied, peer not inserted). Ruleset source options:
-  - Reactive: on `ERR_CHAT_PLAYER_NOT_FOUND_S` for a peer, block that name from the peer list for the session and hide the system message (no schema change; one failed whisper per foreign peer per session).
-  - Proactive: optional `ruleset` field on the presence row (schema change; verify older clients accept it).
-  - Caveat: cross-ruleset rows stay stale (players rows never cross rulesets); only presence/online status updates.
-- [ ] *(Alternative, not preferred)* **Forever: per-ruleset rotating channel** — mix the ruleset (`GetPlayerRulesetLabel`) into `DeriveChannel` in `Utils/CommChannel.lua` on Forever only. Simpler, but hides cross-ruleset players from the leaderboard entirely.
-- [ ] **Report upstream (LibP2PDB):**
-  - `GetRealmName()` is `""` on Forever → load-time assert; patched locally with C_GameRules ruleset fallback (`GetPlayerRealm`)
-  - `UIParentLoadAddOn` missing on Forever when `DEBUG = true` (renamed `LoadAddOnWithErrorHandling`); patched locally to use whichever exists
-  - Self-message filter compares sender to `UnitName("player")` (first name only on Forever), so own broadcasts are processed; patched locally with `playerFullName` (`GetUnitName("player", false)`)
-  - Forever reorders addon whispers sent in the same instant, corrupting multi-part AceComm messages; worked around locally by pacing HCA whisper parts 0.1s apart (`Forever/WhisperPacing.lua`). Digest responses also grow with row count
-  - Whispers cannot cross Forever rulesets; peers on other rulesets cause repeated "No player named" errors
+- [x] **Forever: per-ruleset peer list** — shared rotating channel kept (cross-ruleset presence still shows online). `onIsPeerAllowed` (local LibP2PDB patch in `UpdatePeer`) drops peers whose players row has another ruleset; unknown players are left to LibP2PDB. Cross-ruleset rows stay stale (players rows never cross rulesets).
+- [ ] **Local LibP2PDB patches: re-check on every library update.** Base: upstream **MINOR 15** (`Libs/LibP2PDB/LibP2PDB.lua`, TOC `Version: 15`). Every patch site is tagged `HCA patch` (grep it). When a new version arrives, compare it against this list. Drop a patch the author fixed (adapt HCA if the API differs); re-apply the rest. Then report the remaining ones upstream.
+  1. **Debug loader:** `if DEBUG then` block near the top: `UIParentLoadAddOn or LoadAddOnWithErrorHandling` (Forever renamed it). Only matters with `DEBUG = true`.
+  2. **Realm fallback:** `local function GetPlayerRealm()` before `local priv = Private.New(...)`. `GetRealmName()` is `""` on Forever, which fails a load-time assert; falls back to the C_GameRules ruleset. `Private.New` was changed to take `GetPlayerRealm()` instead of `GetRealmName()`.
+  3. **Self-name:** `priv.playerFullName = GetUnitName("player", false)` right after `priv` is created, plus `or sender == self.playerFullName` in the self-filter of both `Private:OnCommReceived` and `Private:OnChatMsgChannel`. Forever senders arrive as "First Surname" while `UnitName` is the first name only, so own broadcasts were processed.
+  4. **Peer filter (`onIsPeerAllowed`):** desc doc field + `DBOnIsPeerAllowedCallback` alias + `IsFunctionOrNil` assert in `NewDatabase` + `onIsPeerAllowed = desc.onIsPeerAllowed` in the dbi table + check at the top of `Private:UpdatePeer` (returning false skips/removes the peer; the message is still dispatched). HCA user: `IsPeerAllowed` in `Leaderboard/LeaderboardSync.lua` (Forever only; rejects peers whose players row has another ruleset). If upstream adds an equivalent under another name, switch `Sync:Initialize` to it.
+  - **Not a lib patch, but report it:** Forever reorders addon whispers sent in the same instant, corrupting multi-part AceComm messages. Worked around in HCA by `Forever/WhisperPacing.lua` (wraps `ChatThrottleLib.SendAddonMessage` for `^HCA` whispers, 0.1s apart). Remove it if AceComm/LibP2PDB handles ordering upstream.
 
 ### Forever dungeon catalog: missing `requiredMapId`
 
@@ -129,4 +125,11 @@ Fill from `/run local n,t,d,dn,p,_,_,id=GetInstanceInfo(); print("name: "..n,"ma
 
 ```lua
 /run local t=GetServerTime();print("Next rotation in:",1337-t%1337,"seconds")
+```
+
+### Get peer list
+
+```lua
+/run local L=LibStub("LibP2PDB")for i,p in pairs(L:ListPeers(L:GetDatabase("HCALB")))do print(format("%X",i),p.name,floor(GetTime()-p.lastSeen)
+end
 ```
