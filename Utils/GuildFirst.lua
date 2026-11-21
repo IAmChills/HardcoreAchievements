@@ -98,7 +98,9 @@ local function CreateGuildFirstToast()
     end
     local f = CreateFrame("Frame", nil, UIParent)
     f:SetSize(320, 92) -- 92 for bronze, 100 for dark bronze
-    f:SetPoint("CENTER", 0, -300) -- previously -180
+    -- Forever: one toast higher, clear of Blizzard's legacy achievement alerts.
+    local isForever = addon.IsForeverClient and addon.IsForeverClient()
+    f:SetPoint("CENTER", 0, isForever and -200 or -300) -- previously -180
     f:Hide()
     f:SetFrameStrata("TOOLTIP")
     f:SetFrameLevel(100)

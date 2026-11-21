@@ -146,13 +146,13 @@ local ENCOUNTER_ID_TO_NPC = {
     [471] = 4275, -- Archmage Arugal
 
     -- Blackfathom Deeps
-    [219] = 4887,  -- Ghamoo-ra
-    [220] = 4831,  -- Lady Sarevess
-    [221] = 6243,  -- Gelihast
+    [2916] = 4887,  -- Ghamoo-ra
+    [2915] = 4831,  -- Lady Sarevess
+    [2914] = 6243,  -- Gelihast
     [222] = 12902, -- Lorgus Jett
-    [224] = 4830,  -- Old Serra'kis
-    [225] = 4832,  -- Twilight Lord Kelris
-    [226] = 4829,  -- Aku'mai
+    [2912] = 4830,  -- Old Serra'kis
+    [2911] = 4832,  -- Twilight Lord Kelris
+    [2910] = 4829,  -- Aku'mai
 
     -- The Stockade (no classic wiki DungeonEncounterIDs)
     [2756] = 1696, -- Targorr the Dread
