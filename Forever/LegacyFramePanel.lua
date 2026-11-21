@@ -45,6 +45,38 @@ local function TryLoadLegacyAddon()
     return GetHostFrame() ~= nil
 end
 
+-- ShowUIPanel/HideUIPanel are blocked for addon code in combat; LegacySystemFrame is not
+-- protected, so plain Show/Hide works there (outside the UI panel manager's layout).
+local function ShowHostFrame(frame)
+    if not (InCombatLockdown and InCombatLockdown()) and ShowUIPanel then
+        ShowUIPanel(frame)
+    else
+        -- The panel manager anchors UI panels inside ShowUIPanel; until the first managed open
+        -- the frame has no points and a plain Show() draws nothing. Use the manager's left slot.
+        if frame:GetNumPoints() == 0 then
+            local left = UIParent:GetAttribute("LEFT_OFFSET") or 16
+            local top = UIParent:GetAttribute("TOP_OFFSET") or -116
+            frame:SetPoint("TOPLEFT", UIParent, "TOPLEFT", left, top)
+        end
+        frame:Show()
+    end
+end
+
+local function HideHostFrame(frame)
+    if not (InCombatLockdown and InCombatLockdown()) and HideUIPanel then
+        HideUIPanel(frame)
+    else
+        frame:Hide()
+    end
+end
+
+function addon.HideLegacyHostFrame()
+    local frame = GetHostFrame()
+    if frame and frame:IsShown() then
+        HideHostFrame(frame)
+    end
+end
+
 function addon.HasLegacyChallengesHost()
     return GetHostFrame() ~= nil
 end
@@ -242,6 +274,12 @@ local function InitializeLegacyHost()
     if not frame then
         return false
     end
+    -- Escape only closes panels the UI panel manager opened; a combat Show() bypasses it.
+    -- UISpecialFrames makes Escape hide the frame either way.
+    local frameName = frame:GetName()
+    if frameName and UISpecialFrames and not tContains(UISpecialFrames, frameName) then
+        tinsert(UISpecialFrames, frameName)
+    end
     EnsureAchievementsPage(frame)
     if addon.CreateLegacyFrameModeTab then
         addon.CreateLegacyFrameModeTab()
@@ -296,26 +334,15 @@ end
 
 addon.TryInitLegacyChallengesHost = InitializeLegacyHost
 
-function addon.ShowLegacyAchievementsPage()
-    if showingPage then
-        return true
-    end
-    -- Forever LegacySystemFrame cannot be opened safely during combat lockdown.
-    if InCombatLockdown and InCombatLockdown() then
-        return false
-    end
-    showingPage = true
-    addon._hcaShowingLegacyPage = true
-    wantAchievements = true
+local function ShowLegacyAchievementsPageUnguarded()
     local ok = false
     TryLoadLegacyAddon()
     InitializeLegacyHost()
     local frame = GetHostFrame()
+    wantAchievements = true
     if frame then
-        if ShowUIPanel then
-            ShowUIPanel(frame)
-        else
-            frame:Show()
+        if not frame:IsShown() then
+            ShowHostFrame(frame)
         end
         EnsureAchievementsPage(frame)
         RememberTitle(frame)
@@ -339,9 +366,22 @@ function addon.ShowLegacyAchievementsPage()
         end
         ok = true
     end
+    return ok
+end
+
+function addon.ShowLegacyAchievementsPage()
+    if showingPage then
+        return true
+    end
+    showingPage = true
+    addon._hcaShowingLegacyPage = true
+    -- An error mid-show must not leave these flags set, or every later open (tab, /hca, keybind)
+    -- returns early until /reload.
+    local called, ok = xpcall(ShowLegacyAchievementsPageUnguarded, geterrorhandler())
     showingPage = false
     addon._hcaShowingLegacyPage = false
-    return ok
+    addon._hcaEmbeddingDashboard = false
+    return called and ok or false
 end
 
 function addon.HideLegacyAchievementsPage()
@@ -374,21 +414,13 @@ function addon.HideLegacyAchievementsPage()
 end
 
 function addon.ToggleLegacyAchievementsPage()
-    -- Swallow the click in combat so callers do not fall through to a standalone open.
-    if InCombatLockdown and InCombatLockdown() then
-        return true
-    end
     TryLoadLegacyAddon()
     local frame = GetHostFrame()
     if not frame then
         return false
     end
     if frame:IsShown() and wantAchievements and achievementsPage and achievementsPage:IsShown() then
-        if HideUIPanel then
-            HideUIPanel(frame)
-        else
-            frame:Hide()
-        end
+        HideHostFrame(frame)
         return true
     end
     return addon.ShowLegacyAchievementsPage()

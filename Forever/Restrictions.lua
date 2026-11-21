@@ -53,8 +53,9 @@ addon.Restrictions.combatLog = true
 addon.Restrictions.partyKillEvent = false
 addon.Restrictions.encounterEndEvent = false
 
--- Forever is realmless: GetRealmName() can return an internal shard label
--- ("CAMWOW US2 Realm 3 PvE"). Leaderboard and guild-first scope use
+-- Forever is realmless: GetRealmName() returns "" (1.60.1.71037+; earlier builds returned an internal
+-- shard label like "CAMWOW US2 Realm 3 PvE"). LibP2PDB falls back to the C_GameRules ruleset for its
+-- own realm string. Leaderboard and guild-first scope use
 -- addon.GetPlayerRealmLabel() so peers share a ruleset (Normal / PvP / Roleplay / Roleplay PvP).
 -- UnitName's second return is a surname, not a realm — never use it as one.
 --
@@ -68,10 +69,16 @@ addon.Restrictions.encounterEndEvent = false
 -- Classic, TBC, and Forever. Stock GUILD/PARTY/RAID/YELL BroadcastKey remains.
 -- Do not use NewDatabase({ channels = ... }) for this.
 --
--- BLOCKER (upstream LibP2PDB): Forever chat senders have no realm suffix, so
--- VerifySenderPeerID appends the receiver's GetRealmName() shard label and compares it to
--- the sender's GUID realm (e.g. "CAMWOW US1 ..." vs "CAMWOWUS2..."). Surname/name matching
--- is fine; realm mismatch drops chat messages before peers are observed. HCA does not
--- duplicate peer handshakes — LibP2PDB BroadcastPresence + SyncDatabase (180s) own
--- convergence on stock channels. Do not patch LibP2PDB here; wait for upstream Forever
--- name/realm verification, then retest chat discovery unchanged.
+-- Sender verification: since 1.60.1.71037 GetPlayerInfoByGUID returns an empty realm, so
+-- LibP2PDB's VerifySenderPeerID compares bare "First Surname" names and passes across shards.
+-- (Earlier builds returned shard labels that never matched across shards.)
+--
+-- Whispers: Forever loses pieces of whispers longer than ~2 AceComm parts, corrupting gossip
+-- chunks. LeaderboardSync keeps rowsPerChunk small (players 1, presence 8) to stay under that.
+-- Whispers cannot cross rulesets, so sync with a different-ruleset peer fails
+-- ("No player named ... is currently playing") until that peer times out.
+--
+-- Combat: ShowUIPanel/HideUIPanel on LegacySystemFrame are blocked for addon code, but the
+-- frame is not protected (and Blizzard_LegacySystem loads in combat). Forever\LegacyFramePanel.lua
+-- uses plain Show/Hide in combat, anchors the frame itself if the panel manager never has, and
+-- adds it to UISpecialFrames so Escape closes it.

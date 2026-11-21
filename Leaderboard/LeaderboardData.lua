@@ -275,6 +275,8 @@ local function ValueForSort(row, key)
         return row._sortName or tostring(row.name or ""):lower()
     elseif key == "faction" then
         return row._sortFaction or tostring(row.faction or ""):lower()
+    elseif key == "realm" then
+        return tostring(row.realm or ""):lower()
     elseif key == "version" then
         return row._sortVersion or tostring(row.version or ""):lower()
     elseif key == "achievements" then
@@ -328,7 +330,7 @@ local function UpdateRelativeTimes(rows, now)
         local lastSeenSec = math.max(0, now - (tonumber(row.updatedAt) or 0))
         row.lastSeenSec = lastSeenSec
         row.lastSeenText = FormatAgo(lastSeenSec)
-        row.online = (row.offline ~= true) and (lastSeenSec <= RECENT_SECONDS)
+        row.online = (row.offline ~= true) and (math.max(0, now - (tonumber(row.seenAt) or 0)) <= RECENT_SECONDS)
         row._sortUpdated = lastSeenSec
     end
 end
@@ -336,8 +338,10 @@ end
 local function BuildDisplayRow(key, row, now, presence)
     local rowUpdatedAt = tonumber(row.updatedAt) or 0
     local presenceUpdatedAt = type(presence) == "table" and (tonumber(presence.updatedAt) or 0) or 0
-    local updatedAt = math.max(rowUpdatedAt, presenceUpdatedAt)
-    local lastSeenSec = math.max(0, now - updatedAt)
+    -- "Updated" shows when the row's data last changed; presence (which can arrive without the row,
+    -- e.g. across Forever rulesets) only drives online status.
+    local seenAt = math.max(rowUpdatedAt, presenceUpdatedAt)
+    local lastSeenSec = math.max(0, now - rowUpdatedAt)
     local offline = row.offline == true
     if type(presence) == "table" and presenceUpdatedAt >= rowUpdatedAt then
         offline = presence.offline == true
@@ -369,10 +373,11 @@ local function BuildDisplayRow(key, row, now, presence)
         dead = row.dead == true,
         offline = offline,
         version = version,
-        updatedAt = updatedAt,
+        updatedAt = rowUpdatedAt,
+        seenAt = seenAt,
         lastSeenSec = lastSeenSec,
         lastSeenText = FormatAgo(lastSeenSec),
-        online = not offline and (lastSeenSec <= RECENT_SECONDS),
+        online = not offline and (math.max(0, now - seenAt) <= RECENT_SECONDS),
         _sortName = tostring(name):lower(),
         _sortClass = tostring(classLabel):lower(),
         _sortFaction = tostring(faction):lower(),

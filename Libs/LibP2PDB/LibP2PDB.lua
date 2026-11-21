@@ -141,7 +141,11 @@ local CommPriority = {
 ------------------------------------------------------------------------------------------------------------------------
 
 if DEBUG then
-    UIParentLoadAddOn("Blizzard_DebugTools")
+    -- Forever renamed UIParentLoadAddOn to LoadAddOnWithErrorHandling.
+    local loadAddOn = UIParentLoadAddOn or LoadAddOnWithErrorHandling
+    if loadAddOn then
+        loadAddOn("Blizzard_DebugTools")
+    end
 end
 local LAST_ERROR = nil --- @type string?
 
@@ -751,8 +755,31 @@ function Private.New(playerName, playerRealm, playerGUID)
     return instance
 end
 
+--- Realmless clients (WoW Forever) return "" from GetRealmName(); use the character's ruleset instead.
+--- @return string realm Non-empty realm or ruleset label.
+local function GetPlayerRealm()
+    local realm = GetRealmName()
+    if IsNonEmptyString(realm) then
+        return realm
+    end
+    local isActive = C_GameRules and C_GameRules.IsGameRuleActive
+    local rule = Enum and Enum.GameRule
+    if isActive and rule then
+        local pvp = rule.PvPRuleset and isActive(rule.PvPRuleset)
+        local rp = rule.RPRuleset and isActive(rule.RPRuleset)
+        if pvp and rp then return "RPPvP" end
+        if pvp then return "PvP" end
+        if rp then return "RP" end
+        if rule.HardcoreRuleset and isActive(rule.HardcoreRuleset) then return "HC" end
+    end
+    return "PvE"
+end
+
 --- The private library state instance.
-local priv = Private.New(assert(UnitName("player"), "unable to get player name"), assert(GetRealmName(), "unable to get player realm"), assert(UnitGUID("player"), "unable to get player GUID"))
+local priv = Private.New(assert(UnitName("player"), "unable to get player name"), GetPlayerRealm(), assert(UnitGUID("player"), "unable to get player GUID"))
+
+--- Forever senders arrive as "First Surname" while UnitName("player") is the first name only.
+priv.playerFullName = GetUnitName and GetUnitName("player", false) or priv.playerName
 
 ------------------------------------------------------------------------------------------------------------------------
 -- Public API: Database Instance Creation
@@ -3580,7 +3607,7 @@ end
 --- @param sender LibP2PDB.PeerName The sender of the message.
 function Private:OnCommReceived(prefix, encoded, channel, sender)
     -- Ignore messages from self (sender may have realm suffix on cross-realm channels)
-    if sender == self.playerName or sender == self.playerName .. "-" .. self.playerRealm then
+    if sender == self.playerName or sender == self.playerFullName or sender == self.playerName .. "-" .. self.playerRealm then
         return
     end
 
@@ -3617,7 +3644,7 @@ end
 --- @param sender string The name of the sender (may include realm suffix).
 function Private:OnChatMsgChannel(msg, channel, sender)
     -- Ignore messages from self
-    if sender == self.playerName or sender == self.playerName .. "-" .. self.playerRealm then
+    if sender == self.playerName or sender == self.playerFullName or sender == self.playerName .. "-" .. self.playerRealm then
         return
     end
 

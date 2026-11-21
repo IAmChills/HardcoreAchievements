@@ -350,22 +350,15 @@ function addon.IsForeverClient()
     return interfaceVersion >= 16000 and interfaceVersion < 17000
 end
 
-local function ForeverTokenInRealm(raw, token)
-    if type(raw) ~= "string" or raw == "" then
-        return false
-    end
-    local lower = raw:lower()
-    return lower:find("%f[%w]" .. token .. "%f[%W]") ~= nil
-        or lower:find("^" .. token .. "%f[%W]") ~= nil
-        or lower:find("%f[%w]" .. token .. "$") ~= nil
-end
-
---- Forever is realmless: players pick a ruleset (Normal / PvP / Roleplay / Roleplay PvP).
---- Prefer C_GameRules when present; otherwise infer from GetRealmName()'s shard label.
+--- Forever is realmless: players pick a ruleset (Normal / PvP / Roleplay / Roleplay PvP / Hardcore).
+--- C_GameRules is the only source; GetRealmName() is empty on Forever.
 function addon.GetPlayerRulesetLabel()
     local gameRule = Enum and Enum.GameRule
     local isActive = C_GameRules and C_GameRules.IsGameRuleActive
     if type(isActive) == "function" and gameRule then
+        if gameRule.HardcoreRuleset and isActive(gameRule.HardcoreRuleset) then
+            return "Hardcore"
+        end
         local pvp = gameRule.PvPRuleset and isActive(gameRule.PvPRuleset)
         local rp = gameRule.RPRuleset and isActive(gameRule.RPRuleset)
         if pvp and rp then
@@ -377,25 +370,8 @@ function addon.GetPlayerRulesetLabel()
         if pvp then
             return "PvP"
         end
-        return "Normal"
     end
-
-    local raw = (GetRealmName and GetRealmName()) or ""
-    local hasPvP = ForeverTokenInRealm(raw, "pvp")
-    local hasRP = ForeverTokenInRealm(raw, "rp") or ForeverTokenInRealm(raw, "roleplay")
-    if hasRP and hasPvP then
-        return "Roleplay PvP"
-    end
-    if hasRP then
-        return "Roleplay"
-    end
-    if hasPvP then
-        return "PvP"
-    end
-    if ForeverTokenInRealm(raw, "pve") or ForeverTokenInRealm(raw, "normal") then
-        return "Normal"
-    end
-    return raw ~= "" and raw or "Normal"
+    return "Normal"
 end
 
 --- Leaderboard / meta "realm" value. Forever stores the ruleset; Classic/TBC keep GetRealmName().

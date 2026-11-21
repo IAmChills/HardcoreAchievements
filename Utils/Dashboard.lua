@@ -1032,6 +1032,15 @@ local LEADERBOARD_COLS = {
   { key = "achievements", title = "Achievements", width = 120, align = "CENTER" },
   { key = "updated", title = "Updated", width = 60, align = "CENTER" },
 }
+if addon.IsForeverClient and addon.IsForeverClient() then
+  -- Forever rows store the ruleset in row.realm.
+  table.insert(LEADERBOARD_COLS, 5, { key = "realm", title = "Ruleset", width = 75, align = "CENTER" })
+end
+
+local LB_COL = {}
+for i, col in ipairs(LEADERBOARD_COLS) do
+  LB_COL[col.key] = i
+end
 
 local leaderboardSortState = {
   key = nil,
@@ -1156,8 +1165,12 @@ local function IsLeaderboardGuildMember(rowData, viewerGuildCached)
     return rowGuild == viewerGuildCached
 end
 
-local function CanLeaderboardInvite(name, rowData)
+-- Whispers and invites only reach online players on the same realm (Forever: ruleset) and faction.
+local function CanLeaderboardWhisper(name, rowData)
   if not name or name == "" or name == UnitName("player") then
+    return false
+  end
+  if addon.GetPlayerFullName and name == addon.GetPlayerFullName() then
     return false
   end
   if not rowData or rowData.online ~= true then
@@ -1170,10 +1183,19 @@ local function CanLeaderboardInvite(name, rowData)
   if (rowData.faction or "") ~= (UnitFactionGroup("player") or "") then
     return false
   end
-  if IsInGroup() and not (UnitIsGroupLeader("player") or (IsInRaid() and UnitIsGroupAssistant("player"))) then
+  return true
+end
+
+local function CanLeaderboardDirectInvite()
+  return not IsInGroup() or UnitIsGroupLeader("player") or (IsInRaid() and UnitIsGroupAssistant("player"))
+end
+
+-- Forever lets non-leaders suggest an invite (the leader is prompted), via the same InviteUnit call.
+local function CanLeaderboardInvite(name, rowData)
+  if not CanLeaderboardWhisper(name, rowData) then
     return false
   end
-  return true
+  return CanLeaderboardDirectInvite() or (addon.IsForeverClient and addon.IsForeverClient())
 end
 
 local function EnsureLeaderboardContextMenu()
@@ -1193,6 +1215,7 @@ local function EnsureLeaderboardContextMenu()
     info = UIDropDownMenu_CreateInfo()
     info.text = "Whisper"
     info.notCheckable = true
+    info.disabled = not CanLeaderboardWhisper(leaderboardContextTarget, leaderboardContextRow)
     info.func = function()
       if leaderboardContextTarget and ChatFrame_OpenChat then
         ChatFrame_OpenChat("/w " .. leaderboardContextTarget .. " ")
@@ -1277,7 +1300,7 @@ local function RefreshDashboardLeaderboardTimes()
       return false
     end
     local cellColor = isOffline and LEADERBOARD_OFFLINE_COLOR or nil
-    SetLeaderboardCell(row, 7, rowData.lastSeenText or "?", cellColor)
+    SetLeaderboardCell(row, LB_COL.updated, rowData.lastSeenText or "?", cellColor)
   end
   return true
 end
@@ -1466,7 +1489,7 @@ local function EnsureDashboardLeaderboardUI()
         leaderboardSortState.asc = not leaderboardSortState.asc
       else
         leaderboardSortState.key = col.key
-        leaderboardSortState.asc = col.key == "name" or col.key == "class" or col.key == "faction"
+        leaderboardSortState.asc = col.key == "name" or col.key == "class" or col.key == "faction" or col.key == "realm"
       end
       UpdateLeaderboardHeaderText()
       if DASHBOARD and DASHBOARD.Rebuild then
@@ -1546,6 +1569,12 @@ local function CreateDashboardLeaderboardRow(parent)
       ToggleDropDownMenu(1, nil, leaderboardContextMenu, "cursor", 3, -3)
     elseif button == "LeftButton" then
       CloseDropDownMenus()
+      if IsShiftKeyDown() and self.playerName then
+        local editBox = ChatEdit_GetActiveWindow()
+        if editBox and editBox:IsVisible() then
+          editBox:Insert(self.playerName)
+        end
+      end
     end
   end)
 
@@ -1688,8 +1717,8 @@ local function BindLeaderboardRowData(row, rowData, localCharacterKey, viewerGui
     nameColor = LEADERBOARD_GUILD_BRIGHT_GREEN
   end
 
-  SetLeaderboardCell(row, 1, name, nameColor)
-  SetLeaderboardCell(row, 2, tostring(rowData.level or 0), cellColor)
+  SetLeaderboardCell(row, LB_COL.name, name, nameColor)
+  SetLeaderboardCell(row, LB_COL.level, tostring(rowData.level or 0), cellColor)
 
   -- Use pre-computed portrait string from the model when available.
   local classPortrait = rowData._displayClassPortrait
@@ -1700,8 +1729,8 @@ local function BindLeaderboardRowData(row, rowData, localCharacterKey, viewerGui
       rowData.sex
     )
   end
-  SetLeaderboardCell(row, 3, classPortrait, cellColor)
-  SetLeaderboardCell(row, 4, "", cellColor)
+  SetLeaderboardCell(row, LB_COL.class, classPortrait, cellColor)
+  SetLeaderboardCell(row, LB_COL.faction, "", cellColor)
 
   local factionLogo, factionGlow = GetLeaderboardFactionTextures(rowData.faction)
   local fs = rowData.faction or ""
@@ -1719,7 +1748,10 @@ local function BindLeaderboardRowData(row, rowData, localCharacterKey, viewerGui
     row.FactionLogo:Hide()
   end
 
-  SetLeaderboardCell(row, 5, rowData.selfFound and "|TInterface\\RAIDFRAME\\ReadyCheck-Ready.blp:16:16:0:0|t" or "", cellColor)
+  if LB_COL.realm then
+    SetLeaderboardCell(row, LB_COL.realm, rowData.realm or "", cellColor)
+  end
+  SetLeaderboardCell(row, LB_COL.selfFound, rowData.selfFound and "|TInterface\\RAIDFRAME\\ReadyCheck-Ready.blp:16:16:0:0|t" or "", cellColor)
 
   -- Use cached color code from the model row when present.
   local colorCode = rowData._displayAchievementColor or GetLeaderboardAchievementColor(rowData.completed, rowData.total)
@@ -1729,8 +1761,8 @@ local function BindLeaderboardRowData(row, rowData, localCharacterKey, viewerGui
   else
     achievementText = string_format("%d pts |cff%s[%d/%d]|r", rowData.points or 0, colorCode, rowData.completed or 0, rowData.total or 0)
   end
-  SetLeaderboardCell(row, 6, achievementText, cellColor)
-  SetLeaderboardCell(row, 7, rowData.lastSeenText or "?", cellColor)
+  SetLeaderboardCell(row, LB_COL.achievements, achievementText, cellColor)
+  SetLeaderboardCell(row, LB_COL.updated, rowData.lastSeenText or "?", cellColor)
 
   row:Show()
 end
@@ -1778,6 +1810,8 @@ local function UpdateLeaderboardRow(playerKey)
       if oldData.class ~= data.class or oldData.classId ~= data.classId then return false end
     elseif sortKey == "faction" then
       if oldData.faction ~= data.faction then return false end
+    elseif sortKey == "realm" then
+      if oldData.realm ~= data.realm then return false end
     elseif sortKey == "selfFound" then
       if oldData.selfFound ~= data.selfFound then return false end
     elseif sortKey == "version" then
@@ -1903,9 +1937,9 @@ local function BuildDashboardLeaderboardRows()
       row._hcaLbLayW = width
       LayoutLeaderboardColumns(row, row.cells, width)
       row.FactionGlow:ClearAllPoints()
-      row.FactionGlow:SetPoint("CENTER", row.cells[4], "CENTER")
+      row.FactionGlow:SetPoint("CENTER", row.cells[LB_COL.faction], "CENTER")
       row.FactionLogo:ClearAllPoints()
-      row.FactionLogo:SetPoint("CENTER", row.cells[4], "CENTER")
+      row.FactionLogo:SetPoint("CENTER", row.cells[LB_COL.faction], "CENTER")
     end
 
     -- Populate reverse map for dirty-row updates (Option A)
@@ -5036,9 +5070,6 @@ end
 -- Show/Hide Dashboard functions
 function DASHBOARD:Show()
   if addon.ShowLegacyAchievementsPage and not addon._hcaEmbeddingDashboard then
-    if InCombatLockdown and InCombatLockdown() then
-      return
-    end
     if addon.ShowLegacyAchievementsPage() then
       return
     end
@@ -5079,13 +5110,8 @@ end
 function DASHBOARD:Hide()
   if addon.HasLegacyChallengesHost and addon.HasLegacyChallengesHost() and addon.HideLegacyAchievementsPage
       and not addon._hcaEmbeddingDashboard then
-    local frame = _G.LegacySystemFrame or _G.LegacyChallengesFrame
-    if frame and frame:IsShown() then
-      if HideUIPanel then
-        HideUIPanel(frame)
-      else
-        frame:Hide()
-      end
+    if addon.HideLegacyHostFrame then
+      addon.HideLegacyHostFrame()
     end
     addon.HideLegacyAchievementsPage()
     return

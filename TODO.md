@@ -16,9 +16,17 @@ https://linkbreakers.com/qr-code-generator/discord
 
 **Current:** HCA owns local `players`/`presence` writes + stock `BroadcastKey` (GUILD/PARTY/RAID/YELL) and rotating `hca######` presence-only chat. LibP2PDB owns peer discovery/convergence via `BroadcastPresence` + `SyncDatabase` every **180s** (`peerTimeout = 400`). Prefix `HCALB`. Do not use `NewDatabase({ channels = ... })`.
 
-- [x] Rotating HCA chat + hardware flush; presence-only chat payloads
-- [x] Remove HCA-side handshake/`SendKey`/`RequestKey`; rely on LibP2PDB sync
-- [ ] **Forever blocker (upstream LibP2PDB):** chat `VerifySenderPeerID` rejects peers when Forever omits a realm suffix on the sender and substitutes the receiver’s shard label (`GetRealmName`). Leave for upstream; do not fork LibP2PDB. Classic/TBC peer discovery works.
+- [ ] **Forever: per-ruleset peer list (preferred over a per-ruleset channel)** — keep the shared rotating channel so cross-ruleset presence still shows players online, but keep only same-ruleset senders in LibP2PDB's peer list so `SyncDatabase` never whispers across rulesets ("No player named ..." failures). Needs a small lib patch: a peer filter checked in `Private:AddPeer` (message/row still applied, peer not inserted). Ruleset source options:
+  - Reactive: on `ERR_CHAT_PLAYER_NOT_FOUND_S` for a peer, block that name from the peer list for the session and hide the system message (no schema change; one failed whisper per foreign peer per session).
+  - Proactive: optional `ruleset` field on the presence row (schema change; verify older clients accept it).
+  - Caveat: cross-ruleset rows stay stale (players rows never cross rulesets); only presence/online status updates.
+- [ ] *(Alternative, not preferred)* **Forever: per-ruleset rotating channel** — mix the ruleset (`GetPlayerRulesetLabel`) into `DeriveChannel` in `Utils/CommChannel.lua` on Forever only. Simpler, but hides cross-ruleset players from the leaderboard entirely.
+- [ ] **Report upstream (LibP2PDB):**
+  - `GetRealmName()` is `""` on Forever → load-time assert; patched locally with C_GameRules ruleset fallback (`GetPlayerRealm`)
+  - `UIParentLoadAddOn` missing on Forever when `DEBUG = true` (renamed `LoadAddOnWithErrorHandling`); patched locally to use whichever exists
+  - Self-message filter compares sender to `UnitName("player")` (first name only on Forever), so own broadcasts are processed; patched locally with `playerFullName` (`GetUnitName("player", false)`)
+  - Whispers over ~2 AceComm parts lose pieces on Forever; digest responses grow with row count
+  - Whispers cannot cross Forever rulesets; peers on other rulesets cause repeated "No player named" errors
 
 ### Forever dungeon catalog: missing `requiredMapId`
 

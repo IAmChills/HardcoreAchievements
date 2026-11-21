@@ -273,9 +273,8 @@ function addon.FlushBroadcastQueue()
                     end)
                     if ok then
                         keys[key] = nil
-                        Debug("Broadcast invoked: " .. tableName .. "/" .. tostring(key)
-                            .. (est and (" est=" .. tostring(est)) or "")
-                            .. " (not confirmed delivery)")
+                        Debug("Broadcast sent: " .. tableName .. "/" .. tostring(key)
+                            .. (est and (" est=" .. tostring(est)) or ""))
                     else
                         -- Retain for the next hardware flush.
                         Debug("Broadcast invoke failed (retained): " .. tableName .. "/" .. tostring(key))

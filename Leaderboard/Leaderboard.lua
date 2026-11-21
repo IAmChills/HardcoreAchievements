@@ -496,9 +496,6 @@ function Leaderboard:Toggle()
     if addon and addon.FlushBroadcastQueue then
         addon.FlushBroadcastQueue()
     end
-    if addon and addon.IsForeverCharacterUI and InCombatLockdown and InCombatLockdown() then
-        return
-    end
     local dashboardFrame = addon and addon.DashboardFrame
     if dashboardFrame and dashboardFrame:IsShown() and dashboardFrame.SelectedTabKey == "leaderboard" then
         if addon.Dashboard and addon.Dashboard.Hide then
@@ -512,9 +509,6 @@ function Leaderboard:Toggle()
 end
 
 function Leaderboard:Show()
-    if addon and addon.IsForeverCharacterUI and InCombatLockdown and InCombatLockdown() then
-        return
-    end
     addon._hcaOpenDashboardTabKey = "leaderboard"
     if addon.Dashboard and addon.Dashboard.Show then
         addon.Dashboard:Show()

@@ -2339,10 +2339,6 @@ end
 -- Dashboard:Toggle already routes Forever through LegacySystemFrame when that host exists.
 -- Classic CharacterFrame tab clicks still use ShowAchievementTab directly.
 local function ToggleHardcoreAchievementsUI()
-    if addon and addon.IsForeverCharacterUI and InCombatLockdown and InCombatLockdown() then
-        print("|cff008066[Hardcore Achievements]|r Cannot open during combat.")
-        return
-    end
     if addon and addon.Dashboard and addon.Dashboard.Toggle then
         addon.Dashboard:Toggle()
     elseif addon and addon.ShowDashboard then
@@ -3051,14 +3047,6 @@ local function HandleLauncherClick(button)
     -- Hardware-event flush for LibP2PDB chat-channel queue (before UI work).
     if addon and addon.FlushBroadcastQueue then
         addon.FlushBroadcastQueue()
-    end
-    -- Forever hosts dashboard/leaderboard on LegacySystemFrame; opening it
-    -- during combat lockdown raises ADDON_ACTION_BLOCKED.
-    if addon and addon.IsForeverCharacterUI and InCombatLockdown and InCombatLockdown()
-        and ((button == "LeftButton" and not IsShiftKeyDown())
-            or (button == "RightButton" and not IsShiftKeyDown())) then
-        print("|cff008066[Hardcore Achievements]|r Cannot open during combat.")
-        return
     end
     if button == "LeftButton" then
         ToggleHardcoreAchievementsUI()
