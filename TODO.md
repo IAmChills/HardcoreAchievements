@@ -25,7 +25,7 @@ https://linkbreakers.com/qr-code-generator/discord
   - `GetRealmName()` is `""` on Forever → load-time assert; patched locally with C_GameRules ruleset fallback (`GetPlayerRealm`)
   - `UIParentLoadAddOn` missing on Forever when `DEBUG = true` (renamed `LoadAddOnWithErrorHandling`); patched locally to use whichever exists
   - Self-message filter compares sender to `UnitName("player")` (first name only on Forever), so own broadcasts are processed; patched locally with `playerFullName` (`GetUnitName("player", false)`)
-  - Whispers over ~2 AceComm parts lose pieces on Forever; digest responses grow with row count
+  - Forever reorders addon whispers sent in the same instant, corrupting multi-part AceComm messages; worked around locally by pacing HCA whisper parts 0.1s apart (`Forever/WhisperPacing.lua`). Digest responses also grow with row count
   - Whispers cannot cross Forever rulesets; peers on other rulesets cause repeated "No player named" errors
 
 ### Forever dungeon catalog: missing `requiredMapId`

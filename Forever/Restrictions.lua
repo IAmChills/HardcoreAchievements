@@ -73,8 +73,9 @@ addon.Restrictions.encounterEndEvent = false
 -- LibP2PDB's VerifySenderPeerID compares bare "First Surname" names and passes across shards.
 -- (Earlier builds returned shard labels that never matched across shards.)
 --
--- Whispers: Forever loses pieces of whispers longer than ~2 AceComm parts, corrupting gossip
--- chunks. LeaderboardSync keeps rowsPerChunk small (players 1, presence 8) to stay under that.
+-- Whispers: Forever reorders addon whispers sent in the same instant, so AceComm reassembles
+-- multi-part gossip chunks out of order (corrupt). Forever\WhisperPacing.lua spaces HCA
+-- whisper parts 0.1s apart; rowsPerChunk stays at the Classic values.
 -- Whispers cannot cross rulesets, so sync with a different-ruleset peer fails
 -- ("No player named ... is currently playing") until that peer times out.
 --

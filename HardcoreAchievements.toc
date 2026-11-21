@@ -20,6 +20,7 @@ embeds.xml
 # locals at load time, so it has to exist before they run.
 Utils\Compat.lua
 Forever\Restrictions.lua [AllowLoadGameType forever, mainline]
+Forever\WhisperPacing.lua [AllowLoadGameType forever, mainline]
 Forever\LegacyFrameTab.lua [AllowLoadGameType forever, mainline]
 Forever\LegacyFramePanel.lua [AllowLoadGameType forever, mainline]
 
