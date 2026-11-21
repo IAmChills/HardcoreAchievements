@@ -2206,23 +2206,9 @@ local function HookAchievementRefresh()
                     updateTimer = C_Timer.NewTimer(0.2, function()
                         updateTimer = nil
                         if AchievementTracker and AchievementTracker.Update and next(pendingUpdates) ~= nil then
-                            -- Clear pending updates and update tracker
-                            local updates = pendingUpdates
                             pendingUpdates = {}
-                            
-                            -- Update tracker, retrying if in combat
-                            local function TryUpdate()
-                                if AchievementTracker and AchievementTracker.Update then
-                                    if InCombatLockdown() then
-                                        -- Still in combat, retry after a short delay
-                                        C_Timer.After(0.5, TryUpdate)
-                                    else
-                                        -- Out of combat, update now to refresh boss colors
-                                        AchievementTracker:Update()
-                                    end
-                                end
-                            end
-                            TryUpdate()
+                            -- Plain (non-secure) frames: safe to refresh in combat, e.g. a boss dying before its adds.
+                            AchievementTracker:Update()
                         end
                     end)
                 end

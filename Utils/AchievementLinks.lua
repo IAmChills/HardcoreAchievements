@@ -367,6 +367,8 @@ if Old_ItemRef_SetHyperlink then
 end
 
 local function ChatFilter_HCA(chatFrame, event, msg, author, ...)
+    -- Chat args are secret during encounter restrictions; they cannot be inspected then.
+    if issecretvalue and (issecretvalue(msg) or issecretvalue(author)) then return end
     if not msg or type(msg) ~= "string" then return end
     local changed = false
 	-- ChatFrame_AddMessageEventFilter passes (self, event, msg, author, ...)

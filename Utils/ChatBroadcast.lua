@@ -37,7 +37,12 @@ local LibP2PDB = LibStub and LibStub("LibP2PDB", true)
 -- fire, so LibP2PDB's CHAT_MSG_CHANNEL listener, membership, and rotation are unaffected.
 -- All these events share arg4 = "6. hcaXXXXXX" and arg9 = base channel name.
 if ChatFrame_AddMessageEventFilter then
+    local issecretvalue = issecretvalue
     local function IsRotatingChannel(_, _, _, _, _, channelString, _, _, _, _, channelName)
+        -- Chat args are secret during encounter restrictions; they cannot be inspected then.
+        if issecretvalue and (issecretvalue(channelString) or issecretvalue(channelName)) then
+            return false
+        end
         local name = channelName
         if type(name) ~= "string" or name == "" then
             name = type(channelString) == "string" and strmatch(channelString, "^%d+%.%s*(.+)$") or channelString
@@ -45,6 +50,9 @@ if ChatFrame_AddMessageEventFilter then
         return type(name) == "string" and strmatch(name, "^hca%x%x%x%x%x%x$") ~= nil
     end
     ChatFrame_AddMessageEventFilter("CHAT_MSG_CHANNEL", function(self, event, msg, ...)
+        if issecretvalue and issecretvalue(msg) then
+            return IsRotatingChannel(self, event, msg, ...)
+        end
         if type(msg) == "string" and strmatch(msg, "^" .. DB_PREFIX .. ";%d+;") then
             return true
         end

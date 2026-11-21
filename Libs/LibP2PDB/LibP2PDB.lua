@@ -3610,6 +3610,11 @@ end
 --- @param channel string The channel the message was received on.
 --- @param sender LibP2PDB.PeerName The sender of the message.
 function Private:OnCommReceived(prefix, encoded, channel, sender)
+    -- HCA patch: skip secret payloads (see OnChatMsgChannel)
+    if issecretvalue and (issecretvalue(encoded) or issecretvalue(sender) or issecretvalue(channel)) then
+        return
+    end
+
     -- Ignore messages from self (sender may have realm suffix on cross-realm channels)
     -- HCA patch: playerFullName check
     if sender == self.playerName or sender == self.playerFullName or sender == self.playerName .. "-" .. self.playerRealm then
@@ -3648,6 +3653,11 @@ end
 --- @param channel string The channel name.
 --- @param sender string The name of the sender (may include realm suffix).
 function Private:OnChatMsgChannel(msg, channel, sender)
+    -- HCA patch: chat payloads are secret during encounter restrictions (Forever/12.0); any compare errors
+    if issecretvalue and (issecretvalue(msg) or issecretvalue(sender) or issecretvalue(channel)) then
+        return
+    end
+
     -- Ignore messages from self
     -- HCA patch: playerFullName check
     if sender == self.playerName or sender == self.playerFullName or sender == self.playerName .. "-" .. self.playerRealm then

@@ -233,6 +233,19 @@ local function IsAchievementFailed(achId, achDef)
     return false
 end
 
+-- Completion clears progress, so the permanent achievements record is authoritative.
+local function IsAchievementCompleted(achId)
+    local progress = addon and addon.GetProgress and addon.GetProgress(achId)
+    if progress and progress.completed then return true end
+    if addon and addon.GetCharDB then
+        local _, cdb = addon.GetCharDB()
+        local rec = cdb and cdb.achievements and cdb.achievements[tostring(achId)]
+        if rec and rec.completed then return true end
+    end
+    local row = addon and addon.GetAchievementRow and addon.GetAchievementRow(achId)
+    return row and row.completed and true or false
+end
+
 local function PrintEligibilityLine(achDef, isEligible)
     local title = achDef.title or achDef.mapName or "Unknown"
     local usesPartyLevels = achDef.isVariation or achDef.requirePartyLevels
@@ -272,8 +285,7 @@ local function CheckAndPrintEligibilityMessages(mapId, entryData)
         if defMapId and mapIdNum and defMapId == mapIdNum
             and DungeonCommon.DefMatchesInstanceDifficulty(achDef)
             and type(achDef.requiredKills) == "table" and next(achDef.requiredKills) ~= nil then
-            local progress = addon and addon.GetProgress and addon.GetProgress(achId)
-            if not (progress and progress.completed) then
+            if not IsAchievementCompleted(achId) then
                 local level = (type(achDef.level) == "number") and achDef.level or tonumber(achDef.level) or 999
                 local entry = {
                     achId = achId,
