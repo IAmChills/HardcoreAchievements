@@ -847,7 +847,7 @@ local LocationMap = {
         ["Menethil Harbor"] = {x = 0.10, y = 0.58},
         ["Dun Modr"] = {x = 0.48, y = 0.17},
         ["Ironbear's Tomb"] = {x = 0.44, y = 0.28},
-        ["Saltspray Glen"] = {x = 0.32, y = 0.22},
+        ["Saltspray Glen"] = {x = 0.40, y = 0.26},
         ["Sundown Marsh"] = {x = 0.24, y = 0.29},
         ["Bluegill Marsh"] = {x = 0.19, y = 0.39},
         ["Black Channel Marsh"] = {x = 0.19, y = 0.49},
