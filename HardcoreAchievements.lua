@@ -2816,9 +2816,27 @@ end
 -- Coalesce the burst into one pass and remember which achievements actually changed so the follow-up
 -- refresh stays as narrow as it was before.
 -- Kept on one table for the same reason as achToast above: the main chunk is near Lua's local limit.
+-- Progress equality / unsaved-banner helpers also live here so new SetProgress logic does not add locals.
 local progressFlush = {
     pending = false,
     dirty = {},
+    -- Keys that represent real saved progress worth prompting a reload.
+    -- Level/entry metadata is rewritten often on login and must not false-trigger the banner.
+    unsavedKeys = {
+        killed = true,
+        quest = true,
+        counts = true,
+        eligibleCounts = true,
+        completed = true,
+        pointsAtKill = true,
+        soloKill = true,
+        soloQuest = true,
+        ineligibleKill = true,
+        itemOwned = true,
+        firstKillRareState = true,
+        extraCreditPoints = true,
+        extraCreditKills = true,
+    },
 }
 
 function progressFlush.Run()
@@ -2880,46 +2898,72 @@ function progressFlush.Run()
     end
 end
 
--- Keys that represent real saved progress worth prompting a reload.
--- Level/entry metadata is rewritten often on login and must not false-trigger the banner.
-local UNSAVED_PROGRESS_KEYS = {
-    killed = true,
-    quest = true,
-    counts = true,
-    eligibleCounts = true,
-    completed = true,
-    pointsAtKill = true,
-    soloKill = true,
-    soloQuest = true,
-    ineligibleKill = true,
-    itemOwned = true,
-    firstKillRareState = true,
-    extraCreditPoints = true,
-    extraCreditKills = true,
-}
+-- SavedVariables may reload numeric map keys as strings (or the reverse). Treat "644" and 644 as the same.
+function progressFlush.TableGet(t, k)
+    if type(t) ~= "table" then
+        return nil
+    end
+    local v = t[k]
+    if v ~= nil then
+        return v
+    end
+    if type(k) == "string" then
+        local n = tonumber(k)
+        if n ~= nil then
+            return t[n]
+        end
+    elseif type(k) == "number" then
+        return t[tostring(k)]
+    end
+    return nil
+end
 
-local function ProgressValuesEqual(a, b)
+function progressFlush.ValuesEqual(a, b)
     if a == b then
         return true
     end
     if type(a) ~= "table" or type(b) ~= "table" then
         return false
     end
+    local seen = {}
     for k, v in pairs(a) do
+        seen[k] = true
+        if type(k) == "number" then
+            seen[tostring(k)] = true
+        elseif type(k) == "string" then
+            local n = tonumber(k)
+            if n ~= nil then
+                seen[n] = true
+            end
+        end
+        local bv = progressFlush.TableGet(b, k)
         if type(v) == "table" then
-            if not ProgressValuesEqual(v, b[k]) then
+            if not progressFlush.ValuesEqual(v, bv) then
                 return false
             end
-        elseif b[k] ~= v then
+        elseif bv ~= v then
             return false
         end
     end
     for k in pairs(b) do
-        if a[k] == nil then
+        if not seen[k] and progressFlush.TableGet(a, k) == nil then
             return false
         end
     end
     return true
+end
+
+-- Login settle often writes markers that are not player progress (incomplete flags, empty trackers).
+function progressFlush.IsTrivialUnsavedWrite(key, oldValue, newValue)
+    if key == "completed" and newValue == false then
+        return true
+    end
+    if key == "firstKillRareState" and oldValue == nil and type(newValue) == "table" then
+        if newValue.met ~= true and (not newValue.killsTotal or next(newValue.killsTotal) == nil) then
+            return true
+        end
+    end
+    return false
 end
 
 local function SetProgress(achId, key, value)
@@ -2928,9 +2972,10 @@ local function SetProgress(achId, key, value)
     cdb.progress = cdb.progress or {}
     local p = cdb.progress[achId] or {}
     -- Login/zone/quest handlers often rewrite the same values; ignore no-ops.
-    if ProgressValuesEqual(p[key], value) then
+    if progressFlush.ValuesEqual(p[key], value) then
         return
     end
+    local oldValue = p[key]
     p[key] = value
     p.updatedAt = time()
     -- Only set levelAt for progress-related keys (kills, quests, counts, etc.)
@@ -2942,7 +2987,10 @@ local function SetProgress(achId, key, value)
     cdb.progress[achId] = p
 
     if restorationsComplete and not skipBroadcastForRetroactive and not (addon and addon.Initializing) then
-        if UNSAVED_PROGRESS_KEYS[key] then
+        if progressFlush.unsavedKeys[key] and not progressFlush.IsTrivialUnsavedWrite(key, oldValue, value) then
+            if addon then
+                addon._lastUnsavedProgress = { achId = achId, key = key, at = time() }
+            end
             MarkUnsavedAchievementProgress()
         end
         if achId ~= nil then
@@ -6779,11 +6827,12 @@ do
         if Profession then Profession.RefreshAll() end
         if InvalidateAchievementRuntimeIndex then InvalidateAchievementRuntimeIndex() end
 
-        -- Keep Initializing true through the next frame so deferred login timers
-        -- (quest top-up, exploration metas, profession refresh) do not arm the
-        -- unsaved-progress banner for no-op settle work.
+        -- Keep Initializing true through bag/quest-log settle. UNIT_INVENTORY_CHANGED and
+        -- QUEST_LOG_UPDATE fire shortly after login and rewrite progress (dungeon-set
+        -- itemOwned scans, quest top-ups). A one-frame window was arming the unsaved banner
+        -- every login while resting even when nothing meaningful changed.
         if C_Timer and C_Timer.After then
-            C_Timer.After(0, function()
+            C_Timer.After(3, function()
                 addon.Initializing = false
             end)
         else

@@ -158,24 +158,6 @@ local Dungeons = {
     bossOrder = {3914, 3886, 3887, 4278, 4279, 4274, 3927, 4275, 3872}
   },
 
-  -- Excavation Site: Wetlands (Level 24-29)
-  {
-    achId = "ESW",
-    title = "Excavation Site: Wetlands",
-    tooltip = "Defeat the bosses of " .. ClassColor .. "Excavation Site: Wetlands|r at level 29 or lower upon entering the dungeon",
-    icon = 254109,
-    level = 29,
-    points = 10,
-    staticPoints = false,
-    requiredMapId = 000,
-    requiredKills = {
-      [260322] = 1, -- Saltspine
-      [260325] = 1, -- Shadetooth
-      [260326] = 1, -- Relic Guardian
-    },
-    bossOrder = {260322, 260325, 260326}
-  },
-
   -- Blackfathom Deeps (Both, Level 20-30)
   {
     achId = "BFD",
@@ -223,6 +205,24 @@ local Dungeons = {
     bossOrder = {1696, 1666, 1717, 1663, 1716, 1720}
   },
 
+  -- Excavation Site: Wetlands (Level 24-29)
+  {
+    achId = "ESW",
+    title = "Excavation Site: Wetlands",
+    tooltip = "Defeat the bosses of " .. ClassColor .. "Excavation Site: Wetlands|r at level 29 or lower upon entering the dungeon",
+    icon = 254109,
+    level = 29,
+    points = 10,
+    staticPoints = false,
+    requiredMapId = 2998,
+    requiredKills = {
+      [260322] = 1, -- Saltspine
+      [260325] = 1, -- Shadetooth
+      [260326] = 1, -- Relic Guardian
+    },
+    bossOrder = {260322, 260325, 260326}
+  },
+
   -- City of Dalaran (Level 28-33)
   {
     achId = "COD",
@@ -232,7 +232,7 @@ local Dungeons = {
     level = 31,
     points = 10,
     staticPoints = false,
-    requiredMapId = 000,
+    requiredMapId = 2959,
     requiredKills = {
       [247126] = 1, -- Atrexis the Grave Knight
       [245999] = 1, -- Arcane Anomaly

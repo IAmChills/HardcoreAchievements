@@ -134,3 +134,8 @@ Fill from `/run local n,t,d,dn,p,_,_,id=GetInstanceInfo(); print("name: "..n,"ma
 /run local L=LibStub("LibP2PDB")for i,p in pairs(L:ListPeers(L:GetDatabase("HCALB")))do print(format("%X",i),p.name,floor(GetTime()-p.lastSeen)
 end
 ```
+
+## Check pending progress (banner)
+```lua
+/run local t=HardcoreAchievements and HardcoreAchievements._lastUnsavedProgress; if t then print(t.achId, t.key, date("%H:%M:%S", t.at)) else print("none") end
+```

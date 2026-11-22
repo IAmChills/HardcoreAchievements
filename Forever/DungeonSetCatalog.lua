@@ -52,6 +52,21 @@ local DungeonSets = {
     staticPoints = true,
   },
 
+  -- DALARAN CITY
+  {
+    achId = "VioletSet",
+    title = "Violet Sorcerer's Vestments Set",
+    -- level = 40 ,
+    tooltip = "Equip the " .. ClassColor .. "Violet Sorcerer's Vestments Set|r",
+    icon = 132658,
+    points = 50,
+    requiredItems = {273051, 286988, 286987, 286989, 273044},
+    itemOrder = {273051, 286988, 286987, 286989, 273044},
+    class = {"MAGE", "WARLOCK", "PRIEST"},
+    zone = "Dalaran City",
+    staticPoints = true,
+  },
+
   -- SCARLET MONASTERY
   {
     achId = "CrusadeSet",

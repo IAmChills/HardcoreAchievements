@@ -347,18 +347,20 @@ local function registerDungeonSetAchievement(def)
     state.completed = completed
   end
   
-  -- Save progress to database
+  -- Save progress to database. Never write completed=false (nil→false false-triggers the unsaved banner).
   local function SaveProgress()
     if addon and addon.SetProgress then
-      addon.SetProgress(achId, "completed", state.completed)
+      if state.completed then
+        addon.SetProgress(achId, "completed", true)
+      end
       addon.SetProgress(achId, "itemOwned", state.itemOwned)
     end
   end
   
   -- Check if a specific item is owned (checks saved state first, then current inventory)
   local function IsItemOwned(itemId)
-    -- Check saved state first (once owned, always owned)
-    if state.itemOwned and state.itemOwned[itemId] then
+    -- Check saved state first (once owned, always owned). SV may store the id as a string key.
+    if state.itemOwned and (state.itemOwned[itemId] or state.itemOwned[tostring(itemId)]) then
       return true
     end
     -- Fall back to checking current inventory
@@ -385,7 +387,7 @@ local function registerDungeonSetAchievement(def)
       local currentlyOwned = GetItemCount(itemId, true) > 0
       -- Only update if we don't already have it marked as owned
       -- This ensures "once owned, always owned" behavior
-      if currentlyOwned and not state.itemOwned[itemId] then
+      if currentlyOwned and not (state.itemOwned[itemId] or state.itemOwned[tostring(itemId)]) then
         state.itemOwned[itemId] = true
         anyChanged = true
       end
