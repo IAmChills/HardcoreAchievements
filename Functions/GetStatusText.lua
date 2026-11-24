@@ -131,9 +131,14 @@ local function GetStatusText(params)
         end
     end
     
-    -- Solo bonuses: require self-found if hardcore is active, otherwise solo is allowed
-    local isHardcoreActive = C_GameRules and C_GameRules.IsHardcoreActive and C_GameRules.IsHardcoreActive() or false
-    local allowSoloBonus = isSelfFound or not isHardcoreActive
+    -- Solo bonuses: Forever Normal/PvP/RP always allow; Hardcore still needs Self-Found.
+    local allowSoloBonus
+    if addon and addon.AllowSoloBonus then
+        allowSoloBonus = addon.AllowSoloBonus() and true or false
+    else
+        local isHardcoreActive = C_GameRules and C_GameRules.IsHardcoreActive and C_GameRules.IsHardcoreActive() or false
+        allowSoloBonus = isSelfFound or not isHardcoreActive
+    end
     
     if completed and wasSolo and allowSoloBonus then
         return ClassColor .. "Solo|r"

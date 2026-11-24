@@ -395,6 +395,19 @@ local function ShouldShowByCheckboxFilter(def, isCompleted, checkboxIndex, varia
     return true -- Fallback to showing if FilterDropdown not available
 end
 
+-- Solo/Duo/Trio dungeon variations: hidden unless their dashboard filter is checked.
+-- Dedicated dungeon_solo/duo/trio tabs skip this gate (tab already scopes the category).
+local function ShouldShowDashboardDungeonVariation(def, isCompleted)
+    if not def or not def.isVariation then
+        return true
+    end
+    local key = (DashboardFrame and DashboardFrame.SelectedTabKey) or "all"
+    if key == "dungeon_solo" or key == "dungeon_duo" or key == "dungeon_trio" then
+        return true
+    end
+    return ShouldShowByCheckboxFilter(def, isCompleted, nil, def.variationType)
+end
+
 local function GetDashboardStatusFilters()
     if FilterDropdown and FilterDropdown.GetStatusFilterStatesFromDropdown and DashboardFrame and DashboardFrame.filterDropdown then
         local states = FilterDropdown:GetStatusFilterStatesFromDropdown(DashboardFrame.filterDropdown)
@@ -2368,6 +2381,9 @@ function DASHBOARD:BuildClassicGrid(srcRows)
       else
         if srow._def and not ShouldShowBySelectedTab(srow._def) then shouldShow = false end
       end
+      if shouldShow and srow._def and not ShouldShowDashboardDungeonVariation(srow._def, isCompleted) then
+        shouldShow = false
+      end
       if shouldShow then
         table_insert(visibleForGrid, srow)
       end
@@ -3387,6 +3403,9 @@ function DASHBOARD:BuildModernRows(srcRows)
           shouldShow = false
         end
       end
+      if shouldShow and srow._def and not ShouldShowDashboardDungeonVariation(srow._def, isCompleted) then
+        shouldShow = false
+      end
       
       if shouldShow then
         table_insert(visibleRows, srow)
@@ -4394,7 +4413,11 @@ local function BuildDashboardFrame()
     )
     FilterDropdown:InitializeDropdown(DashboardFrame.filterDropdown, {
       statusOnly = true,
+      includeVariationFilters = true,
       onStatusFilterChange = function()
+        if ApplyFilter then ApplyFilter() end
+      end,
+      onCheckboxChange = function()
         if ApplyFilter then ApplyFilter() end
       end,
     })

@@ -52,7 +52,13 @@ Forever\ProfessionTracker.lua [AllowLoadGameType forever, mainline]
 Utils\SharedUtils.lua
 Utils\FilterDropdown.lua
 Utils\AchievementTracker.lua
+Utils\Core\Hooks.lua
+Utils\Core\AchievementRegistry.lua
+Utils\UI\AchievementToast.lua
+Utils\Core\Progress.lua
+Utils\UI\MinimapButton.lua
 HardcoreAchievements.lua
+Utils\Combat\KillBridge.lua
 Utils\GuildFirst.lua
 Utils\CommChannel.lua
 Utils\ChatBroadcast.lua

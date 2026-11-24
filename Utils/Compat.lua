@@ -374,6 +374,16 @@ function addon.GetPlayerRulesetLabel()
     return "Normal"
 end
 
+--- Solo-double gate: C_GameRules.IsHardcoreActive() is the authority (true on Hardcore, false
+--- otherwise). Non-Hardcore never requires Self-Found; Hardcore still does.
+function addon.AllowSoloBonus()
+    local isHardcoreActive = C_GameRules and C_GameRules.IsHardcoreActive and C_GameRules.IsHardcoreActive() or false
+    if not isHardcoreActive then
+        return true
+    end
+    return (addon.IsSelfFound and addon.IsSelfFound()) and true or false
+end
+
 --- Leaderboard / meta "realm" value. Forever stores the ruleset; Classic/TBC keep GetRealmName().
 function addon.GetPlayerRealmLabel()
     if addon.IsForeverClient() then

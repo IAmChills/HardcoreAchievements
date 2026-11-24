@@ -115,7 +115,11 @@ function ReputationCommon.registerReputationAchievement(def)
 
   -- Get character database (addon only)
   local function GetCharDB()
-    return (addon and addon.GetCharDB and addon.GetCharDB()) or (function() return nil, nil end)()
+    local fn = addon and addon.GetCharDB
+    if type(fn) == "function" then
+      return fn()
+    end
+    return nil, nil
   end
 
   -- Check if achievement was already completed in database

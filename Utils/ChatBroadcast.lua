@@ -244,6 +244,12 @@ function addon.FlushBroadcastQueue()
     if not LibP2PDB or not dbHandle then
         return
     end
+    -- Forever Chat restriction blocks SendChatMessage with ADDON_ACTION_BLOCKED (not a Lua
+    -- error), so pcall cannot swallow it. Keep the queue for a later unrestricted flush.
+    if addon.IsForeverChatRestricted and addon.IsForeverChatRestricted() then
+        Debug("Broadcast deferred: Forever chat restricted")
+        return
+    end
     -- Hardware-only join/rotate retry (bypasses CommChannel auto-cycle cap).
     if addon.EnsureHCACommChannel then
         addon.EnsureHCACommChannel()

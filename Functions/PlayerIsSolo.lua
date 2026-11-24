@@ -10,6 +10,8 @@ local UnitIsUnit = UnitIsUnit
 local UnitIsPlayer = UnitIsPlayer
 local UnitInRange = UnitInRange
 local UnitDetailedThreatSituation = UnitDetailedThreatSituation
+local UnitThreatSituation = UnitThreatSituation
+local UnitTokenFromGUID = UnitTokenFromGUID
 local CombatLogGetCurrentEventInfo = CombatLogGetCurrentEventInfo
 local IsInRaid = IsInRaid
 local IsInGroup = IsInGroup
@@ -20,6 +22,8 @@ local UnitAffectingCombat = UnitAffectingCombat
 local UnitCanAttack = UnitCanAttack
 local CreateFrame = CreateFrame
 local issecretvalue = issecretvalue
+local pcall = pcall
+local type = type
 
 -- Retail 12.0 / Forever: combat-related unit queries can return secret booleans and numbers.
 -- Tainted code may store those values but must not use them in `if`, `and`, `or`, `not`, or `>=`.
@@ -145,21 +149,32 @@ local function OtherPlayersRecentlyHelped(targetGUID)
 end
 
 ---------------------------------------
+-- On the mob's threat table at all. Status may be secret; nil still means "not on it".
+---------------------------------------
+local function UnitOnThreatTable(unit, mobUnit)
+    if not UnitThreatSituation or not PlainBool(UnitExists(unit), false) or not PlainBool(UnitExists(mobUnit), false) then
+        return false
+    end
+    local ok, status = pcall(UnitThreatSituation, unit, mobUnit)
+    return ok and type(status) == "number"
+end
+
+---------------------------------------
 -- Check if a specific unit has significant threat
 ---------------------------------------
 local function UnitHasSignificantThreat(unit, mobUnit, threshold)
     if not UnitDetailedThreatSituation then
-        return false
+        return UnitOnThreatTable(unit, mobUnit)
     end
     local ok, isUnitTanking, unitStatus, scaledPct, rawPct = pcall(UnitDetailedThreatSituation, unit, mobUnit)
     if not ok then
         return false
     end
 
-    -- A secret return means they are on the table. Presence is enough to count as helping;
-    -- the percentages cannot legally be compared.
+    -- Percentages cannot be compared when secret (Forever combat). Fall back to presence:
+    -- on the table = helping; nil = not on it. Do not treat "secret" as automatic help.
     if IsSecret(isUnitTanking) or IsSecret(unitStatus) or IsSecret(scaledPct) or IsSecret(rawPct) then
-        return true
+        return UnitOnThreatTable(unit, mobUnit)
     end
 
     -- Check if this unit is tanking (definitely helping) - disqualify immediately
@@ -240,10 +255,18 @@ local function PlayerThreatGoodEnough(mobUnit)
     end
     local primaryIsOtherPlayer = MobPrimaryTargetIsOtherPlayer(mobUnit)
 
-    -- Secret threat numbers cannot be compared to the 90% bar, so solo credit is refused.
-    -- Returning the raw secrets is still legal; callers that boolean-test them must use PlainBool.
+    -- Forever combat may hide threat percentages. Presence on the target's threat table is still
+    -- readable (UnitThreatSituation nil vs number), which is the open-world solo signal that used
+    -- to work: you on the table, and no other player with meaningful threat.
     if IsSecret(isTanking) or IsSecret(status) or IsSecret(scaledPct) or IsSecret(rawPct) then
-        return false, isTanking, status, scaledPct, rawPct
+        local onTable = UnitOnThreatTable("player", mobUnit) or UnitOnThreatTable("pet", mobUnit)
+        if not onTable then
+            return false, isTanking, status, scaledPct, rawPct
+        end
+        if primaryIsOtherPlayer then
+            return false, isTanking, status, scaledPct, rawPct
+        end
+        return true, isTanking, status, scaledPct, rawPct
     end
 
     -- If data is missing entirely, treat as not good enough (unless mob is clearly on a non-player).
@@ -251,6 +274,10 @@ local function PlayerThreatGoodEnough(mobUnit)
         -- If it's smacking a non-player (dummy/pet), allow it and let the other checks decide.
         local mobTarget = mobUnit .. "target"
         if PlainBool(UnitExists(mobTarget), false) and not PlainBool(UnitIsPlayer(mobTarget), true) then
+            return true, isTanking, status, scaledPct, rawPct
+        end
+        -- Last resort: presence on the threat table (same signal Forever open-world uses).
+        if UnitOnThreatTable("player", mobUnit) or UnitOnThreatTable("pet", mobUnit) then
             return true, isTanking, status, scaledPct, rawPct
         end
         return false, isTanking, status, scaledPct, rawPct
@@ -290,52 +317,61 @@ end
 ---------------------------------------
 -- Check solo status for a specific GUID (used during combat tracking)
 ---------------------------------------
-local function CheckSoloStatusForGUID(targetGUID)
-    if not targetGUID or IsSecret(targetGUID) then return false end
-    
-    -- Try to find the unit by GUID (check target first, then nameplate)
-    local mobUnit = nil
+local function ResolveMobUnitForGUID(targetGUID)
+    if not targetGUID or IsSecret(targetGUID) then
+        return nil
+    end
     local currentTargetGUID = UnitGUID("target")
     if PlainBool(UnitExists("target"), false)
         and currentTargetGUID
         and not IsSecret(currentTargetGUID)
         and currentTargetGUID == targetGUID
     then
-        mobUnit = "target"
-    else
-        -- Try to find via nameplate (limited in Classic, but worth trying)
-        -- For now, we'll use a workaround: check if we can query threat by GUID
-        -- Since we can't directly get unit from GUID, we'll need to track during combat
-        -- This function will be called when we have the unit available
-        return nil -- Can't check without unit
+        return "target"
     end
-    
-    if not mobUnit or not PlainBool(UnitExists(mobUnit), false) or not PlainBool(UnitCanAttack("player", mobUnit), false) then
+    if UnitTokenFromGUID then
+        local ok, token = pcall(UnitTokenFromGUID, targetGUID)
+        if ok and type(token) == "string" and not IsSecret(token) and PlainBool(UnitExists(token), false) then
+            return token
+        end
+    end
+    return nil
+end
+
+local function CheckSoloStatusForGUID(targetGUID)
+    if not targetGUID or IsSecret(targetGUID) then return false end
+
+    local mobUnit = ResolveMobUnitForGUID(targetGUID)
+    if not mobUnit then
+        return nil -- Can't check without unit; keep prior cached status if any
+    end
+
+    if not PlainBool(UnitExists(mobUnit), false) or not PlainBool(UnitCanAttack("player", mobUnit), false) then
         return nil
     end
-    
+
     -- Early exit: if player doesn't have the tag, they can't be solo.
     -- Secret tap: refuse the bonus rather than guess.
     if PlainBool(UnitIsTapDenied(mobUnit), true) then
         return false
     end
-    
-    if not PlainBool(UnitAffectingCombat("player"), false) then
-        return nil
-    end
-    
+
+    -- At kill award time combat may already have dropped; still evaluate threat against the
+    -- corpse/unit while it exists. Cached status from UNIT_THREAT_* covers the in-fight path.
     local threatOK, isTanking, status, scaledPct, rawPct = PlayerThreatGoodEnough(mobUnit)
     if not threatOK then
         return false
     end
 
-    -- Disqualify if any grouped player has >10% threat.
+    -- Disqualify if any grouped player has >10% threat (or is on the table when % is secret).
+    -- Ungrouped helpers cannot be threat-queried by the client (only self/party/raid); on Classic
+    -- CLEU catches them, but Forever has no combat log. Do not add nameplate scans — they never
+    -- see outsider threat and only add complexity.
     if AnyGroupedPlayerOverThresholdOn(mobUnit, OTHER_PLAYER_THREAT_THRESHOLD) then
         return false
     end
 
-    -- If any *ungrouped* player recently helped (via combat log),
-    -- only fail if you're NOT clearly holding threat (not tanking and <90%).
+    -- Classic CLEU: ungrouped players recently damaging your target. Empty on Forever.
     if OtherPlayersRecentlyHelped(targetGUID) then
         if IsSecret(isTanking) or IsSecret(status) or IsSecret(scaledPct) or IsSecret(rawPct) then
             return false
@@ -344,7 +380,7 @@ local function CheckSoloStatusForGUID(targetGUID)
             (isTanking and status and status >= 2) or
             (scaledPct and scaledPct >= PLAYER_SOLO_THREAT_THRESHOLD) or
             (not scaledPct and rawPct and rawPct >= PLAYER_SOLO_THREAT_THRESHOLD) or
-            (not MobPrimaryTargetIsOtherPlayer(mobUnit))  -- pet/dummy tanking allowance
+            (not MobPrimaryTargetIsOtherPlayer(mobUnit))
         if not clearlyAhead then
             return false
         end

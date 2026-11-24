@@ -41,8 +41,13 @@ local function CalculateAchievementPoints(row, preset, isSelfFound, isSoloMode, 
         -- Visual preview: if solo mode toggle is on and no stored points, show doubled points
         -- This is just a preview - actual points are determined at kill/quest time
         -- Solo preview applies: requires self-found if hardcore is active, otherwise solo is allowed
-        local isHardcoreActive = C_GameRules and C_GameRules.IsHardcoreActive and C_GameRules.IsHardcoreActive() or false
-        local allowSoloBonus = isSelfFound or not isHardcoreActive
+        local allowSoloBonus
+        if addon and addon.AllowSoloBonus then
+            allowSoloBonus = addon.AllowSoloBonus() and true or false
+        else
+            local isHardcoreActive = C_GameRules and C_GameRules.IsHardcoreActive and C_GameRules.IsHardcoreActive() or false
+            allowSoloBonus = isSelfFound or not isHardcoreActive
+        end
         if isSoloMode and row.allowSoloDouble and allowSoloBonus then
             finalPoints = finalPoints * 2
         end
@@ -110,9 +115,14 @@ local function RefreshAllAchievementPoints(dirtyRows)
     -- Calculate shared values once at the top
     local preset = (addon and addon.GetPlayerPresetFromSettings and addon.GetPlayerPresetFromSettings()) or nil
     local isSoloMode = (addon and addon.IsSoloModeEnabled and addon.IsSoloModeEnabled()) or false
-    local isHardcoreActive = C_GameRules and C_GameRules.IsHardcoreActive and C_GameRules.IsHardcoreActive() or false
     local isSelfFoundFn = addon and addon.IsSelfFound
-    local allowSoloBonus = (type(isSelfFoundFn) == "function" and isSelfFoundFn()) or not isHardcoreActive
+    local allowSoloBonus
+    if addon and addon.AllowSoloBonus then
+        allowSoloBonus = addon.AllowSoloBonus() and true or false
+    else
+        local isHardcoreActive = C_GameRules and C_GameRules.IsHardcoreActive and C_GameRules.IsHardcoreActive() or false
+        allowSoloBonus = (type(isSelfFoundFn) == "function" and isSelfFoundFn()) or not isHardcoreActive
+    end
 
     -- Build a fast lookup table for achievement definitions (by achId) once.
     local defById = {}

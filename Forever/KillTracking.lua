@@ -10,12 +10,12 @@ local addonName, addon = ...
 -- blow the PARTY_KILL payload cannot attribute. Nearby UNIT_DIED events with no group threat are ignored
 -- silently.
 --
--- Solo vs assisted is participation, not group membership. A kill stays solo unless another player or
--- their pet was positively seen contributing. When Midnight hides that information, the kill stays solo:
--- the addon is on the honor system for anything it cannot observe.
+-- Participation records (assisted / threat presence) feed group eligibility and level-cap checks.
+-- Open-world solo doubles still come from Functions\PlayerIsSolo.lua (player threat vs the target's
+-- threat table). This file must not replace those helpers.
 --
 -- Dungeon and raid bosses do not use this participation record. See Forever\EncounterKills.lua.
--- This file loads before Achievements\Common.lua so the overrides below are the functions it captures.
+-- IsGroupEligibleForAchievement is overridden here before Achievements\Common.lua captures it.
 -- =========================================================
 
 if not (addon and addon.IsForeverClient and addon.IsForeverClient()) then
@@ -256,13 +256,21 @@ local function Sample(unit)
 
     -- The mob's own target is a contribution signal: it is hitting that unit. Another player merely
     -- targeting this mob is not, and a secret answer is not either.
+    -- Own pets / totems / guardians are never assistance (matches Classic PlayerIsSolo).
     local target = unit .. "target"
     if UnitExists(target) then
         local sameAsPlayer = UnitIsUnit(target, "player")
         local sameAsPet = UnitIsUnit(target, "pet")
+        local ownedByPlayer = false
+        if UnitIsOwnerOrControllerOfUnit then
+            local ok, owned = pcall(UnitIsOwnerOrControllerOfUnit, "player", target)
+            if ok and not IsSecret(owned) then
+                ownedByPlayer = owned and true or false
+            end
+        end
         -- Compound tokens (nameplate1target, party1target) are secret comparisons inside an instance.
-        -- An unreadable answer is not assistance.
-        if not IsSecret(sameAsPlayer) and not IsSecret(sameAsPet) and not sameAsPlayer and not sameAsPet then
+        -- An unreadable answer is not assistance (honor system).
+        if not IsSecret(sameAsPlayer) and not IsSecret(sameAsPet) and not sameAsPlayer and not sameAsPet and not ownedByPlayer then
             local isPlayer = UnitIsPlayer(target)
             local controlled = UnitPlayerControlled and UnitPlayerControlled(target)
             local inParty = UnitInParty(target)
@@ -273,9 +281,8 @@ local function Sample(unit)
                 local level = isPlayer and ReadableLevel(target) or nil
                 if targetGUID then
                     NoteParticipant(record, targetGUID, level, not isPlayer, true)
-                else
-                    record.assisted = true
                 end
+                -- Unreadable GUID: do not flip assisted. Midnight secrecy defaults to solo.
             end
         end
     end
@@ -342,7 +349,30 @@ local function LogSecretGUID(kind)
     KillLog(kind .. " GUID is secret; this kill cannot be attributed by GUID (expected inside instances)")
 end
 
+local function SampleGuidIfPossible(guid)
+    if type(guid) ~= "string" or IsSecret(guid) then
+        return
+    end
+    if UnitExists("target") then
+        local targetGUID = UnitGUID("target")
+        if type(targetGUID) == "string" and not IsSecret(targetGUID) and targetGUID == guid then
+            -- Dead units are skipped inside Sample; still attempt while the corpse exists in case
+            -- the client briefly reports living right at the kill event.
+            Sample("target")
+            return
+        end
+    end
+    if UnitTokenFromGUID then
+        local ok, token = pcall(UnitTokenFromGUID, guid)
+        if ok and type(token) == "string" and not IsSecret(token) then
+            Sample(token)
+        end
+    end
+end
+
 local function Award(guid, npcId, source)
+    -- Refresh participation for eligibility before the deferred kill award.
+    SampleGuidIfPossible(guid)
     local record = records[guid]
     KillLog(source .. " npc " .. tostring(npcId)
         .. " assisted=" .. tostring(record and record.assisted or false)
@@ -445,28 +475,11 @@ local function OnUnitDied(guid)
 end
 
 -- =========================================================
--- Overrides captured by Achievements\Common.lua. Group membership is not assistance, and a missing
--- record stays solo: that is the honor-system default when the fight was not observable.
+-- Group eligibility override (participation / level caps). Solo detection stays in
+-- Functions\PlayerIsSolo.lua: player threat vs the target's threat table (90%/10% when
+-- readable; presence on the table when Forever hides percentages). Do not replace those
+-- helpers here — that is what broke open-world solo after Forever kill credit landed.
 -- =========================================================
-
-local function PlayerIsSoloForGUID(guid)
-    if type(guid) ~= "string" or IsSecret(guid) then
-        return nil
-    end
-    local record = records[guid]
-    if not record then
-        return nil
-    end
-    return not record.assisted
-end
-
-local function PlayerIsSolo()
-    local guid = PlainGUID("target")
-    if guid and records[guid] then
-        return not records[guid].assisted
-    end
-    return true
-end
 
 local function IsGroupEligibleForAchievement(maxLevel, achievementId, destGUID)
     local maxPartySize = 5
@@ -504,9 +517,6 @@ local function IsGroupEligibleForAchievement(maxLevel, achievementId, destGUID)
     return true
 end
 
-addon.PlayerIsSolo = PlayerIsSolo
-addon.PlayerIsSoloForGUID = PlayerIsSoloForGUID
-addon.PlayerIsSolo_UpdateStatusForGUID = function() end
 addon.IsGroupEligibleForAchievement = IsGroupEligibleForAchievement
 addon.GetKillRecord = function(guid)
     -- Instance creature GUIDs are secret and cannot be used as table keys.
@@ -516,13 +526,9 @@ addon.GetKillRecord = function(guid)
     return records[guid]
 end
 
--- The Classic threat frame compares percentages and would error on secret values. It has nothing to
--- observe here anyway, because the combat log never arrives. PlayerIsSolo.lua exposes this frame
--- globally so Forever can tear it down after replacing the solo helpers.
-if _G.PlayerIsSolo_EventFrame then
-    _G.PlayerIsSolo_EventFrame:UnregisterAllEvents()
-    _G.PlayerIsSolo_EventFrame:SetScript("OnEvent", nil)
-end
+-- Leave Functions\PlayerIsSolo.lua's threat frame registered. UNIT_THREAT_* still fires on Forever;
+-- only CLEU helper tracking is unavailable (Restrictions.combatLog). Open-world solo needs that
+-- frame so soloStatusByGUID is filled during the fight before KillBridge awards the kill.
 
 local tracker = CreateFrame("Frame")
 

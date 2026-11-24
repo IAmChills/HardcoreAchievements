@@ -334,10 +334,16 @@ local function NotSoloEligible(name)
 end
 
 -- Same rule the kill/quest trackers apply: the achievement allows solo doubling and solo bonuses
--- apply to this character (self-found, or not on a hardcore realm).
+-- apply to this character (Forever Normal/PvP/RP always; Hardcore needs Self-Found).
 local function IsSoloEligible(row)
-    local isHardcoreActive = C_GameRules and C_GameRules.IsHardcoreActive and C_GameRules.IsHardcoreActive() or false
-    return row.allowSoloDouble and (IsSelfFound() or not isHardcoreActive) or false
+    local allowSoloBonus
+    if addon and addon.AllowSoloBonus then
+        allowSoloBonus = addon.AllowSoloBonus() and true or false
+    else
+        local isHardcoreActive = C_GameRules and C_GameRules.IsHardcoreActive and C_GameRules.IsHardcoreActive() or false
+        allowSoloBonus = IsSelfFound() or not isHardcoreActive
+    end
+    return row.allowSoloDouble and allowSoloBonus or false
 end
 
 local function SetCompletedPoints(row, rec, points)

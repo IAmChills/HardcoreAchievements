@@ -1,5 +1,5 @@
 ---------------------------------------
--- Achievement Definitions (Quest/Milestone catalog for Vanilla)
+-- Achievement Definitions (Quest/Milestone catalog for Forever)
 ---------------------------------------
 local addonName, addon = ...
 local UnitLevel = UnitLevel

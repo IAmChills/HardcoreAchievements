@@ -197,28 +197,44 @@ function M.registerQuestAchievement(cfg)
         return basePoints
     end
 
+    -- Solo-double gate: Forever Normal/PvP/RP always allows it; Hardcore still needs Self-Found.
+    local function AllowSoloBonus()
+        if addon and addon.AllowSoloBonus then
+            return addon.AllowSoloBonus() and true or false
+        end
+        local isHardcoreActive = C_GameRules and C_GameRules.IsHardcoreActive and C_GameRules.IsHardcoreActive() or false
+        return (IsSelfFound() or not isHardcoreActive) and true or false
+    end
+
     -- Get solo status for a kill (uses stored status from combat tracking)
     local function GetSoloStatusForKill(destGUID)
-        local isHardcoreActive = C_GameRules and C_GameRules.IsHardcoreActive and C_GameRules.IsHardcoreActive() or false
-        local allowSoloBonus = IsSelfFound() or not isHardcoreActive
-        
-        local storedSoloStatus = nil
-        if destGUID then
-            storedSoloStatus = PlayerIsSoloForGUID(destGUID)
+        if not AllowSoloBonus() then
+            return false
         end
-        
-        -- Fallback to current check if no stored status available
-        return allowSoloBonus and (
-            (storedSoloStatus ~= nil and storedSoloStatus) or
-            (storedSoloStatus == nil and PlayerIsSolo() or false)
-        ) or false
+
+        -- Prefer live Forever/Classic helpers on addon (not load-time captures) so KillTracking
+        -- overrides always win after the Phase 1/2 extract reshuffle.
+        local soloForGuid = (addon and addon.PlayerIsSoloForGUID) or PlayerIsSoloForGUID
+        local soloNow = (addon and addon.PlayerIsSolo) or PlayerIsSolo
+
+        local storedSoloStatus = nil
+        if destGUID and type(soloForGuid) == "function" then
+            storedSoloStatus = soloForGuid(destGUID)
+        end
+
+        if storedSoloStatus ~= nil then
+            return storedSoloStatus and true or false
+        end
+        return (type(soloNow) == "function" and soloNow()) and true or false
     end
 
     -- Get solo status for quest completion
     local function GetSoloStatusForQuest()
-        local isHardcoreActive = C_GameRules and C_GameRules.IsHardcoreActive and C_GameRules.IsHardcoreActive() or false
-        local allowSoloBonus = IsSelfFound() or not isHardcoreActive
-        return allowSoloBonus and (PlayerIsSolo() or false) or false
+        if not AllowSoloBonus() then
+            return false
+        end
+        local soloNow = (addon and addon.PlayerIsSolo) or PlayerIsSolo
+        return (type(soloNow) == "function" and soloNow()) and true or false
     end
 
     -- Update status text on row (wrapper for SetStatusTextOnRow)
@@ -587,9 +603,7 @@ function M.registerQuestAchievement(cfg)
         end
         topUpFromServer()
         -- Check if we have solo status from previous kills/quests and update UI
-        -- Solo indicators show: requires self-found if hardcore is active, otherwise solo is allowed
-        local isHardcoreActive = C_GameRules and C_GameRules.IsHardcoreActive and C_GameRules.IsHardcoreActive() or false
-        local allowSoloBonus = IsSelfFound() or not isHardcoreActive
+        local allowSoloBonus = AllowSoloBonus()
         if p and (p.soloKill or p.soloQuest) and allowSoloBonus then
             if AchievementPanel and AchievementPanel.achievements then
                 for _, row in ipairs(AchievementPanel.achievements) do

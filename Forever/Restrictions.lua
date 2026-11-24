@@ -38,8 +38,9 @@ end
 -- means "not on the threat table", so type(status) == "number" is a legal presence test. UnitLevel,
 -- UnitIsTapDenied, UnitIsPlayer, and UnitPlayerControlled are plain. UnitInRange is always secret.
 --
--- Forever\KillTracking.lua replaces PlayerIsSolo and IsGroupEligibleForAchievement before the shared
--- achievement code captures them, so the Classic percentage comparisons never run on this client.
+-- Forever\KillTracking.lua replaces IsGroupEligibleForAchievement before the shared achievement code
+-- captures it. PlayerIsSolo stays in Functions\PlayerIsSolo.lua: when threat percentages are secret it
+-- falls back to UnitThreatSituation presence (nil = not on the table) instead of comparing numbers.
 
 addon.Restrictions = addon.Restrictions or {}
 

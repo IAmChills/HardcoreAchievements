@@ -115,12 +115,15 @@ local Secrets = {
         end
 
         local targetGuid = UnitGUID("target")
-        if not targetGuid then
+        if not targetGuid or (addon.IsSecretValue and addon.IsSecretValue(targetGuid)) then
             return false
         end
 
-        local _, _, _, _, _, npcIdStr = strsplit("-", targetGuid)
-        local npcId = npcIdStr and tonumber(npcIdStr) or nil
+        local npcId = addon.ParseCreatureNpcId and addon.ParseCreatureNpcId(targetGuid)
+        if not npcId then
+            local npcIdStr = select(6, strsplit("-", targetGuid))
+            npcId = npcIdStr and tonumber(npcIdStr) or nil
+        end
         return npcId == 4950
     end,
     secret = true,
