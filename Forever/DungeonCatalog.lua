@@ -102,8 +102,9 @@ local Dungeons = {
       [646] = 1,   -- Mr. Smite
       [647] = 1,   -- Captain Greenskin
       [639] = 1,   -- Edwin VanCleef
+      [645] = 1,   -- Cookie
     },
-    bossOrder = {644, 643, 1763, 646, 647, 639}
+    bossOrder = {644, 643, 1763, 646, 647, 639, 645}
   },
 
   -- Wailing Caverns (Both, Level 15-25)
@@ -259,14 +260,18 @@ local Dungeons = {
     staticPoints = false,
     requiredMapId = 47,
     requiredKills = {
-      [6168] = 1,  -- Roogug (No one does this boss, left side)
+      [6168] = 1,  -- Roogug
       [4424] = 1,  -- Aggem Thorncurse
       [4428] = 1,  -- Death Speaker Jargba
       [4420] = 1,  -- Overlord Ramtusk
       [4422] = 1,  -- Agathelos the Raging
       [4421] = 1,  -- Charlga Razorflank
     },
-    bossOrder = {6168, 4424, 4428, 4420, 4422, 4421}
+    extraCreditKills = {
+      [4425] = 1,  -- Blind Hunter (rare)
+      [4842] = 1,  -- Earthcaller Halmgar (rare)
+    },
+    bossOrder = {6168, 4424, 4428, 4420, 4422, 4421, 4425, 4842}
   },
 
   -- Gnomeregan (Alliance, Level 24-33)

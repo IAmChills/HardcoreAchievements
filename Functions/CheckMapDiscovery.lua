@@ -421,7 +421,7 @@ local LocationMap = {
     ["Thousand Needles"] = {
         ["The Screeching Canyon"] = {x = 0.31, y = 0.46},
         ["Darkcloud Pinnacle"] = {x = 0.35, y = 0.35},
-        ["White Reach Post"] = {x = 0.15, y = 0.23},
+        ["Camp E'thok"] = {x = 0.15, y = 0.23},
         ["Highperch"] = {x = 0.11, y = 0.36},
         ["The Great Lift"] = {x = 0.29, y = 0.25},
         ["Freewind Post"] = {x = 0.46, y = 0.51},

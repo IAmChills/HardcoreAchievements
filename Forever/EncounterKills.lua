@@ -118,12 +118,13 @@ local ENCOUNTER_ID_TO_NPC = {
     [433] = 11519, -- Bazzalan
 
     -- Deadmines (Cookie 165 not tracked)
-    [161] = 644,   -- Rhahk'Zor
-    [162] = 643,   -- Sneed / Sneed's Shredder
-    [163] = 1763,  -- Gilnid
-    [164] = 646,   -- Mr. Smite
-    [166] = 647,   -- Captain Greenskin
-    [167] = 639,   -- Edwin VanCleef
+    [2741] = 644,   -- Rhahk'Zor
+    [2742] = 643,   -- Sneed / Sneed's Shredder
+    [2743] = 1763,  -- Gilnid
+    [2745] = 646,   -- Mr. Smite
+    [2744] = 647,   -- Captain Greenskin
+    [2747] = 639,   -- Edwin VanCleef
+    [2746] = 645,   -- Cookie
 
     -- Wailing Caverns (Deviate Faerie Dragon rare has no encounter)
     [585] = 3671, -- Lady Anacondra
@@ -136,25 +137,24 @@ local ENCOUNTER_ID_TO_NPC = {
     [592] = 3654, -- Mutanus the Devourer
 
     -- Shadowfang Keep (Deathsworn Captain rare has no encounter)
-    [464] = 3914, -- Rethilgore
-    [465] = 3886, -- Razorclaw the Butcher
-    [466] = 3887, -- Baron Silverlaine
-    [467] = 4278, -- Commander Springvale
-    [468] = 4279, -- Odo the Blindwatcher
-    [469] = 4274, -- Fenrus the Devourer
-    [470] = 3927, -- Wolf Master Nandos
-    [471] = 4275, -- Archmage Arugal
+    [2748] = 3914, -- Rethilgore
+    [2749] = 3886, -- Razorclaw the Butcher
+    [2750] = 3887, -- Baron Silverlaine
+    [2751] = 4278, -- Commander Springvale
+    [2752] = 4279, -- Odo the Blindwatcher
+    [2753] = 4274, -- Fenrus the Devourer
+    [2754] = 3927, -- Wolf Master Nandos
+    [2755] = 4275, -- Archmage Arugal
 
     -- Blackfathom Deeps
     [2916] = 4887,  -- Ghamoo-ra
     [2915] = 4831,  -- Lady Sarevess
     [2914] = 6243,  -- Gelihast
-    [222] = 12902, -- Lorgus Jett
     [2912] = 4830,  -- Old Serra'kis
     [2911] = 4832,  -- Twilight Lord Kelris
     [2910] = 4829,  -- Aku'mai
 
-    -- The Stockade (no classic wiki DungeonEncounterIDs)
+    -- The Stockade
     [2756] = 1696, -- Targorr the Dread
     [2757] = 1666, -- Kam Deepfury
     [2758] = 1717, -- Hamhock
@@ -162,19 +162,19 @@ local ENCOUNTER_ID_TO_NPC = {
     [2760] = 1716, -- Bazil Thredd
 
     -- Razorfen Kraul
-    [438] = 6168, -- Roogug
-    [439] = 4424, -- Aggem Thorncurse
-    [440] = 4428, -- Death Speaker Jargba
-    [441] = 4420, -- Overlord Ramtusk
-    [883] = 4422, -- Agathelos the Raging
-    [443] = 4421, -- Charlga Razorflank
+    [2773] = 6168, -- Roogug
+    [2774] = 4424, -- Aggem Thorncurse
+    [2775] = 4428, -- Death Speaker Jargba
+    [2776] = 4420, -- Overlord Ramtusk
+    [2777] = 4422, -- Agathelos the Raging
+    [2778] = 4421, -- Charlga Razorflank
 
     -- Gnomeregan (Dark Iron Ambassador rare has no encounter)
-    [378] = 7079, -- Viscous Fallout
-    [379] = 7361, -- Grubbis
-    [380] = 6235, -- Electrocutioner 6000
-    [381] = 6229, -- Crowd Pummeler 9-60
-    [382] = 7800, -- Mekgineer Thermaplugg
+    [2769] = 7079, -- Viscous Fallout
+    [2768] = 7361, -- Grubbis
+    [2770] = 6235, -- Electrocutioner 6000
+    [2771] = 6229, -- Crowd Pummeler 9-60
+    [2772] = 7800, -- Mekgineer Thermaplugg
 
     -- Scarlet Monastery (rares have no encounter; Whitemane fight includes Mograine)
     [444] = 3983, -- Interrogator Vishas
@@ -331,6 +331,10 @@ local ENCOUNTER_NAME_ALIASES = {
 }
 
 local function KillLog(message)
+    if addon.KillDebugLog then
+        addon.KillDebugLog(message)
+        return
+    end
     if not addon.ForeverKillDebug then
         return
     end
@@ -338,6 +342,13 @@ local function KillLog(message)
     if addon.EventLogAdd then
         addon.EventLogAdd("[Kills] " .. message)
     end
+end
+
+local function IsTrackedNpc(npcId)
+    if addon.KillDebugIsTrackedNpc then
+        return addon.KillDebugIsTrackedNpc(npcId)
+    end
+    return addon.IsNpcTrackedForAchievement and addon.IsNpcTrackedForAchievement(npcId) and true or false
 end
 
 local function Describe(value)
@@ -405,8 +416,8 @@ local function TryAwardCreature(creatureID, source)
     if not creatureID then
         return false
     end
-    if not (addon.IsNpcTrackedForAchievement and addon.IsNpcTrackedForAchievement(creatureID)) then
-        KillLog(source .. " creature " .. tostring(creatureID) .. " not tracked")
+    -- Silent when not achievement-tracked: killdebug is filtered to relevant NPCs only.
+    if not IsTrackedNpc(creatureID) then
         return false
     end
     if not addon.AwardKillFromEncounter then
@@ -427,9 +438,18 @@ local function AwardFromUnitStatus(encounterID, encounterUnitStatus)
             local creatureID = entry.creatureID
             local creatureName = entry.creatureName
             local health = entry.remainingHealthPercent
-            KillLog("ENCOUNTER_END unit creatureID=" .. Describe(creatureID)
-                .. " name=" .. Describe(creatureName)
-                .. " health=" .. Describe(health))
+            local logUnit = false
+            if not IsSecret(creatureID) then
+                logUnit = IsTrackedNpc(creatureID)
+            elseif not IsSecret(creatureName) then
+                local byName = ResolveNpcIdFromName(creatureName)
+                logUnit = byName and IsTrackedNpc(byName)
+            end
+            if logUnit then
+                KillLog("ENCOUNTER_END unit creatureID=" .. Describe(creatureID)
+                    .. " name=" .. Describe(creatureName)
+                    .. " health=" .. Describe(health))
+            end
             if not IsSecret(creatureID) and not IsSecret(health) then
                 creatureID = tonumber(creatureID)
                 health = tonumber(health)
@@ -455,6 +475,7 @@ end
 local function AwardFromEncounterName(encounterName, source)
     local npcId = ResolveNpcIdFromName(encounterName)
     if not npcId then
+        -- Useful when filling Forever encounter maps for dungeon achievements.
         KillLog(source .. " no npc mapping for name=" .. Describe(encounterName))
         return false
     end
@@ -467,6 +488,7 @@ local function AwardFromEncounterID(encounterID, source)
     end
     local mapped = ENCOUNTER_ID_TO_NPC[tonumber(encounterID)]
     if not mapped then
+        -- Useful when filling Forever encounter maps for dungeon achievements.
         KillLog(source .. " no npc mapping for encounter id=" .. Describe(encounterID))
         return false
     end
@@ -497,9 +519,8 @@ addon.Restrictions.encounterEndEvent = registeredEnd and true or false
 tracker:SetScript("OnEvent", function(_, event, ...)
     if event == "BOSS_KILL" then
         local encounterID, encounterName = ...
-        KillLog("BOSS_KILL id=" .. Describe(encounterID) .. " name=" .. Describe(encounterName))
         -- Raid rows still use their own BOSS_KILL handler. This is a Forever dungeon fallback when
-        -- ENCOUNTER_END did not identify a creature.
+        -- ENCOUNTER_END did not identify a creature. Logging happens only on award / mapping miss.
         if AwardFromEncounterID(encounterID, "BOSS_KILL") then
             return
         end
@@ -512,18 +533,9 @@ tracker:SetScript("OnEvent", function(_, event, ...)
     end
 
     local encounterID, encounterName, difficultyID, groupSize, success, encounterUnitStatus = ...
-    KillLog("ENCOUNTER_END id=" .. Describe(encounterID)
-        .. " name=" .. Describe(encounterName)
-        .. " difficulty=" .. Describe(difficultyID)
-        .. " size=" .. Describe(groupSize)
-        .. " success=" .. Describe(success)
-        .. " status=" .. (encounterUnitStatus == nil and "nil"
-            or (issecrettable and issecrettable(encounterUnitStatus) and "secret-table"
-                or type(encounterUnitStatus))))
 
     local killSuccess = IsKillSuccess(success)
     if killSuccess ~= true then
-        KillLog("ENCOUNTER_END ignored: success not confirmed")
         return
     end
 
@@ -531,9 +543,11 @@ tracker:SetScript("OnEvent", function(_, event, ...)
     -- before the missing-payload path could log or fall back to encounterName.
     if type(encounterUnitStatus) == "table" then
         if issecrettable and issecrettable(encounterUnitStatus) then
-            KillLog("ENCOUNTER_END encounterUnitStatus is a secret table")
+            KillLog("ENCOUNTER_END encounterUnitStatus is a secret table id=" .. Describe(encounterID)
+                .. " name=" .. Describe(encounterName))
         elseif canaccesstable and not canaccesstable(encounterUnitStatus) then
-            KillLog("ENCOUNTER_END encounterUnitStatus is inaccessible")
+            KillLog("ENCOUNTER_END encounterUnitStatus is inaccessible id=" .. Describe(encounterID)
+                .. " name=" .. Describe(encounterName))
         else
             if AwardFromUnitStatus(encounterID, encounterUnitStatus) then
                 return
@@ -547,8 +561,6 @@ tracker:SetScript("OnEvent", function(_, event, ...)
             if addon.EventLogAdd then
                 addon.EventLogAdd("[Kills] " .. message)
             end
-        else
-            KillLog("ENCOUNTER_END has no usable encounterUnitStatus")
         end
     end
 

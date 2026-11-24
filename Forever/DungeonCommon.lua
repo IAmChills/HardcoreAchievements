@@ -1273,6 +1273,8 @@ local function registerDungeonAchievement(def)
       [4420] = "Overlord Ramtusk",
       [4422] = "Agathelos the Raging",
       [4421] = "Charlga Razorflank",
+      [4425] = "Blind Hunter",
+      [4842] = "Earthcaller Halmgar",
       [3983] = "Interrogator Vishas",
       [4543] = "Bloodmage Thalnos",
       [6490] = "Azshir the Sleepless",

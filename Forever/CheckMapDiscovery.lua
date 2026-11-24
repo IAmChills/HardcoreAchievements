@@ -548,6 +548,7 @@ local LocationMap = {
         ["Iceflow Lake"] = {x = 0.35, y = 0.40},
         ["Frostmane Hold"] = {x = 0.26, y = 0.52},
         ["Coldridge Valley"] = {x = 0.27, y = 0.73},
+        ["Shimmer Ridge"] = {x = 0.39, y = 0.40},
     },
     ["Duskwood"] = {
         ["The Darkened Bank"] = {x = 0.55, y = 0.16},
