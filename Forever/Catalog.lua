@@ -15,7 +15,7 @@ local ClassColor = (addon and addon.GetClassColor())
 local Achievements = {
 
 --{ achId="Test",  title="Test",  level=8, tooltip="Kill " .. ClassColor .. "whatever", icon=134400, points=00, requiredQuestId=nil, targetNpcId=3098, zone="Somewhere" },
---{ achId="Test2", title="Easy Quest Test", level=2, tooltip="Orc starter quest", icon=134400, points=10, requiredQuestId=4641, targetNpcId=nil, faction="Horde", zone="Durotar" },
+--{ achId="Test2", title="Easy Quest Test", level=2, tooltip="Orc starter quest", icon=134400, points=10, requiredQuestId=4641, targetNpcId=3098, faction="Horde", zone="Durotar" },
 --{ achId="Test3", title="Kill + Quest", level=2, tooltip="Kill a boar and complete the orc starter quest", icon=134400, points=10, requiredQuestId=4641, targetNpcId=3098, faction="Horde", zone="Durotar" },
 --{ achId="Test4", title="Kill 3 Boars", level=2, tooltip="Kill 3 boars", icon=134400, points=10, requiredQuestId=nil, requiredKills = { [3098] = 3, }, faction="Horde", zone="Durotar" },
 
@@ -138,6 +138,7 @@ local Achievements = {
     tooltip = "Complete " .. ClassColor .. "Mor'Ladim|r before level 34",
     icon = 3601559,
     points = 10,
+    allowSoloDouble = true,
     requiredQuestId = 228,
     targetNpcId = 522,
     faction = FACTION_ALLIANCE,

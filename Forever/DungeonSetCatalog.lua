@@ -82,6 +82,36 @@ local DungeonSets = {
     staticPoints = true,
   },
 
+  -- KROL'DOK STRONGHOLD
+  {
+    achId = "KrolodokSet",
+    title = "Krol'dok Battlegear Set",
+    -- level = 45,
+    tooltip = "Equip the " .. ClassColor .. "Krol'dok Battlegear Set|r",
+    icon = 132736,
+    points = 50,
+    requiredItems = {275006, 287014, 275005, 287013, 287012},
+    itemOrder = {275006, 287014, 275005, 287013, 287012},
+    class = "WARRIOR",
+    zone = "Krol'dok Stronghold",
+    staticPoints = true,
+  },
+
+  -- ALCAZ PRISON
+  {
+    achId = "DefiasEnforcerSet",
+    title = "Defias Enforcer Set",
+    -- level = 55,
+    tooltip = "Equip the " .. ClassColor .. "Defias Enforcer Set|r",
+    icon = 132629,
+    points = 50,
+    requiredItems = {287019, 276741, 287020, 276746, 287021},
+    itemOrder = {287019, 276741, 287020, 276746, 287021},
+    class = "ROGUE",
+    zone = "Alcaz Prison",
+    staticPoints = true,
+  },
+
   -- SCHOLOMANCE
   {
     achId = "BloodmailSet",

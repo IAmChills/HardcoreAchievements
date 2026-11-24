@@ -239,11 +239,99 @@ local function InitializeDropdown(self, dropdown, config)
     dropdown._checkboxLabels = checkboxLabels
     dropdown._filterList = filterList
     dropdown._statusOnly = config.statusOnly and true or false
+    -- Dashboard: status filters + Solo/Duo/Trio dungeon variation toggles (default off).
+    dropdown._includeVariationFilters = config.includeVariationFilters and true or false
+
+    -- getChecked reads live stored state each click (keepShownOnClick); avoids double-toggle.
+    local function AddToggleCheckbox(text, getChecked, onToggle)
+        local info = UIDropDownMenu_CreateInfo()
+        info.text = text
+        info.checked = getChecked() and true or false
+        info.isNotRadio = true
+        info.keepShownOnClick = true
+        info.func = function(self)
+            local newState = not getChecked()
+            self.checked = newState
+            local buttonName = self:GetName()
+            local checkTexture = _G[buttonName .. "Check"]
+            local uncheckTexture = _G[buttonName .. "UnCheck"]
+            if checkTexture and uncheckTexture then
+                if newState then
+                    checkTexture:Show()
+                    uncheckTexture:Hide()
+                else
+                    checkTexture:Hide()
+                    uncheckTexture:Show()
+                end
+            end
+            onToggle(newState)
+        end
+        UIDropDownMenu_AddButton(info)
+    end
+
+    local function AddDivider()
+        local separatorInfo = UIDropDownMenu_CreateInfo()
+        separatorInfo.hasArrow = false
+        separatorInfo.dist = 0
+        separatorInfo.isTitle = true
+        separatorInfo.isUninteractable = true
+        separatorInfo.notCheckable = true
+        separatorInfo.iconOnly = true
+        separatorInfo.icon = "Interface\\Common\\UI-TooltipDivider-Transparent"
+        separatorInfo.tCoordLeft = 0
+        separatorInfo.tCoordRight = 1
+        separatorInfo.tCoordTop = 0
+        separatorInfo.tCoordBottom = 1
+        separatorInfo.tSizeX = 0
+        separatorInfo.tSizeY = 8
+        separatorInfo.tFitDropDownSizeX = true
+        separatorInfo.iconInfo = {
+            tCoordLeft = 0,
+            tCoordRight = 1,
+            tCoordTop = 0,
+            tCoordBottom = 1,
+            tSizeX = 0,
+            tSizeY = 8,
+            tFitDropDownSizeX = true
+        }
+        UIDropDownMenu_AddButton(separatorInfo)
+    end
+
+    local function AddVariationFilterButtons()
+        dropdown._checkboxStates = GetCheckboxStatesFromDB()
+        AddDivider()
+        local varTitle = UIDropDownMenu_CreateInfo()
+        varTitle.text = "Dungeon Variations"
+        varTitle.isTitle = true
+        varTitle.isUninteractable = true
+        varTitle.notCheckable = true
+        varTitle.disabled = true
+        UIDropDownMenu_AddButton(varTitle)
+
+        -- Indices match GetCheckboxStates: 10 Solo, 11 Duo, 12 Trio (default false).
+        local variationEntries = {
+            { index = 12, label = "Show Trio Dungeons" },
+            { index = 11, label = "Show Duo Dungeons" },
+            { index = 10, label = "Show Solo Dungeons" },
+        }
+        for _, entry in ipairs(variationEntries) do
+            local checkboxIndex = entry.index
+            AddToggleCheckbox(entry.label, function()
+                return dropdown._checkboxStates[checkboxIndex]
+            end, function(newState)
+                dropdown._checkboxStates[checkboxIndex] = newState
+                SaveCheckboxStatesToDB(dropdown._checkboxStates)
+                if dropdown._onCheckboxChange then
+                    dropdown._onCheckboxChange(checkboxIndex, newState)
+                end
+            end)
+        end
+    end
     
     UIDropDownMenu_Initialize(dropdown, function(self, level)
         if level == 1 then
             -- Reload checkbox states from database each time dropdown opens (for sync between frames)
-            if not dropdown._statusOnly then
+            if not dropdown._statusOnly or dropdown._includeVariationFilters then
                 dropdown._checkboxStates = GetCheckboxStatesFromDB()
             end
             -- Reload status filter states from database each time dropdown opens
@@ -261,47 +349,23 @@ local function InitializeDropdown(self, dropdown, config)
             -- Add status filter checkboxes (Completed, Available, Failed)
             local statusFilterLabels = { "Completed", "Available", "Failed" }
             for i = 1, 3 do
-                local info = UIDropDownMenu_CreateInfo()
-                local statusIndex = i  -- Capture index in local variable
-                info.text = statusFilterLabels[statusIndex]
-                info.checked = dropdown._statusFilters[statusIndex]
-                info.isNotRadio = true
-                info.keepShownOnClick = true
-                info.func = function(self)
-                    -- Toggle the state
-                    dropdown._statusFilters[statusIndex] = not dropdown._statusFilters[statusIndex]
-                    local newState = dropdown._statusFilters[statusIndex]
-                    
-                    -- Update the button's checked property
-                    self.checked = newState
-                    
-                    -- Manually toggle the checkmark textures for immediate visual feedback
-                    local buttonName = self:GetName()
-                    local checkTexture = _G[buttonName .. "Check"]
-                    local uncheckTexture = _G[buttonName .. "UnCheck"]
-                    if checkTexture and uncheckTexture then
-                        if newState then
-                            checkTexture:Show()
-                            uncheckTexture:Hide()
-                        else
-                            checkTexture:Hide()
-                            uncheckTexture:Show()
-                        end
-                    end
-                    
-                    -- Save to database
+                local statusIndex = i
+                AddToggleCheckbox(statusFilterLabels[statusIndex], function()
+                    return dropdown._statusFilters[statusIndex]
+                end, function(newState)
+                    dropdown._statusFilters[statusIndex] = newState
                     SaveStatusFilterStates(dropdown._statusFilters)
-                    
-                    -- Call the callback
                     if dropdown._onStatusFilterChange then
                         dropdown._onStatusFilterChange(statusIndex, newState)
                     end
-                end
-                UIDropDownMenu_AddButton(info)
+                end)
             end
 
-            -- Dashboard only needs status filters; category tabs replace the rest.
+            -- Dashboard: status + optional Solo/Duo/Trio toggles; category tabs replace the rest.
             if dropdown._statusOnly then
+                if dropdown._includeVariationFilters then
+                    AddVariationFilterButtons()
+                end
                 return
             end
             
@@ -506,6 +570,7 @@ local function CreateAndInitializeDropdown(self, parent, positionConfig, callbac
     InitializeDropdown(self, dropdown, {
         checkboxLabels = checkboxLabels,
         statusOnly = positionConfig.statusOnly,
+        includeVariationFilters = positionConfig.includeVariationFilters,
         onFilterChange = callbacks.onFilterChange or function() end,
         onCheckboxChange = callbacks.onCheckboxChange or function() end,
         onStatusFilterChange = callbacks.onStatusFilterChange or function() end,

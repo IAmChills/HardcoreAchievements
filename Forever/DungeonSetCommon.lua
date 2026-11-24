@@ -49,6 +49,20 @@ local function GetItemName(itemId)
     [286989] = "Violet Sorcerer's Wraps",
     [273044] = "Violet Sorcerer's Robes",
 
+    -- Krol'dok Battlegear Set (Krol'dok Stronghold)
+    [275006] = "Krol'dok Warplate Helmet",
+    [287014] = "Krol'dok Warplate Pauldrons",
+    [275005] = "Krol'dok Warplate Chest",
+    [287013] = "Krol'dok Warplate Legplates",
+    [287012] = "Krol'dok Warplate Gauntlets",
+
+    -- Defias Enforcer's Garb Set (Alcaz Prison)
+    [287019] = "Defias Enforcer's Mask",
+    [276741] = "Defias Enforcer's Shoulderpads",
+    [287020] = "Defias Enforcer's Chest",
+    [276746] = "Defias Enforcer's Legguards",
+    [287021] = "Defias Enforcer's Prowlers",
+
     -- Chain of the Scarlet Crusade Set (Paladin)
     [10329] = "Scarlet Belt",
     [10332] = "Scarlet Boots",
