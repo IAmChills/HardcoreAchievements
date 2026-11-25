@@ -114,20 +114,21 @@ local ExplorationAchievements = {
   end,
   faction = FACTION_ALLIANCE,
   staticPoints = true,
-}, {
-  achId = "StormH",
-  title = "Discover Stormwind City",
-  level = nil,
-  tooltip = "Discover " .. ClassColor .. "Stormwind City|r",
-  icon = 463451,
-  points = 0,
-  explorationZone = "Stormwind City",
-  customIsCompleted = function()
-      return CheckMapDiscoveryByLocation("Elwynn Forest", "Stormwind City")
-  end,
-  faction = FACTION_HORDE,
-  staticPoints = true,
-},
+}, 
+-- {
+--   achId = "StormH",
+--   title = "Discover Stormwind City",
+--   level = nil,
+--   tooltip = "Discover " .. ClassColor .. "Stormwind City|r",
+--   icon = 463451,
+--   points = 0,
+--   explorationZone = "Stormwind City",
+--   customIsCompleted = function()
+--       return CheckMapDiscoveryByLocation("Elwynn Forest", "Stormwind City")
+--   end,
+--   faction = FACTION_HORDE,
+--   staticPoints = true,
+-- },
 }
 
 local KalimdorExplorationZones = {
@@ -140,7 +141,7 @@ local KalimdorExplorationZones = {
   { zone = "Dustwallow Marsh", title = "Dustwallow Marsh", icon = 236758, points = 10 },
   { zone = "Felwood", title = "Felwood", icon = 236763, points = 10 },
   { zone = "Feralas", title = "Feralas", icon = 236764, points = 10 },
-  { zone = "Moonglade", title = "Moonglade", icon = 135758, points = 10 },
+  --{ zone = "Moonglade", title = "Moonglade", icon = 135758, points = 10 },
   { zone = "Mount Hyjal", title = "Mount Hyjal", icon = 409547, points = 10 },
   { zone = "Mulgore", title = "Mulgore", icon = 236809, points = 10 },
   --{ zone = "Orgrimmar", title = "Orgrimmar", icon = "Interface\\AddOns\\HardcoreAchievements\\Images\\Icons\\Achievement_Zone_XXX.png", points = 0 },
