@@ -253,8 +253,8 @@ local function ApplyForeverRetailScrollBar()
 
   bar:SetParent(DashboardFrame)
   bar:ClearAllPoints()
-  bar:SetPoint("TOPRIGHT", scroll, "TOPRIGHT", 0, -2)
-  bar:SetPoint("BOTTOMRIGHT", scroll, "BOTTOMRIGHT", 0, 2)
+  bar:SetPoint("TOPRIGHT", scroll, "TOPRIGHT", 10, -2)
+  bar:SetPoint("BOTTOMRIGHT", scroll, "BOTTOMRIGHT", 10, 2)
   bar:SetFrameStrata(scroll:GetFrameStrata() or "MEDIUM")
   bar:SetFrameLevel((scroll:GetFrameLevel() or 1) + 20)
   bar:Show()
@@ -1474,8 +1474,6 @@ local function EnsureDashboardLeaderboardUI()
   DashboardFrame.LeaderboardSearchBox = searchBox
 
   local header = CreateFrame("Frame", nil, DashboardFrame)
-  -- Match BorderClip TOP y-inset (+2 vs Scroll TOP): anchoring slightly up covers the viewport band
-  -- where scrolled rows would otherwise show through above the opaque header (UIPanel clip + font bleed).
   header:SetPoint("TOPLEFT", DashboardFrame.Scroll, "TOPLEFT", 1, -1)
   header:SetPoint("TOPRIGHT", DashboardFrame.Scroll, "TOPRIGHT", -1, -1)
   header:SetHeight(LEADERBOARD_HEADER_HEIGHT)
@@ -2294,7 +2292,7 @@ local function ApplyForeverScrollInset()
   local headerInset = DashboardFrame._hcaLegacyHeaderHeight or EMBEDDED_HEADER_INSET
   DashboardFrame.Scroll:ClearAllPoints()
   DashboardFrame.Scroll:SetPoint("TOPLEFT", DashboardFrame, "TOPLEFT", 8 + TAB_PANEL_WIDTH, -(headerInset + FOREVER_CONTENT_EXTRA_INSET))
-  DashboardFrame.Scroll:SetPoint("BOTTOMRIGHT", DashboardFrame, "BOTTOMRIGHT", -10, 24)
+  DashboardFrame.Scroll:SetPoint("BOTTOMRIGHT", DashboardFrame, "BOTTOMRIGHT", -20, 24)
 end
 
 local function LayoutIcons(container, icons)
@@ -4427,7 +4425,7 @@ local function BuildDashboardFrame()
   -- Points number text (with drop shadow) - positioned below title bar/divider
   if not DashboardFrame.TotalPointsText then
     DashboardFrame.TotalPointsText = DashboardFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlightLarge")
-    DashboardFrame.TotalPointsText:SetPoint("TOPLEFT", DashboardFrame, "TOPLEFT", 20, -58)
+    DashboardFrame.TotalPointsText:SetPoint("TOPLEFT", DashboardFrame, "TOPLEFT", 12, -58)
     DashboardFrame.TotalPointsText:SetText("0") -- Will be updated by UpdateTotalPointsText
     DashboardFrame.TotalPointsText:SetTextColor(0.922, 0.871, 0.761)
     DashboardFrame.TotalPointsText:SetFont(POINTS_FONT_PATH, 42)
@@ -4467,7 +4465,7 @@ local function BuildDashboardFrame()
   -- Multiplier text (below the points background)
   if not DashboardFrame.MultiplierText then
     DashboardFrame.MultiplierText = DashboardFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    DashboardFrame.MultiplierText:SetPoint("TOPLEFT", DashboardFrame.PlayerNameText, "BOTTOMLEFT", 1, -12) -- Positioned below with spacing
+    DashboardFrame.MultiplierText:SetPoint("BOTTOMLEFT", DashboardFrame.TabHeader, "TOPLEFT", 4, 5) -- Positioned below with spacing
     DashboardFrame.MultiplierText:SetText("") -- Will be set by UpdateMultiplierText
     DashboardFrame.MultiplierText:SetJustifyH("LEFT")
     DashboardFrame.MultiplierText:Show() -- Ensure it's visible
