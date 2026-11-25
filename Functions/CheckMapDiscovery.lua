@@ -426,6 +426,7 @@ local LocationMap = {
         ["The Great Lift"] = {x = 0.29, y = 0.25},
         ["Freewind Post"] = {x = 0.46, y = 0.51},
         ["Splithoof Crag"] = {x = 0.48, y = 0.41},
+        ["Windbreak Canyon"] = {x = 0.60, y = 0.54},
         ["Shimmering Flats"] = {x = 0.79, y = 0.73},
     },
     ["Thunder Bluff"] = {

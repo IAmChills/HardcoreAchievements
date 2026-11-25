@@ -146,8 +146,8 @@ local Achievements = {
 }, {
     achId = "ForsakenCourier",
     title = "Courier of Death",
-    level = 34,
-    tooltip = "Complete " .. ClassColor .. "Hints of a New Plague|r before level 35",
+    level = 33,
+    tooltip = "Complete " .. ClassColor .. "Hints of a New Plague Pt. 2|r before level 34",
     icon = 133470,
     points = 10,
     requiredQuestId = 658,
@@ -161,7 +161,7 @@ local Achievements = {
     tooltip = "Complete " .. ClassColor .. "Stinky’s Escape|r before level 35",
     icon = 236758,
     points = 10,
-    allowSoloDouble = true,
+    allowSoloDouble = false,
     requiredQuestId = 1222,
     targetNpcId = nil,
     faction = FACTION_ALLIANCE,
@@ -479,6 +479,18 @@ local Achievements = {
     points = 60,
     customIsCompleted = function(newLevel) return (newLevel or UnitLevel("player") or 1) >= 60 end,
     staticPoints = true,
+    -- Forever Legacy level-60 milestones are per-class.
+    nativeAchievementIdByClass = {
+        DRUID = 61504,
+        HUNTER = 61993,
+        MAGE = 61996,
+        PALADIN = 61999,
+        PRIEST = 62002,
+        ROGUE = 62005,
+        SHAMAN = 62008,
+        WARLOCK = 62011,
+        WARRIOR = 61501,
+    },
 }, {
     achId = "GalensEscape",
     title = "Galen's Freedom",

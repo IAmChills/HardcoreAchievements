@@ -1902,11 +1902,27 @@ local function MarkRowCompleted(row, cdbParam)
         local broadcastMessage = string_format(ACHIEVEMENT_BROADCAST, "", achievementTitle)
         broadcastMessage = broadcastMessage:gsub("^%s+", "")
 
+        -- Forever: prefer native Legacy achievement links when mapped on the def
+        -- (nativeAchievementId, or nativeAchievementIdByClass for Level60). Else HCA bracket.
         local link
-        local achIdForLink = row.achId or row.id
-        local getBracket = addon and addon.GetAchievementBracket
-        if achIdForLink and type(getBracket) == "function" then
-            link = getBracket(achIdForLink)
+        local def = row._def or row.def
+        local nativeId = def and tonumber(def.nativeAchievementId)
+        if not nativeId and def and type(def.nativeAchievementIdByClass) == "table" then
+            local _, classToken = UnitClass("player")
+            nativeId = tonumber(def.nativeAchievementIdByClass[classToken])
+        end
+        if isForever and nativeId and type(GetAchievementLink) == "function" then
+            local ok, nativeLink = pcall(GetAchievementLink, nativeId)
+            if ok and type(nativeLink) == "string" and nativeLink ~= "" then
+                link = nativeLink
+            end
+        end
+        if not link then
+            local achIdForLink = row.achId or row.id
+            local getBracket = addon and addon.GetAchievementBracket
+            if achIdForLink and type(getBracket) == "function" then
+                link = getBracket(achIdForLink)
+            end
         end
         local linkedMessage = string_format(ACHIEVEMENT_BROADCAST, "", link or achievementTitle):gsub("^%s+", "")
 

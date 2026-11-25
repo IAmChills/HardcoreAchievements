@@ -168,7 +168,8 @@ local MetaAchievements = {
     icon = 237381,
     points = 100,
     requiredAchievements = continentExplorationAchievements,
-    achievementOrder = continentExplorationAchievements
+    achievementOrder = continentExplorationAchievements,
+    nativeAchievementId = 62382, -- Forever Legacy: Explorer
   },
   {
     achId = "SecoProfMeta",

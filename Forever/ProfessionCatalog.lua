@@ -19,6 +19,16 @@ local pointsByThreshold = {
     [300] = 100,
 }
 
+-- Forever Legacy trade-skill achievement IDs (Journeyman / Expert / Artisan).
+local nativeProfessionIds = {
+    Alchemy = { [150] = 62012, [225] = 62013, [300] = 62014 },
+    Blacksmithing = { [150] = 62015, [225] = 62016, [300] = 62017 },
+    Enchanting = { [150] = 62018, [225] = 62019, [300] = 62020 },
+    Engineering = { [150] = 62021, [225] = 62022, [300] = 62023 },
+    Leatherworking = { [150] = 62024, [225] = 62025, [300] = 62026 },
+    Tailoring = { [150] = 62028, [225] = 62029, [300] = 62030 },
+}
+
 local function MakeCompletionFunc(skillID, requiredRank)
     return function()
         return GetSkillRank and GetSkillRank(skillID) >= requiredRank
@@ -32,11 +42,13 @@ if addon then
 
   for _, profession in ipairs(ProfessionList) do
     local label = profession.name or "Profession"
-    local shortKey = profession.shortKey or (label:gsub("%s+", ""))
+    local shortKey = profession.shortKey or profession.key or (label:gsub("%s+", ""))
     for _, threshold in ipairs(thresholds) do
       local achId = string_format("Profession_%s_%d", shortKey, threshold)
       local title = string_format("%s %s", rankTitles[threshold] or ("Rank " .. threshold), label)
       local tooltip = string_format("Reach %d skill in %s", threshold, label)
+      local byThreshold = nativeProfessionIds[shortKey]
+      local nativeId = byThreshold and byThreshold[threshold]
 
       local def = {
         achId = achId,
@@ -52,6 +64,7 @@ if addon then
         hiddenUntilComplete = true,
         customIsCompleted = MakeCompletionFunc(profession.skillID, threshold),
         isProfession = true,
+        nativeAchievementId = nativeId,
       }
 
       if addon.RegisterCustomAchievement then
