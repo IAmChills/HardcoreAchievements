@@ -929,6 +929,37 @@ local function GetAchievementLevel(achievementId)
     return nil
 end
 
+local function StripColorForSort(text)
+    if type(text) ~= "string" then
+        return ""
+    end
+    return (text:gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", "")):lower()
+end
+
+-- Title used for A-Z ordering (same-level ties and no-level entries).
+local function GetAchievementSortName(achievementId, data)
+    local name
+    if type(data) == "table" and data.title then
+        name = data.title
+    elseif type(data) == "string" then
+        name = data
+    else
+        local _, wowName = GetAchievementInfo(achievementId)
+        name = wowName
+        if not name then
+            local row = addon and addon.GetAchievementRow and addon.GetAchievementRow(achievementId)
+            if row then
+                name = (row.Title and row.Title.GetText and row.Title:GetText()) or row.title
+            end
+        end
+    end
+    if not name and addon and addon.AchievementDefs then
+        local def = addon.AchievementDefs[tostring(achievementId)]
+        name = def and def.title
+    end
+    return StripColorForSort(name or tostring(achievementId))
+end
+
 -- Helper function to get achievement description/tooltip from definition (with extended info for dungeons/sets)
 local function GetAchievementDescription(achievementId)
     local baseTooltip = nil
@@ -1670,7 +1701,7 @@ local function Update(self)
         -- Set content frame width to match base frame (for text wrapping)
         trackerContentFrame:SetWidth(baseFrameWidth)
 
-        -- Sort tracked achievements by level ascending; no-level entries sink to the bottom.
+        -- Level ascending; no-level last. Same level / no-level ties sort A-Z by title.
         local sortedAchievements = {}
         for achievementId, data in pairs(trackedAchievements) do
             local level = GetAchievementLevel(achievementId)
@@ -1679,7 +1710,7 @@ local function Update(self)
                 id = achievementId,
                 data = data,
                 level = (level and level > 0) and level or nil,
-                trackedOrder = GetTrackedAchievementOrder(data) or math.huge,
+                sortName = GetAchievementSortName(achievementId, data),
             })
         end
 
@@ -1692,8 +1723,8 @@ local function Update(self)
             elseif aLevel or bLevel then
                 return aLevel ~= nil
             end
-            if a.trackedOrder ~= b.trackedOrder then
-                return a.trackedOrder < b.trackedOrder
+            if a.sortName ~= b.sortName then
+                return a.sortName < b.sortName
             end
             return tostring(a.id) < tostring(b.id)
         end)
