@@ -396,7 +396,7 @@ local Dungeons = {
 
   -- Krol'dok Stronghold (Level 40-45)
   {
-    achId = "KS",
+    achId = "KDS",
     title = "Krol'dok Stronghold",
     tooltip = "Defeat the bosses of " .. ClassColor .. "Krol'dok Stronghold|r at level 43 or lower upon entering the dungeon",
     icon = 237299,
