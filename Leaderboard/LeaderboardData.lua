@@ -269,6 +269,8 @@ end
 local function ValueForSort(row, key)
     if key == "updated" then
         return row._sortUpdated or tonumber(row.lastSeenSec) or math.huge
+    elseif key == "lastOnline" then
+        return row._sortLastOnline or tonumber(row.lastOnlineSec) or math.huge
     elseif key == "class" then
         return row._sortClass or ""
     elseif key == "name" then
@@ -328,10 +330,14 @@ local function UpdateRelativeTimes(rows, now)
     for i = 1, #rows do
         local row = rows[i]
         local lastSeenSec = math.max(0, now - (tonumber(row.updatedAt) or 0))
+        local lastOnlineSec = math.max(0, now - (tonumber(row.seenAt) or 0))
         row.lastSeenSec = lastSeenSec
         row.lastSeenText = FormatAgo(lastSeenSec)
-        row.online = (row.offline ~= true) and (math.max(0, now - (tonumber(row.seenAt) or 0)) <= RECENT_SECONDS)
+        row.lastOnlineSec = lastOnlineSec
+        row.lastOnlineText = FormatAgo(lastOnlineSec)
+        row.online = (row.offline ~= true) and (lastOnlineSec <= RECENT_SECONDS)
         row._sortUpdated = lastSeenSec
+        row._sortLastOnline = lastOnlineSec
     end
 end
 
@@ -339,9 +345,10 @@ local function BuildDisplayRow(key, row, now, presence)
     local rowUpdatedAt = tonumber(row.updatedAt) or 0
     local presenceUpdatedAt = type(presence) == "table" and (tonumber(presence.updatedAt) or 0) or 0
     -- "Updated" shows when the row's data last changed; presence (which can arrive without the row,
-    -- e.g. across Forever rulesets) only drives online status.
+    -- e.g. across Forever rulesets) only drives online status / Last Online.
     local seenAt = math.max(rowUpdatedAt, presenceUpdatedAt)
     local lastSeenSec = math.max(0, now - rowUpdatedAt)
+    local lastOnlineSec = math.max(0, now - seenAt)
     local offline = row.offline == true
     if type(presence) == "table" and presenceUpdatedAt >= rowUpdatedAt then
         offline = presence.offline == true
@@ -377,7 +384,9 @@ local function BuildDisplayRow(key, row, now, presence)
         seenAt = seenAt,
         lastSeenSec = lastSeenSec,
         lastSeenText = FormatAgo(lastSeenSec),
-        online = not offline and (math.max(0, now - seenAt) <= RECENT_SECONDS),
+        lastOnlineSec = lastOnlineSec,
+        lastOnlineText = FormatAgo(lastOnlineSec),
+        online = not offline and (lastOnlineSec <= RECENT_SECONDS),
         _sortName = tostring(name):lower(),
         _sortClass = tostring(classLabel):lower(),
         _sortFaction = tostring(faction):lower(),
@@ -385,6 +394,7 @@ local function BuildDisplayRow(key, row, now, presence)
         _sortAchievements = tonumber(row.points) or 0,
         _sortSelfFound = selfFound and 1 or 0,
         _sortUpdated = lastSeenSec,
+        _sortLastOnline = lastOnlineSec,
         _displayClassPortrait = FormatClassPortrait(classLabel, row.raceId, row.sex),
         _displayAchievementColor = GetLeaderboardAchievementColorCode(tonumber(row.completed) or 0, tonumber(row.total) or 0),
     }
@@ -459,7 +469,9 @@ function Data:GetRows(sortState, opts)
     local sortSignature = SortSignature(sortState, scopeSignature)
     local sortKey = sortState and sortState.key
 
-    if sortKey and sortKey ~= "updated" and cachedSortedRows and cachedBaseVersion == dataVersion and cachedSortSignature == sortSignature then
+    -- Relative-time sorts need a fresh SortRows pass as ages advance.
+    if sortKey and sortKey ~= "updated" and sortKey ~= "lastOnline"
+        and cachedSortedRows and cachedBaseVersion == dataVersion and cachedSortSignature == sortSignature then
         UpdateRelativeTimes(cachedSortedRows, Now())
         return cachedSortedRows
     end

@@ -67,6 +67,7 @@ local CHECKBOX_TEXTURE_ACTIVE = "Interface\\AddOns\\HardcoreAchievements\\Images
 local SETTINGS_ICON_TEXTURE = "Interface\\AddOns\\HardcoreAchievements\\Images\\icon_gear.png"
 local LEADERBOARD_ROW_HEIGHT = 24
 local LEADERBOARD_HEADER_HEIGHT = 24
+local LEADERBOARD_COL_INSET = 4
 local LEADERBOARD_OFFLINE_COLOR = { 0.65, 0.65, 0.65 }
 local LEADERBOARD_GUILD_BRIGHT_GREEN = { 0.25, 1, 0.25 }
 local LEADERBOARD_DEAD_COLOR = { 0.95, 0.26, 0.21 }
@@ -1048,6 +1049,8 @@ local LEADERBOARD_COLS = {
 if addon.IsForeverClient and addon.IsForeverClient() then
   -- Forever rows store the ruleset in row.realm.
   table.insert(LEADERBOARD_COLS, 5, { key = "realm", title = "Ruleset", width = 75, align = "CENTER" })
+  -- Presence heartbeat / last activity age (after Updated = last data publish).
+  table.insert(LEADERBOARD_COLS, { key = "lastOnline", title = "Online", width = 70, align = "CENTER" })
 end
 
 local LB_COL = {}
@@ -1296,7 +1299,9 @@ local function RefreshDashboardLeaderboardTimes()
   if not DASHBOARD or not DASHBOARD.leaderboardRows then
     return false
   end
-  if leaderboardSortState.key == nil or leaderboardSortState.key == "updated" then
+  if leaderboardSortState.key == nil
+      or leaderboardSortState.key == "updated"
+      or leaderboardSortState.key == "lastOnline" then
     return false
   end
 
@@ -1314,6 +1319,9 @@ local function RefreshDashboardLeaderboardTimes()
     end
     local cellColor = isOffline and LEADERBOARD_OFFLINE_COLOR or nil
     SetLeaderboardCell(row, LB_COL.updated, rowData.lastSeenText or "?", cellColor)
+    if LB_COL.lastOnline then
+      SetLeaderboardCell(row, LB_COL.lastOnline, rowData.lastOnlineText or "?", cellColor)
+    end
   end
   return true
 end
@@ -1474,8 +1482,7 @@ local function EnsureDashboardLeaderboardUI()
   DashboardFrame.LeaderboardSearchBox = searchBox
 
   local header = CreateFrame("Frame", nil, DashboardFrame)
-  header:SetPoint("TOPLEFT", DashboardFrame.Scroll, "TOPLEFT", 1, -1)
-  header:SetPoint("TOPRIGHT", DashboardFrame.Scroll, "TOPRIGHT", -1, -1)
+  header:SetPoint("TOPLEFT", DashboardFrame.Scroll, "TOPLEFT", LEADERBOARD_COL_INSET, -1)
   header:SetHeight(LEADERBOARD_HEADER_HEIGHT)
   header:SetFrameLevel((DashboardFrame.Scroll:GetFrameLevel() or 1) + 20)
   header:Hide()
@@ -1774,6 +1781,9 @@ local function BindLeaderboardRowData(row, rowData, localCharacterKey, viewerGui
   end
   SetLeaderboardCell(row, LB_COL.achievements, achievementText, cellColor)
   SetLeaderboardCell(row, LB_COL.updated, rowData.lastSeenText or "?", cellColor)
+  if LB_COL.lastOnline then
+    SetLeaderboardCell(row, LB_COL.lastOnline, rowData.lastOnlineText or "?", cellColor)
+  end
 
   row:Show()
 end
@@ -1813,6 +1823,8 @@ local function UpdateLeaderboardRow(playerKey)
       if oldData.points ~= data.points then return false end
     elseif sortKey == "updated" then
       if oldData.updatedAt ~= data.updatedAt or oldData.online ~= data.online then return false end
+    elseif sortKey == "lastOnline" then
+      if oldData.seenAt ~= data.seenAt or oldData.online ~= data.online then return false end
     elseif sortKey == "level" then
       if oldData.level ~= data.level then return false end
     elseif sortKey == "name" then
@@ -1907,11 +1919,14 @@ local function BuildDashboardLeaderboardRows()
   DASHBOARD.leaderboardRows = DASHBOARD.leaderboardRows or {}
 
   local container = DashboardFrame.Content
-  local inset = 4
+  local inset = LEADERBOARD_COL_INSET
   local width = math.max((container:GetWidth() or 1) - inset - 2, 1)
-  if DashboardFrame._hcaLbHdrColW ~= width then
-    DashboardFrame._hcaLbHdrColW = width
-    LayoutLeaderboardColumns(DashboardFrame.LeaderboardHeader, DashboardFrame.LeaderboardHeaders, width)
+  if DashboardFrame.LeaderboardHeader then
+    if DashboardFrame._hcaLbHdrColW ~= width then
+      DashboardFrame._hcaLbHdrColW = width
+      DashboardFrame.LeaderboardHeader:SetWidth(width)
+      LayoutLeaderboardColumns(DashboardFrame.LeaderboardHeader, DashboardFrame.LeaderboardHeaders, width)
+    end
   end
   UpdateLeaderboardHeaderText()
   UpdateLeaderboardScopeCaption()
@@ -4170,12 +4185,52 @@ local function BuildDashboardFrame()
       DashboardFrame.TabScrollBorder = border
     end
 
-    -- Tabs (single-select). Not wired to filtering yet.
+    -- Category tabs. Dungeon nests Solo/Duo/Trio behind a right-aligned +/- expander.
+    local DUNGEON_CHILD_KEYS = {
+      dungeon_solo = true,
+      dungeon_duo = true,
+      dungeon_trio = true,
+    }
+
+    local function IsDungeonVariationsExpanded()
+      if DashboardFrame._dungeonVariationsExpanded ~= nil then
+        return DashboardFrame._dungeonVariationsExpanded and true or false
+      end
+      if type(GetCharDB) == "function" then
+        local _, cdb = GetCharDB()
+        if cdb and cdb.settings and cdb.settings.dashboardDungeonVariationsExpanded ~= nil then
+          DashboardFrame._dungeonVariationsExpanded = cdb.settings.dashboardDungeonVariationsExpanded and true or false
+          return DashboardFrame._dungeonVariationsExpanded
+        end
+      end
+      DashboardFrame._dungeonVariationsExpanded = false
+      return false
+    end
+
+    local function SetDungeonVariationsExpanded(expanded)
+      expanded = expanded and true or false
+      DashboardFrame._dungeonVariationsExpanded = expanded
+      if type(GetCharDB) == "function" then
+        local _, cdb = GetCharDB()
+        if cdb then
+          cdb.settings = cdb.settings or {}
+          cdb.settings.dashboardDungeonVariationsExpanded = expanded
+        end
+      end
+    end
 
     local tabDefs = {
       { key = "all", label = "All" },
       { key = "quest", label = "Quests" },
-      { key = "dungeon", label = "Dungeon" },
+      {
+        key = "dungeon",
+        label = "Dungeon",
+        children = {
+          { key = "dungeon_solo", label = "Solo" },
+          { key = "dungeon_duo", label = "Duo" },
+          { key = "dungeon_trio", label = "Trio" },
+        },
+      },
     }
     if isTBC then
       table_insert(tabDefs, { key = "heroic_dungeon", label = "Heroic Dungeon" })
@@ -4187,41 +4242,254 @@ local function BuildDashboardFrame()
       { key = "reputation", label = "Reputation" },
       { key = "exploration", label = "Exploration" },
       { key = "gear_sets", label = "Gear Sets" },
-      { key = "dungeon_solo", label = "Dungeon Solo" },
-      { key = "dungeon_duo", label = "Dungeon Duo" },
-      { key = "dungeon_trio", label = "Dungeon Trio" },
       { key = "ridiculous", label = "Ridiculous" },
       { key = "secret", label = "Secret" },
       { key = "guild", label = "Guild" },
       { key = "log", label = "Logs" },
     }
     for _, t in ipairs(more) do table_insert(tabDefs, t) end
+    DashboardFrame._categoryTabDefs = tabDefs
 
     DashboardFrame.TabButtons = DashboardFrame.TabButtons or {}
     DashboardFrame.TabButtonsByKey = DashboardFrame.TabButtonsByKey or {}
 
+    local CHILD_TAB_INDENT = 14
+    local CHILD_TAB_TEXT_COLOR = { 0.70, 0.68, 0.60 }
+    local CHILD_TAB_TEXTURE_COLOR = { 0.70, 0.74, 0.86 }
+
     local function ApplyTabVisual(btn, selected)
       if not btn then return end
       local classR, classG, classB = GetPlayerClassColor()
+      local isChild = btn._isChildTab and true or false
       if btn.Texture then
-        btn.Texture:SetAlpha(selected and 1.0 or 0.65)
-        btn.Texture:SetVertexColor(selected and classR or 1, selected and classG or 1, selected and classB or 1)
+        if selected then
+          btn.Texture:SetAlpha(isChild and 0.88 or 1.0)
+          btn.Texture:SetVertexColor(classR, classG, classB)
+        elseif isChild then
+          btn.Texture:SetAlpha(0.40)
+          btn.Texture:SetVertexColor(CHILD_TAB_TEXTURE_COLOR[1], CHILD_TAB_TEXTURE_COLOR[2], CHILD_TAB_TEXTURE_COLOR[3])
+        else
+          btn.Texture:SetAlpha(0.65)
+          btn.Texture:SetVertexColor(1, 1, 1)
+        end
       end
       if btn.Text then
         if selected then
           btn.Text:SetTextColor(classR, classG, classB)
+        elseif isChild then
+          btn.Text:SetTextColor(CHILD_TAB_TEXT_COLOR[1], CHILD_TAB_TEXT_COLOR[2], CHILD_TAB_TEXT_COLOR[3])
         else
           btn.Text:SetTextColor(TAB_TEXT_COLOR[1], TAB_TEXT_COLOR[2], TAB_TEXT_COLOR[3])
         end
       end
+      if btn.ChildAccent then
+        if isChild then
+          if selected then
+            btn.ChildAccent:SetColorTexture(classR, classG, classB, 0.85)
+          else
+            btn.ChildAccent:SetColorTexture(0.55, 0.58, 0.68, 0.75)
+          end
+          btn.ChildAccent:Show()
+        else
+          btn.ChildAccent:Hide()
+        end
+      end
+      if btn.ExpandButton and btn.ExpandButton.Text then
+        local er, eg, eb = classR, classG, classB
+        if not selected then
+          er, eg, eb = TAB_TEXT_COLOR[1], TAB_TEXT_COLOR[2], TAB_TEXT_COLOR[3]
+        end
+        btn.ExpandButton.Text:SetTextColor(er, eg, eb)
+      end
     end
 
+    local function EnsureTabButton(index)
+      local btn = DashboardFrame.TabButtons[index]
+      if btn then
+        return btn
+      end
+      btn = CreateFrame("Button", nil, DashboardFrame.TabContent)
+      btn:SetSize(TAB_PANEL_WIDTH - 16, TAB_BUTTON_HEIGHT)
+
+      local tex = btn:CreateTexture(nil, "ARTWORK")
+      tex:SetAllPoints(btn)
+      tex:SetTexture(TAB_BUTTON_TEXTURE)
+      tex:SetTexCoord(0, 1, 0, 1)
+      tex:SetAlpha(0.65)
+      btn.Texture = tex
+
+      local hl = btn:CreateTexture(nil, "HIGHLIGHT")
+      hl:SetAllPoints(btn)
+      hl:SetTexture(TAB_BUTTON_TEXTURE)
+      hl:SetBlendMode("ADD")
+      hl:SetAlpha(0.20)
+      btn.Highlight = hl
+
+      local label = btn:CreateFontString(nil, "OVERLAY", TAB_TEXT_FONT)
+      label:SetPoint("LEFT", btn, "LEFT", 10, 0)
+      label:SetJustifyH("LEFT")
+      label:SetTextColor(TAB_TEXT_COLOR[1], TAB_TEXT_COLOR[2], TAB_TEXT_COLOR[3])
+      btn.Text = label
+
+      DashboardFrame.TabButtons[index] = btn
+      return btn
+    end
+
+    local function EnsureDungeonExpandButton(btn)
+      if btn.ExpandButton then
+        return btn.ExpandButton
+      end
+      local expand = CreateFrame("Button", nil, btn)
+      expand:SetSize(22, TAB_BUTTON_HEIGHT)
+      expand:SetPoint("RIGHT", btn, "RIGHT", -4, 0)
+      expand:SetFrameLevel((btn:GetFrameLevel() or 1) + 2)
+      local expandText = expand:CreateFontString(nil, "OVERLAY", TAB_TEXT_FONT)
+      expandText:SetPoint("CENTER", expand, "CENTER", 0, 0)
+      expandText:SetJustifyH("CENTER")
+      expand.Text = expandText
+      expand:SetScript("OnClick", function()
+        local nextState = not IsDungeonVariationsExpanded()
+        SetDungeonVariationsExpanded(nextState)
+        -- Collapsing while on a nested variation: fall back to parent Dungeon tab.
+        if not nextState then
+          local selected = DashboardFrame.SelectedTabKey
+          if selected and DUNGEON_CHILD_KEYS[selected] and DashboardFrame.SetSelectedTab then
+            DashboardFrame.SetSelectedTab("dungeon")
+          end
+        end
+        if DashboardFrame.LayoutCategoryTabs then
+          DashboardFrame.LayoutCategoryTabs()
+        end
+      end)
+      btn.ExpandButton = expand
+      if btn.Text then
+        btn.Text:ClearAllPoints()
+        btn.Text:SetPoint("LEFT", btn, "LEFT", 10, 0)
+        btn.Text:SetPoint("RIGHT", expand, "LEFT", -2, 0)
+      end
+      return expand
+    end
+
+    local function BuildVisibleTabList()
+      local visible = {}
+      local expanded = IsDungeonVariationsExpanded()
+      for _, tab in ipairs(DashboardFrame._categoryTabDefs or {}) do
+        table_insert(visible, {
+          key = tab.key,
+          label = tab.label,
+          isChild = false,
+          hasChildren = tab.children and true or false,
+        })
+        if tab.children and expanded then
+          for _, child in ipairs(tab.children) do
+            table_insert(visible, {
+              key = child.key,
+              label = child.label,
+              isChild = true,
+              hasChildren = false,
+            })
+          end
+        end
+      end
+      return visible
+    end
+
+    local function LayoutCategoryTabs()
+      for _, btn in ipairs(DashboardFrame.TabButtons) do
+        btn:Hide()
+        if btn.ExpandButton then
+          btn.ExpandButton:Hide()
+        end
+        if btn.ChildAccent then
+          btn.ChildAccent:Hide()
+        end
+      end
+      wipe(DashboardFrame.TabButtonsByKey)
+
+      local visible = BuildVisibleTabList()
+      local totalH = 0
+      local y = -8
+      for i, tab in ipairs(visible) do
+        local btn = EnsureTabButton(i)
+        local isChild = tab.isChild and true or false
+        local x = isChild and (8 + CHILD_TAB_INDENT) or 8
+        local w = isChild and (TAB_PANEL_WIDTH - 16 - CHILD_TAB_INDENT) or (TAB_PANEL_WIDTH - 16)
+        btn._tabKey = tab.key
+        btn._tabLabel = tab.label
+        btn._isChildTab = isChild
+        btn:SetSize(w, isChild and (TAB_BUTTON_HEIGHT - 2) or TAB_BUTTON_HEIGHT)
+
+        if isChild then
+          if not btn.ChildAccent then
+            local accent = btn:CreateTexture(nil, "OVERLAY")
+            accent:SetWidth(2)
+            accent:SetPoint("TOPLEFT", btn, "TOPLEFT", 0, -5)
+            accent:SetPoint("BOTTOMLEFT", btn, "BOTTOMLEFT", 0, 5)
+            accent:SetColorTexture(0.55, 0.58, 0.68, 0.75)
+            btn.ChildAccent = accent
+          end
+          btn.ChildAccent:Show()
+        elseif btn.ChildAccent then
+          btn.ChildAccent:Hide()
+        end
+
+        if btn.Text then
+          btn.Text:SetText(tab.label)
+          btn.Text:ClearAllPoints()
+          btn.Text:SetPoint("LEFT", btn, "LEFT", isChild and 12 or 10, 0)
+          btn.Text:SetPoint("RIGHT", btn, "RIGHT", -8, 0)
+        end
+        btn:SetScript("OnClick", function()
+          if DashboardFrame.SetSelectedTab then
+            DashboardFrame.SetSelectedTab(tab.key)
+          end
+        end)
+
+        if tab.hasChildren then
+          local expand = EnsureDungeonExpandButton(btn)
+          expand:Show()
+          if expand.Text then
+            expand.Text:SetText(IsDungeonVariationsExpanded() and "-" or "+")
+          end
+          if btn.Text then
+            btn.Text:ClearAllPoints()
+            btn.Text:SetPoint("LEFT", btn, "LEFT", 10, 0)
+            btn.Text:SetPoint("RIGHT", expand, "LEFT", -2, 0)
+          end
+        elseif btn.ExpandButton then
+          btn.ExpandButton:Hide()
+        end
+
+        btn:ClearAllPoints()
+        btn:SetPoint("TOPLEFT", DashboardFrame.TabContent, "TOPLEFT", x, y)
+        btn:Show()
+        DashboardFrame.TabButtonsByKey[tab.key] = btn
+        y = y - (isChild and (TAB_BUTTON_HEIGHT - 2) or TAB_BUTTON_HEIGHT) - TAB_BUTTON_GAP
+        totalH = -y + 8
+      end
+
+      DashboardFrame.TabContent:SetHeight(math.max(totalH, 1))
+
+      local selected = DashboardFrame.SelectedTabKey
+      for _, btn in ipairs(DashboardFrame.TabButtons) do
+        if btn:IsShown() then
+          ApplyTabVisual(btn, btn._tabKey == selected)
+        end
+      end
+    end
+    DashboardFrame.LayoutCategoryTabs = LayoutCategoryTabs
+
     local function SetSelectedTab(key)
+      if DUNGEON_CHILD_KEYS[key] and not IsDungeonVariationsExpanded() then
+        SetDungeonVariationsExpanded(true)
+        LayoutCategoryTabs()
+      end
       DashboardFrame.SelectedTabKey = key
       for _, btn in ipairs(DashboardFrame.TabButtons) do
-        ApplyTabVisual(btn, btn._tabKey == key)
+        if btn:IsShown() then
+          ApplyTabVisual(btn, btn._tabKey == key)
+        end
       end
-      -- Update special top tab visual, if present
       if DashboardFrame.DashboardTopTab then
         ApplyTabVisual(DashboardFrame.DashboardTopTab, key == "summary")
       end
@@ -4229,79 +4497,19 @@ local function BuildDashboardFrame()
         ApplyTabVisual(DashboardFrame.LeaderboardTopTab, key == "leaderboard")
       end
       UpdateDashboardStatusFilterVisibility()
-      -- Re-apply filter when tab changes (tabs replace the dropdown)
       if ApplyFilter then
         ApplyFilter()
       end
     end
     DashboardFrame.SetSelectedTab = SetSelectedTab
 
-    -- Hide any existing buttons (in case we rebuild)
-    for _, btn in ipairs(DashboardFrame.TabButtons) do
-      btn:Hide()
-    end
-    wipe(DashboardFrame.TabButtonsByKey)
+    LayoutCategoryTabs()
 
-    local totalH = 0
-    for i, tab in ipairs(tabDefs) do
-      local btn = DashboardFrame.TabButtons[i]
-      if not btn then
-        btn = CreateFrame("Button", nil, DashboardFrame.TabContent)
-        btn:SetSize(TAB_PANEL_WIDTH - 16, TAB_BUTTON_HEIGHT)
-
-        local tex = btn:CreateTexture(nil, "ARTWORK")
-        tex:SetAllPoints(btn)
-        tex:SetTexture(TAB_BUTTON_TEXTURE)
-        tex:SetTexCoord(0, 1, 0, 1)
-        tex:SetAlpha(0.65)
-        btn.Texture = tex
-
-        local hl = btn:CreateTexture(nil, "HIGHLIGHT")
-        hl:SetAllPoints(btn)
-        hl:SetTexture(TAB_BUTTON_TEXTURE)
-        hl:SetBlendMode("ADD")
-        hl:SetAlpha(0.20)
-        btn.Highlight = hl
-
-        local label = btn:CreateFontString(nil, "OVERLAY", TAB_TEXT_FONT)
-        label:SetPoint("LEFT", btn, "LEFT", 10, 0)
-        label:SetJustifyH("LEFT")
-        label:SetTextColor(TAB_TEXT_COLOR[1], TAB_TEXT_COLOR[2], TAB_TEXT_COLOR[3])
-        btn.Text = label
-
-        DashboardFrame.TabButtons[i] = btn
-      end
-
-      btn._tabKey = tab.key
-      btn._tabLabel = tab.label
-      if btn.Text then
-        btn.Text:SetText(tab.label)
-      end
-      btn:SetScript("OnClick", function()
-        SetSelectedTab(tab.key)
-      end)
-
-      btn:ClearAllPoints()
-      if i == 1 then
-        btn:SetPoint("TOPLEFT", DashboardFrame.TabContent, "TOPLEFT", 8, -8)
-      else
-        btn:SetPoint("TOPLEFT", DashboardFrame.TabButtons[i - 1], "BOTTOMLEFT", 0, -TAB_BUTTON_GAP)
-      end
-      btn:Show()
-
-      DashboardFrame.TabButtonsByKey[tab.key] = btn
-      totalH = 8 + i * TAB_BUTTON_HEIGHT + (i - 1) * TAB_BUTTON_GAP + 8
-    end
-
-    DashboardFrame.TabContent:SetHeight(math.max(totalH, 1))
-
-    -- Default selection
     if not DashboardFrame.SelectedTabKey then
       DashboardFrame.SelectedTabKey = "summary"
     end
     SetSelectedTab(DashboardFrame.SelectedTabKey)
 
-    -- Apply minimal scrollbar styling to tab list
     ApplyClassLineScrollbar(DashboardFrame.TabScroll, 3)
   end
 
