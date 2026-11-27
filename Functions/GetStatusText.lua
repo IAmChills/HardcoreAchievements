@@ -8,9 +8,18 @@ local function GetStatusParamsForAchievement(achId, row)
     if not achId or not row then return nil end
     local progress = (addon and addon.GetProgress) and addon.GetProgress(achId) or nil
     local rowId = achId
-    local requiresBoth = (row.questTracker ~= nil) and (row.killTracker ~= nil or (row.requiredKills and next(row.requiredKills)) or (row._def and (row._def.requiredKills and next(row._def.requiredKills) or row._def.targetNpcId)))
+    local hasKillReq = (row.killTracker ~= nil)
+        or (row.requiredKills and next(row.requiredKills))
+        or (row._def and ((row._def.requiredKills and next(row._def.requiredKills)) or row._def.targetNpcId))
+        or false
+    local hasQuestReq = (row.questTracker ~= nil)
+        or (row.requiredQuestId ~= nil)
+        or (row._def and row._def.requiredQuestId ~= nil)
+        or false
+    local requiresBoth = hasQuestReq and hasKillReq
+    local isOutleveled = (addon and addon.IsRowOutleveled) and addon.IsRowOutleveled(row) or false
     local killsSatisfied = false
-    if requiresBoth and progress and not (addon and addon.IsRowOutleveled and addon.IsRowOutleveled(row)) then
+    if requiresBoth and progress and not isOutleveled then
         local hasKill = false
         if progress.killed then
             hasKill = true
@@ -32,6 +41,21 @@ local function GetStatusParamsForAchievement(achId, row)
         end
         killsSatisfied = hasKill and not progress.quest
     end
+    -- Quest-only (escorts, deliver, talk-to): objectives done in the log = Pending Turn-in.
+    -- progress may be nil until first touch; treat that as not turned in.
+    local questObjectivesComplete = false
+    local questTurnedIn = progress and progress.quest and true or false
+    if hasQuestReq and not hasKillReq and not questTurnedIn and not isOutleveled then
+        local questId = tonumber(row.requiredQuestId) or (row._def and tonumber(row._def.requiredQuestId))
+        local getQuestLogState = addon and addon.GetQuestLogState
+        if questId and getQuestLogState then
+            local onQuest, isComplete = getQuestLogState(questId)
+            questObjectivesComplete = onQuest and isComplete and true or false
+        end
+    end
+    local pendingTurnIn = (requiresBoth and killsSatisfied)
+        or (hasQuestReq and not hasKillReq and questObjectivesComplete)
+        or false
     local hasSoloStatus = progress and (progress.soloKill or progress.soloQuest)
     local isSelfFound = (addon and addon.IsSelfFound) and addon.IsSelfFound() or false
     local isSoloMode = (addon and addon.IsSoloModeEnabled) and addon.IsSoloModeEnabled() or false
@@ -82,12 +106,13 @@ local function GetStatusParamsForAchievement(achId, row)
         hasIneligibleKill = progress and progress.ineligibleKill,
         requiresBoth = requiresBoth,
         killsSatisfied = killsSatisfied,
+        pendingTurnIn = pendingTurnIn,
         isSelfFound = isSelfFound,
         isSoloMode = isSoloMode,
         wasSolo = wasSolo,
         allowSoloDouble = row.allowSoloDouble,
         maxLevel = row.maxLevel,
-        isOutleveled = (addon and addon.IsRowOutleveled) and addon.IsRowOutleveled(row),
+        isOutleveled = isOutleveled,
         isSecretAchievement = isSecretAchievement,
         isMetaAchievement = isMetaAchievement,
         guildFirstClaimedLabel = guildFirstClaimedLabel,
@@ -101,6 +126,11 @@ local function GetStatusText(params)
     local hasIneligibleKill = params.hasIneligibleKill or false
     local requiresBoth = params.requiresBoth or false
     local killsSatisfied = params.killsSatisfied or false
+    local pendingTurnIn = params.pendingTurnIn
+    if pendingTurnIn == nil then
+        -- Older call sites only pass killsSatisfied for kill+quest pending.
+        pendingTurnIn = requiresBoth and killsSatisfied
+    end
     local isSelfFound = params.isSelfFound or false
     local isSoloMode = params.isSoloMode or false
     local wasSolo = params.wasSolo or false
@@ -117,10 +147,9 @@ local function GetStatusText(params)
     -- Priority order:
     -- 1. Ineligible kill (takes highest priority)
     -- 2. Completed solo (if completed and wasSolo)
-    -- 3. Pending Turn-in (if kills satisfied but quest not turned in)
-    -- 4. Pending Turn-in (solo) (if kills satisfied, quest pending, and has solo status)
-    -- 5. Pending solo (if has solo status but not completed and not pending turn-in)
-    -- 6. Solo preview (if solo mode toggle is on and no solo status yet)
+    -- 3. Pending Turn-in (kill done / quest objectives done, not turned in)
+    -- 4. Pending Turn-in (solo)
+    -- 5. Solo preview (if solo mode toggle is on and no solo status yet)
     
     if hasIneligibleKill and not completed then
         -- Determine message based on whether both kill and quest are required
@@ -144,8 +173,7 @@ local function GetStatusText(params)
         return ClassColor .. "Solo|r"
     end
     
-    -- Check if kills are satisfied but quest is pending (for achievements requiring both)
-    if not completed and requiresBoth and killsSatisfied then
+    if not completed and pendingTurnIn then
         if hasSoloStatus and allowSoloBonus then
             return ClassColor .. "Pending Turn-in (solo)|r"
         else

@@ -178,7 +178,7 @@ local ENCOUNTER_ID_TO_NPC = {
 
     -- Scarlet Monastery (rares have no encounter; Whitemane fight includes Mograine)
     [444] = 3983, -- Interrogator Vishas
-    [445] = 4543, -- Bloodmage Thalnos
+    [2779] = 4543, -- Bloodmage Thalnos
     [446] = 3974, -- Houndmaster Loksey
     [447] = 6487, -- Arcanist Doan
     [448] = 3975, -- Herod
@@ -186,10 +186,12 @@ local ENCOUNTER_ID_TO_NPC = {
     [450] = {3976, 3977}, -- Scarlet Commander Mograine + High Inquisitor Whitemane
 
     -- Razorfen Downs (Ragglesnout / Plaguemaw have no encounter)
-    [434] = 7355, -- Tuten'kash
-    [435] = 7357, -- Mordresh Fire Eye
-    [436] = 8567, -- Glutton
-    [437] = 7358, -- Amnennar the Coldbringer
+    [2780] = 7355, -- Tuten'kash
+    [2782] = 7357, -- Mordresh Fire Eye
+    [2784] = 8567, -- Glutton
+    [2785] = 7358, -- Amnennar the Coldbringer
+    [2781] = 7356, -- Plaguemaw the Rotting (Summoned)
+    [2783] = 7354, -- Ragglesnout
 
     -- Uldaman
     [547] = 6910, -- Revelosh

@@ -677,18 +677,25 @@ function M.registerQuestAchievement(cfg)
                 end
             end
         end
-        -- Check if we have kills satisfied but quest is pending (restore "Pending Turn-in" status)
-        -- This handles the case where NPC is killed before quest is obtained
-        if not state.completed and REQUIRED_QUEST_ID and (TARGET_NPC_ID or REQUIRED_KILLS) then
-            local killsOk = false
-            if REQUIRED_KILLS then
-                killsOk = countsSatisfied()
+        -- Restore "Pending Turn-in": kill+quest with kills done, or quest-only with objectives complete.
+        if not state.completed and REQUIRED_QUEST_ID and not state.quest and not (p and p.quest) then
+            local shouldPending = false
+            if TARGET_NPC_ID or REQUIRED_KILLS then
+                local killsOk = false
+                if REQUIRED_KILLS then
+                    killsOk = countsSatisfied()
+                else
+                    killsOk = state.killed or (p and p.killed) or false
+                end
+                shouldPending = killsOk and not (p and p.ineligibleKill)
             else
-                killsOk = state.killed or (p and p.killed) or false
+                local getQuestLogState = addon and addon.GetQuestLogState
+                if getQuestLogState then
+                    local onQuest, isComplete = getQuestLogState(REQUIRED_QUEST_ID)
+                    shouldPending = onQuest and isComplete and true or false
+                end
             end
-            local questNotTurnedIn = not state.quest and not (p and p.quest)
-            -- Only show "Pending Turn-in" if kills are satisfied, quest is not turned in, and no ineligible kill
-            if killsOk and questNotTurnedIn and not (p and p.ineligibleKill) then
+            if shouldPending then
                 local updated = false
                 if AchievementPanel and AchievementPanel.achievements then
                     for _, row in ipairs(AchievementPanel.achievements) do
@@ -1130,6 +1137,7 @@ function M.registerQuestAchievement(cfg)
         local f = CreateFrame("Frame")
         questLogFrame = f
         local questLogCheckPending = false
+        local lastQuestObjectivesComplete = false
         f:RegisterEvent("QUEST_LOG_UPDATE")
         f:SetScript("OnEvent", function(self)
             if state.completed then
@@ -1147,6 +1155,32 @@ function M.registerQuestAchievement(cfg)
                 questLogCheckPending = false
                 if topUpFromServer() and checkComplete() then
                     self:UnregisterAllEvents()
+                    return
+                end
+                -- Quest-only escorts / delivers: when objectives flip to complete, show Pending Turn-in.
+                local isQuestOnly = not TARGET_NPC_ID and not REQUIRED_KILLS
+                if isQuestOnly and not state.quest then
+                    local getQuestLogState = addon and addon.GetQuestLogState
+                    if getQuestLogState then
+                        local onQuest, isComplete = getQuestLogState(REQUIRED_QUEST_ID)
+                        local ready = onQuest and isComplete and true or false
+                        if ready ~= lastQuestObjectivesComplete then
+                            lastQuestObjectivesComplete = ready
+                            local row = FindAchievementRow()
+                            if row and not row.completed then
+                                local params = (addon and addon.GetStatusParamsForAchievement)
+                                    and addon.GetStatusParamsForAchievement(ACH_ID, row)
+                                if params and SetStatusTextOnRow then
+                                    SetStatusTextOnRow(row, params)
+                                end
+                            end
+                            if RefreshAllAchievementPoints then
+                                RefreshAllAchievementPoints()
+                            elseif addon and addon.RefreshAuxiliaryViews then
+                                addon.RefreshAuxiliaryViews()
+                            end
+                        end
+                    end
                 end
             end)
         end)

@@ -44,6 +44,7 @@ local isExpanded = true
 local trackedAchievements = {}
 local collapsedAchievements = {}  -- Track which achievements are collapsed (true = collapsed, nil/false = expanded)
 local nextTrackedOrder = 1  -- Preserve the order achievements were tracked in
+local MAX_TRACKED_ACHIEVEMENTS = 20
 local isSizing = false
 local savedBackdropSettings = { enabled = false, alpha = 0 }
 local savedFrameHeight = nil  -- Store the frame height to persist across collapse/expand
@@ -1622,7 +1623,7 @@ local function Update(self)
 
     -- Update header (yellow color)
     if isExpanded then
-        trackerHeaderFrame.label:SetText("|CFFFFD100Achievement Tracker: " .. numTracked .. "/10|r")
+        trackerHeaderFrame.label:SetText("|CFFFFD100Achievement Tracker: " .. numTracked .. "/" .. MAX_TRACKED_ACHIEVEMENTS .. "|r")
     else
         trackerHeaderFrame.label:SetText("|CFFFFD100Achievement Tracker +|r")
     end
@@ -2070,14 +2071,13 @@ local function TrackAchievement(self, achievementId, title)
         return
     end
 
-    -- Check limit (WoW allows max 10 tracked achievements)
     local count = 0
     for _ in pairs(trackedAchievements) do
         count = count + 1
     end
 
-    if count >= 10 and not trackedAchievements[achievementId] then
-        print("|cff008066[Hardcore Achievements]|r You may only track 10 achievements at a time.")
+    if count >= MAX_TRACKED_ACHIEVEMENTS and not trackedAchievements[achievementId] then
+        print("|cff008066[Hardcore Achievements]|r You may only track " .. MAX_TRACKED_ACHIEVEMENTS .. " achievements at a time.")
         return
     end
 
