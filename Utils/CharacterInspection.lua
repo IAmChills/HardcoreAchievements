@@ -369,7 +369,7 @@ local function StartInspectionHandshakeTimer(targetName)
     if C_Timer and C_Timer.NewTimer then
         handshakeTimer = C_Timer.NewTimer(HANDSHAKE_TIMEOUT, function()
             if currentInspectionTarget == targetName then
-                ClearInspectionAchievementRows("No response from " .. targetName .. ". They may not have HardcoreAchievements installed.", {1, 0.5, 0.5})
+                ClearInspectionAchievementRows("No response from " .. targetName .. ". They may not have Hardcore Achievements installed.", {1, 0.5, 0.5})
             end
             CancelInspectionHandshakeTimer()
         end)

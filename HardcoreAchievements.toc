@@ -36,6 +36,7 @@ Functions\GetStatusText.lua
 Functions\RefreshAllAchievementPoints.lua
 Functions\ShowAchievementTooltip.lua
 Functions\NPCTooltip.lua
+Functions\ItemTooltip.lua
 Functions\TrackJumps.lua
 Functions\TrackNoWeapon.lua
 Functions\TrackNude.lua
@@ -122,6 +123,7 @@ Forever\ReputationCatalog.lua [AllowLoadGameType forever, mainline]
 Forever\SecretCatalog.lua [AllowLoadGameType forever, mainline]
 
 Forever\NPCTooltip.lua [AllowLoadGameType forever, mainline]
+Forever\ItemTooltip.lua [AllowLoadGameType forever, mainline]
 
 Utils\Dashboard.lua
 Utils\CommandHandler.lua
